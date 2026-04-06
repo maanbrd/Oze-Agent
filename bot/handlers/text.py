@@ -48,6 +48,7 @@ from shared.google_calendar import (
     create_event,
     get_events_for_date,
     get_events_for_range,
+    get_free_slots,
 )
 from shared.google_sheets import (
     add_client,
@@ -408,50 +409,103 @@ async def handle_add_meeting(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Extract meeting data, check conflicts, ask for confirmation."""
+    """Extract meeting data (single or multiple), check conflicts, ask for confirmation."""
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
     today_str = date.today().isoformat()
-    meeting = await extract_meeting_data(message_text, today_str)
+    meeting_result = await extract_meeting_data(message_text, today_str)
+    meetings = meeting_result.get("meetings", [])
 
-    if not meeting.get("date") or not meeting.get("time"):
+    if not meetings:
         await update.message.reply_text(
             "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
         )
         return
 
-    # Build datetime objects
-    try:
-        start_dt = datetime.fromisoformat(f"{meeting['date']}T{meeting['time']}:00").replace(tzinfo=timezone.utc)
-        duration = meeting.get("duration_minutes", user.get("default_meeting_duration", 60))
-        end_dt = start_dt + timedelta(minutes=duration)
-    except Exception:
-        await update.message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
-        return
+    default_duration = user.get("default_meeting_duration", 60)
 
-    conflicts = await check_conflicts(user_id, start_dt, end_dt)
-    conflict_warning = ""
-    if conflicts:
-        conflict_warning = f"\n\n⚠️ Uwaga: masz już spotkanie o tej porze: *{escape_markdown_v2(conflicts[0].get('title', ''))}*"
+    if len(meetings) == 1:
+        # Single meeting — original flow with format_confirmation card
+        m = meetings[0]
+        if not m.get("date") or not m.get("time"):
+            await update.message.reply_text(
+                "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
+            )
+            return
+        try:
+            start_dt = datetime.fromisoformat(f"{m['date']}T{m['time']}:00").replace(tzinfo=timezone.utc)
+            duration = m.get("duration_minutes") or default_duration
+            end_dt = start_dt + timedelta(minutes=duration)
+        except Exception:
+            await update.message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
+            return
 
-    save_pending_flow(telegram_id, "add_meeting", {
-        "title": meeting.get("client_name", "Spotkanie"),
-        "start": start_dt.isoformat(),
-        "end": end_dt.isoformat(),
-        "location": meeting.get("location", ""),
-        "client_name": meeting.get("client_name", ""),
-    })
+        conflicts = await check_conflicts(user_id, start_dt, end_dt)
+        conflict_warning = ""
+        if conflicts:
+            conflict_warning = f"\n\n⚠️ Uwaga: masz już spotkanie o tej porze: *{escape_markdown_v2(conflicts[0].get('title', ''))}*"
 
-    details = {
-        "Klient": meeting.get("client_name", ""),
-        "Data": meeting["date"],
-        "Godzina": meeting["time"],
-        "Czas trwania": f"{duration} min",
-        "Miejsce": meeting.get("location", ""),
-    }
-    msg = format_confirmation("add_meeting", details) + conflict_warning
-    await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+        save_pending_flow(telegram_id, "add_meeting", {
+            "title": m.get("client_name", "Spotkanie"),
+            "start": start_dt.isoformat(),
+            "end": end_dt.isoformat(),
+            "location": m.get("location", ""),
+            "client_name": m.get("client_name", ""),
+        })
+
+        details = {
+            "Klient": m.get("client_name", ""),
+            "Data": m["date"],
+            "Godzina": m["time"],
+            "Czas trwania": f"{duration} min",
+            "Miejsce": m.get("location", ""),
+        }
+        msg = format_confirmation("add_meeting", details) + conflict_warning
+        await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+
+    else:
+        # Multiple meetings — build all, check conflicts, confirm as a batch
+        flow_meetings = []
+        conflict_warnings = []
+
+        for m in meetings:
+            if not m.get("date") or not m.get("time"):
+                continue
+            try:
+                start_dt = datetime.fromisoformat(f"{m['date']}T{m['time']}:00").replace(tzinfo=timezone.utc)
+                duration = m.get("duration_minutes") or default_duration
+                end_dt = start_dt + timedelta(minutes=duration)
+            except Exception:
+                continue
+
+            conflicts = await check_conflicts(user_id, start_dt, end_dt)
+            if conflicts:
+                cname = m.get("client_name", "?")
+                conflict_warnings.append(f"⚠️ Konflikt {cname}: {conflicts[0].get('title', '')}")
+
+            flow_meetings.append({
+                "title": m.get("client_name", "Spotkanie"),
+                "start": start_dt.isoformat(),
+                "end": end_dt.isoformat(),
+                "location": m.get("location", ""),
+                "client_name": m.get("client_name", ""),
+            })
+
+        if not flow_meetings:
+            await update.message.reply_text("Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
+            return
+
+        save_pending_flow(telegram_id, "add_meetings", {"meetings": flow_meetings})
+
+        lines = [f"📅 Dodać {len(flow_meetings)} spotkań:"]
+        for fm in flow_meetings:
+            start = datetime.fromisoformat(fm["start"])
+            loc = f", {fm['location']}" if fm.get("location") else ""
+            lines.append(f"• {fm.get('client_name', '?')} — {start.strftime('%d.%m %H:%M')}{loc}")
+        lines.extend(conflict_warnings)
+        msg = escape_markdown_v2("\n".join(lines))
+        await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
 
 
 async def handle_view_meetings(

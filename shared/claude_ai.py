@@ -216,25 +216,31 @@ async def extract_meeting_data(message: str, today: str) -> dict:
     """Parse meeting info from natural language (Polish dates/times).
 
     Returns:
-        {"client_name": str, "date": str, "time": str, "duration_minutes": int,
-         "location": str, "tokens_in": int, "tokens_out": int, "cost_usd": float}
+        {"meetings": [{"client_name": str, "date": str, "time": str,
+                       "duration_minutes": int, "location": str}],
+         "tokens_in": int, "tokens_out": int, "cost_usd": float}
     """
-    system_prompt = f"""Wyciągnij dane spotkania z wiadomości. Dzisiaj: {today}.
-Zwróć TYLKO JSON:
-{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "duration_minutes": 60, "location": ""}}
-Rozumiej polskie wyrażenia dat: "jutro", "w środę", "za tydzień", "o 14", "na 14:30".
+    system_prompt = f"""Wyciągnij dane spotkań z wiadomości. Dzisiaj: {today}.
+Zwróć TYLKO JSON z listą spotkań (nawet jeśli jedno):
+{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "duration_minutes": 60, "location": ""}}]}}
+Rozumiej polskie wyrażenia dat i czasu:
+- "jutro", "w środę", "za tydzień", "pojutrze", "w przyszłą środę"
+- "o 14", "na 14:30", "o czternastej", "na szesnastą"
+- "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
+Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string."""
 
-    result = await call_claude(system_prompt, message, model_type="complex", max_tokens=512)
+    result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)
 
     try:
         parsed = json.loads(result["text"])
+        meetings = parsed.get("meetings", [])
     except Exception:
         logger.error("extract_meeting_data: JSON parse failed: %s", result["text"][:200])
-        parsed = {"client_name": "", "date": "", "time": "", "duration_minutes": 60, "location": ""}
+        meetings = []
 
     return {
-        **parsed,
+        "meetings": meetings,
         "tokens_in": result["tokens_in"],
         "tokens_out": result["tokens_out"],
         "cost_usd": result["cost_usd"],
