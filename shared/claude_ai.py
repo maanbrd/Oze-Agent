@@ -155,6 +155,10 @@ Przykłady:
 - "dodaj klienta Jana Kowalskiego" → add_client, entities: {{"name": "Jan Kowalski"}}
 - "znajdź Kowalskiego z Warszawy" → search_client, entities: {{"name": "Kowalski", "city": "Warszawa"}}
 - "umów spotkanie na wtorek" → add_meeting, entities: {{"day": "wtorek"}}
+- "spotkanie 22 kwietnia o 17:30 Marki Fiołkowa 24" → add_meeting, entities: {{"date": "22 kwietnia", "time": "17:30", "location": "Marki Fiołkowa 24"}}
+- "jutro o 10 jadę do Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Nowak", "location": "ul. Różana 3 Piaseczno"}}
+- "spotkanie z Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Kowalski", "day": "pojutrze", "time": "15:00"}}
+- WAŻNE: Każda wiadomość zawierająca datę/godzinę + miejsce lub klienta to add_meeting, NIE general_question.
 - "tak" / "ok" / "zgadza się" → confirm_yes
 - "nie" / "anuluj" → confirm_no lub cancel_flow
 

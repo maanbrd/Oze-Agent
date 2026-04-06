@@ -649,6 +649,8 @@ async def handle_general(
     pipeline_statuses = user.get("pipeline_statuses", [])
     system_context = (
         "Jesteś asystentem handlowca OZE w Polsce. Zarządzasz klientami, spotkaniami i pipeline'm. "
+        "Masz pełny dostęp do Google Calendar, Google Sheets i Google Drive użytkownika. "
+        "Nigdy nie mów że nie masz dostępu do tych systemów. "
         f"Statusy pipeline: {pipeline_statuses}. "
         "Odpowiadaj BARDZO krótko i konkretnie — maksimum 2 zdania. "
         "Bez pytań zwrotnych. Bez propozycji kolejnych kroków. Tylko fakty."
