@@ -170,8 +170,55 @@ async def _route_pending_flow(
         await handle_confirm(update, context, user, {}, message_text)
     elif is_no:
         await handle_cancel_flow(update, context, user, {}, message_text)
+    elif flow_type == "add_client":
+        # User is augmenting an in-progress add_client flow with more data
+        telegram_id = update.effective_user.id
+        user_id = user["id"]
+        old_flow_data = flow.get("flow_data", {})
+        old_client_data = old_flow_data.get("client_data", {})
+
+        headers = await get_sheet_headers(user_id)
+        result = await extract_client_data(message_text, headers)
+        new_data = {k: v for k, v in result.get("client_data", {}).items() if v}
+        merged = {**old_client_data, **new_data}
+        sheet_columns = user.get("sheet_columns") or headers
+        missing = [col for col in sheet_columns if not merged.get(col)]
+
+        if not missing:
+            # All fields now filled — auto-save without another confirmation prompt
+            delete_pending_flow(telegram_id)
+            row = await add_client(user_id, merged)
+            if row:
+                name = merged.get("Imię i nazwisko", "klient")
+                offer_remaining = old_flow_data.get("_offer_remaining", [])
+                if offer_remaining:
+                    next_client = offer_remaining[0]
+                    new_remaining = offer_remaining[1:]
+                    save_pending_flow(telegram_id, "add_client", {
+                        "client_data": {"Imię i nazwisko": next_client},
+                        "_offer_remaining": new_remaining,
+                    })
+                    await update.message.reply_text(
+                        f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
+                    )
+                else:
+                    await update.message.reply_text(f"✅ Klient {name} dodany do arkusza (wiersz {row}).")
+            else:
+                await update.message.reply_markdown_v2(format_error("google_down"))
+            return
+
+        # Still missing fields — update flow and re-show confirmation card
+        new_flow_data: dict = {"client_data": merged}
+        if old_flow_data.get("_offer_remaining"):
+            new_flow_data["_offer_remaining"] = old_flow_data["_offer_remaining"]
+        save_pending_flow(telegram_id, "add_client", new_flow_data)
+        parts = [merged[col] for col in sheet_columns if merged.get(col)]
+        summary = ", ".join(parts)
+        missing_text = f"\n❓ Brakuje: {', '.join(missing)}." if missing else ""
+        msg = escape_markdown_v2(f"📋 Zapisuję klienta:\n{summary}.{missing_text}\nZapisać?")
+        await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
     else:
-        # User is providing more data for the current flow
+        # Non-add_client flows don't support augmentation
         await update.message.reply_text(
             "Odpowiedz *tak* aby potwierdzić lub *nie* aby anulować.",
             parse_mode="MarkdownV2",
@@ -544,12 +591,39 @@ async def handle_confirm(
     flow_type = flow.get("flow_type", "")
     flow_data = flow.get("flow_data", {})
 
+    # Gap 7: if cancellation was requested, this "tak" confirms the cancel
+    if flow_data.get("_cancelling"):
+        delete_pending_flow(telegram_id)
+        await update.message.reply_text("❌ Anulowano.")
+        return
+
+    # skip_delete: set True when we save a new flow inside the handler so the
+    # finally block doesn't immediately delete it (delete_pending_flow removes
+    # ALL flows for this telegram_id, including the one we just saved).
+    skip_delete = False
+
     try:
         if flow_type == "add_client":
+            remaining = flow_data.get("_offer_remaining", [])
             row = await add_client(user_id, flow_data["client_data"])
             if row:
                 name = flow_data["client_data"].get("Imię i nazwisko", "klient")
-                await update.message.reply_text(f"✅ Klient *{name}* dodany do arkusza \\(wiersz {row}\\)\\.", parse_mode="MarkdownV2")
+                if remaining:
+                    next_client = remaining[0]
+                    new_remaining = remaining[1:]
+                    save_pending_flow(telegram_id, "add_client", {
+                        "client_data": {"Imię i nazwisko": next_client},
+                        "_offer_remaining": new_remaining,
+                    })
+                    await update.message.reply_text(
+                        f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
+                    )
+                    skip_delete = True
+                else:
+                    await update.message.reply_text(
+                        f"✅ Klient *{name}* dodany do arkusza \\(wiersz {row}\\)\\.",
+                        parse_mode="MarkdownV2",
+                    )
             else:
                 await update.message.reply_markdown_v2(format_error("google_down"))
 
@@ -577,7 +651,6 @@ async def handle_confirm(
                 await update.message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "add_meeting":
-            from datetime import datetime
             start = datetime.fromisoformat(flow_data["start"])
             end = datetime.fromisoformat(flow_data["end"])
             event = await create_event(
@@ -596,16 +669,78 @@ async def handle_confirm(
                         f"✅ Spotkanie dodane. Nie mam {client_name} w bazie. Dodać?",
                         reply_markup=build_confirm_buttons("confirm"),
                     )
-                    return  # new flow saved — don't fall through to delete
-                await update.message.reply_text("✅ Spotkanie dodane do kalendarza.")
+                    skip_delete = True
+                else:
+                    await update.message.reply_text("✅ Spotkanie dodane do kalendarza.")
             else:
                 await update.message.reply_markdown_v2(format_error("calendar_down"))
 
+        elif flow_type == "add_meetings":
+            created = []
+            failed = []
+            for fm in flow_data.get("meetings", []):
+                start = datetime.fromisoformat(fm["start"])
+                end = datetime.fromisoformat(fm["end"])
+                event = await create_event(
+                    user_id,
+                    title=fm.get("title", "Spotkanie"),
+                    start=start, end=end,
+                    location=fm.get("location"),
+                )
+                if event:
+                    created.append(fm)
+                else:
+                    failed.append(fm.get("client_name", "?"))
+
+            missing_from_sheets = []
+            for fm in created:
+                name = fm.get("client_name", "")
+                if name and not await search_clients(user_id, name):
+                    missing_from_sheets.append(name)
+
+            msg_parts = [f"✅ Dodano {len(created)} spotkań."]
+            if failed:
+                msg_parts.append(f"❌ Nie udało się: {', '.join(failed)}.")
+            if missing_from_sheets:
+                names_str = ", ".join(missing_from_sheets)
+                save_pending_flow(telegram_id, "offer_add_clients", {"names": missing_from_sheets})
+                msg_parts.append(f"Nie mam w bazie: {names_str}. Dodać?")
+                await update.message.reply_text(
+                    "\n".join(msg_parts),
+                    reply_markup=build_confirm_buttons("confirm"),
+                )
+                skip_delete = True
+            else:
+                await update.message.reply_text("\n".join(msg_parts))
+
         elif flow_type == "offer_add_client":
             client_name = flow_data.get("client_name", "")
-            await update.message.reply_text(
-                f"Podaj dane {client_name} — adres, telefon, produkt."
-            )
+            if client_name:
+                save_pending_flow(telegram_id, "add_client", {
+                    "client_data": {"Imię i nazwisko": client_name},
+                })
+                await update.message.reply_text(
+                    f"Podaj dane {client_name} — adres, telefon, produkt."
+                )
+                skip_delete = True
+            else:
+                await update.message.reply_text("Brak klienta do dodania.")
+
+        elif flow_type == "offer_add_clients":
+            names = flow_data.get("names", [])
+            if names:
+                first = names[0]
+                new_remaining = names[1:]
+                save_pending_flow(telegram_id, "add_client", {
+                    "client_data": {"Imię i nazwisko": first},
+                    "_offer_remaining": new_remaining,
+                })
+                await update.message.reply_text(
+                    f"Podaj dane {first} — adres, telefon, produkt."
+                )
+                skip_delete = True
+            else:
+                await update.message.reply_text("Brak klientów do dodania.")
 
         elif flow_type == "change_status":
             ok = await update_client(user_id, flow_data["row"], {flow_data["field"]: flow_data["new_value"]})
@@ -621,7 +756,8 @@ async def handle_confirm(
         logger.error("handle_confirm(flow_type=%s): %s", flow_type, e)
         await update.message.reply_markdown_v2(format_error("timeout"))
     finally:
-        delete_pending_flow(telegram_id)
+        if not skip_delete:
+            delete_pending_flow(telegram_id)
 
 
 async def handle_cancel_flow(
