@@ -100,6 +100,9 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             else:
                 await query.edit_message_text("❌ Nie udało się zmienić statusu.")
 
+    elif action == "phone":
+        await _handle_phone_choice(query, telegram_id, user["id"], value)
+
     elif action == "cancel_confirm":
         if value == "yes":
             delete_pending_flow(telegram_id)
@@ -128,6 +131,36 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
     from shared.formatting import format_client_card
     card = format_client_card(client)
     await query.edit_message_text(card, parse_mode="MarkdownV2")
+
+
+async def _handle_phone_choice(query, telegram_id: int, user_id: str, value: str) -> None:
+    """Handle keep-or-replace choice for phone/email field edits."""
+    flow = get_pending_flow(telegram_id)
+    if not flow or flow.get("flow_type") != "edit_client_phone_choice":
+        await query.edit_message_text("Brak aktywnej edycji.")
+        return
+
+    flow_data = flow["flow_data"]
+    row = flow_data["row"]
+    field = flow_data["field"]
+    old_val = flow_data["old_value"]
+    new_val = flow_data["new_value"]
+    other = flow_data.get("other_updates", {})
+
+    if value == "keep_both":
+        updates = {field: f"{old_val} / {new_val}", **other}
+        label = "Oba numery zachowane"
+    else:  # replace
+        updates = {field: new_val, **other}
+        label = "Numer zastąpiony"
+
+    ok = await update_client(user_id, row, updates)
+    delete_pending_flow(telegram_id)
+
+    if ok:
+        await query.edit_message_text(f"✅ {label}.")
+    else:
+        await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
 
 
 async def _handle_edit_choice(query, telegram_id: int, user_id: str, value: str) -> None:

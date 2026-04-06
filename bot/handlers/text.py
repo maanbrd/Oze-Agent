@@ -358,6 +358,31 @@ async def handle_edit_client(
         await update.message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
         return
 
+    # For phone/email fields: if client already has a value, ask keep or replace
+    CONTACT_FIELDS = {"Telefon", "Email"}
+    ambiguous = {f for f in updates if f in CONTACT_FIELDS and client.get(f)}
+    if ambiguous:
+        field = next(iter(ambiguous))
+        old_val = client.get(field, "")
+        new_val = updates[field]
+        other_updates = {k: v for k, v in updates.items() if k != field}
+        save_pending_flow(telegram_id, "edit_client_phone_choice", {
+            "row": client.get("_row"),
+            "field": field,
+            "old_value": old_val,
+            "new_value": new_val,
+            "other_updates": other_updates,
+        })
+        await update.message.reply_text(
+            f"Stary {field}: {old_val}\nNowy {field}: {new_val}\n\n"
+            f"Zastąpić stary czy zachować oba?",
+            reply_markup=build_choice_buttons([
+                ("Zastąp stary", "phone:replace"),
+                ("Zachowaj oba", "phone:keep_both"),
+            ]),
+        )
+        return
+
     save_pending_flow(telegram_id, "edit_client", {
         "row": client.get("_row"),
         "updates": updates,
