@@ -159,7 +159,7 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     if missing:
         lines.append(f"❓ Brakuje: {', '.join(missing)}")
 
-    lines.append("Zapisać?")
+    lines.append("Zapisać czy jeszcze coś dopiszesz?")
     return "\n".join(lines)
 
 

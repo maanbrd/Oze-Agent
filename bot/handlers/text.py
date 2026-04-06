@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 SYSTEM_FIELDS = {
     "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status",
     "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email",
-    "Dodatkowe info", "Notatki",
+    "Dodatkowe info", "Notatki", "Następny krok",
 }
 
 
@@ -195,12 +195,8 @@ async def _route_pending_flow(
         old_name = old_client_data.get("Imię i nazwisko", "").strip()
         new_name = new_data.get("Imię i nazwisko", "").strip()
         if old_name and new_name and old_name.lower() != new_name.lower():
-            # Treat as a brand-new add_client (overwrite existing flow)
             sheet_columns = user.get("sheet_columns") or headers
-            raw_missing = result.get("missing_columns", []) or [
-                col for col in sheet_columns if not new_data.get(col)
-            ]
-            missing = [col for col in raw_missing if col not in SYSTEM_FIELDS]
+            missing = [col for col in sheet_columns if not new_data.get(col) and col not in SYSTEM_FIELDS]
             save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
             card = format_add_client_card(new_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
@@ -211,7 +207,6 @@ async def _route_pending_flow(
         missing = [col for col in sheet_columns if not merged.get(col) and col not in SYSTEM_FIELDS]
 
         if not missing:
-            # All business fields now filled — auto-save without another confirmation prompt
             delete_pending_flow(telegram_id)
             row = await add_client(user_id, merged)
             if row:
@@ -233,7 +228,7 @@ async def _route_pending_flow(
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
             return
 
-        # Still missing fields — update flow and re-show confirmation card
+        # User is correcting/adding data (possibly after tapping [Nie]) — clear cancel flag, re-show card
         new_flow_data: dict = {"client_data": merged}
         if old_flow_data.get("_offer_remaining"):
             new_flow_data["_offer_remaining"] = old_flow_data["_offer_remaining"]
@@ -717,10 +712,9 @@ async def handle_confirm(
     flow_type = flow.get("flow_type", "")
     flow_data = flow.get("flow_data", {})
 
-    # Gap 7: if cancellation was requested, this "tak" confirms the cancel
     if flow_data.get("_cancelling"):
         delete_pending_flow(telegram_id)
-        await update.effective_message.reply_text("❌ Anulowano.")
+        await update.effective_message.reply_text("🫡 Anulowane.")
         return
 
     # skip_delete: set True when we save a new flow inside the handler so the
@@ -889,29 +883,34 @@ async def handle_cancel_flow(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Two-step cancel: first warn, delete only on second confirm."""
+    """Cancel flow: ask once, delete on confirm."""
     telegram_id = update.effective_user.id
     flow = get_pending_flow(telegram_id)
     if not flow:
-        await update.effective_message.reply_text("Nie ma nic do anulowania.")
         return
 
     flow_data = flow.get("flow_data", {})
 
     if flow_data.get("_cancelling"):
-        # User said "nie" a second time — remove the flag and keep the flow active
+        # User tapped [Nie] on the "Anulować?" question — keep flow, re-show card silently
         flow_data.pop("_cancelling")
         save_pending_flow(telegram_id, flow["flow_type"], flow_data)
-        await update.effective_message.reply_text("OK, czekam na Twoją odpowiedź.")
+        if flow["flow_type"] == "add_client":
+            user_id = user["id"]
+            headers = await get_sheet_headers(user_id)
+            sheet_columns = user.get("sheet_columns") or headers
+            client_data = flow_data.get("client_data", {})
+            missing = [col for col in sheet_columns if not client_data.get(col) and col not in SYSTEM_FIELDS]
+            card = format_add_client_card(client_data, missing)
+            await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
         return
 
-    # First cancel request: set flag and warn
+    # First cancel request: set flag, ask with buttons
     flow_data["_cancelling"] = True
     save_pending_flow(telegram_id, flow["flow_type"], flow_data)
     await update.effective_message.reply_text(
-        "Anulować całkowicie? Dane zostaną utracone.\n"
-        "Napisz *tak* aby anulować lub *nie* aby wrócić.",
-        parse_mode="MarkdownV2",
+        "Anulować?",
+        reply_markup=build_confirm_buttons("confirm"),
     )
 
 
