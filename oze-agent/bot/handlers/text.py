@@ -72,14 +72,23 @@ SYSTEM_FIELDS = {
     "Dodatkowe info", "Notatki",
 }
 
-# Regex: 9+ consecutive digits after stripping spaces/hyphens/dots (phone number)
-_PHONE_RE = re.compile(r'\d{9,}')
+# Regex: 7+ consecutive digits after stripping spaces/hyphens/dots (phone number)
+# 7 catches Polish 8-digit numbers entered without leading country code
+_PHONE_RE = re.compile(r'\d{7,}')
 # Words that indicate lookup/question intent — not new client data
 _LOOKUP_WORDS = {"szukaj", "znajdź", "pokaż", "zmień", "edytuj", "usuń", "odwołaj"}
+# Words that indicate a genuine meeting intent (date/time markers)
+_TEMPORAL_MARKERS = {
+    "jutro", "pojutrze", "dziś", "dzisiaj", "wczoraj",
+    "poniedziałek", "wtorek", "środę", "środa", "czwartek",
+    "piątek", "sobotę", "sobota", "niedzielę", "niedziela",
+    "tydzień", "następny", "przyszły",
+}
+_TIME_RE = re.compile(r'\bo\s+\d{1,2}\b|\bna\s+\d{1,2}\b|\d{1,2}:\d{2}')
 
 
 def _contains_phone(text: str) -> bool:
-    """Return True if text contains a 9+ digit phone number."""
+    """Return True if text contains a 7+ digit phone-like number."""
     digits_only = re.sub(r'[\s\-\.]', '', text)
     return bool(_PHONE_RE.search(digits_only))
 
@@ -152,11 +161,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Save message and get history
     save_conversation_message(telegram_id, "user", message_text)
-    history = get_conversation_history(telegram_id, limit=10)
+    history = get_conversation_history(telegram_id, limit=3)
 
     # Classify intent
     intent_data = await classify_intent(message_text, history)
     intent = intent_data.get("intent", "general_question")
+
+    # Guard: Claude said add_meeting but message has no date/time markers
+    # → reclassify as add_client (avoids history contamination from past meeting attempts)
+    if intent == "add_meeting":
+        msg_lower = message_text.lower()
+        has_temporal = (
+            any(w in msg_lower for w in _TEMPORAL_MARKERS)
+            or bool(_TIME_RE.search(msg_lower))
+        )
+        if not has_temporal:
+            intent = "add_client"
 
     # Route by intent
     handlers = {
@@ -224,6 +244,15 @@ async def _route_pending_flow(
         headers = await get_sheet_headers(user_id)
         result = await extract_client_data(message_text, headers)
         new_data = {k: v for k, v in result.get("client_data", {}).items() if v}
+        logger.info("augment add_client: new_data=%s", new_data)
+
+        if not new_data:
+            # Claude extracted nothing — re-show existing card unchanged
+            sheet_columns = user.get("sheet_columns") or headers
+            missing = [col for col in sheet_columns if not old_client_data.get(col) and col not in SYSTEM_FIELDS]
+            card = format_add_client_card(old_client_data, missing)
+            await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+            return
 
         # If the new message names a different client → start fresh, don't merge
         old_name = old_client_data.get("Imię i nazwisko", "").strip()
@@ -237,8 +266,10 @@ async def _route_pending_flow(
             return
 
         merged = {**old_client_data, **new_data}
+        logger.info("augment add_client: merged=%s", merged)
         sheet_columns = user.get("sheet_columns") or headers
         missing = [col for col in sheet_columns if not merged.get(col) and col not in SYSTEM_FIELDS]
+        logger.info("augment add_client: missing=%s", missing)
 
         if not missing:
             delete_pending_flow(telegram_id)
