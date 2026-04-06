@@ -104,15 +104,20 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     """Format client data as a confirmation card per agent_system_prompt.md spec.
 
     Plain text (no MarkdownV2) — use with reply_text().
+    Every non-empty field in client_data is visible so the user knows what
+    they are confirming.
 
     Example output:
-        📋 Nowak, Piaseczno
-        Pompa ciepła
+        📋 Nowak, ul. Różana 3, Piaseczno
+        Pompa ciepła 8kW
         Tel. 601 234 567
-        ❓ Brakuje: adres (ulica), metraż domu, metraż dachu, kierunek dachu, zużycie prądu, źródło leada
-        Zapisać?
+        Źródło pozyskania: Facebook
+        Następny krok: wysłać ofertę
+        ❓ Brakuje: metraż domu, metraż dachu, kierunek dachu
+        Zapisać czy jeszcze coś dopiszesz?
     """
     lines: list[str] = []
+    rendered: set[str] = set()
 
     # Line 1: 📋 name, [address, ]city
     name = client_data.get("Imię i nazwisko", "")
@@ -122,6 +127,7 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     header = ", ".join([name] + loc_parts) if name else ", ".join(loc_parts)
     if header:
         lines.append(f"📋 {header}")
+    rendered.update(["Imię i nazwisko", "Adres", "Miasto"])
 
     # Line 2: product [power] [| measurements]
     product = client_data.get("Produkt", "")
@@ -150,10 +156,20 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     elif meas_parts:
         lines.append(", ".join(meas_parts))
 
+    rendered.add("Produkt")
+    for candidates in _MEASUREMENT_FIELDS.values():
+        rendered.update(candidates)
+
     # Line 3: phone
     phone = client_data.get("Telefon", "")
     if phone:
         lines.append(f"Tel. {_fmt_phone(phone)}")
+    rendered.add("Telefon")
+
+    # Remaining fields: every non-empty field not already shown above
+    for field, value in client_data.items():
+        if field not in rendered and value:
+            lines.append(f"{field}: {value}")
 
     # Missing fields
     if missing:
