@@ -109,7 +109,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     telegram_id = update.effective_user.id
-    message_text = update.message.text.strip()
+    message_text = update.effective_message.text.strip()
 
     await send_typing(context, telegram_id)
 
@@ -203,7 +203,7 @@ async def _route_pending_flow(
             missing = [col for col in raw_missing if col not in SYSTEM_FIELDS]
             save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
             card = format_add_client_card(new_data, missing)
-            await update.message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+            await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
             return
 
         merged = {**old_client_data, **new_data}
@@ -224,13 +224,13 @@ async def _route_pending_flow(
                         "client_data": {"Imię i nazwisko": next_client},
                         "_offer_remaining": new_remaining,
                     })
-                    await update.message.reply_text(
+                    await update.effective_message.reply_text(
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
                 else:
-                    await update.message.reply_text("✅ Zapisane.")
+                    await update.effective_message.reply_text("✅ Zapisane.")
             else:
-                await update.message.reply_markdown_v2(format_error("google_down"))
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
             return
 
         # Still missing fields — update flow and re-show confirmation card
@@ -239,10 +239,10 @@ async def _route_pending_flow(
             new_flow_data["_offer_remaining"] = old_flow_data["_offer_remaining"]
         save_pending_flow(telegram_id, "add_client", new_flow_data)
         card = format_add_client_card(merged, missing)
-        await update.message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+        await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
     else:
         # Non-add_client flows don't support augmentation
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "Odpowiedz *tak* aby potwierdzić lub *nie* aby anulować.",
             parse_mode="MarkdownV2",
         )
@@ -269,7 +269,7 @@ async def handle_add_client(
     client_data = result.get("client_data", {})
 
     if not client_data:
-        await update.message.reply_text("Co chcesz zrobić?")
+        await update.effective_message.reply_text("Co chcesz zrobić?")
         return
 
     # Duplicate check
@@ -288,7 +288,7 @@ async def handle_add_client(
         dup_addr = duplicate.get("Adres", "")
         dup_prod = duplicate.get("Produkt", "")
         dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"⚠️ Masz już {dup_name} ({dup_info}).\nDodać nowego czy zaktualizować?",
             reply_markup=build_choice_buttons([
                 ("Nowy", "duplicate:add_anyway"),
@@ -304,7 +304,7 @@ async def handle_add_client(
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
     card = format_add_client_card(client_data, missing)
-    await update.message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+    await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
 
 
 async def handle_search_client(
@@ -322,17 +322,17 @@ async def handle_search_client(
     results = await search_clients(user_id, query)
 
     if not results:
-        await update.message.reply_text(f"Nie znalazłem klientów pasujących do: '{query}'")
+        await update.effective_message.reply_text(f"Nie znalazłem klientów pasujących do: '{query}'")
         return
 
     if len(results) == 1:
         card = format_client_card(results[0])
-        await update.message.reply_markdown_v2(card)
+        await update.effective_message.reply_markdown_v2(card)
         return
 
     if len(results) >= 50:
         sheets_url = f"https://docs.google.com/spreadsheets/d/{user.get('google_sheets_id', '')}"
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"Znalazłem {len(results)} klientów. Otwórz arkusz, aby przejrzeć wyniki:\n{sheets_url}"
         )
         return
@@ -348,7 +348,7 @@ async def handle_search_client(
         lines.append(label)
         options.append((label, f"select_client:{row}"))
 
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "\n".join(lines),
         reply_markup=build_choice_buttons(options),
     )
@@ -369,7 +369,7 @@ async def handle_edit_client(
 
     results = await search_clients(user_id, query)
     if not results:
-        await update.message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
@@ -378,7 +378,7 @@ async def handle_edit_client(
     updates = extracted.get("client_data", {})
 
     if not updates:
-        await update.message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
+        await update.effective_message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
         return
 
     # For phone/email fields: if client already has a value, ask keep or replace
@@ -396,7 +396,7 @@ async def handle_edit_client(
             "new_value": new_val,
             "other_updates": other_updates,
         })
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"Stary {field}: {old_val}\nNowy {field}: {new_val}\n\n"
             f"Zastąpić stary czy zachować oba?",
             reply_markup=build_choice_buttons([
@@ -418,7 +418,7 @@ async def handle_edit_client(
         lines.append(format_edit_comparison(field, old_val, new_val))
 
     msg = "\n".join(lines)
-    await update.message.reply_markdown_v2(
+    await update.effective_message.reply_markdown_v2(
         msg, reply_markup=build_confirm_buttons("confirm")
     )
 
@@ -437,14 +437,14 @@ async def handle_delete_client(
 
     results = await search_clients(user_id, query)
     if not results:
-        await update.message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
     save_pending_flow(telegram_id, "delete_client", {"row": client.get("_row")})
 
     card = format_client_card(client)
-    await update.message.reply_markdown_v2(
+    await update.effective_message.reply_markdown_v2(
         f"🗑️ Usunąć tego klienta?\n\n{card}",
         reply_markup=build_confirm_buttons("confirm"),
     )
@@ -466,7 +466,7 @@ async def handle_add_meeting(
     meetings = meeting_result.get("meetings", [])
 
     if not meetings:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
         )
         return
@@ -477,7 +477,7 @@ async def handle_add_meeting(
         # Single meeting — original flow with format_confirmation card
         m = meetings[0]
         if not m.get("date") or not m.get("time"):
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
             )
             return
@@ -486,7 +486,7 @@ async def handle_add_meeting(
             duration = m.get("duration_minutes") or default_duration
             end_dt = start_dt + timedelta(minutes=duration)
         except Exception:
-            await update.message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
+            await update.effective_message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
             return
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
@@ -510,7 +510,7 @@ async def handle_add_meeting(
             "Miejsce": m.get("location", ""),
         }
         msg = format_confirmation("add_meeting", details) + conflict_warning
-        await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
 
     else:
         # Multiple meetings — build all, check conflicts, confirm as a batch
@@ -541,7 +541,7 @@ async def handle_add_meeting(
             })
 
         if not flow_meetings:
-            await update.message.reply_text("Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
+            await update.effective_message.reply_text("Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
             return
 
         save_pending_flow(telegram_id, "add_meetings", {"meetings": flow_meetings})
@@ -553,7 +553,7 @@ async def handle_add_meeting(
             lines.append(f"• {fm.get('client_name', '?')} — {start.strftime('%d.%m %H:%M')}{loc}")
         lines.extend(conflict_warnings)
         msg = escape_markdown_v2("\n".join(lines))
-        await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
 
 
 async def handle_view_meetings(
@@ -582,14 +582,14 @@ async def handle_view_meetings(
             target = today
         slots = await get_free_slots(user_id, target)
         if not slots:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"Brak wolnych okien na {target.strftime('%d.%m')} (9:00–18:00)."
             )
         else:
             lines = [f"🕐 Wolne okna na {target.strftime('%d.%m')}:"]
             for slot_start, slot_end in slots[:8]:
                 lines.append(f"• {slot_start.strftime('%H:%M')}–{slot_end.strftime('%H:%M')}")
-            await update.message.reply_text("\n".join(lines))
+            await update.effective_message.reply_text("\n".join(lines))
         return
 
     today = date.today()
@@ -604,7 +604,7 @@ async def handle_view_meetings(
         events = await get_events_for_date(user_id, today)
 
     schedule = format_daily_schedule(events)
-    await update.message.reply_markdown_v2(schedule)
+    await update.effective_message.reply_markdown_v2(schedule)
 
 
 async def handle_reschedule_meeting(
@@ -615,7 +615,7 @@ async def handle_reschedule_meeting(
     message_text: str,
 ) -> None:
     """Placeholder — tell user to specify which meeting to reschedule."""
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "Podaj nazwę lub datę spotkania które chcesz przełożyć, oraz nowy termin."
     )
 
@@ -628,7 +628,7 @@ async def handle_cancel_meeting(
     message_text: str,
 ) -> None:
     """Placeholder — tell user to specify which meeting to cancel."""
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "Podaj nazwę lub datę spotkania które chcesz odwołać."
     )
 
@@ -649,7 +649,7 @@ async def handle_show_pipeline(
     if dashboard_url:
         msg += f"\n\n[Otwórz dashboard]({escape_markdown_v2(dashboard_url)})"
 
-    await update.message.reply_markdown_v2(msg)
+    await update.effective_message.reply_markdown_v2(msg)
 
 
 async def handle_change_status(
@@ -668,7 +668,7 @@ async def handle_change_status(
 
     results = await search_clients(user_id, query)
     if not results:
-        await update.message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
@@ -678,7 +678,7 @@ async def handle_change_status(
         pipeline_statuses = user.get("pipeline_statuses", [])
         if pipeline_statuses:
             options = [(s, f"set_status:{client.get('_row')}:{s}") for s in pipeline_statuses]
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
                 reply_markup=build_choice_buttons(options),
             )
@@ -691,7 +691,7 @@ async def handle_change_status(
         "new_value": new_status,
     })
 
-    await update.message.reply_markdown_v2(
+    await update.effective_message.reply_markdown_v2(
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
         + format_edit_comparison("Status", old_status, new_status),
         reply_markup=build_confirm_buttons("confirm"),
@@ -711,7 +711,7 @@ async def handle_confirm(
 
     flow = get_pending_flow(telegram_id)
     if not flow:
-        await update.message.reply_text("Nie ma nic do potwierdzenia.")
+        await update.effective_message.reply_text("Nie ma nic do potwierdzenia.")
         return
 
     flow_type = flow.get("flow_type", "")
@@ -720,7 +720,7 @@ async def handle_confirm(
     # Gap 7: if cancellation was requested, this "tak" confirms the cancel
     if flow_data.get("_cancelling"):
         delete_pending_flow(telegram_id)
-        await update.message.reply_text("❌ Anulowano.")
+        await update.effective_message.reply_text("❌ Anulowano.")
         return
 
     # skip_delete: set True when we save a new flow inside the handler so the
@@ -741,36 +741,36 @@ async def handle_confirm(
                         "client_data": {"Imię i nazwisko": next_client},
                         "_offer_remaining": new_remaining,
                     })
-                    await update.message.reply_text(
+                    await update.effective_message.reply_text(
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
                     skip_delete = True
                 else:
-                    await update.message.reply_text("✅ Zapisane.")
+                    await update.effective_message.reply_text("✅ Zapisane.")
             else:
-                await update.message.reply_markdown_v2(format_error("google_down"))
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "add_client_duplicate":
             row = await add_client(user_id, flow_data["client_data"])
             if row:
-                await update.message.reply_text("✅ Zapisane.")
+                await update.effective_message.reply_text("✅ Zapisane.")
             else:
-                await update.message.reply_markdown_v2(format_error("google_down"))
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "edit_client":
             ok = await update_client(user_id, flow_data["row"], flow_data["updates"])
             if ok:
-                await update.message.reply_text("✅ Dane klienta zaktualizowane.")
+                await update.effective_message.reply_text("✅ Dane klienta zaktualizowane.")
             else:
-                await update.message.reply_markdown_v2(format_error("google_down"))
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "delete_client":
             from shared.google_sheets import delete_client
             ok = await delete_client(user_id, flow_data["row"])
             if ok:
-                await update.message.reply_text("✅ Klient usunięty z arkusza.")
+                await update.effective_message.reply_text("✅ Klient usunięty z arkusza.")
             else:
-                await update.message.reply_markdown_v2(format_error("google_down"))
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "add_meeting":
             start = datetime.fromisoformat(flow_data["start"])
@@ -787,15 +787,15 @@ async def handle_confirm(
                 in_sheets = bool(client_name and await search_clients(user_id, client_name))
                 if not in_sheets and client_name:
                     save_pending_flow(telegram_id, "offer_add_client", {"client_name": client_name})
-                    await update.message.reply_text(
+                    await update.effective_message.reply_text(
                         f"✅ Spotkanie dodane. Nie mam {client_name} w bazie. Dodać?",
                         reply_markup=build_confirm_buttons("confirm"),
                     )
                     skip_delete = True
                 else:
-                    await update.message.reply_text("✅ Spotkanie dodane do kalendarza.")
+                    await update.effective_message.reply_text("✅ Spotkanie dodane do kalendarza.")
             else:
-                await update.message.reply_markdown_v2(format_error("calendar_down"))
+                await update.effective_message.reply_markdown_v2(format_error("calendar_down"))
 
         elif flow_type == "add_meetings":
             created = []
@@ -827,13 +827,13 @@ async def handle_confirm(
                 names_str = ", ".join(missing_from_sheets)
                 save_pending_flow(telegram_id, "offer_add_clients", {"names": missing_from_sheets})
                 msg_parts.append(f"Nie mam w bazie: {names_str}. Dodać?")
-                await update.message.reply_text(
+                await update.effective_message.reply_text(
                     "\n".join(msg_parts),
                     reply_markup=build_confirm_buttons("confirm"),
                 )
                 skip_delete = True
             else:
-                await update.message.reply_text("\n".join(msg_parts))
+                await update.effective_message.reply_text("\n".join(msg_parts))
 
         elif flow_type == "offer_add_client":
             client_name = flow_data.get("client_name", "")
@@ -841,12 +841,12 @@ async def handle_confirm(
                 save_pending_flow(telegram_id, "add_client", {
                     "client_data": {"Imię i nazwisko": client_name},
                 })
-                await update.message.reply_text(
+                await update.effective_message.reply_text(
                     f"Podaj dane {client_name} — adres, telefon, produkt."
                 )
                 skip_delete = True
             else:
-                await update.message.reply_text("Brak klienta do dodania.")
+                await update.effective_message.reply_text("Brak klienta do dodania.")
 
         elif flow_type == "offer_add_clients":
             names = flow_data.get("names", [])
@@ -857,26 +857,26 @@ async def handle_confirm(
                     "client_data": {"Imię i nazwisko": first},
                     "_offer_remaining": new_remaining,
                 })
-                await update.message.reply_text(
+                await update.effective_message.reply_text(
                     f"Podaj dane {first} — adres, telefon, produkt."
                 )
                 skip_delete = True
             else:
-                await update.message.reply_text("Brak klientów do dodania.")
+                await update.effective_message.reply_text("Brak klientów do dodania.")
 
         elif flow_type == "change_status":
             ok = await update_client(user_id, flow_data["row"], {flow_data["field"]: flow_data["new_value"]})
             if ok:
-                await update.message.reply_text(f"✅ Status zmieniony na: {flow_data['new_value']}")
+                await update.effective_message.reply_text(f"✅ Status zmieniony na: {flow_data['new_value']}")
             else:
-                await update.message.reply_markdown_v2(format_error("google_down"))
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         else:
-            await update.message.reply_text("✅ Gotowe.")
+            await update.effective_message.reply_text("✅ Gotowe.")
 
     except Exception as e:
         logger.error("handle_confirm(flow_type=%s): %s", flow_type, e)
-        await update.message.reply_markdown_v2(format_error("timeout"))
+        await update.effective_message.reply_markdown_v2(format_error("timeout"))
     finally:
         if not skip_delete:
             delete_pending_flow(telegram_id)
@@ -893,7 +893,7 @@ async def handle_cancel_flow(
     telegram_id = update.effective_user.id
     flow = get_pending_flow(telegram_id)
     if not flow:
-        await update.message.reply_text("Nie ma nic do anulowania.")
+        await update.effective_message.reply_text("Nie ma nic do anulowania.")
         return
 
     flow_data = flow.get("flow_data", {})
@@ -902,13 +902,13 @@ async def handle_cancel_flow(
         # User said "nie" a second time — remove the flag and keep the flow active
         flow_data.pop("_cancelling")
         save_pending_flow(telegram_id, flow["flow_type"], flow_data)
-        await update.message.reply_text("OK, czekam na Twoją odpowiedź.")
+        await update.effective_message.reply_text("OK, czekam na Twoją odpowiedź.")
         return
 
     # First cancel request: set flag and warn
     flow_data["_cancelling"] = True
     save_pending_flow(telegram_id, flow["flow_type"], flow_data)
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "Anulować całkowicie? Dane zostaną utracone.\n"
         "Napisz *tak* aby anulować lub *nie* aby wrócić.",
         parse_mode="MarkdownV2",
@@ -927,9 +927,9 @@ async def handle_refresh_columns(
     headers = await get_sheet_headers(user_id)  # already updates Supabase on success
     if headers:
         cols = ", ".join(headers)
-        await update.message.reply_text(f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
+        await update.effective_message.reply_text(f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
     else:
-        await update.message.reply_markdown_v2(format_error("google_down"))
+        await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
 
 async def handle_general(
@@ -961,7 +961,7 @@ async def handle_general(
 
     save_conversation_message(telegram_id, "assistant", response_text)
 
-    await update.message.reply_text(response_text)
+    await update.effective_message.reply_text(response_text)
 
     await increment_interaction(
         telegram_id,
