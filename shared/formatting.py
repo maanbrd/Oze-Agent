@@ -1,0 +1,243 @@
+"""Telegram message formatting helpers for OZE-Agent.
+
+All output uses Telegram MarkdownV2. All user-facing text is in Polish.
+"""
+
+import re
+
+# ── MarkdownV2 escaping ───────────────────────────────────────────────────────
+
+# Characters that must be escaped in MarkdownV2
+_MDV2_SPECIAL = r"\_*[]()~`>#+-=|{}.!"
+
+
+def escape_markdown_v2(text: str) -> str:
+    """Escape special characters for Telegram MarkdownV2."""
+    for char in _MDV2_SPECIAL:
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def _e(text: str) -> str:
+    """Shorthand for escape_markdown_v2."""
+    return escape_markdown_v2(str(text)) if text else ""
+
+
+# ── Error messages ────────────────────────────────────────────────────────────
+
+_ERROR_MESSAGES = {
+    "google_down": (
+        "⚠️ Google Sheets jest chwilowo niedostępny\\. "
+        "Twoje dane NIE zostały zapisane\\. "
+        "Spróbuj ponownie za kilka minut\\."
+    ),
+    "calendar_down": (
+        "⚠️ Google Calendar jest chwilowo niedostępny\\. "
+        "Spotkanie NIE zostało dodane\\. "
+        "Spróbuj ponownie za kilka minut\\."
+    ),
+    "drive_down": (
+        "⚠️ Google Drive jest chwilowo niedostępny\\. "
+        "Zdjęcie NIE zostało przesłane\\. "
+        "Spróbuj ponownie za kilka minut\\."
+    ),
+    "timeout": (
+        "⏱ Przekroczono czas oczekiwania\\. "
+        "Spróbuj ponownie\\."
+    ),
+    "token_expired": (
+        "🔑 Integracja Google wymaga ponownej autoryzacji\\. "
+        "Otwórz dashboard i autoryzuj ponownie\\."
+    ),
+    "subscription_expired": (
+        "💳 Twoja subskrypcja wygasła\\. "
+        "Wykup dostęp, aby kontynuować korzystanie z asystenta\\."
+    ),
+    "rate_limit": (
+        "📊 Osiągnąłeś dzienny limit interakcji\\. "
+        "Limit odnawia się o północy\\."
+    ),
+}
+
+
+def format_error(error_type: str) -> str:
+    """Return a user-friendly Polish error message for MarkdownV2."""
+    return _ERROR_MESSAGES.get(
+        error_type,
+        "❌ Wystąpił nieoczekiwany błąd\\. Spróbuj ponownie\\.",
+    )
+
+
+# ── Client card ───────────────────────────────────────────────────────────────
+
+SKIP_FIELDS = {"_row", "Link do zdjęć", "ID kalendarza"}
+
+
+def format_client_card(client: dict) -> str:
+    """Format a client dict as a Telegram MarkdownV2 card."""
+    name = _e(client.get("Imię i nazwisko", "Nieznany klient"))
+    lines = [f"👤 *{name}*"]
+
+    priority_fields = [
+        ("Miasto", "📍"),
+        ("Telefon", "📞"),
+        ("Email", "✉️"),
+        ("Status", "📋"),
+        ("Produkt", "☀️"),
+    ]
+    shown = {"Imię i nazwisko"}
+
+    for field, emoji in priority_fields:
+        value = client.get(field, "")
+        if value:
+            lines.append(f"{emoji} {_e(field)}: {_e(value)}")
+            shown.add(field)
+
+    for field, value in client.items():
+        if field in shown or field in SKIP_FIELDS or not value:
+            continue
+        lines.append(f"• {_e(field)}: {_e(value)}")
+
+    row = client.get("_row")
+    if row:
+        lines.append(f"\n_Wiersz: {_e(str(row))}_")
+
+    return "\n".join(lines)
+
+
+# ── Meeting / event formatting ────────────────────────────────────────────────
+
+
+def format_meeting(event: dict) -> str:
+    """Format a single calendar event for display."""
+    start = event.get("start", "")
+    end = event.get("end", "")
+    title = _e(event.get("title", "Spotkanie"))
+    location = event.get("location", "")
+    description = event.get("description", "")
+
+    time_str = ""
+    try:
+        # Parse ISO strings — show only HH:MM-HH:MM
+        s = start[11:16] if len(start) >= 16 else start
+        e = end[11:16] if len(end) >= 16 else end
+        time_str = f"{_e(s)}\\-{_e(e)}"
+    except Exception:
+        time_str = _e(start)
+
+    lines = [f"📅 {time_str} — *{title}*"]
+    if location:
+        lines.append(f"📍 {_e(location)}")
+    if description:
+        lines.append(f"📝 {_e(description)}")
+    return "\n".join(lines)
+
+
+def format_daily_schedule(events: list[dict]) -> str:
+    """Format a full day's schedule."""
+    if not events:
+        return "📭 Brak spotkań na dziś\\."
+    parts = ["📅 *Plan dnia:*\n"]
+    for event in events:
+        parts.append(format_meeting(event))
+    return "\n\n".join(parts)
+
+
+# ── Pipeline stats ────────────────────────────────────────────────────────────
+
+
+def format_pipeline_stats(stats: dict) -> str:
+    """Format pipeline status counts."""
+    if not stats:
+        return "📊 *Pipeline:* brak danych\\."
+    lines = ["📊 *Pipeline:*"]
+    for status, count in stats.items():
+        lines.append(f"• {_e(status)}: {_e(str(count))}")
+    return "\n".join(lines)
+
+
+# ── Morning brief ─────────────────────────────────────────────────────────────
+
+
+def format_morning_brief(
+    events: list[dict],
+    followups: list[dict],
+    stats: dict,
+    free_slots: list,
+) -> str:
+    """Compose the full morning brief message."""
+    parts = ["🌅 *Dzień dobry\\! Oto Twój plan na dziś:*\n"]
+
+    parts.append(format_daily_schedule(events))
+
+    if followups:
+        parts.append("\n⏳ *Oczekujące follow\\-upy:*")
+        for f in followups:
+            parts.append(f"• {_e(f.get('event_title', 'Spotkanie'))}")
+
+    parts.append("\n" + format_pipeline_stats(stats))
+
+    if free_slots:
+        slot_strs = []
+        for s, e in free_slots[:3]:
+            slot_strs.append(f"{s.strftime('%H:%M')}\\-{e.strftime('%H:%M')}")
+        parts.append(f"\n🕐 *Wolne sloty:* {', '.join(slot_strs)}")
+
+    return "\n".join(parts)
+
+
+# ── Meeting reminder ──────────────────────────────────────────────────────────
+
+
+def format_meeting_reminder(event: dict, client: dict) -> str:
+    """Format a pre-meeting reminder with client data."""
+    title = _e(event.get("title", "Spotkanie"))
+    start = event.get("start", "")
+    time_str = _e(start[11:16]) if len(start) >= 16 else _e(start)
+
+    lines = [
+        f"🔔 *Przypomnienie o spotkaniu\\!*",
+        f"📅 {time_str} — *{title}*",
+    ]
+    if event.get("location"):
+        lines.append(f"📍 {_e(event['location'])}")
+
+    if client:
+        lines.append("\n👤 *Dane klienta:*")
+        for field in ["Telefon", "Email", "Notatki", "Produkt", "Status"]:
+            value = client.get(field, "")
+            if value:
+                lines.append(f"• {_e(field)}: {_e(value)}")
+
+    return "\n".join(lines)
+
+
+# ── Confirmation messages ─────────────────────────────────────────────────────
+
+
+def format_confirmation(action: str, details: dict) -> str:
+    """Format a confirmation message for any action."""
+    action_labels = {
+        "add_client": "Dodać klienta",
+        "edit_client": "Zaktualizować dane klienta",
+        "delete_client": "Usunąć klienta",
+        "add_meeting": "Dodać spotkanie",
+        "update_meeting": "Zaktualizować spotkanie",
+        "delete_meeting": "Odwołać spotkanie",
+        "update_status": "Zmienić status",
+    }
+    label = _e(action_labels.get(action, action))
+    lines = [f"✅ *{label}?*\n"]
+    for key, value in details.items():
+        if value:
+            lines.append(f"• {_e(str(key))}: {_e(str(value))}")
+    lines.append("\nOdpowiedz *tak* aby potwierdzić lub *nie* aby anulować\\.")
+    return "\n".join(lines)
+
+
+# ── Edit comparison ───────────────────────────────────────────────────────────
+
+
+def format_edit_comparison(field: str, old_value: str, new_value: str) -> str:
+    """Show field change: 'Telefon: 600111222 → 601234567'."""
+    return f"{_e(field)}: {_e(old_value)} → {_e(new_value)}"
