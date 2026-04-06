@@ -297,12 +297,9 @@ async def handle_add_client(
         )
         return
 
-    # Use Claude's missing_columns; fall back to full recount if empty — filter system fields
+    # Always compute missing from actual sheet column names (never trust Claude's guesses)
     sheet_columns = user.get("sheet_columns") or headers
-    raw_missing = result.get("missing_columns", []) or [
-        col for col in sheet_columns if not client_data.get(col)
-    ]
-    missing = [col for col in raw_missing if col not in SYSTEM_FIELDS]
+    missing = [col for col in sheet_columns if not client_data.get(col) and col not in SYSTEM_FIELDS]
 
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
