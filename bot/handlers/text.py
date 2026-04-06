@@ -157,8 +157,13 @@ async def _route_pending_flow(
     flow_type = flow.get("flow_type", "")
     text_lower = message_text.lower().strip()
 
-    is_yes = text_lower in {"tak", "tak.", "ok", "okej", "dobrze", "zgadza się", "yes"}
-    is_no = text_lower in {"nie", "nie.", "anuluj", "stop", "no", "cancel"}
+    is_yes = text_lower in {
+        "tak", "tak.", "ok", "okej", "dobrze", "zgadza się", "yes",
+        "zapisz tak jak jest", "zapisz", "tak jak jest", "ok zapisz", "dobra", "spoko",
+    }
+    is_no = text_lower in {
+        "nie", "nie.", "anuluj", "stop", "no", "cancel", "nie chcę", "zrezygnuj",
+    }
 
     if is_yes:
         await handle_confirm(update, context, user, {}, message_text)
