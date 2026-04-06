@@ -151,9 +151,9 @@ def build_confirm_buttons(callback_prefix: str) -> InlineKeyboardMarkup:
 
 
 def build_save_buttons(callback_prefix: str) -> InlineKeyboardMarkup:
-    """Return single wide [Tak] button for add-client confirmation."""
+    """Return single wide [Zapisz] button for add-client confirmation."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Tak", callback_data=f"{callback_prefix}:yes")],
+        [InlineKeyboardButton("✅ Zapisz", callback_data=f"{callback_prefix}:yes")],
     ])
 
 

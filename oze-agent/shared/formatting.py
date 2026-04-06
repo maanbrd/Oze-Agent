@@ -82,6 +82,13 @@ _MEASUREMENT_FIELDS = {
     "dir":   ["Kierunek dachu"],
 }
 
+# Short display labels for verbose field names shown in extra-fields section
+_FIELD_LABEL = {
+    "Źródło pozyskania": "Źródło",
+    "Miejscowość": "Miejscowość",
+    "Następny krok": "Następny krok",
+}
+
 
 def _find(client_data: dict, candidates: list[str]) -> str:
     for key in candidates:
@@ -169,7 +176,8 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     # Remaining fields: every non-empty field not already shown above
     for field, value in client_data.items():
         if field not in rendered and value:
-            lines.append(f"{field}: {value}")
+            label = _FIELD_LABEL.get(field, field)
+            lines.append(f"{label}: {value}")
 
     # Missing fields
     if missing:
