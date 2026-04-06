@@ -168,8 +168,15 @@ Kontekst poprzednich wiadomości:
 
     result = await call_claude(system_prompt, message, model_type="simple", max_tokens=256)
 
+    raw = result["text"].strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
     try:
-        parsed = json.loads(result["text"])
+        parsed = json.loads(raw)
         if parsed.get("intent") not in VALID_INTENTS:
             parsed["intent"] = "general_question"
         parsed.setdefault("entities", {})

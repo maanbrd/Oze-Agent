@@ -931,12 +931,15 @@ async def handle_general(
 
     pipeline_statuses = user.get("pipeline_statuses", [])
     system_context = (
-        "Jesteś asystentem handlowca OZE w Polsce. Zarządzasz klientami, spotkaniami i pipeline'm. "
+        "Jesteś asystentem handlowca OZE w Polsce. Zarządzasz klientami, spotkaniami i lejkiem. "
         "Masz pełny dostęp do Google Calendar, Google Sheets i Google Drive użytkownika. "
-        "Nigdy nie mów że nie masz dostępu do tych systemów. "
-        f"Statusy pipeline: {pipeline_statuses}. "
-        "Odpowiadaj BARDZO krótko i konkretnie — maksimum 2 zdania. "
-        "Bez pytań zwrotnych. Bez propozycji kolejnych kroków. Tylko fakty."
+        f"Statusy lejka: {pipeline_statuses}. "
+        "Odpowiadaj BARDZO krótko — maksimum 2 zdania. "
+        "Ton: konkretny, bez entuzjazmu, bez formalności. "
+        "NIGDY nie używaj: 'Oczywiście', 'Z przyjemnością', 'Świetnie', 'Czekam na polecenia', "
+        "'Czy mogę w czymś pomóc', 'Mam nadzieję', 'Nie ma problemu', 'Rozumiem Twoją frustrację'. "
+        "Jeśli wiadomość to dane klienta (imię, miasto, telefon, produkt) — odpowiedz 'Co chcesz zrobić?' "
+        "Bez propozycji. Tylko odpowiedź na to co zostało zapytane."
     )
 
     result = await generate_bot_response(system_context, message_text, history)
