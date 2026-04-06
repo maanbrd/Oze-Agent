@@ -231,8 +231,8 @@ async def handle_add_client(
     parts = [client_data[col] for col in sheet_columns if client_data.get(col)]
     summary = ", ".join(parts)
     missing = [col for col in sheet_columns if not client_data.get(col)]
-    missing_text = f"\nBrakuje: {', '.join(missing)}." if missing else ""
-    msg = escape_markdown_v2(f"Zapisuję klienta: {summary}.{missing_text}\nZapisać?")
+    missing_text = f"\n❓ Brakuje: {', '.join(missing)}." if missing else ""
+    msg = escape_markdown_v2(f"📋 Zapisuję klienta:\n{summary}.{missing_text}\nZapisać?")
     await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
 
 
