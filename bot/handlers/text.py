@@ -64,6 +64,13 @@ from shared.search import detect_potential_duplicate
 
 logger = logging.getLogger(__name__)
 
+# Fields managed automatically — never show as "missing" to the user
+SYSTEM_FIELDS = {
+    "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status",
+    "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email",
+    "Dodatkowe info", "Notatki",
+}
+
 
 # ── Guards ─────────────────────────────────────────────────────────────────────
 
@@ -183,12 +190,28 @@ async def _route_pending_flow(
         headers = await get_sheet_headers(user_id)
         result = await extract_client_data(message_text, headers)
         new_data = {k: v for k, v in result.get("client_data", {}).items() if v}
+
+        # If the new message names a different client → start fresh, don't merge
+        old_name = old_client_data.get("Imię i nazwisko", "").strip()
+        new_name = new_data.get("Imię i nazwisko", "").strip()
+        if old_name and new_name and old_name.lower() != new_name.lower():
+            # Treat as a brand-new add_client (overwrite existing flow)
+            sheet_columns = user.get("sheet_columns") or headers
+            raw_missing = result.get("missing_columns", []) or [
+                col for col in sheet_columns if not new_data.get(col)
+            ]
+            missing = [col for col in raw_missing if col not in SYSTEM_FIELDS]
+            save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
+            card = format_add_client_card(new_data, missing)
+            await update.message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+            return
+
         merged = {**old_client_data, **new_data}
         sheet_columns = user.get("sheet_columns") or headers
-        missing = [col for col in sheet_columns if not merged.get(col)]
+        missing = [col for col in sheet_columns if not merged.get(col) and col not in SYSTEM_FIELDS]
 
         if not missing:
-            # All fields now filled — auto-save without another confirmation prompt
+            # All business fields now filled — auto-save without another confirmation prompt
             delete_pending_flow(telegram_id)
             row = await add_client(user_id, merged)
             if row:
@@ -205,7 +228,7 @@ async def _route_pending_flow(
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
                 else:
-                    await update.message.reply_text(f"✅ Klient {name} dodany do arkusza (wiersz {row}).")
+                    await update.message.reply_text("✅ Zapisane.")
             else:
                 await update.message.reply_markdown_v2(format_error("google_down"))
             return
@@ -215,11 +238,8 @@ async def _route_pending_flow(
         if old_flow_data.get("_offer_remaining"):
             new_flow_data["_offer_remaining"] = old_flow_data["_offer_remaining"]
         save_pending_flow(telegram_id, "add_client", new_flow_data)
-        parts = [merged[col] for col in sheet_columns if merged.get(col)]
-        summary = ", ".join(parts)
-        missing_text = f"\n❓ Brakuje: {', '.join(missing)}." if missing else ""
-        msg = escape_markdown_v2(f"📋 Zapisuję klienta:\n{summary}.{missing_text}\nZapisać?")
-        await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+        card = format_add_client_card(merged, missing)
+        await update.message.reply_text(card, reply_markup=build_save_buttons("confirm"))
     else:
         # Non-add_client flows don't support augmentation
         await update.message.reply_text(
@@ -277,11 +297,12 @@ async def handle_add_client(
         )
         return
 
-    # Use Claude's missing_columns; fall back to full recount if empty
+    # Use Claude's missing_columns; fall back to full recount if empty — filter system fields
     sheet_columns = user.get("sheet_columns") or headers
-    missing = result.get("missing_columns", []) or [
+    raw_missing = result.get("missing_columns", []) or [
         col for col in sheet_columns if not client_data.get(col)
     ]
+    missing = [col for col in raw_missing if col not in SYSTEM_FIELDS]
 
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
@@ -728,18 +749,14 @@ async def handle_confirm(
                     )
                     skip_delete = True
                 else:
-                    await update.message.reply_text(
-                        f"✅ Klient *{name}* dodany do arkusza \\(wiersz {row}\\)\\.",
-                        parse_mode="MarkdownV2",
-                    )
+                    await update.message.reply_text("✅ Zapisane.")
             else:
                 await update.message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "add_client_duplicate":
             row = await add_client(user_id, flow_data["client_data"])
             if row:
-                name = flow_data["client_data"].get("Imię i nazwisko", "klient")
-                await update.message.reply_text(f"✅ Klient *{name}* dodany \\(wiersz {row}\\)\\.", parse_mode="MarkdownV2")
+                await update.message.reply_text("✅ Zapisane.")
             else:
                 await update.message.reply_markdown_v2(format_error("google_down"))
 

@@ -200,8 +200,10 @@ Zwróć TYLKO surowy JSON (bez markdown, bez ```):
 {{"client_data": {{"kolumna": "wartość"}}, "missing_columns": ["..."], "suggested_followup": {{}}}}
 
 Zasady:
+- Parsuj TYLKO tę jedną wiadomość. Ignoruj wszelki wcześniejszy kontekst lub dane.
 - NIE dodawaj pól których nie ma w wiadomości
-- missing_columns = kolumny z listy BEZ wartości w wiadomości
+- missing_columns = kolumny z listy BEZ wartości w wiadomości, z wyjątkiem pól systemowych
+- NIE wliczaj do missing_columns pól systemowych: "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status", "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email", "Dodatkowe info", "Notatki"
 
 Mapuj slang OZE (zawsze):
 - foto / fotowoltaika / fotowoltaikę / PV-ka / panele / pv → "PV"
