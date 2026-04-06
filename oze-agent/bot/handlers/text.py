@@ -1,6 +1,7 @@
 """Text message handler — main intent router for OZE-Agent bot."""
 
 import logging
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -68,8 +69,19 @@ logger = logging.getLogger(__name__)
 SYSTEM_FIELDS = {
     "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status",
     "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email",
-    "Dodatkowe info", "Notatki", "Następny krok",
+    "Dodatkowe info", "Notatki",
 }
+
+# Regex: 9+ consecutive digits after stripping spaces/hyphens/dots (phone number)
+_PHONE_RE = re.compile(r'\d{9,}')
+# Words that indicate lookup/question intent — not new client data
+_LOOKUP_WORDS = {"szukaj", "znajdź", "pokaż", "zmień", "edytuj", "usuń", "odwołaj"}
+
+
+def _contains_phone(text: str) -> bool:
+    """Return True if text contains a 9+ digit phone number."""
+    digits_only = re.sub(r'[\s\-\.]', '', text)
+    return bool(_PHONE_RE.search(digits_only))
 
 
 # ── Guards ─────────────────────────────────────────────────────────────────────
@@ -117,6 +129,25 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     pending_flow = get_pending_flow(telegram_id)
     if pending_flow:
         await _route_pending_flow(update, context, user, pending_flow, message_text)
+        return
+
+    text_lower = message_text.lower()
+    words = set(text_lower.split())
+
+    # "zapisz" keyword with other content → parse client data and save immediately
+    if "zapisz" in words and len(words) > 1:
+        await handle_add_client(update, context, user, {}, message_text, save_immediately=True)
+        await increment_interaction(telegram_id, "add_client", "local", 0, 0, 0.0)
+        return
+
+    # Phone number in message (not a question, not a lookup command) → add_client
+    if (
+        _contains_phone(message_text)
+        and "?" not in message_text
+        and not any(w in words for w in _LOOKUP_WORDS)
+    ):
+        await handle_add_client(update, context, user, {}, message_text)
+        await increment_interaction(telegram_id, "add_client", "local", 0, 0, 0.0)
         return
 
     # Save message and get history
@@ -172,6 +203,9 @@ async def _route_pending_flow(
         "tak", "tak.", "ok", "okej", "dobrze", "zgadza się", "yes",
         "zapisz tak jak jest", "zapisz", "tak jak jest", "ok zapisz", "dobra", "spoko",
     }
+    # "zapisz" as a word in a longer message (e.g. "adres Długa 12 zapisz") → confirm
+    if not is_yes and "zapisz" in set(text_lower.split()):
+        is_yes = True
     is_no = text_lower in {
         "nie", "nie.", "anuluj", "stop", "no", "cancel", "nie chcę", "zrezygnuj",
     }
@@ -252,19 +286,35 @@ async def handle_add_client(
     user: dict,
     intent_data: dict,
     message_text: str,
+    save_immediately: bool = False,
 ) -> None:
-    """Extract client data, check for duplicates, show confirmation card."""
+    """Extract client data, check for duplicates, show confirmation card.
+
+    If save_immediately=True (triggered by "zapisz" keyword), skip confirmation
+    and write to Sheets directly.
+    """
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
     await send_typing(context, telegram_id)
 
     headers = await get_sheet_headers(user_id)
-    result = await extract_client_data(message_text, headers)
+    # Strip "zapisz" from the message before extraction so it isn't mis-parsed
+    clean_message = re.sub(r'\bZapisz\b|\bzapisz\b', '', message_text).strip()
+    result = await extract_client_data(clean_message, headers)
     client_data = result.get("client_data", {})
 
     if not client_data:
         await update.effective_message.reply_text("Co chcesz zrobić?")
+        return
+
+    # save_immediately: write without showing card
+    if save_immediately:
+        row = await add_client(user_id, client_data)
+        if row:
+            await update.effective_message.reply_text("✅ Zapisane.")
+        else:
+            await update.effective_message.reply_markdown_v2(format_error("google_down"))
         return
 
     # Duplicate check
