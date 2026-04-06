@@ -52,7 +52,12 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
             logger.error("get_google_credentials: decryption failed for user %s: %s", user_id, e)
             return None
 
-        expiry = datetime.fromisoformat(token_expiry) if token_expiry else None
+        if token_expiry:
+            expiry = datetime.fromisoformat(token_expiry.replace("Z", "+00:00"))
+            # google-auth compares expiry with datetime.utcnow() (naive) — must be naive UTC
+            expiry = expiry.replace(tzinfo=None)
+        else:
+            expiry = None
 
         creds = Credentials(
             token=decrypted_access,
@@ -96,25 +101,20 @@ def store_google_tokens(user_id: str, credentials: Credentials) -> None:
 def build_oauth_url(user_id: str) -> str:
     """Generate Google OAuth authorization URL.
 
-    state=user_id so we can match the callback to the correct user.
+    Uses plain OAuth2 without PKCE — correct for server-side web app flows.
+    state=user_id so the callback can identify the user.
     """
-    flow = Flow.from_client_config(
-        client_config={
-            "web": {
-                "client_id": Config.GOOGLE_CLIENT_ID,
-                "client_secret": Config.GOOGLE_CLIENT_SECRET,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        },
-        scopes=SCOPES,
+    from requests_oauthlib import OAuth2Session
+
+    oauth = OAuth2Session(
+        client_id=Config.GOOGLE_CLIENT_ID,
+        scope=SCOPES,
         redirect_uri=Config.GOOGLE_REDIRECT_URI,
-    )
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        prompt="consent",
         state=user_id,
-        include_granted_scopes="true",
+    )
+    auth_url, _ = oauth.authorization_url(
+        "https://accounts.google.com/o/oauth2/auth",
+        access_type="offline",
     )
     return auth_url
 

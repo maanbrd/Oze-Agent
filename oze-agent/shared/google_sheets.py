@@ -191,7 +191,9 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
         def _append():
             service = _get_sheets_service_sync(user_id)
             if not service:
+                logger.error("add_client: no service for user %s", user_id)
                 return None
+            logger.info("add_client: appending %d-cell row to %s", len(row), spreadsheet_id)
             result = service.spreadsheets().values().append(
                 spreadsheetId=spreadsheet_id,
                 range="A1",
@@ -200,11 +202,13 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
                 body={"values": [row]},
             ).execute()
             updated_range = result.get("updates", {}).get("updatedRange", "")
+            logger.info("add_client: updatedRange=%s", updated_range)
             # Extract row number from range like "Sheet1!A5:Q5"
             try:
                 row_num = int(updated_range.split("!")[1].split(":")[0][1:])
                 return row_num
-            except Exception:
+            except Exception as e:
+                logger.error("add_client: row_num parse failed, updatedRange=%r: %s", updated_range, e)
                 return None
 
         return await asyncio.to_thread(_append)

@@ -1,0 +1,250 @@
+# Poznaj swojego agenta
+
+## Czym jest OZE-Agent?
+
+OZE-Agent to Twój osobisty asystent sprzedażowy, który żyje w aplikacji Telegram na Twoim telefonie. Rozmawiasz z nim tak, jak rozmawiasz ze znajomym — po polsku, swoimi słowami, bez żadnych specjalnych komend ani skomplikowanych formularzy.
+
+Agent jest połączony z Twoim kontem Google. To znaczy, że kiedy powiesz mu o nowym kliencie, sam zapisze dane w Twoim arkuszu Google Sheets. Kiedy umówisz spotkanie, sam doda je do Twojego kalendarza Google. Kiedy wyślesz zdjęcie dachu klienta, sam zapisze je na Twoim Dysku Google i podepnie do tego klienta.
+
+Ty mówisz — on robi. Żadnego wpisywania w tabelki, żadnego przeklikiwania się przez menu.
+
+---
+
+## Jak się z nim komunikować?
+
+Masz trzy sposoby — używaj tego, który jest wygodniejszy w danym momencie:
+
+### 🎙️ Głosówki (najszybszy sposób)
+
+Jedziesz autem po spotkaniu? Przytrzymaj przycisk mikrofonu w Telegramie i po prostu powiedz co się wydarzyło. Mów naturalnie, tak jak opowiadałbyś koledze. Im więcej powiesz za jednym razem, tym lepiej — agent przetworzy wszystko naraz:
+
+*"Byłem właśnie u Kowalskiego na Piłsudskiego 12 w Warszawie. Dom ma 160 metrów, dach skierowany na południe, około 40 metrów dachu. Zainteresowany fotowoltaiką, myśli o instalacji 8 kilowatów. Chce wycenę do środy. Numer telefonu 600 123 456."*
+
+Po nagraniu agent pokaże Ci transkrypcję — to co usłyszał. Jeśli coś źle zrozumiał (np. przekręcił nazwisko), możesz poprawić tekstem albo nagrać ponownie. Dopiero po Twoim potwierdzeniu agent przetworzy dane.
+
+Agent wyciągnie z tego wszystkie dane, pokaże co zrozumiał i na końcu wymieni wszystkie brakujące pola — wszystkie naraz, nie po jednym. Jeśli masz brakujące dane, uzupełniasz jedną wiadomością. Jeśli nie masz — mówisz "zapisz tak jak jest" i uzupełnisz później.
+
+Nie musisz mówić w żadnym specjalnym formacie. Mów tak jak mówisz na co dzień. Agent zrozumie.
+
+### ✍️ Pisanie (gdy jest ciszej)
+
+Siedzisz w poczekalni? Wpisujesz wiadomość tak jak SMS:
+
+*"Nowy klient Nowak, Leśna 5, Piaseczno, zainteresowany pompą ciepła, dom 120m2, tel 601234567"*
+
+Im więcej informacji podasz w jednej wiadomości, tym szybciej agent zapisze klienta — i tym mniej zużyjesz swoich interakcji. Jedna rozbudowana wiadomość jest lepsza niż pięć krótkich.
+
+### 📸 Zdjęcia (dokumentacja wizualna)
+
+Zrobiłeś zdjęcie dachu klienta? Licznika prądu? Tabliczki z adresem? Wyślij je do agenta w Telegramie. Agent zapyta do którego klienta przypisać zdjęcie — powiesz imię i miejscowość, a on sam zapisze zdjęcie w folderze tego klienta na Twoim Dysku Google.
+
+Możesz wysłać kilka zdjęć pod rząd — agent podepnie je wszystkie do tego samego klienta.
+
+---
+
+## Co agent potrafi?
+
+### 👥 Zarządzanie klientami
+
+Agent prowadzi Twoją bazę klientów w arkuszu Google Sheets. Ale Ty nigdy nie musisz otwierać tego arkusza ręcznie — agent robi to za Ciebie.
+
+**Dodawanie klientów** — powiedz agentowi o nowym kliencie głosówką lub tekstem. Podaj jak najwięcej informacji naraz. Agent wyciągnie wszystkie dane, pokaże co zrozumiał, a na końcu wymieni wszystkie brakujące pola:
+
+*Ty: "Byłem u Kowalskiego, Piłsudskiego 12 Warszawa, dom 160 metrów, dach południe 40 metrów, PV 8kW, telefon 600 123 456, chce wycenę do środy"*
+
+*Agent: "📋 Zapisuję klienta:*
+*Jan Kowalski, Piłsudskiego 12, Warszawa*
+*Dom 160m², dach 40m² południe, PV 8kW*
+*Tel. 600 123 456*
+*❓ Brakuje: zużycie prądu, źródło leada*
+*Zapisać?"*
+
+*Ty: "Tak"*
+
+*Agent: "✅ Zapisane."*
+
+Dwie wiadomości — klient w arkuszu.
+
+**Wyszukiwanie klientów** — chcesz sprawdzić dane klienta? Wystarczy powiedzieć:
+- *"Co mam o Kowalskim?"*
+- *"Znajdź klienta z Piaseczna"*
+- *"Pokaż dane Nowaka"*
+
+Agent przeszuka arkusz i pokaże kartę klienta ze wszystkimi danymi. Jeśli znajdzie kilku klientów o podobnym nazwisku, pokaże listę i zapyta którego masz na myśli. Nawet jeśli zrobisz literówkę (np. "Kowalsky" zamiast "Kowalski"), agent domyśli się o kogo chodzi.
+
+Jeśli masz dużo klientów (50+), agent zamiast długiej listy wyśle Ci link do Twojego arkusza Google Sheets.
+
+**Edycja danych** — chcesz coś zmienić? Powiedz co i u kogo:
+- *"Zmień telefon Kowalskiego na 601 234 567"*
+- *"Dodaj notatkę do Nowaka: interesuje się też magazynem energii"*
+- *"Kowalski ma 45 metrów dachu, nie 40"*
+
+Gdy zmieniasz np. numer telefonu, agent zapyta: "Zostawić stary numer i dodać drugi, czy usunąć stary?" — żebyś nie stracił danych przypadkiem.
+
+Agent pokaże co zmieni i poczeka na Twoje potwierdzenie.
+
+**Zmiana statusu klienta** — Twoi klienci przechodzą przez etapy sprzedaży (nowy lead → spotkanie → oferta → negocjacje → podpisane). Żeby przesunąć klienta dalej, wystarczy powiedzieć:
+- *"Kowalski — wysłałem ofertę"*
+- *"Nowak podpisał umowę!"*
+- *"Wiśniewski zrezygnował"*
+
+Agent zaproponuje zmianę statusu i poczeka na Twoje potwierdzenie.
+
+**Usuwanie klientów** — jeśli chcesz usunąć klienta z bazy, powiedz np. *"Usuń Nowaka z Piaseczna"*. Agent zawsze pyta o potwierdzenie, bo tej operacji nie da się cofnąć.
+
+### 📅 Kalendarz i spotkania
+
+Agent zarządza Twoim dedykowanym kalendarzem Google. To osobny kalendarz tylko dla spotkań OZE — nie miesza się z Twoimi prywatnymi wydarzeniami. Możesz dodawać, przeglądać, przenosić i odwoływać spotkania — wszystko głosem lub tekstem.
+
+**Dodawanie spotkań** — mów naturalnie:
+- *"Jutro o 10 jadę do Kowalskiego"*
+- *"Umów spotkanie z Nowakiem w piątek o czternastej"*
+- *"W środę o szesnastej wycena u Wiśniewskiego w Legionowie"*
+- *"Wpół do ósmej jestem u Majewskiego"* (agent zrozumie że to 7:30)
+
+Możesz dodać kilka spotkań w jednej wiadomości:
+*"Jutro o 10 Kowalski, o 14 Nowak, o 17 Wiśniewski"*
+Agent stworzy trzy wydarzenia naraz, a potem zapyta czy dodać tych klientów do bazy (tych, którzy jeszcze nie są w arkuszu).
+
+Jeśli w danym terminie masz już inne spotkanie — agent ostrzeże o konflikcie, ale pozwoli dodać jeśli potwierdzisz.
+
+Domyślna długość spotkania to 60 minut (możesz zmienić w ustawieniach). Z czasem agent nauczy się Twoich nawyków — jeśli większość Twoich spotkań trwa 45 minut, zacznie proponować 45 minut jako domyślne.
+
+Każde spotkanie ma adres klienta — agent zapisuje go zarówno w kalendarzu jak i w arkuszu. Dzięki temu widzisz adres bezpośrednio w aplikacji Kalendarz Google na telefonie.
+
+**Przeglądanie planu** — zapytaj:
+- *"Co mam dziś?"*
+- *"Pokaż jutrzejszy plan"*
+- *"Co mam w tym tygodniu?"*
+- *"Jakie mam wolne okna w czwartek?"*
+
+**Przenoszenie spotkań** — jeśli klient odwołał:
+- *"Przełóż Kowalskiego na piątek o 10"*
+- *"Przesuń jutrzejsze spotkanie z Nowakiem na przyszły wtorek"*
+
+Agent pokaże dane klienta, stary termin i nowy termin — poczeka na potwierdzenie, a potem sam zmieni kalendarz i datę w arkuszu.
+
+**Odwoływanie spotkań:**
+- *"Odwołaj spotkanie z Kowalskim"*
+- *"Usuń jutrzejsze spotkanie o 14"*
+
+Do przeglądania i usuwania spotkań możesz też używać natywnej aplikacji Kalendarz Google na telefonie — zmiany będą widoczne od razu.
+
+### 🤖 Co agent robi sam, bez Twojego pytania
+
+Są trzy rzeczy, które agent robi automatycznie:
+
+**☀️ Poranny brief** — codziennie rano w Twoje dni robocze (które ustawiasz w ustawieniach — domyślnie poniedziałek-piątek, godzina 7:00) dostajesz wiadomość z planem dnia: wszystkie spotkania z danymi klientów i adresami, wolne okna czasowe, zaległe follow-upy i krótkie podsumowanie pipeline'u.
+
+**⏰ Przypomnienie przed spotkaniem** — domyślnie godzinę przed każdym spotkaniem (możesz zmienić na 15, 30 lub 120 minut w ustawieniach) agent wyśle Ci przypomnienie z nazwą klienta, adresem, numerem telefonu i notatkami z arkusza. Jedziesz na spotkanie przygotowany.
+
+**📋 Follow-up po spotkaniach** — po Twoim ostatnim spotkaniu dnia agent sam się odezwie i zapyta jak poszły spotkania, o których jeszcze mu nie powiedziałeś. Wylistuje nieraportowane spotkania i poczeka na Twoją odpowiedź. Możesz odpowiedzieć jedną głosówką, opisując wszystkie spotkania naraz:
+
+*"Z Kowalskim super, chce wycenę na 8kW, wyślę jutro. Nowak nie był w domu, trzeba przełożyć na przyszły tydzień. U Wiśniewskiego złożyłem ofertę, czekam na odpowiedź."*
+
+Agent na podstawie tego zaktualizuje statusy (po Twoim potwierdzeniu), ustawi przypomnienia i zaproponuje nowe terminy tam, gdzie potrzeba.
+
+---
+
+## Twoje dane — gdzie są i kto ma do nich dostęp
+
+Wszystkie Twoje dane klientów są na TWOIM koncie Google:
+
+- **📊 Arkusz klientów** — w Twoich Arkuszach Google. Możesz go otworzyć w przeglądarce i zobaczyć lub edytować dane ręcznie w dowolnym momencie.
+- **📅 Kalendarz spotkań** — osobny kalendarz w Twoim Kalendarzu Google. Widoczny w aplikacji Kalendarz na telefonie i komputerze, obok Twoich prywatnych wydarzeń ale w osobnej warstwie.
+- **📸 Zdjęcia klientów** — na Twoim Dysku Google, w osobnym folderze dla każdego klienta.
+
+Nikt inny — ani my, ani inni użytkownicy — nie widzi Twoich danych. Jeśli zrezygnujesz z OZE-Agent, Twoje dane zostają u Ciebie na koncie Google. Nic nie kasujemy.
+
+💡 Zalecamy założenie oddzielnego konta Google dedykowanego do OZE-Agent. Dzięki temu masz osobne 15 GB miejsca na dane klientów i nie mieszasz ich ze swoimi prywatnymi plikami.
+
+---
+
+## Jak agent rozumie daty i godziny
+
+Agent rozumie polskie sposoby podawania czasu:
+
+- *"dziś"*, *"jutro"*, *"pojutrze"*
+- *"w piątek"*, *"we wtorek"*, *"w przyszłą środę"*
+- *"o czternastej"*, *"o dwudziestej drugiej"*, *"o ósmej"*
+- *"wpół do ósmej"* → 7:30, *"za kwadrans dziesiąta"* → 9:45
+- *"o 14"*, *"o 14:30"*, *"na 16"*
+- *"za godzinę"*, *"za dwie godziny"*
+- *"12 maja"*, *"15.04.2026"*
+
+---
+
+## Arkusz klientów — co jest w środku
+
+Przy rejestracji agent zaproponuje domyślne kolumny dostosowane do branży OZE:
+
+Imię i nazwisko, Telefon, Adres, Miejscowość, Zużycie prądu (kWh/rok), Produkt, , Status, Źródło leada, Data pierwszego kontaktu, Data ostatniego kontaktu, Data następnego kontaktu, Notatki, Zdjęcia.
+
+Ale to Twój arkusz — możesz dodawać i zmieniać kolumny w ustawieniach na dashboardzie albo bezpośrednio w Google Sheets. Agent odczytuje nagłówki co kilka godzin i dostosowuje się automatycznie. Jeśli dodasz kolumnę "Numer działki" — agent zacznie pytać o numer działki przy następnych klientach.
+
+**Ważne:** Jeśli właśnie zmieniłeś kolumny w arkuszu i chcesz żeby agent od razu to widział, napisz do niego "odśwież kolumny" — agent natychmiast odczyta nowe nagłówki.
+
+Niektóre kolumny są chronione i nie da się ich usunąć: Imię i nazwisko, Adres, Telefon, Status, Notatki. To fundamenty bazy klientów — bez nich agent nie mógłby działać.
+
+Statusy pipeline'u też możesz edytować. Domyślne to: Nowy lead → Spotkanie umówione → Spotkanie odbyte → Oferta wysłana → Negocjacje → Podpisane → Odrzucone. Dodaj własne, zmień nazwy, zmień kolejność — agent używa tego co ustawisz.
+
+---
+
+## Adresy i miejscowości
+
+Agent zawsze zapisuje adres klienta w dwóch miejscach: w arkuszu Google Sheets i w wydarzeniu w kalendarzu (w polu "lokalizacja"). Dzięki temu widzisz adres klienta bezpośrednio w aplikacji Kalendarz na telefonie — np. możesz kliknąć i otworzyć nawigację.
+
+W Polsce jest wiele miejscowości o tej samej nazwie. Jeśli agent nie jest pewny, o którą miejscowość chodzi, zapyta o kod pocztowy żeby uniknąć pomyłki.
+
+---
+
+## Przyciski w Telegramie
+
+Przy pytaniach z zamkniętą odpowiedzią (np. "Zapisać?" → Tak/Nie) agent pokaże Ci przyciski do szybkiego kliknięcia. Ale zawsze możesz zamiast tego napisać odpowiedź tekstem lub nagrać głosówkę — przyciski to skrót, nie jedyna opcja.
+
+---
+
+## Potwierdzenia
+
+Agent nigdy nie zrobi niczego ważnego bez Twojego OK. Dodanie klienta, edycja, usunięcie, zmiana statusu, dodanie spotkania, przeniesienie — każda taka akcja wymaga Twojego potwierdzenia. Dopóki nie powiesz "tak" — nic się nie zmienia.
+
+Jeśli przy pytaniu "Zapisać?" powiesz "nie" — agent zapyta czy anulować całą operację. Jeśli potwierdzisz — dane są odrzucone. Jeśli nie — agent czeka na poprawki.
+
+---
+
+## Pamięć rozmowy
+
+Agent pamięta ostatnie 10 wiadomości (lub do 30 minut przerwy). Możesz prowadzić naturalną rozmowę bez powtarzania o kim mówisz:
+
+*Ty: "Dodaj Kowalskiego z Warszawy, Piłsudskiego 12, PV 8kW, tel 600123456"*
+*Agent: "📋 Zapisuję Kowalskiego. Brakuje: metraż domu, metraż dachu, kierunek dachu, zużycie prądu. Uzupełnisz czy zapisać tak?"*
+*Ty: "Dom 160, dach 40 metrów, południe. Resztę nie wiem."*
+*Agent: "✅ Zapisane: Kowalski, Warszawa, PV 8kW, 160m², dach 40m² płd. Zużycie puste."*
+
+---
+
+## Agent uczy się Twoich nawyków
+
+Z czasem agent zapamiętuje Twoje preferencje. Na przykład: jeśli większość Twoich spotkań trwa 45 minut, agent zacznie domyślnie proponować 45 minut zamiast 60. Zawsze możesz to nadpisać mówiąc np. "spotkanie na pół godziny".
+
+---
+
+## Wskazówka: jak korzystać najefektywniej
+
+Podawaj jak najwięcej informacji w jednej wiadomości lub głosówce. Agent przetworzy wszystko naraz — jedną interakcją zamiast pięciu. Im więcej powiesz za jednym razem, tym szybciej masz dane zapisane i tym mniej zużywasz swoich interakcji.
+
+Jedna rozbudowana głosówka po spotkaniu jest lepsza niż pięć krótkich wiadomości z pojedynczymi danymi.
+
+Masz 100 interakcji dziennie. Jeśli się zbliżasz do limitu, agent Cię poinformuje i zaproponuje pożyczenie do 20 interakcji z następnego dnia.
+
+---
+
+## Import klientów z pliku
+
+Masz już bazę klientów w Excelu albo leady z Facebooka? Nie musisz ich przepisywać ręcznie. Na dashboardzie (strona "Import klientów") możesz wgrać plik CSV lub Excel, podejrzeć dane, zmapować kolumny na swój arkusz i jednym kliknięciem dodać wszystkich klientów do bazy.
+
+---
+
+## Ton agenta
+
+Agent jest konkretny i zwięzły. Nie gada, nie filozofuje, nie pisze wypracowań. Odpowiada krótko, na temat, bo wie że korzystasz z niego na telefonie między spotkaniami. Czujesz że masz asystenta, nie chatbota.
