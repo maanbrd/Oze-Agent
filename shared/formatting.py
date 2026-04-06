@@ -4,6 +4,7 @@ All output uses Telegram MarkdownV2. All user-facing text is in Polish.
 """
 
 import re
+from typing import Optional
 
 # ── MarkdownV2 escaping ───────────────────────────────────────────────────────
 
@@ -66,6 +67,100 @@ def format_error(error_type: str) -> str:
         error_type,
         "❌ Wystąpił nieoczekiwany błąd\\. Spróbuj ponownie\\.",
     )
+
+
+# ── Add-client confirmation card ─────────────────────────────────────────────
+
+_DIR_ABBR = {
+    "południe": "płd.", "wschód": "wsch.", "zachód": "zach.", "północ": "płn.",
+}
+
+_MEASUREMENT_FIELDS = {
+    "house": ["Metraż domu (m²)", "Metraż domu", "Powierzchnia domu"],
+    "roof":  ["Metraż dachu (m²)", "Metraż dachu", "Powierzchnia dachu"],
+    "power": ["Moc (kW)", "Moc", "Moc instalacji"],
+    "dir":   ["Kierunek dachu"],
+}
+
+
+def _find(client_data: dict, candidates: list[str]) -> str:
+    for key in candidates:
+        if client_data.get(key):
+            return client_data[key]
+    return ""
+
+
+def _fmt_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 9:
+        return f"{digits[:3]} {digits[3:6]} {digits[6:]}"
+    if len(digits) == 11 and digits.startswith("48"):
+        d = digits[2:]
+        return f"+48 {d[:3]} {d[3:6]} {d[6:]}"
+    return raw
+
+
+def format_add_client_card(client_data: dict, missing: list[str]) -> str:
+    """Format client data as a confirmation card per agent_system_prompt.md spec.
+
+    Plain text (no MarkdownV2) — use with reply_text().
+
+    Example output:
+        📋 Nowak, Piaseczno
+        Pompa ciepła
+        Tel. 601 234 567
+        ❓ Brakuje: adres (ulica), metraż domu, metraż dachu, kierunek dachu, zużycie prądu, źródło leada
+        Zapisać?
+    """
+    lines: list[str] = []
+
+    # Line 1: 📋 name, [address, ]city
+    name = client_data.get("Imię i nazwisko", "")
+    address = client_data.get("Adres", "")
+    city = client_data.get("Miasto", "")
+    loc_parts = [p for p in [address, city] if p]
+    header = ", ".join([name] + loc_parts) if name else ", ".join(loc_parts)
+    if header:
+        lines.append(f"📋 {header}")
+
+    # Line 2: product [power] [| measurements]
+    product = client_data.get("Produkt", "")
+    power = _find(client_data, _MEASUREMENT_FIELDS["power"])
+    house = _find(client_data, _MEASUREMENT_FIELDS["house"])
+    roof = _find(client_data, _MEASUREMENT_FIELDS["roof"])
+    direction = _find(client_data, _MEASUREMENT_FIELDS["dir"])
+
+    prod_part = product
+    if power:
+        prod_part = f"{prod_part} {power}kW" if prod_part else f"{power}kW"
+
+    meas_parts: list[str] = []
+    if house:
+        meas_parts.append(f"dom {house}m²")
+    if roof:
+        abbr = _DIR_ABBR.get(direction.lower(), direction)
+        meas_parts.append(f"dach {roof}m²" + (f" {abbr}" if abbr else ""))
+    elif direction:
+        meas_parts.append(direction)
+
+    if prod_part and meas_parts:
+        lines.append(f"{prod_part} | {', '.join(meas_parts)}")
+    elif prod_part:
+        lines.append(prod_part)
+    elif meas_parts:
+        lines.append(", ".join(meas_parts))
+
+    # Line 3: phone
+    phone = client_data.get("Telefon", "")
+    if phone:
+        lines.append(f"Tel. {_fmt_phone(phone)}")
+
+    # Missing fields
+    if missing:
+        lines.append(f"❓ Brakuje: {', '.join(missing)}")
+
+    lines.append("Zapisać?")
+    return "\n".join(lines)
 
 
 # ── Client card ───────────────────────────────────────────────────────────────

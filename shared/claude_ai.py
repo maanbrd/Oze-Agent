@@ -188,15 +188,39 @@ async def extract_client_data(message: str, user_columns: list[str]) -> dict:
 
     Returns same format as parse_voice_note.
     """
-    system_prompt = f"""Wyciągnij dane klienta z wiadomości tekstowej. Kolumny arkusza: {json.dumps(user_columns, ensure_ascii=False)}.
-Zwróć TYLKO JSON:
+    system_prompt = f"""Wyciągnij dane klienta z wiadomości. Kolumny arkusza: {json.dumps(user_columns, ensure_ascii=False)}.
+Zwróć TYLKO surowy JSON (bez markdown, bez ```):
 {{"client_data": {{"kolumna": "wartość"}}, "missing_columns": ["..."], "suggested_followup": {{}}}}
-NIE dodawaj pól których nie ma w wiadomości."""
+
+Zasady:
+- NIE dodawaj pól których nie ma w wiadomości
+- missing_columns = kolumny z listy BEZ wartości w wiadomości
+
+Mapuj slang OZE (zawsze):
+- foto / fotowoltaika / fotowoltaikę / PV-ka / panele / pv → "PV"
+- pompa / pompeczka / pompa ciepła / pompę → "Pompa ciepła"
+- magazyn / magazyn energii → "Magazyn energii"
+- klima / klimatyzacja → "Klimatyzacja"
+
+Parsuj bez pytania:
+- Metraż: "160m2" / "160 metrów" / "dom 160" → "160"
+- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6"
+- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ"
+- Telefon: tylko cyfry, bez spacji i myślników
+- Kolejność słów i interpunkcja nie mają znaczenia — parsuj intencję"""
 
     result = await call_claude(system_prompt, message, model_type="complex")
 
+    # Strip markdown code fences if model returned them
+    raw = result["text"].strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
     try:
-        parsed = json.loads(result["text"])
+        parsed = json.loads(raw)
     except Exception:
         logger.error("extract_client_data: JSON parse failed: %s", result["text"][:200])
         parsed = {"client_data": {}, "missing_columns": [], "suggested_followup": {}}

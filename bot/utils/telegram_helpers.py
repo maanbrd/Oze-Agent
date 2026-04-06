@@ -150,6 +150,21 @@ def build_confirm_buttons(callback_prefix: str) -> InlineKeyboardMarkup:
     ])
 
 
+def build_save_buttons(callback_prefix: str) -> InlineKeyboardMarkup:
+    """Return [Tak] [Zapisz bez] keyboard for add-client confirmation.
+
+    callback_data:
+      '{prefix}:yes'          — save with all collected fields
+      '{prefix}:save_without' — save, skipping missing fields
+    """
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Tak", callback_data=f"{callback_prefix}:yes"),
+            InlineKeyboardButton("Zapisz bez", callback_data=f"{callback_prefix}:save_without"),
+        ]
+    ])
+
+
 def build_choice_buttons(options: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     """Build a vertical list of choice buttons.
 

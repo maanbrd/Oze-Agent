@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 from bot.utils.telegram_helpers import (
     build_confirm_buttons,
     build_choice_buttons,
+    build_save_buttons,
     check_interaction_limit,
     check_subscription_active,
     check_user_registered,
@@ -35,6 +36,7 @@ from shared.database import (
     update_pending_followup,
 )
 from shared.formatting import (
+    format_add_client_card,
     format_client_card,
     format_confirmation,
     format_daily_schedule,
@@ -236,7 +238,7 @@ async def handle_add_client(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Extract client data, check for duplicates, ask for confirmation."""
+    """Extract client data, check for duplicates, show confirmation card."""
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
@@ -245,18 +247,15 @@ async def handle_add_client(
     headers = await get_sheet_headers(user_id)
     result = await extract_client_data(message_text, headers)
     client_data = result.get("client_data", {})
-    missing = result.get("missing_columns", [])
 
     if not client_data:
-        await update.message.reply_text(
-            "Nie udało mi się wyciągnąć danych klienta. Opisz go ponownie."
-        )
+        await update.message.reply_text("Co chcesz zrobić?")
         return
 
     # Duplicate check
     all_clients = await get_all_clients(user_id)
     name = client_data.get("Imię i nazwisko", "")
-    city = client_data.get("Miasto", client_data.get("Miejscowość", ""))
+    city = client_data.get("Miasto", "")
     duplicate = detect_potential_duplicate(name, city, all_clients) if name and city else None
 
     if duplicate:
@@ -264,24 +263,30 @@ async def handle_add_client(
             "client_data": client_data,
             "duplicate_row": duplicate.get("_row"),
         })
-        card = format_client_card(duplicate)
-        await update.message.reply_markdown_v2(
-            f"⚠️ Znalazłem podobnego klienta:\n\n{card}\n\n"
-            f"Czy chcesz dodać nowego klienta pomimo podobieństwa?",
-            reply_markup=build_confirm_buttons("duplicate"),
+        dup_name = duplicate.get("Imię i nazwisko", "")
+        dup_city = duplicate.get("Miasto", "")
+        dup_addr = duplicate.get("Adres", "")
+        dup_prod = duplicate.get("Produkt", "")
+        dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
+        await update.message.reply_text(
+            f"⚠️ Masz już {dup_name} ({dup_info}).\nDodać nowego czy zaktualizować?",
+            reply_markup=build_choice_buttons([
+                ("Nowy", "duplicate:add_anyway"),
+                ("Aktualizuj", "duplicate:no"),
+            ]),
         )
         return
 
-    # Show summary and ask for confirmation
+    # Use Claude's missing_columns; fall back to full recount if empty
+    sheet_columns = user.get("sheet_columns") or headers
+    missing = result.get("missing_columns", []) or [
+        col for col in sheet_columns if not client_data.get(col)
+    ]
+
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
-    sheet_columns = user.get("sheet_columns") or headers
-    parts = [client_data[col] for col in sheet_columns if client_data.get(col)]
-    summary = ", ".join(parts)
-    missing = [col for col in sheet_columns if not client_data.get(col)]
-    missing_text = f"\n❓ Brakuje: {', '.join(missing)}." if missing else ""
-    msg = escape_markdown_v2(f"📋 Zapisuję klienta:\n{summary}.{missing_text}\nZapisać?")
-    await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+    card = format_add_client_card(client_data, missing)
+    await update.message.reply_text(card, reply_markup=build_save_buttons("confirm"))
 
 
 async def handle_search_client(
