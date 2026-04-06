@@ -221,11 +221,12 @@ async def handle_add_client(
     # Show summary and ask for confirmation
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
-    details = {k: v for k, v in client_data.items() if v}
-    if missing:
-        details["⚠️ Brakujące pola"] = ", ".join(missing)
-
-    msg = format_confirmation("add_client", details)
+    sheet_columns = user.get("sheet_columns") or headers
+    parts = [client_data[col] for col in sheet_columns if client_data.get(col)]
+    summary = ", ".join(parts)
+    missing = [col for col in sheet_columns if not client_data.get(col)]
+    missing_text = f"\nBrakuje: {', '.join(missing)}." if missing else ""
+    msg = escape_markdown_v2(f"Zapisuję klienta: {summary}.{missing_text}\nZapisać?")
     await update.message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
 
 
@@ -581,9 +582,24 @@ async def handle_confirm(
                 location=flow_data.get("location"),
             )
             if event:
+                client_name = flow_data.get("client_name", "")
+                in_sheets = bool(client_name and await search_clients(user_id, client_name))
+                if not in_sheets and client_name:
+                    save_pending_flow(telegram_id, "offer_add_client", {"client_name": client_name})
+                    await update.message.reply_text(
+                        f"✅ Spotkanie dodane. Nie mam {client_name} w bazie. Dodać?",
+                        reply_markup=build_confirm_buttons("confirm"),
+                    )
+                    return  # new flow saved — don't fall through to delete
                 await update.message.reply_text("✅ Spotkanie dodane do kalendarza.")
             else:
                 await update.message.reply_markdown_v2(format_error("calendar_down"))
+
+        elif flow_type == "offer_add_client":
+            client_name = flow_data.get("client_name", "")
+            await update.message.reply_text(
+                f"Podaj dane {client_name} — adres, telefon, produkt."
+            )
 
         elif flow_type == "change_status":
             ok = await update_client(user_id, flow_data["row"], {flow_data["field"]: flow_data["new_value"]})
@@ -632,9 +648,10 @@ async def handle_general(
 
     pipeline_statuses = user.get("pipeline_statuses", [])
     system_context = (
-        "Jesteś asystentem handlowca OZE w Polsce. Pomagasz zarządzać klientami, "
-        f"spotkaniami i pipeline'm sprzedażowym. Statusy pipeline: {pipeline_statuses}. "
-        "Odpowiadaj krótko i po polsku."
+        "Jesteś asystentem handlowca OZE w Polsce. Zarządzasz klientami, spotkaniami i pipeline'm. "
+        f"Statusy pipeline: {pipeline_statuses}. "
+        "Odpowiadaj BARDZO krótko i konkretnie — maksimum 2 zdania. "
+        "Bez pytań zwrotnych. Bez propozycji kolejnych kroków. Tylko fakty."
     )
 
     result = await generate_bot_response(system_context, message_text, history)
