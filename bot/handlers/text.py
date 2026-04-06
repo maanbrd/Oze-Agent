@@ -870,14 +870,30 @@ async def handle_cancel_flow(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Cancel and delete the current pending flow."""
+    """Two-step cancel: first warn, delete only on second confirm."""
     telegram_id = update.effective_user.id
     flow = get_pending_flow(telegram_id)
-    if flow:
-        delete_pending_flow(telegram_id)
-        await update.message.reply_text("❌ Anulowano.")
-    else:
+    if not flow:
         await update.message.reply_text("Nie ma nic do anulowania.")
+        return
+
+    flow_data = flow.get("flow_data", {})
+
+    if flow_data.get("_cancelling"):
+        # User said "nie" a second time — remove the flag and keep the flow active
+        flow_data.pop("_cancelling")
+        save_pending_flow(telegram_id, flow["flow_type"], flow_data)
+        await update.message.reply_text("OK, czekam na Twoją odpowiedź.")
+        return
+
+    # First cancel request: set flag and warn
+    flow_data["_cancelling"] = True
+    save_pending_flow(telegram_id, flow["flow_type"], flow_data)
+    await update.message.reply_text(
+        "Anulować całkowicie? Dane zostaną utracone.\n"
+        "Napisz *tak* aby anulować lub *nie* aby wrócić.",
+        parse_mode="MarkdownV2",
+    )
 
 
 async def handle_refresh_columns(
