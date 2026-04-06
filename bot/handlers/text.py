@@ -515,10 +515,34 @@ async def handle_view_meetings(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Show meetings for today, tomorrow, or this week."""
+    """Show meetings for today, tomorrow, or this week. Detects free-slot queries."""
     user_id = user["id"]
     entities = intent_data.get("entities", {})
     day_hint = entities.get("day", "").lower()
+    msg_lower = message_text.lower()
+
+    # Free slot detection
+    wants_free = any(kw in msg_lower for kw in [
+        "wolne okna", "wolny czas", "kiedy wolny", "wolne terminy",
+        "kiedy mogę", "wolna godzina", "kiedy mam czas",
+    ])
+    if wants_free:
+        today = date.today()
+        if "jutro" in day_hint or "jutro" in msg_lower:
+            target = today + timedelta(days=1)
+        else:
+            target = today
+        slots = await get_free_slots(user_id, target)
+        if not slots:
+            await update.message.reply_text(
+                f"Brak wolnych okien na {target.strftime('%d.%m')} (9:00–18:00)."
+            )
+        else:
+            lines = [f"🕐 Wolne okna na {target.strftime('%d.%m')}:"]
+            for slot_start, slot_end in slots[:8]:
+                lines.append(f"• {slot_start.strftime('%H:%M')}–{slot_end.strftime('%H:%M')}")
+            await update.message.reply_text("\n".join(lines))
+        return
 
     today = date.today()
     if "jutro" in day_hint or "tomorrow" in day_hint:
