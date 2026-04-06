@@ -1,0 +1,160 @@
+"""Inline button callback handler for OZE-Agent."""
+
+import logging
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from bot.handlers.text import (
+    handle_cancel_flow,
+    handle_confirm,
+    _run_guards,
+)
+from bot.utils.telegram_helpers import is_private_chat
+from shared.database import (
+    delete_pending_flow,
+    get_pending_flow,
+    increment_daily_interaction_count,
+    save_pending_flow,
+)
+from shared.google_sheets import get_all_clients, update_client
+
+logger = logging.getLogger(__name__)
+
+
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Route inline button presses by callback_data format 'action:value'."""
+    query = update.callback_query
+    await query.answer()  # Remove loading indicator
+
+    if not await is_private_chat(update):
+        return
+
+    user = await _run_guards(update)
+    if not user:
+        return
+
+    telegram_id = update.effective_user.id
+    data = query.data or ""
+
+    if ":" not in data:
+        logger.warning("handle_button: unexpected callback_data=%s", data)
+        return
+
+    action, _, value = data.partition(":")
+
+    if action == "confirm":
+        if value == "yes":
+            await handle_confirm(update, context, user, {}, "")
+        else:
+            await handle_cancel_flow(update, context, user, {}, "")
+
+    elif action == "borrow":
+        if value == "yes":
+            from datetime import date, timedelta
+            tomorrow = date.today() + timedelta(days=1)
+            increment_daily_interaction_count(telegram_id, tomorrow)
+            await query.edit_message_text("✅ Pożyczono 1 interakcję z jutra.")
+        else:
+            await query.edit_message_text("❌ Brak dodatkowych interakcji na dziś.")
+
+    elif action == "select_client":
+        await _handle_select_client(query, context, user, value)
+
+    elif action == "duplicate":
+        if value == "add_anyway":
+            flow = get_pending_flow(telegram_id)
+            if flow and flow.get("flow_type") == "add_client_duplicate":
+                save_pending_flow(telegram_id, "add_client", {
+                    "client_data": flow["flow_data"]["client_data"]
+                })
+            await handle_confirm(update, context, user, {}, "")
+        else:
+            await handle_cancel_flow(update, context, user, {}, "")
+
+    elif action == "edit":
+        await _handle_edit_choice(query, telegram_id, user["id"], value)
+
+    elif action == "voice_confirm":
+        if value == "yes":
+            flow = get_pending_flow(telegram_id)
+            if flow and flow.get("flow_type") == "voice_transcription":
+                transcription = flow["flow_data"]["transcription"]
+                delete_pending_flow(telegram_id)
+                # Simulate text message and re-route
+                update.callback_query.message.text = transcription
+                from bot.handlers.text import handle_text
+                await handle_text(update, context)
+        else:
+            delete_pending_flow(telegram_id)
+            await query.edit_message_text("❌ Nagranie anulowane. Spróbuj ponownie.")
+
+    elif action == "set_status":
+        # value format: "{row}:{status}"
+        parts = value.split(":", 1)
+        if len(parts) == 2:
+            row, new_status = int(parts[0]), parts[1]
+            ok = await update_client(user["id"], row, {"Status": new_status})
+            if ok:
+                await query.edit_message_text(f"✅ Status zmieniony na: {new_status}")
+            else:
+                await query.edit_message_text("❌ Nie udało się zmienić statusu.")
+
+    elif action == "cancel_confirm":
+        if value == "yes":
+            delete_pending_flow(telegram_id)
+            await query.edit_message_text("❌ Anulowano.")
+        else:
+            await query.edit_message_text("Kontynuuj — co chcesz zmienić?")
+
+    else:
+        logger.warning("handle_button: unhandled action=%s value=%s", action, value)
+
+
+async def _handle_select_client(query, context, user: dict, row_str: str) -> None:
+    """Show full client card for the selected row number."""
+    try:
+        row = int(row_str)
+    except ValueError:
+        await query.edit_message_text("❌ Nieprawidłowy wybór.")
+        return
+
+    clients = await get_all_clients(user["id"])
+    client = next((c for c in clients if c.get("_row") == row), None)
+    if not client:
+        await query.edit_message_text("Nie znaleziono klienta.")
+        return
+
+    from shared.formatting import format_client_card
+    card = format_client_card(client)
+    await query.edit_message_text(card, parse_mode="MarkdownV2")
+
+
+async def _handle_edit_choice(query, telegram_id: int, user_id: str, value: str) -> None:
+    """Handle edit mode choices: replace or keep_both."""
+    flow = get_pending_flow(telegram_id)
+    if not flow or flow.get("flow_type") != "edit_client":
+        await query.edit_message_text("Brak aktywnej edycji.")
+        return
+
+    flow_data = flow["flow_data"]
+    row = flow_data.get("row")
+    updates = flow_data.get("updates", {})
+    old_values = flow_data.get("old_values", {})
+
+    if value == "keep_both":
+        # Append new value to old value with semicolon
+        merged = {
+            k: f"{old_values.get(k, '')}; {v}" if old_values.get(k) else v
+            for k, v in updates.items()
+        }
+        ok = await update_client(user_id, row, merged)
+    else:
+        ok = await update_client(user_id, row, updates)
+
+    delete_pending_flow(telegram_id)
+
+    if ok:
+        await query.edit_message_text("✅ Dane zaktualizowane.")
+    else:
+        await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
