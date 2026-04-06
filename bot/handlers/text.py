@@ -129,6 +129,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         "cancel_meeting": handle_cancel_meeting,
         "show_pipeline": handle_show_pipeline,
         "change_status": handle_change_status,
+        "refresh_columns": handle_refresh_columns,
         "confirm_yes": handle_confirm,
         "confirm_no": handle_cancel_flow,
         "cancel_flow": handle_cancel_flow,
@@ -638,6 +639,23 @@ async def handle_cancel_flow(
         await update.message.reply_text("❌ Anulowano.")
     else:
         await update.message.reply_text("Nie ma nic do anulowania.")
+
+
+async def handle_refresh_columns(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    """Force-refresh sheet column headers from Google Sheets and update Supabase cache."""
+    user_id = user["id"]
+    headers = await get_sheet_headers(user_id)  # already updates Supabase on success
+    if headers:
+        cols = ", ".join(headers)
+        await update.message.reply_text(f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
+    else:
+        await update.message.reply_markdown_v2(format_error("google_down"))
 
 
 async def handle_general(

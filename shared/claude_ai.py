@@ -27,7 +27,7 @@ COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
 VALID_INTENTS = {
     "add_client", "search_client", "edit_client", "delete_client",
     "add_meeting", "view_meetings", "reschedule_meeting", "cancel_meeting",
-    "show_pipeline", "change_status", "assign_photo",
+    "show_pipeline", "change_status", "assign_photo", "refresh_columns",
     "general_question", "confirm_yes", "confirm_no", "cancel_flow",
 }
 
@@ -159,6 +159,7 @@ Przykłady:
 - "jutro o 10 jadę do Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Nowak", "location": "ul. Różana 3 Piaseczno"}}
 - "spotkanie z Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Kowalski", "day": "pojutrze", "time": "15:00"}}
 - WAŻNE: Każda wiadomość zawierająca datę/godzinę + miejsce lub klienta to add_meeting, NIE general_question.
+- "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
 - "tak" / "ok" / "zgadza się" → confirm_yes
 - "nie" / "anuluj" → confirm_no lub cancel_flow
 
