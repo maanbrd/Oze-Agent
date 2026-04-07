@@ -4,6 +4,9 @@ import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+WARSAW = ZoneInfo("Europe/Warsaw")
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -527,6 +530,46 @@ async def handle_delete_client(
     )
 
 
+def _parse_warsaw(date_str: str, time_str: str) -> datetime:
+    """Parse date+time strings as Europe/Warsaw and return an aware datetime."""
+    naive = datetime.fromisoformat(f"{date_str}T{time_str}:00")
+    return naive.replace(tzinfo=WARSAW)
+
+
+async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) -> dict:
+    """Look up client in Sheets and return enriched title/location/description."""
+    full_name = client_name
+    location = location_hint
+    description = ""
+
+    if client_name:
+        results = await search_clients(user_id, client_name)
+        if results:
+            client = results[0]
+            full_name = client.get("Imię i nazwisko", client_name)
+
+            addr = client.get("Adres", "")
+            city = client.get("Miasto", client.get("Miejscowość", ""))
+            if not location:
+                location = ", ".join(p for p in [addr, city] if p)
+
+            parts = []
+            if client.get("Telefon"):
+                parts.append(f"Tel: {client['Telefon']}")
+            prod = client.get("Produkt", "")
+            power = client.get("Moc (kW)", client.get("Moc", ""))
+            if prod:
+                parts.append(f"Produkt: {prod}" + (f" {power} kW" if power else ""))
+            if client.get("Notatki"):
+                parts.append(f"Notatki: {client['Notatki']}")
+            if client.get("Następny krok"):
+                parts.append(f"Następny krok: {client['Następny krok']}")
+            description = "\n".join(parts)
+
+    title = f"Spotkanie z {full_name}" if full_name else "Spotkanie"
+    return {"title": title, "location": location, "description": description, "full_name": full_name}
+
+
 async def handle_add_meeting(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -559,12 +602,14 @@ async def handle_add_meeting(
             )
             return
         try:
-            start_dt = datetime.fromisoformat(f"{m['date']}T{m['time']}:00").replace(tzinfo=timezone.utc)
+            start_dt = _parse_warsaw(m["date"], m["time"])
             duration = m.get("duration_minutes") or default_duration
             end_dt = start_dt + timedelta(minutes=duration)
         except Exception:
             await update.effective_message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
             return
+
+        enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
@@ -572,19 +617,20 @@ async def handle_add_meeting(
             conflict_warning = f"\n\n⚠️ Uwaga: masz już spotkanie o tej porze: *{escape_markdown_v2(conflicts[0].get('title', ''))}*"
 
         save_pending_flow(telegram_id, "add_meeting", {
-            "title": m.get("client_name", "Spotkanie"),
+            "title": enriched["title"],
             "start": start_dt.isoformat(),
             "end": end_dt.isoformat(),
-            "location": m.get("location", ""),
-            "client_name": m.get("client_name", ""),
+            "location": enriched["location"],
+            "description": enriched["description"],
+            "client_name": enriched["full_name"],
         })
 
         details = {
-            "Klient": m.get("client_name", ""),
+            "Klient": enriched["full_name"],
             "Data": m["date"],
             "Godzina": m["time"],
             "Czas trwania": f"{duration} min",
-            "Miejsce": m.get("location", ""),
+            "Miejsce": enriched["location"],
         }
         msg = format_confirmation("add_meeting", details) + conflict_warning
         await update.effective_message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
@@ -598,23 +644,25 @@ async def handle_add_meeting(
             if not m.get("date") or not m.get("time"):
                 continue
             try:
-                start_dt = datetime.fromisoformat(f"{m['date']}T{m['time']}:00").replace(tzinfo=timezone.utc)
+                start_dt = _parse_warsaw(m["date"], m["time"])
                 duration = m.get("duration_minutes") or default_duration
                 end_dt = start_dt + timedelta(minutes=duration)
             except Exception:
                 continue
 
+            enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
+
             conflicts = await check_conflicts(user_id, start_dt, end_dt)
             if conflicts:
-                cname = m.get("client_name", "?")
-                conflict_warnings.append(f"⚠️ Konflikt {cname}: {conflicts[0].get('title', '')}")
+                conflict_warnings.append(f"⚠️ Konflikt {enriched['full_name']}: {conflicts[0].get('title', '')}")
 
             flow_meetings.append({
-                "title": m.get("client_name", "Spotkanie"),
+                "title": enriched["title"],
                 "start": start_dt.isoformat(),
                 "end": end_dt.isoformat(),
-                "location": m.get("location", ""),
-                "client_name": m.get("client_name", ""),
+                "location": enriched["location"],
+                "description": enriched["description"],
+                "client_name": enriched["full_name"],
             })
 
         if not flow_meetings:
@@ -856,7 +904,8 @@ async def handle_confirm(
                 title=flow_data.get("title", "Spotkanie"),
                 start=start,
                 end=end,
-                location=flow_data.get("location"),
+                location=flow_data.get("location") or None,
+                description=flow_data.get("description") or None,
             )
             if event:
                 client_name = flow_data.get("client_name", "")
@@ -883,7 +932,8 @@ async def handle_confirm(
                     user_id,
                     title=fm.get("title", "Spotkanie"),
                     start=start, end=end,
-                    location=fm.get("location"),
+                    location=fm.get("location") or None,
+                    description=fm.get("description") or None,
                 )
                 if event:
                     created.append(fm)
