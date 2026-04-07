@@ -82,9 +82,10 @@ _TEMPORAL_MARKERS = {
     "jutro", "pojutrze", "dziś", "dzisiaj", "wczoraj",
     "poniedziałek", "wtorek", "środę", "środa", "czwartek",
     "piątek", "sobotę", "sobota", "niedzielę", "niedziela",
-    "tydzień", "następny", "przyszły",
+    "tydzień", "następny", "przyszły", "spotkanie",
 }
-_TIME_RE = re.compile(r'\bo\s+\d{1,2}\b|\bna\s+\d{1,2}\b|\d{1,2}:\d{2}')
+# HH:MM or "o <hour>" / "na <hour>" — require explicit time preposition
+_TIME_RE = re.compile(r'\d{1,2}:\d{2}|\bo\s+\d{1,2}(?:\s|$)|\bna\s+\d{1,2}(?:\s|$)')
 
 
 def _contains_phone(text: str) -> bool:

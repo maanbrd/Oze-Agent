@@ -265,8 +265,15 @@ Jeśli czegoś brak, zostaw pusty string."""
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)
 
+    raw = result["text"].strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
     try:
-        parsed = json.loads(result["text"])
+        parsed = json.loads(raw)
         meetings = parsed.get("meetings", [])
     except Exception:
         logger.error("extract_meeting_data: JSON parse failed: %s", result["text"][:200])
