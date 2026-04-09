@@ -914,9 +914,16 @@ async def handle_add_meeting(
             "client_name": enriched["full_name"],
         })
 
+        _DAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
+        try:
+            _d = datetime.fromisoformat(m["date"]).date()
+            date_display = _d.strftime("%d.%m.%Y") + f" ({_DAYS_PL[_d.weekday()]})"
+        except Exception:
+            date_display = m["date"]
+
         details = {
             "Klient": enriched["full_name"],
-            "Data": m["date"],
+            "Data": date_display,
             "Godzina": m["time"],
             "Czas trwania": f"{duration} min",
             "Miejsce": enriched["location"],
