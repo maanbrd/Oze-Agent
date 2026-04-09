@@ -282,7 +282,7 @@ async def _route_pending_flow(
         if not new_data:
             # Claude extracted nothing — re-show existing card unchanged
             sheet_columns = user.get("sheet_columns") or headers
-            missing = [col for col in sheet_columns if not old_client_data.get(col) and col not in SYSTEM_FIELDS]
+            missing = [col for col in sheet_columns if col and not old_client_data.get(col) and col not in SYSTEM_FIELDS]
             card = format_add_client_card(old_client_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
             return True
@@ -292,7 +292,7 @@ async def _route_pending_flow(
         new_name = new_data.get("Imię i nazwisko", "").strip()
         if old_name and new_name and old_name.lower() != new_name.lower():
             sheet_columns = user.get("sheet_columns") or headers
-            missing = [col for col in sheet_columns if not new_data.get(col) and col not in SYSTEM_FIELDS]
+            missing = [col for col in sheet_columns if col and not new_data.get(col) and col not in SYSTEM_FIELDS]
             save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
             card = format_add_client_card(new_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
@@ -301,7 +301,7 @@ async def _route_pending_flow(
         merged = {**old_client_data, **new_data}
         logger.info("augment add_client: merged=%s", merged)
         sheet_columns = user.get("sheet_columns") or headers
-        missing = [col for col in sheet_columns if not merged.get(col) and col not in SYSTEM_FIELDS]
+        missing = [col for col in sheet_columns if col and not merged.get(col) and col not in SYSTEM_FIELDS]
         logger.info("augment add_client: missing=%s", missing)
 
         if not missing:
@@ -409,7 +409,7 @@ async def handle_add_client(
 
     # Always compute missing from actual sheet column names (never trust Claude's guesses)
     sheet_columns = user.get("sheet_columns") or headers
-    missing = [col for col in sheet_columns if not client_data.get(col) and col not in SYSTEM_FIELDS]
+    missing = [col for col in sheet_columns if col and not client_data.get(col) and col not in SYSTEM_FIELDS]
 
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
@@ -1395,7 +1395,7 @@ async def handle_cancel_flow(
             headers = await get_sheet_headers(user_id)
             sheet_columns = user.get("sheet_columns") or headers
             client_data = flow_data.get("client_data", {})
-            missing = [col for col in sheet_columns if not client_data.get(col) and col not in SYSTEM_FIELDS]
+            missing = [col for col in sheet_columns if col and not client_data.get(col) and col not in SYSTEM_FIELDS]
             card = format_add_client_card(client_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
         return

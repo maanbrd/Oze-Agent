@@ -179,9 +179,10 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
             label = _FIELD_LABEL.get(field, field)
             lines.append(f"{label}: {value}")
 
-    # Missing fields
-    if missing:
-        lines.append(f"❓ Brakuje: {', '.join(missing)}")
+    # Missing fields (filter out any empty strings from sheet header gaps)
+    missing_clean = [col for col in missing if col and col.strip()]
+    if missing_clean:
+        lines.append(f"❓ Brakuje: {', '.join(missing_clean)}")
 
     # Always ask about next contact if not already provided (spec R4)
     if not client_data.get("Następny krok") and not client_data.get("Data następnego kontaktu"):
