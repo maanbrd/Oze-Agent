@@ -80,7 +80,8 @@ SYSTEM_FIELDS = {
 # 7 catches Polish 8-digit numbers entered without leading country code
 _PHONE_RE = re.compile(r'\d{7,}')
 # Words that indicate lookup/question intent — not new client data
-_LOOKUP_WORDS = {"szukaj", "znajdź", "pokaż", "zmień", "edytuj", "usuń", "odwołaj"}
+_LOOKUP_WORDS = {"szukaj", "znajdź", "pokaż", "zmień", "edytuj", "usuń", "odwołaj",
+                 "zaktualizuj", "popraw", "zmiana", "aktualizuj"}
 # Words that indicate a genuine meeting intent (date/time markers)
 _TEMPORAL_MARKERS = {
     "jutro", "pojutrze", "dziś", "dzisiaj", "wczoraj",

@@ -233,6 +233,10 @@ Przykłady:
 - "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnuje"}}
 - "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - "Zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
+- "zmień numer Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Nowak", "city": "Piaseczno"}}
+- "zaktualizuj telefon Kowalskiego na 601000222" → edit_client, entities: {{"name": "Kowalski"}}
+- "popraw metraż dachu Jana Nowaka na 45" → edit_client, entities: {{"name": "Jan Nowak"}}
+- WAŻNE: wiadomości zaczynające się od "zmień", "zaktualizuj", "popraw", "edytuj" + dane klienta → edit_client, NIE add_client, nawet gdy zawierają numer telefonu.
 - "dodaj notatkę do Jana Mazura: zadzwoń po 15" → add_note, entities: {{"name": "Jan Mazur"}}
 - "Jan Mazur interesuje się też magazynem" → add_note, entities: {{"name": "Jan Mazur"}}
 - "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
@@ -348,7 +352,8 @@ Rozumiej polskie wyrażenia dat i czasu:
 - "o 14", "na 14:30", "o czternastej", "na szesnastą"
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
-Jeśli czegoś brak, zostaw pusty string."""
+Jeśli czegoś brak, zostaw pusty string.
+WAŻNE: client_name zapisuj w mianowniku (nominative): "Jan Nowak" nie "Janem Nowakiem", "Mazur" nie "Mazurem", "Anna Kowalska" nie "Anny Kowalskiej"."""
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)
 
