@@ -183,6 +183,10 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     if missing:
         lines.append(f"❓ Brakuje: {', '.join(missing)}")
 
+    # Always ask about next contact if not already provided (spec R4)
+    if not client_data.get("Następny krok") and not client_data.get("Data następnego kontaktu"):
+        lines.append("📅 Kiedy następny kontakt?")
+
     lines.append("Zapisać / dopisać / anulować?")
     return "\n".join(lines)
 
@@ -194,15 +198,27 @@ SKIP_FIELDS = {"_row", "Link do zdjęć", "ID kalendarza"}
 _DATE_FIELDS = {"Data pierwszego kontaktu", "Data ostatniego kontaktu", "Data następnego kontaktu"}
 
 
+_DAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
+
+
 def _fmt_date(serial) -> str:
-    """Convert Excel serial date (e.g. 46120) to DD.MM.YYYY. Pass-through for strings."""
+    """Convert Excel serial date or ISO string to DD.MM.YYYY (dzień tygodnia)."""
     from datetime import datetime as _datetime, timedelta as _timedelta
     try:
         n = int(serial)
         if n > 40000:  # plausible Excel date (2009+)
-            return (_datetime(1899, 12, 30) + _timedelta(days=n)).strftime("%d.%m.%Y")
+            dt = _datetime(1899, 12, 30) + _timedelta(days=n)
+            return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
     except (TypeError, ValueError):
         pass
+    # Handle ISO string "YYYY-MM-DD"
+    if serial and isinstance(serial, str) and len(serial) == 10 and serial[4] == "-":
+        try:
+            from datetime import datetime as _datetime2
+            dt = _datetime2.fromisoformat(serial)
+            return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
+        except Exception:
+            pass
     return str(serial) if serial else ""
 
 

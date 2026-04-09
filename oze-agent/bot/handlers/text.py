@@ -205,12 +205,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         "add_client": handle_add_client,
         "search_client": handle_search_client,
         "edit_client": handle_edit_client_v2,
+        "add_note": handle_edit_client_v2,         # note triggers in handle_edit_client_v2
         "delete_client": handle_delete_client,
         "add_meeting": handle_add_meeting,
+        "show_day_plan": handle_view_meetings,     # spec v5 name
         "view_meetings": handle_view_meetings,
         "reschedule_meeting": handle_reschedule_meeting,
         "cancel_meeting": handle_cancel_meeting,
-        "show_pipeline": handle_show_pipeline,
+        "lejek_sprzedazowy": handle_show_pipeline, # spec v5 rename
+        "show_pipeline": handle_show_pipeline,     # backwards compat
+        "filtruj_klientów": handle_filter_clients, # new
         "change_status": handle_change_status,
         "refresh_columns": handle_refresh_columns,
         "confirm_yes": handle_confirm,
@@ -1060,6 +1064,52 @@ async def handle_show_pipeline(
         msg += f"\n\n[Otwórz dashboard]({escape_markdown_v2(dashboard_url)})"
 
     await update.effective_message.reply_markdown_v2(msg)
+
+
+async def handle_filter_clients(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    """Filter clients by city, status, or product."""
+    user_id = user["id"]
+    telegram_id = update.effective_user.id
+    entities = intent_data.get("entities", {})
+    city_filter = entities.get("city", "").strip().lower()
+    status_filter = entities.get("status", "").strip().lower()
+    product_filter = entities.get("product", "").strip().lower()
+
+    await send_typing(context, telegram_id)
+    clients = await get_all_clients(user_id)
+    if not clients:
+        await update.effective_message.reply_text("Brak klientów w bazie.")
+        return
+
+    filtered = clients
+    if city_filter:
+        filtered = [c for c in filtered if city_filter in c.get("Miasto", "").lower()]
+    if status_filter:
+        filtered = [c for c in filtered if status_filter in c.get("Status", "").lower()]
+    if product_filter:
+        filtered = [c for c in filtered if product_filter in c.get("Produkt", "").lower()]
+
+    if not filtered:
+        await update.effective_message.reply_text("Brak klientów spełniających kryteria.")
+        return
+
+    lines = [f"Mam {len(filtered)} klientów:"]
+    for c in filtered[:20]:
+        name = c.get("Imię i nazwisko", "?")
+        city = c.get("Miasto", "")
+        status = c.get("Status", "")
+        line = f"• {name}" + (f" — {city}" if city else "") + (f" ({status})" if status else "")
+        lines.append(line)
+    if len(filtered) > 20:
+        lines.append(f"...i {len(filtered) - 20} więcej")
+
+    await update.effective_message.reply_text("\n".join(lines))
 
 
 async def handle_change_status(

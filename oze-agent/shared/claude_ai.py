@@ -26,9 +26,10 @@ COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
 COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
 
 VALID_INTENTS = {
-    "add_client", "search_client", "edit_client", "delete_client",
-    "add_meeting", "view_meetings", "reschedule_meeting", "cancel_meeting",
-    "show_pipeline", "change_status", "assign_photo", "refresh_columns",
+    "add_client", "search_client", "edit_client", "add_note", "delete_client",
+    "add_meeting", "show_day_plan", "view_meetings", "reschedule_meeting", "cancel_meeting",
+    "lejek_sprzedazowy", "filtruj_klientów", "show_pipeline", "change_status",
+    "assign_photo", "refresh_columns",
     "general_question", "confirm_yes", "confirm_no", "cancel_flow",
 }
 
@@ -211,28 +212,35 @@ async def classify_intent(
 {{"intent": "<jeden z: {intents_list}>", "entities": {{}}, "confidence": 0.0-1.0}}
 
 Przykłady:
-- "dodaj klienta Jana Kowalskiego" → add_client, entities: {{"name": "Jan Kowalski"}}
-- "znajdź Kowalskiego z Warszawy" → search_client, entities: {{"name": "Kowalski", "city": "Warszawa"}}
+- "Jan Nowak Piaseczno 601234567 pompa" → add_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
+- "Stefan Jankowski PV 12kW" → add_client, entities: {{"name": "Stefan Jankowski"}}
+- "znajdź Jana Kowalskiego z Warszawy" → search_client, entities: {{"name": "Jan Kowalski", "city": "Warszawa"}}
+- "co mam o Janie Mazurze?" → search_client, entities: {{"name": "Jan Mazur"}}
 - "umów spotkanie na wtorek" → add_meeting, entities: {{"day": "wtorek"}}
 - "spotkanie 22 kwietnia o 17:30 Marki Fiołkowa 24" → add_meeting, entities: {{"date": "22 kwietnia", "time": "17:30", "location": "Marki Fiołkowa 24"}}
-- "jutro o 10 jadę do Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Nowak", "location": "ul. Różana 3 Piaseczno"}}
-- "spotkanie z Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Kowalski", "day": "pojutrze", "time": "15:00"}}
+- "jutro o 10 jadę do Jana Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Jan Nowak", "location": "ul. Różana 3 Piaseczno"}}
+- "spotkanie z Janem Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Jan Kowalski", "day": "pojutrze", "time": "15:00"}}
 - WAŻNE: Każda wiadomość zawierająca datę/godzinę + miejsce lub klienta to add_meeting, NIE general_question.
-- "ile mam klientów?" → show_pipeline
-- "pokaż lejek" → show_pipeline
-- "ilu klientów mam" → show_pipeline
-- "wysłałem ofertę Nowakowi" → change_status, entities: {{"name": "Nowak", "status": "Oferta wysłana"}}
-- "Kowalski podpisał" → change_status, entities: {{"name": "Kowalski", "status": "Podpisał"}}
-- "Wiśniewski rezygnuje" → change_status, entities: {{"name": "Wiśniewski", "status": "Rezygnuje"}}
-- "Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Kowalski"}}
-- "Zmień telefon Nowaka na 601234567" → edit_client, entities: {{"name": "Nowak"}}
-- "Dodaj notatkę do Kowalskiego: interesuje się magazynem" → edit_client, entities: {{"name": "Kowalski"}}
-- "Kowalski interesuje się też pompą ciepła" → edit_client, entities: {{"name": "Kowalski"}}
+- "co mam dziś?" / "plan na dziś" / "jakie mam spotkania?" → show_day_plan
+- "ile mam klientów?" / "pokaż lejek" / "ilu klientów mam" → lejek_sprzedazowy
+- "pokaż klientów z Warszawy" → filtruj_klientów, entities: {{"city": "Warszawa"}}
+- "kto czeka na ofertę?" → filtruj_klientów, entities: {{"status": "Oferta wysłana"}}
+- "klienci z pompą ciepła" → filtruj_klientów, entities: {{"product": "Pompa ciepła"}}
+- "wysłałem ofertę Janowi Nowakowi" → change_status, entities: {{"name": "Jan Nowak", "status": "Oferta wysłana"}}
+- "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisał"}}
+- "Jan Kowalski podpisał kwit" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisał"}}
+- "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Rezygnuje"}}
+- "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnuje"}}
+- "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
+- "Zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
+- "dodaj notatkę do Jana Mazura: zadzwoń po 15" → add_note, entities: {{"name": "Jan Mazur"}}
+- "Jan Mazur interesuje się też magazynem" → add_note, entities: {{"name": "Jan Mazur"}}
 - "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
 - "tak" / "ok" / "zgadza się" → confirm_yes
 - "nie" / "anuluj" → confirm_no lub cancel_flow
 - "asdkjfhaskdjfh" / losowe znaki / niezrozumiały tekst → general_question, confidence: 0.1
-- WAŻNE: "wysłałem X", "klient podpisał", "rezygnuje" → change_status, NIE edit_client.
+- WAŻNE: "podpisał", "podpisał kwit/papier/umowę", "klient podpisał" → change_status {{"status": "Podpisał"}}.
+- WAŻNE: "wysłałem X", "rezygnuje", "spadł kwit" → change_status, NIE edit_client.
 - WAŻNE: Jeśli wiadomość dotyczy zmiany danych ISTNIEJĄCEGO klienta (metraż, telefon, notatki, produkt) → edit_client NIE add_client.
 
 Kontekst poprzednich wiadomości:
@@ -281,7 +289,7 @@ Mapuj slang OZE (zawsze):
 - foto / fotowoltaika / fotowoltaikę / PV-ka / panele / pv → "PV"
 - pompa / pompeczka / pompa ciepła / pompę → "Pompa ciepła"
 - magazyn / magazyn energii → "Magazyn energii"
-- klima / klimatyzacja → "Klimatyzacja"
+- klimatyzacja → "Klimatyzacja"
 - Jeśli kilka produktów naraz ("magazyn, klima", "PV i pompa"), zapisz WSZYSTKIE w polu Produkt oddzielone przecinkami: np. "PV, Magazyn energii, Klimatyzacja".
 - NIE wrzucaj nazw produktów do pola Notatki.
 
@@ -463,8 +471,12 @@ async def format_morning_brief(
         f"  {status}: {count}" for status, count in pipeline_stats.items()
     ) or "Brak danych"
 
-    system_prompt = """Jesteś asystentem handlowca OZE. Wygeneruj poranny raport po polsku.
-Bądź zwięzły, przyjazny, motywujący. Użyj emoji. Format Telegram MarkdownV2."""
+    system_prompt = (
+        "Jesteś asystentem handlowca OZE. Wygeneruj poranny raport po polsku. "
+        "Bądź zwięzły i konkretny. Bez tekstu motywacyjnego. Tylko dane. Format Telegram MarkdownV2. "
+        "Używaj emoji funkcjonalnych: 📅 spotkania, ⏰ follow-upy, 📊 pipeline. "
+        "Nie używaj: 🎉 🌟 ✨ 💪 🙌 👏 🚀 😊"
+    )
 
     user_message = f"""Spotkania dziś:
 {events_str}
