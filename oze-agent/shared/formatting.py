@@ -183,13 +183,27 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     if missing:
         lines.append(f"❓ Brakuje: {', '.join(missing)}")
 
-    lines.append("Zapisać czy jeszcze coś dopiszesz?")
+    lines.append("Zapisać / dopisać / anulować?")
     return "\n".join(lines)
 
 
 # ── Client card ───────────────────────────────────────────────────────────────
 
 SKIP_FIELDS = {"_row", "Link do zdjęć", "ID kalendarza"}
+
+_DATE_FIELDS = {"Data pierwszego kontaktu", "Data ostatniego kontaktu", "Data następnego kontaktu"}
+
+
+def _fmt_date(serial) -> str:
+    """Convert Excel serial date (e.g. 46120) to DD.MM.YYYY. Pass-through for strings."""
+    from datetime import datetime as _datetime, timedelta as _timedelta
+    try:
+        n = int(serial)
+        if n > 40000:  # plausible Excel date (2009+)
+            return (_datetime(1899, 12, 30) + _timedelta(days=n)).strftime("%d.%m.%Y")
+    except (TypeError, ValueError):
+        pass
+    return str(serial) if serial else ""
 
 
 def format_client_card(client: dict) -> str:
@@ -215,11 +229,8 @@ def format_client_card(client: dict) -> str:
     for field, value in client.items():
         if field in shown or field in SKIP_FIELDS or not value:
             continue
-        lines.append(f"• {_e(field)}: {_e(value)}")
-
-    row = client.get("_row")
-    if row:
-        lines.append(f"\n_Wiersz: {_e(str(row))}_")
+        display_value = _fmt_date(value) if field in _DATE_FIELDS else value
+        lines.append(f"• {_e(field)}: {_e(display_value)}")
 
     return "\n".join(lines)
 

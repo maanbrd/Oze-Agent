@@ -9,6 +9,7 @@ All functions return dicts and never raise — errors return empty/default value
 
 import json
 import logging
+from datetime import date
 from typing import Optional
 
 import anthropic
@@ -72,6 +73,64 @@ async def call_claude(
     except Exception as e:
         logger.error("call_claude(%s): %s", model_type, e)
         return {"text": "", "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "model": model}
+
+
+# ── Tool use API call ─────────────────────────────────────────────────────────
+
+
+async def call_claude_with_tools(
+    system_prompt: str,
+    user_message: str,
+    tools: list[dict],
+    model_type: str = "complex",
+) -> dict:
+    """Call Claude with tool use enabled.
+
+    Returns:
+        {
+            "tool_name": str | None,   # None if Claude responded with text
+            "tool_input": dict,
+            "text": str | None,        # None if Claude called a tool
+            "tokens_in": int, "tokens_out": int, "cost_usd": float, "model": str
+        }
+    """
+    model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
+    client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+
+    try:
+        response = await client.messages.create(
+            model=model,
+            max_tokens=1024,
+            system=system_prompt,
+            tools=tools,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        tokens_in = response.usage.input_tokens
+        tokens_out = response.usage.output_tokens
+        cost = (
+            tokens_in * COST_PER_MTOK_IN[model_type] / 1_000_000
+            + tokens_out * COST_PER_MTOK_OUT[model_type] / 1_000_000
+        )
+        base = {"tokens_in": tokens_in, "tokens_out": tokens_out, "cost_usd": cost, "model": model}
+
+        for block in response.content:
+            if block.type == "tool_use":
+                return {**base, "tool_name": block.name, "tool_input": block.input, "text": None}
+
+        # Claude responded with text instead of calling a tool
+        text = ""
+        for block in response.content:
+            if hasattr(block, "text"):
+                text = block.text
+                break
+        return {**base, "tool_name": None, "tool_input": {}, "text": text}
+
+    except Exception as e:
+        logger.error("call_claude_with_tools(%s): %s", model_type, e)
+        return {
+            "tool_name": None, "tool_input": {}, "text": "",
+            "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "model": model,
+        }
 
 
 # ── Voice note parsing ────────────────────────────────────────────────────────
@@ -159,9 +218,22 @@ Przykłady:
 - "jutro o 10 jadę do Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Nowak", "location": "ul. Różana 3 Piaseczno"}}
 - "spotkanie z Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Kowalski", "day": "pojutrze", "time": "15:00"}}
 - WAŻNE: Każda wiadomość zawierająca datę/godzinę + miejsce lub klienta to add_meeting, NIE general_question.
+- "ile mam klientów?" → show_pipeline
+- "pokaż lejek" → show_pipeline
+- "ilu klientów mam" → show_pipeline
+- "wysłałem ofertę Nowakowi" → change_status, entities: {{"name": "Nowak", "status": "Oferta wysłana"}}
+- "Kowalski podpisał" → change_status, entities: {{"name": "Kowalski", "status": "Podpisał"}}
+- "Wiśniewski rezygnuje" → change_status, entities: {{"name": "Wiśniewski", "status": "Rezygnuje"}}
+- "Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Kowalski"}}
+- "Zmień telefon Nowaka na 601234567" → edit_client, entities: {{"name": "Nowak"}}
+- "Dodaj notatkę do Kowalskiego: interesuje się magazynem" → edit_client, entities: {{"name": "Kowalski"}}
+- "Kowalski interesuje się też pompą ciepła" → edit_client, entities: {{"name": "Kowalski"}}
 - "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
 - "tak" / "ok" / "zgadza się" → confirm_yes
 - "nie" / "anuluj" → confirm_no lub cancel_flow
+- "asdkjfhaskdjfh" / losowe znaki / niezrozumiały tekst → general_question, confidence: 0.1
+- WAŻNE: "wysłałem X", "klient podpisał", "rezygnuje" → change_status, NIE edit_client.
+- WAŻNE: Jeśli wiadomość dotyczy zmiany danych ISTNIEJĄCEGO klienta (metraż, telefon, notatki, produkt) → edit_client NIE add_client.
 
 Kontekst poprzednich wiadomości:
 {context_str}"""
@@ -203,19 +275,25 @@ Zasady:
 - Parsuj TYLKO tę jedną wiadomość. Ignoruj wszelki wcześniejszy kontekst lub dane.
 - NIE dodawaj pól których nie ma w wiadomości
 - missing_columns = kolumny z listy BEZ wartości w wiadomości, z wyjątkiem pól systemowych
-- NIE wliczaj do missing_columns pól systemowych: "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status", "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email", "Dodatkowe info", "Notatki"
+- NIE wliczaj do missing_columns pól systemowych: "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status", "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email", "Dodatkowe info", "Notatki", "Następny krok"
 
 Mapuj slang OZE (zawsze):
 - foto / fotowoltaika / fotowoltaikę / PV-ka / panele / pv → "PV"
 - pompa / pompeczka / pompa ciepła / pompę → "Pompa ciepła"
 - magazyn / magazyn energii → "Magazyn energii"
 - klima / klimatyzacja → "Klimatyzacja"
+- Jeśli kilka produktów naraz ("magazyn, klima", "PV i pompa"), zapisz WSZYSTKIE w polu Produkt oddzielone przecinkami: np. "PV, Magazyn energii, Klimatyzacja".
+- NIE wrzucaj nazw produktów do pola Notatki.
 
 Parsuj bez pytania:
-- Metraż: "160m2" / "160 metrów" / "dom 160" → "160"
-- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6"
-- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ"
+- Metraż domu: "160m2" / "160 metrów" / "dom 160" → zapisz w kolumnie zawierającej "domu" lub "dom" (np. "Metraż domu (m²)")
+- Metraż dachu: "dach 40" / "40m2 dachu" → zapisz w kolumnie zawierającej "dachu" lub "dach" (np. "Metraż dachu (m²)")
+- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6" → kolumna "Moc" lub "Moc (kW)"
+- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ" → kolumna "Kierunek dachu"
 - Telefon: tylko cyfry, bez spacji i myślników
+- Follow-up / następny krok: "zadzwonię za tydzień" / "wracam za 3 dni" / "follow-up w piątek" → oblicz konkretną datę względem {date.today().strftime("%Y-%m-%d")} i zapisz w kolumnie "Następny krok" lub "Data następnego kontaktu"
+- Kontekst emocjonalny i sytuacyjny: "żona go przekręciła" / "obiekcje" / "nie był w domu" / "chory" / sytuacja rodzinna → zapisz w polu Notatki
+- WAŻNE: Metraże i moc to dane TECHNICZNE — zapisuj w dedykowanych kolumnach, NIE w Notatkach.
 - Kolejność słów i interpunkcja nie mają znaczenia — parsuj intencję"""
 
     result = await call_claude(system_prompt, message, model_type="complex")

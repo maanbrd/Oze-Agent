@@ -26,6 +26,7 @@ from bot.utils.telegram_helpers import (
     send_unregistered_message,
 )
 from shared.claude_ai import (
+    call_claude_with_tools,
     classify_intent,
     extract_client_data,
     extract_meeting_data,
@@ -72,7 +73,7 @@ logger = logging.getLogger(__name__)
 SYSTEM_FIELDS = {
     "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status",
     "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email",
-    "Dodatkowe info", "Notatki",
+    "Dodatkowe info", "Notatki", "Następny krok",
 }
 
 # Regex: 7+ consecutive digits after stripping spaces/hyphens/dots (phone number)
@@ -86,9 +87,17 @@ _TEMPORAL_MARKERS = {
     "poniedziałek", "wtorek", "środę", "środa", "czwartek",
     "piątek", "sobotę", "sobota", "niedzielę", "niedziela",
     "tydzień", "następny", "przyszły", "spotkanie",
+    "wpół", "kwadrans",  # Polish quarter-hour time expressions
 }
 # HH:MM or "o <hour>" / "na <hour>" — require explicit time preposition
-_TIME_RE = re.compile(r'\d{1,2}:\d{2}|\bo\s+\d{1,2}(?:\s|$)|\bna\s+\d{1,2}(?:\s|$)')
+# Also matches "wpół" ("wpół do ósmej") and "kwadrans" ("za kwadrans dziesiąta")
+_TIME_RE = re.compile(
+    r'\d{1,2}:\d{2}'
+    r'|\bo\s+\d{1,2}(?:\s|$)'
+    r'|\bna\s+\d{1,2}(?:\s|$)'
+    r'|\bwpół\b'
+    r'|\bkwadrans\b'
+)
 
 
 def _contains_phone(text: str) -> bool:
@@ -141,8 +150,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Check for active pending flow first
     pending_flow = get_pending_flow(telegram_id)
     if pending_flow:
-        await _route_pending_flow(update, context, user, pending_flow, message_text)
-        return
+        consumed = await _route_pending_flow(update, context, user, pending_flow, message_text)
+        if consumed:
+            return
+        # Flow was auto-cancelled — fall through to process the new message normally
 
     text_lower = message_text.lower()
     words = set(text_lower.split())
@@ -171,6 +182,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     intent_data = await classify_intent(message_text, history)
     intent = intent_data.get("intent", "general_question")
 
+    # Low-confidence classification → fall back to general (prevents garbage → add_client)
+    if (
+        intent_data.get("confidence", 1.0) < 0.5
+        and intent not in {"confirm_yes", "confirm_no", "cancel_flow"}
+    ):
+        intent = "general_question"
+
     # Guard: Claude said add_meeting but message has no date/time markers
     # → reclassify as add_client (avoids history contamination from past meeting attempts)
     if intent == "add_meeting":
@@ -186,7 +204,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     handlers = {
         "add_client": handle_add_client,
         "search_client": handle_search_client,
-        "edit_client": handle_edit_client,
+        "edit_client": handle_edit_client_v2,
         "delete_client": handle_delete_client,
         "add_meeting": handle_add_meeting,
         "view_meetings": handle_view_meetings,
@@ -218,8 +236,12 @@ async def _route_pending_flow(
     user: dict,
     flow: dict,
     message_text: str,
-) -> None:
-    """Route a reply message based on the active pending flow."""
+) -> bool:
+    """Route a reply message based on the active pending flow.
+
+    Returns True if the message was consumed by the flow, False if the flow was
+    auto-cancelled and the message should be processed normally by handle_text.
+    """
     flow_type = flow.get("flow_type", "")
     text_lower = message_text.lower().strip()
 
@@ -236,8 +258,10 @@ async def _route_pending_flow(
 
     if is_yes:
         await handle_confirm(update, context, user, {}, message_text)
+        return True
     elif is_no:
         await handle_cancel_flow(update, context, user, {}, message_text)
+        return True
     elif flow_type == "add_client":
         # User is augmenting an in-progress add_client flow with more data
         telegram_id = update.effective_user.id
@@ -256,7 +280,7 @@ async def _route_pending_flow(
             missing = [col for col in sheet_columns if not old_client_data.get(col) and col not in SYSTEM_FIELDS]
             card = format_add_client_card(old_client_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
-            return
+            return True
 
         # If the new message names a different client → start fresh, don't merge
         old_name = old_client_data.get("Imię i nazwisko", "").strip()
@@ -267,7 +291,7 @@ async def _route_pending_flow(
             save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
             card = format_add_client_card(new_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
-            return
+            return True
 
         merged = {**old_client_data, **new_data}
         logger.info("augment add_client: merged=%s", merged)
@@ -295,7 +319,7 @@ async def _route_pending_flow(
                     await update.effective_message.reply_text("✅ Zapisane.")
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
-            return
+            return True
 
         # User is correcting/adding data (possibly after tapping [Nie]) — clear cancel flag, re-show card
         new_flow_data: dict = {"client_data": merged}
@@ -304,12 +328,13 @@ async def _route_pending_flow(
         save_pending_flow(telegram_id, "add_client", new_flow_data)
         card = format_add_client_card(merged, missing)
         await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+        return True
     else:
-        # Non-add_client flows don't support augmentation
-        await update.effective_message.reply_text(
-            "Odpowiedz *tak* aby potwierdzić lub *nie* aby anulować.",
-            parse_mode="MarkdownV2",
-        )
+        # New message arrived during a non-add_client pending flow → auto-cancel, process message normally
+        telegram_id = update.effective_user.id
+        delete_pending_flow(telegram_id)
+        await update.effective_message.reply_text("⚠️ Anulowane.")
+        return False
 
 
 # ── Sub-handlers ──────────────────────────────────────────────────────────────
@@ -395,38 +420,58 @@ async def handle_search_client(
     message_text: str,
 ) -> None:
     """Search for clients and show results."""
+    telegram_id = update.effective_user.id
     user_id = user["id"]
     query = intent_data.get("entities", {}).get("name") or message_text
 
-    await send_typing(context, update.effective_user.id)
+    await send_typing(context, telegram_id)
     results = await search_clients(user_id, query)
 
     if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klientów pasujących do: '{query}'")
+        await update.effective_message.reply_text(f"Nie mam \"{query}\" w bazie.")
         return
 
     if len(results) == 1:
-        card = format_client_card(results[0])
+        client = results[0]
+        client_name = client.get("Imię i nazwisko", "")
+        query_lower = query.lower().strip()
+        name_lower = client_name.lower().strip()
+
+        # If the query is not literally present in the name (or vice versa), it's a typo match.
+        # Ask the user to confirm instead of silently showing the wrong person's data.
+        is_exact = query_lower in name_lower or name_lower in query_lower
+        if not is_exact:
+            city = client.get("Miasto", "")
+            suggestion = client_name + (f" z {city}" if city else "")
+            save_pending_flow(telegram_id, "confirm_search", {"row": client.get("_row")})
+            await update.effective_message.reply_text(
+                f"Nie mam \"{query}\". Chodziło o {suggestion}?",
+                reply_markup=build_confirm_buttons("confirm"),
+            )
+            return
+
+        card = format_client_card(client)
         await update.effective_message.reply_markdown_v2(card)
         return
 
     if len(results) >= 50:
         sheets_url = f"https://docs.google.com/spreadsheets/d/{user.get('google_sheets_id', '')}"
         await update.effective_message.reply_text(
-            f"Znalazłem {len(results)} klientów. Otwórz arkusz, aby przejrzeć wyniki:\n{sheets_url}"
+            f"Znalazłem {len(results)} klientów. Otwórz arkusz:\n{sheets_url}"
         )
         return
 
-    # 2–49 results: show numbered list
-    lines = [f"Znalazłem {len(results)} klientów. Wybierz:"]
+    # 2–49 results: numbered list
+    lines = [f"Mam {len(results)} klientów:"]
     options = []
     for i, c in enumerate(results[:10], start=1):
         name = c.get("Imię i nazwisko", "?")
         city = c.get("Miasto", c.get("Miejscowość", ""))
         row = c.get("_row", 0)
-        label = f"{i}. {name}" + (f" ({city})" if city else "")
+        label = f"{i}. {name}" + (f" — {city}" if city else "")
         lines.append(label)
         options.append((label, f"select_client:{row}"))
+    lines.append("Którego?")
 
     await update.effective_message.reply_text(
         "\n".join(lines),
@@ -447,21 +492,92 @@ async def handle_edit_client(
     entities = intent_data.get("entities", {})
     query = entities.get("name") or message_text
 
+    logger.info("handle_edit_client: query=%r", query)
     results = await search_clients(user_id, query)
     if not results:
         await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
+    client_name = client.get("Imię i nazwisko", "klient")
     headers = await get_sheet_headers(user_id)
+    logger.info("handle_edit_client: client=%r headers=%s", client_name, len(headers))
     extracted = await extract_client_data(message_text, headers)
     updates = extracted.get("client_data", {})
+    logger.info("handle_edit_client: updates=%s", updates)
+
+    # Strip "Imię i nazwisko" if AI echoed the search key back as an update
+    client_name_lower = client_name.lower()
+    updates = {
+        k: v for k, v in updates.items()
+        if not (
+            k == "Imię i nazwisko"
+            and (
+                v.lower() == client_name_lower
+                or v.lower() in client_name_lower
+                or client_name_lower in v.lower()
+            )
+        )
+    }
+    logger.info("handle_edit_client: after name-echo filter updates=%s", updates)
+
+    msg_lower = message_text.lower()
+
+    # Note-append detection via keyword triggers
+    NOTE_TRIGGERS = [
+        "dodaj informacje", "dodaj informację", "dodaj że", "dodaj ze",
+        "dodaj notatkę", "dodaj notatke", "dopisz", "zanotuj",
+        "interesuje się też", "interesuje sie tez",
+        "interesuje go też", "interesuje go tez",
+    ]
+    note_trigger_found = any(t in msg_lower for t in NOTE_TRIGGERS)
+
+    if note_trigger_found and "Notatki" not in updates:
+        content = message_text
+        for trigger in NOTE_TRIGGERS:
+            content = re.sub(re.escape(trigger), "", content, flags=re.IGNORECASE)
+        for word in query.split():
+            if len(word) > 2:
+                content = re.sub(r'\b' + re.escape(word) + r'\b', "", content, flags=re.IGNORECASE)
+        content = re.sub(r'\b(do|ze|że|ku|od|też|tez|dla|i|a)\b', "", content, flags=re.IGNORECASE)
+        content = re.sub(r'[,.:]+', " ", content)
+        content = " ".join(content.split()).strip()
+        if content:
+            updates["Notatki"] = content
+            logger.info("handle_edit_client: note-append detected, content=%r", content)
+
+    # Keyword fallback for measurements when AI missed the field
+    if not updates:
+        roof_col = next((h for h in headers if "dachu" in h.lower()), None)
+        if roof_col and any(kw in msg_lower for kw in ["dachu", "dach"]):
+            nie_idx = msg_lower.find("nie ")
+            search_text = message_text[:nie_idx] if nie_idx != -1 else message_text
+            nums = re.findall(r'\d+(?:[.,]\d+)?', search_text)
+            if nums:
+                updates[roof_col] = nums[-1]
+                logger.info("handle_edit_client: roof fallback matched col=%r val=%r", roof_col, nums[-1])
+        elif not updates:
+            house_col = next(
+                (h for h in headers if "domu" in h.lower() or ("metraż" in h.lower() and "dachu" not in h.lower())),
+                None,
+            )
+            if house_col and any(kw in msg_lower for kw in ["domu", "dom", "metraż"]):
+                nums = re.findall(r'\d+(?:[.,]\d+)?', message_text)
+                if nums:
+                    updates[house_col] = nums[0]
+                    logger.info("handle_edit_client: house fallback matched col=%r val=%r", house_col, nums[0])
 
     if not updates:
-        await update.effective_message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
+        # Detect which keyword was mentioned and report missing column
+        if any(kw in msg_lower for kw in ["dachu", "dach", "metraż"]):
+            await update.effective_message.reply_text(
+                "Nie mam kolumny 'Metraż dachu' w arkuszu. Dodaj ją lub napisz 'odśwież kolumny'."
+            )
+        else:
+            await update.effective_message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
         return
 
-    # For phone/email fields: if client already has a value, ask keep or replace
+    # For phone/email fields: if client already has a value, offer replace or keep-both
     CONTACT_FIELDS = {"Telefon", "Email"}
     ambiguous = {f for f in updates if f in CONTACT_FIELDS and client.get(f)}
     if ambiguous:
@@ -476,31 +592,200 @@ async def handle_edit_client(
             "new_value": new_val,
             "other_updates": other_updates,
         })
+        field_label = field.lower()
         await update.effective_message.reply_text(
-            f"Stary {field}: {old_val}\nNowy {field}: {new_val}\n\n"
-            f"Zastąpić stary czy zachować oba?",
+            f"{client_name} — {field_label}:\n"
+            f"Stary: {old_val}\n"
+            f"Nowy: {new_val}\n"
+            f"Zamienić czy dodać drugi?",
             reply_markup=build_choice_buttons([
-                ("Zastąp stary", "phone:replace"),
-                ("Zachowaj oba", "phone:keep_both"),
+                ("Zamień", "phone:replace"),
+                ("Dodaj drugi", "phone:keep_both"),
             ]),
         )
         return
+
+    # Detect note-append intent
+    is_note_append = "Notatki" in updates and (
+        note_trigger_found
+        or any(kw in msg_lower for kw in ("dodaj", "dopisz", "też", "tez"))
+    )
+    append_fields = ["Notatki"] if is_note_append else []
 
     save_pending_flow(telegram_id, "edit_client", {
         "row": client.get("_row"),
         "updates": updates,
         "old_values": {k: client.get(k, "") for k in updates},
+        "append_fields": append_fields,
     })
 
-    lines = ["✏️ *Proponowane zmiany:*\n"]
-    for field, new_val in updates.items():
+    # Build plain-text confirmation card
+    if len(updates) == 1:
+        field, new_val = next(iter(updates.items()))
         old_val = client.get(field, "")
-        lines.append(format_edit_comparison(field, old_val, new_val))
+        field_label = field.lower()
+        if is_note_append:
+            msg = f"{client_name} — {field_label}:\nDodaję: \"{new_val}\"\nZapisać?"
+        else:
+            msg = f"{client_name} — {field_label}:\nByło: {old_val}\nBędzie: {new_val}\nZmienić?"
+    else:
+        lines = [f"Zmiany dla {client_name}:"]
+        for field, new_val in updates.items():
+            old_val = client.get(field, "")
+            lines.append(f"{field}: {old_val} → {new_val}")
+        lines.append("Zmienić?")
+        msg = "\n".join(lines)
 
-    msg = "\n".join(lines)
-    await update.effective_message.reply_markdown_v2(
-        msg, reply_markup=build_confirm_buttons("confirm")
+    await update.effective_message.reply_text(msg, reply_markup=build_confirm_buttons("confirm"))
+
+
+async def handle_edit_client_v2(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    """Find client and update via Claude tool use — no regex fallbacks."""
+    user_id = user["id"]
+    telegram_id = update.effective_user.id
+    entities = intent_data.get("entities", {})
+    query = entities.get("name") or message_text
+
+    logger.info("handle_edit_client_v2: query=%r msg=%r", query, message_text)
+    results = await search_clients(user_id, query)
+    if not results:
+        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        return
+
+    client = results[0]
+    client_name = client.get("Imię i nazwisko", "klient")
+    headers = await get_sheet_headers(user_id)
+    logger.info("handle_edit_client_v2: client=%r headers=%d", client_name, len(headers))
+
+    client_data_str = "\n".join(
+        f"  {h}: {client.get(h, '')}" for h in headers if client.get(h)
     )
+    headers_str = ", ".join(headers)
+
+    system_prompt = f"""Jesteś asystentem handlowca OZE. Pomagasz edytować dane klientów w arkuszu.
+
+Klient: {client_name}
+Aktualne dane:
+{client_data_str}
+
+Dostępne kolumny (użyj DOKŁADNIE tych nazw):
+{headers_str}
+
+Zasady:
+- Użyj dokładnych nazw kolumn z listy, nigdy nie wymyślaj własnych.
+- Jeśli użytkownik mówi o metrażu dachu, field_name to kolumna z listy zawierająca słowo "dach".
+- Jeśli użytkownik chce dodać informację ("interesuje się też X", "dodaj że", "dopisz"), użyj append_client_note.
+- Jeśli użytkownik wyraźnie zmienia wartość ("zmień X na Y", "ma Y nie Z"), użyj update_client_field.
+- Nie zmieniaj "Imię i nazwisko" chyba że użytkownik wprost prosi o zmianę nazwiska.
+- Zawsze wywołaj jedno z narzędzi. Jeśli nie wiesz co zmienić, użyj request_clarification."""
+
+    tools = [
+        {
+            "name": "update_client_field",
+            "description": "Zastępuje wartość pola klienta nową wartością.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "client_name": {"type": "string", "description": "Nazwa klienta"},
+                    "field_name": {"type": "string", "description": "Dokładna nazwa kolumny z listy"},
+                    "new_value": {"type": "string", "description": "Nowa wartość"},
+                    "old_value_hint": {"type": "string", "description": "Stara wartość wspomniana przez użytkownika"},
+                },
+                "required": ["client_name", "field_name", "new_value"],
+            },
+        },
+        {
+            "name": "append_client_note",
+            "description": "Dodaje tekst do kolumny Notatki bez usuwania poprzednich notatek.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "client_name": {"type": "string", "description": "Nazwa klienta"},
+                    "note_text": {"type": "string", "description": "Tekst notatki do dodania"},
+                },
+                "required": ["client_name", "note_text"],
+            },
+        },
+        {
+            "name": "request_clarification",
+            "description": "Prosi użytkownika o wyjaśnienie gdy nie wiadomo co zmienić.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "reason": {"type": "string", "description": "Krótkie wyjaśnienie po polsku co jest niejasne"},
+                },
+                "required": ["reason"],
+            },
+        },
+    ]
+
+    result = await call_claude_with_tools(system_prompt, message_text, tools, model_type="complex")
+    tool_name = result.get("tool_name")
+    tool_input = result.get("tool_input", {})
+    logger.info("handle_edit_client_v2: tool=%r input=%s", tool_name, tool_input)
+
+    if tool_name == "update_client_field":
+        field_name = tool_input.get("field_name", "")
+        new_value = tool_input.get("new_value", "")
+        old_value_hint = tool_input.get("old_value_hint", "")
+        old_value = client.get(field_name, old_value_hint)
+
+        save_pending_flow(telegram_id, "edit_client", {
+            "row": client.get("_row"),
+            "updates": {field_name: new_value},
+            "old_values": {field_name: old_value},
+            "append_fields": [],
+        })
+        logger.info(
+            "handle_edit_client_v2: flow saved row=%s updates=%s append=[]",
+            client.get("_row"), {field_name: new_value},
+        )
+
+        field_label = field_name.lower()
+        msg = (
+            f"{client_name} — {field_label}:\n"
+            f"Było: {old_value}\n"
+            f"Będzie: {new_value}\n"
+            f"Zmienić?"
+        )
+        await update.effective_message.reply_text(msg, reply_markup=build_confirm_buttons("confirm"))
+
+    elif tool_name == "append_client_note":
+        note_text = tool_input.get("note_text", "")
+        old_notes = client.get("Notatki", "")
+
+        save_pending_flow(telegram_id, "edit_client", {
+            "row": client.get("_row"),
+            "updates": {"Notatki": note_text},
+            "old_values": {"Notatki": old_notes},
+            "append_fields": ["Notatki"],
+        })
+        logger.info(
+            "handle_edit_client_v2: flow saved row=%s note_append=%r",
+            client.get("_row"), note_text,
+        )
+
+        msg = (
+            f"{client_name} — notatki:\n"
+            f"Dodaję: \"{note_text}\"\n"
+            f"Zapisać?"
+        )
+        await update.effective_message.reply_text(msg, reply_markup=build_confirm_buttons("confirm"))
+
+    elif tool_name == "request_clarification":
+        reason = tool_input.get("reason", "Nie rozumiem co chcesz zmienić. Opisz dokładniej.")
+        await update.effective_message.reply_text(reason)
+
+    else:
+        text = result.get("text") or "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej."
+        logger.warning("handle_edit_client_v2: no tool called, text=%r", text[:100])
+        await update.effective_message.reply_text(text)
 
 
 async def handle_delete_client(
@@ -882,9 +1167,19 @@ async def handle_confirm(
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "edit_client":
-            ok = await update_client(user_id, flow_data["row"], flow_data["updates"])
+            updates = flow_data["updates"]
+            append_fields = flow_data.get("append_fields", [])
+            old_values = flow_data.get("old_values", {})
+            # For append fields: prepend existing value so nothing is lost
+            final_updates = {}
+            for field, new_val in updates.items():
+                if field in append_fields and old_values.get(field):
+                    final_updates[field] = f"{old_values[field]}; {new_val}"
+                else:
+                    final_updates[field] = new_val
+            ok = await update_client(user_id, flow_data["row"], final_updates)
             if ok:
-                await update.effective_message.reply_text("✅ Dane klienta zaktualizowane.")
+                await update.effective_message.reply_text("✅ Zapisane.")
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
@@ -997,6 +1292,16 @@ async def handle_confirm(
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
+        elif flow_type == "confirm_search":
+            row = flow_data.get("row")
+            all_clients = await get_all_clients(user_id)
+            client = next((c for c in all_clients if c.get("_row") == row), None)
+            if client:
+                card = format_client_card(client)
+                await update.effective_message.reply_markdown_v2(card)
+            else:
+                await update.effective_message.reply_text("Nie znalazłem tego klienta.")
+
         else:
             await update.effective_message.reply_text("✅ Gotowe.")
 
@@ -1084,6 +1389,7 @@ async def handle_general(
         "NIGDY nie używaj: 'Oczywiście', 'Z przyjemnością', 'Świetnie', 'Czekam na polecenia', "
         "'Czy mogę w czymś pomóc', 'Mam nadzieję', 'Nie ma problemu', 'Rozumiem Twoją frustrację'. "
         "Jeśli wiadomość to dane klienta (imię, miasto, telefon, produkt) — odpowiedz 'Co chcesz zrobić?' "
+        "Jeśli wiadomość jest niezrozumiała (losowe znaki, brak sensu) — odpowiedz 'Co chcesz zrobić?' "
         "Bez propozycji. Tylko odpowiedź na to co zostało zapytane."
     )
 

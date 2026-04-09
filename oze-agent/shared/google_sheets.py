@@ -141,20 +141,51 @@ async def get_all_clients(user_id: str) -> list[dict]:
         return []
 
 
+_POLISH_NAME_SUFFIXES = (
+    "skiego", "ckiego", "owego", "iego", "ego", "emu", "owi", "skim", "im", "ą",
+)
+
+
+def _strip_polish_suffix(query: str) -> str:
+    """Strip common Polish genitive/locative suffixes from name queries.
+
+    "Kowalskiego" → "Kowalsk", "Mazurowi" → "Mazur", "Nowaka" → "Nowak".
+    Returns the original string unchanged when no known suffix is found.
+    """
+    lower = query.lower()
+    for suffix in _POLISH_NAME_SUFFIXES:
+        if lower.endswith(suffix) and len(query) > len(suffix) + 2:
+            return query[: -len(suffix)]
+    return query
+
+
 async def search_clients(user_id: str, query: str) -> list[dict]:
-    """Fuzzy search clients by name, city, or phone. Typo-tolerant."""
+    """Fuzzy search clients by name, city, or phone. Typo-tolerant.
+
+    Tries both the raw query and a suffix-stripped version so inflected Polish
+    names like "Kowalskiego" match stored "Kowalski".
+    """
     clients = await get_all_clients(user_id)
     if not clients:
         return []
 
+    stripped = _strip_polish_suffix(query)
+    queries_to_try = [query] if stripped.lower() == query.lower() else [query, stripped]
+
     search_cols = ["Imię i nazwisko", "Miasto", "Telefon", "Email"]
-    results = []
-    for client in clients:
-        for col in search_cols:
-            value = client.get(col, "")
-            if value and _fuzzy_match(query, value):
-                results.append(client)
-                break
+    results: list[dict] = []
+    seen_rows: set = set()
+    for q in queries_to_try:
+        for client in clients:
+            row = client.get("_row")
+            if row in seen_rows:
+                continue
+            for col in search_cols:
+                value = client.get(col, "")
+                if value and _fuzzy_match(q, value):
+                    results.append(client)
+                    seen_rows.add(row)
+                    break
     return results
 
 
