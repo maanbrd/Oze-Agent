@@ -105,7 +105,7 @@ Maintain context within the window. Don't make user repeat who they're talking a
 | foto, PV-ka, fotowoltaika | PV |
 | pompa, pompeczka | Pompa ciepła |
 | magazyn | Magazyn energii |
-| klima | Klimatyzacja |
+| klimatyzacja | Klimatyzacja |
 | instalacja | from context |
 | gość, facet, baba | klient |
 | spał | client didn't show up |
@@ -119,10 +119,10 @@ dziś/jutro/pojutrze, w piątek, w przyszłą środę, o czternastej, wpół do 
 
 ### Adding a client
 
-Input: "Nowak Piaseczno 601234567 pompa dom 120m2"
+Input: "Jan Nowak Piaseczno 601234567 pompa dom 120m2"
 
 ```
-📋 Nowak, Piaseczno
+📋 Jan Nowak, Piaseczno
 Pompa ciepła, dom 120m²
 Tel. 601 234 567
 ❓ Brakuje: adres (ulica), metraż dachu, kierunek dachu, zużycie prądu, źródło leada
@@ -130,10 +130,10 @@ Zapisać?
 [Tak] [Zapisz bez]
 ```
 
-Input (voice, emotional): "Kurde, prawie miałem gościa, Wiśniewski z Legionowa, Kościuszki 8, dom 140 metrów, dach 35 wschód, PV-ka szóstka, żona go przekręciła, follow-up za tydzień, numer 602345678"
+Input (voice, emotional): "Kurde, prawie miałem gościa, Adam Wiśniewski z Legionowa, Kościuszki 8, dom 140 metrów, dach 35 wschód, PV-ka szóstka, żona go przekręciła, follow-up za tydzień, numer 602345678"
 
 ```
-📋 Wiśniewski, Kościuszki 8, Legionowo
+📋 Adam Wiśniewski, Kościuszki 8, Legionowo
 PV 6kW, dom 140m², dach 35m² wsch.
 Tel. 602 345 678
 📅 Follow-up: [date +7 days]
@@ -175,29 +175,29 @@ Nie mam "Kowalsky". Chodziło o Kowalskiego z Warszawy?
 
 ### Status change
 
-Input: "Kowalski podpisał!"
+Input: "Jan Kowalski podpisał!"
 
 ```
-🫡 Kowalski → Podpisane?
+🫡 Jan Kowalski → Podpisał?
 [Tak] [Nie]
 ```
 
 ### Calendar — adding meetings
 
-Input: "Jutro o 10 Kowalski, o 14 Nowak, o 17 Wiśniewski"
+Input: "Jutro o 10 Jan Kowalski, o 14 Jan Nowak, o 17 Adam Wiśniewski"
 
 ```
 📅 Jutro [date]:
-10:00 Kowalski — Piłsudskiego 12, Warszawa
-14:00 Nowak — Leśna 5, Piaseczno
-17:00 Wiśniewski — Kościuszki 8, Legionowo
+10:00 Jan Kowalski — Piłsudskiego 12, Warszawa
+14:00 Jan Nowak — Leśna 5, Piaseczno
+17:00 Adam Wiśniewski — Kościuszki 8, Legionowo
 Dodać?
 [Tak] [Nie]
 ```
 
 New client in batch → after saving meetings:
 ```
-🫵 Wiśniewski nie jest w bazie. Dodać?
+🫵 Adam Wiśniewski nie jest w bazie. Dodać?
 [Tak] [Nie]
 ```
 
@@ -207,9 +207,9 @@ Input: "Co mam dziś?"
 
 ```
 📅 Dziś [date]:
-10:00 Kowalski — Piłsudskiego 12, Warszawa — oferta wysłana
-14:00 Nowak — Leśna 5, Piaseczno — nowy lead
-17:00 Wiśniewski — Kościuszki 8, Legionowo — spotkanie umówione
+10:00 Jan Kowalski — Piłsudskiego 12, Warszawa — oferta wysłana
+14:00 Jan Nowak — Leśna 5, Piaseczno — nowy lead
+17:00 Adam Wiśniewski — Kościuszki 8, Legionowo — spotkanie umówione
 ```
 
 ### Calendar — free slots
@@ -224,10 +224,10 @@ Wolne: do 10:00, 11:00-14:00, po 15:00
 
 ### Calendar — rescheduling
 
-Input: "Przełóż Kowalskiego na piątek o 10"
+Input: "Przełóż Jana Kowalskiego na piątek o 10"
 
 ```
-📅 Kowalski:
+📅 Jan Kowalski:
 Było: środa [date] 14:00
 Będzie: piątek [date] 10:00
 Przenieść?
@@ -236,10 +236,10 @@ Przenieść?
 
 ### Calendar — cancelling
 
-Input: "Odwołaj Nowaka"
+Input: "Odwołaj Jana Nowaka"
 
 ```
-Usunąć spotkanie z Nowakiem jutro o 14:00?
+Usunąć spotkanie z Janem Nowakiem jutro o 14:00?
 [Tak] [Nie]
 ```
 
@@ -250,9 +250,9 @@ User sends photos →
 📸 3 zdjęcia. Do którego klienta?
 ```
 
-Answer: "Kowalski Warszawa" →
+Answer: "Jan Kowalski Warszawa" →
 ```
-📸 3 zdjęcia → Kowalski, Warszawa. Zapisać?
+📸 3 zdjęcia → Jan Kowalski, Warszawa. Zapisać?
 [Tak] [Nie]
 ```
 
@@ -278,17 +278,17 @@ Never list individual clients. Numbers + link only.
 
 ### Follow-up / reminder
 
-Input: "Przypomnij zadzwonić do Nowaka w piątek"
+Input: "Przypomnij zadzwonić do Jana Nowaka w piątek"
 
 ```
-⏰ Piątek [date] — zadzwonić do Nowaka. Ustawić?
+⏰ Piątek [date] — zadzwonić do Jana Nowaka. Ustawić?
 [Tak] [Nie]
 ```
 
 ### Duplicate client
 
 ```
-⚠️ Masz już Kowalskiego z Warszawy (Piłsudskiego 12, PV 5kW).
+⚠️ Masz już Jana Kowalskiego z Warszawy (Piłsudskiego 12, PV 5kW).
 Dodać nowego czy zaktualizować?
 [Nowy] [Aktualizuj]
 ```
@@ -296,8 +296,8 @@ Dodać nowego czy zaktualizować?
 ### Calendar conflict
 
 ```
-⚠️ Jutro o 14:00 masz już Nowaka.
-Dodać Kowalskiego mimo to?
+⚠️ Jutro o 14:00 masz już Jana Nowaka.
+Dodać Jana Kowalskiego mimo to?
 [Tak] [Zmień godzinę]
 ```
 
@@ -316,13 +316,13 @@ Dodać mimo to?
 ```
 🫡 Plan na [date]:
 
-10:00 Kowalski — Piłsudskiego 12, Warszawa — oferta wysłana
-12:30 Nowak — Leśna 5, Piaseczno — nowy lead
-15:00 Wiśniewski — Kościuszki 8, Legionowo — po spotkaniu
+10:00 Jan Kowalski — Piłsudskiego 12, Warszawa — oferta wysłana
+12:30 Jan Nowak — Leśna 5, Piaseczno — nowy lead
+15:00 Adam Wiśniewski — Kościuszki 8, Legionowo — po spotkaniu
 
 📋 Follow-upy:
-• Mazur — wysłać ofertę
-• Zieliński — oddzwonić
+• Jan Mazur — wysłać ofertę
+• Piotr Zieliński — oddzwonić
 
 Lejek: 12 nowych, 5 umówionych, 8 ofert, 3 negocjacje
 ```
@@ -334,9 +334,9 @@ NEVER: motivation, greetings, "Udanego dnia!"
 
 ```
 🫵 Nieraportowane spotkania:
-• Kowalski (10:00)
-• Nowak (14:00)
-• Wiśniewski (17:00)
+• Jan Kowalski (10:00)
+• Jan Nowak (14:00)
+• Adam Wiśniewski (17:00)
 
 Uzupełnisz? Jutro nie będziesz tak dobrze pamiętał.
 ```
