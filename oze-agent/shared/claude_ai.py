@@ -294,14 +294,15 @@ Mapuj slang OZE (zawsze):
 - NIE wrzucaj nazw produktów do pola Notatki.
 
 Parsuj bez pytania:
-- Metraż domu: "160m2" / "160 metrów" / "dom 160" → zapisz w kolumnie zawierającej "domu" lub "dom" (np. "Metraż domu (m²)")
-- Metraż dachu: "dach 40" / "40m2 dachu" → zapisz w kolumnie zawierającej "dachu" lub "dach" (np. "Metraż dachu (m²)")
-- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6" → kolumna "Moc" lub "Moc (kW)"
-- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ" → kolumna "Kierunek dachu"
+- Metraż domu: "160m2" / "160 metrów" / "dom 160" → szukaj kolumny zawierającej "domu" lub "dom" (np. "Metraż domu (m²)"); jeśli nie ma → pomiń
+- Metraż dachu: "dach 40" / "40m2 dachu" → szukaj kolumny zawierającej "dachu" lub "dach" (np. "Metraż dachu (m²)"); jeśli nie ma → pomiń
+- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6" → kolumna "Moc" lub "Moc (kW)"; jeśli nie ma → pomiń
+- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ" → kolumna "Kierunek dachu"; jeśli nie ma → pomiń
 - Telefon: tylko cyfry, bez spacji i myślników
+- Zużycie prądu / roczne zużycie: "500kWh" / "zużycie 500" → szukaj kolumny zawierającej "zużycie"; jeśli nie ma → pomiń
 - Follow-up / następny krok: "zadzwonię za tydzień" / "wracam za 3 dni" / "follow-up w piątek" → oblicz konkretną datę względem {date.today().strftime("%Y-%m-%d")} i zapisz w kolumnie "Następny krok" lub "Data następnego kontaktu"
 - Kontekst emocjonalny i sytuacyjny: "żona go przekręciła" / "obiekcje" / "nie był w domu" / "chory" / sytuacja rodzinna → zapisz w polu Notatki
-- WAŻNE: Metraże i moc to dane TECHNICZNE — zapisuj w dedykowanych kolumnach, NIE w Notatkach.
+- WAŻNE: Dane techniczne (metraże, moc, kierunek) zapisuj w dedykowanych kolumnach gdy istnieją w arkuszu. Gdy nie istnieją — zapisz w "Dodatkowe info" lub "Notatki" jako tekst (np. "dom: 160m², dach: 40m², moc: 8kW, południe").
 - Kolejność słów i interpunkcja nie mają znaczenia — parsuj intencję"""
 
     result = await call_claude(system_prompt, message, model_type="complex")
