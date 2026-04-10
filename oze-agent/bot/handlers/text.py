@@ -455,8 +455,16 @@ async def handle_search_client(
             )
             return
 
-        card = format_client_card(client)
-        await update.effective_message.reply_markdown_v2(card)
+        try:
+            card = format_client_card(client)
+            await update.effective_message.reply_markdown_v2(card)
+        except Exception as e:
+            logger.error("format_client_card failed: %s", e)
+            name = client.get("Imię i nazwisko", "?")
+            city = client.get("Miasto", "")
+            await update.effective_message.reply_text(
+                f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
+            )
         return
 
     if len(results) >= 50:
@@ -813,11 +821,19 @@ async def handle_delete_client(
     client = results[0]
     save_pending_flow(telegram_id, "delete_client", {"row": client.get("_row")})
 
-    card = format_client_card(client)
-    await update.effective_message.reply_markdown_v2(
-        f"🗑️ Usunąć tego klienta?\n\n{card}",
-        reply_markup=build_confirm_buttons("confirm"),
-    )
+    try:
+        card = format_client_card(client)
+        await update.effective_message.reply_markdown_v2(
+            f"🗑️ Usunąć tego klienta?\n\n{card}",
+            reply_markup=build_confirm_buttons("confirm"),
+        )
+    except Exception as e:
+        logger.error("format_client_card failed: %s", e)
+        name = client.get("Imię i nazwisko", "?")
+        city = client.get("Miasto", "")
+        await update.effective_message.reply_text(
+            f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
+        )
 
 
 def _parse_warsaw(date_str: str, time_str: str) -> datetime:
@@ -1355,8 +1371,16 @@ async def handle_confirm(
             all_clients = await get_all_clients(user_id)
             client = next((c for c in all_clients if c.get("_row") == row), None)
             if client:
-                card = format_client_card(client)
-                await update.effective_message.reply_markdown_v2(card)
+                try:
+                    card = format_client_card(client)
+                    await update.effective_message.reply_markdown_v2(card)
+                except Exception as e:
+                    logger.error("format_client_card failed: %s", e)
+                    name = client.get("Imię i nazwisko", "?")
+                    city = client.get("Miasto", "")
+                    await update.effective_message.reply_text(
+                        f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
+                    )
             else:
                 await update.effective_message.reply_text("Nie znalazłem tego klienta.")
 

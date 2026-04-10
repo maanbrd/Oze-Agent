@@ -194,7 +194,7 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
 
 # ── Client card ───────────────────────────────────────────────────────────────
 
-SKIP_FIELDS = {"_row", "Link do zdjęć", "ID kalendarza"}
+SKIP_FIELDS = {"_row", "Link do zdjęć", "ID kalendarza", "Wiersz"}
 
 _DATE_FIELDS = {"Data pierwszego kontaktu", "Data ostatniego kontaktu", "Data następnego kontaktu"}
 
@@ -223,6 +223,15 @@ def _fmt_date(serial) -> str:
     return str(serial) if serial else ""
 
 
+def _is_excel_serial(val) -> bool:
+    """Return True if val looks like an Excel date serial (integer 40000–60000)."""
+    try:
+        n = int(val)
+        return 40000 < n < 60000
+    except (TypeError, ValueError):
+        return False
+
+
 def format_client_card(client: dict) -> str:
     """Format a client dict as a Telegram MarkdownV2 card."""
     name = _e(client.get("Imię i nazwisko", "Nieznany klient"))
@@ -246,7 +255,10 @@ def format_client_card(client: dict) -> str:
     for field, value in client.items():
         if field in shown or field in SKIP_FIELDS or not value:
             continue
-        display_value = _fmt_date(value) if field in _DATE_FIELDS else value
+        if field in _DATE_FIELDS or _is_excel_serial(value):
+            display_value = _fmt_date(value)
+        else:
+            display_value = value
         lines.append(f"• {_e(field)}: {_e(display_value)}")
 
     return "\n".join(lines)
