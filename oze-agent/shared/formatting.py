@@ -107,6 +107,22 @@ def _fmt_phone(raw: str) -> str:
     return raw
 
 
+def _fmt_followup(val: str) -> str:
+    """Convert ISO datetime '2026-04-12 16:00' or '2026-04-12T16:00' to '12.04.2026 (niedziela) 16:00'."""
+    if not val:
+        return ""
+    try:
+        val_clean = str(val).replace("T", " ")
+        if " " in val_clean:
+            date_part, time_part = val_clean.split(" ", 1)
+            from datetime import datetime as _dt
+            dt = _dt.fromisoformat(date_part)
+            return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]}) {time_part}"
+        return _fmt_date(val)
+    except Exception:
+        return str(val)
+
+
 def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     """Format client data as a confirmation card per agent_system_prompt.md spec.
 
@@ -174,10 +190,12 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     rendered.add("Telefon")
 
     # Remaining fields: every non-empty field not already shown above
+    _FOLLOWUP_FIELDS = {"Następny krok", "Data następnego kontaktu"}
     for field, value in client_data.items():
         if field not in rendered and value:
             label = _FIELD_LABEL.get(field, field)
-            lines.append(f"{label}: {value}")
+            display = _fmt_followup(value) if field in _FOLLOWUP_FIELDS else value
+            lines.append(f"{label}: {display}")
 
     # Missing fields (filter out any empty strings from sheet header gaps)
     missing_clean = [col for col in missing if col and col.strip()]

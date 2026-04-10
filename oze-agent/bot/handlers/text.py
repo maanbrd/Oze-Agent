@@ -1151,6 +1151,16 @@ async def handle_change_status(
     query = entities.get("name") or message_text
     new_status = entities.get("status", "")
 
+    _STATUS_MAPPING = {
+        "rezygnuje": "Odrzucone",
+        "rezygnacja": "Odrzucone",
+        "odpada": "Odrzucone",
+        "spadła": "Odrzucone",
+        "spadł": "Odrzucone",
+    }
+    if new_status:
+        new_status = _STATUS_MAPPING.get(new_status.lower(), new_status)
+
     results = await search_clients(user_id, query)
     if not results:
         await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
