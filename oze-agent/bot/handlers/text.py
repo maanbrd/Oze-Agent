@@ -81,7 +81,8 @@ SYSTEM_FIELDS = {
 _PHONE_RE = re.compile(r'\d{7,}')
 # Words that indicate lookup/question intent — not new client data
 _LOOKUP_WORDS = {"szukaj", "znajdź", "pokaż", "zmień", "edytuj", "usuń", "odwołaj",
-                 "zaktualizuj", "popraw", "zmiana", "aktualizuj"}
+                 "zaktualizuj", "popraw", "zmiana", "aktualizuj", "nowy", "numer",
+                 "telefon", "adres", "metraż", "dach", "dom"}
 # Words that indicate a genuine meeting intent (date/time markers)
 _TEMPORAL_MARKERS = {
     "jutro", "pojutrze", "dziś", "dzisiaj", "wczoraj",

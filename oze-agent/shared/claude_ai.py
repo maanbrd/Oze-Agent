@@ -232,11 +232,13 @@ Przykłady:
 - "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Rezygnuje"}}
 - "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnuje"}}
 - "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
-- "Zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "zmień numer Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Nowak", "city": "Piaseczno"}}
-- "zaktualizuj telefon Kowalskiego na 601000222" → edit_client, entities: {{"name": "Kowalski"}}
+- "zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
+- "zmień numer Jana Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
+- "zaktualizuj telefon Jana Kowalskiego na 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - "popraw metraż dachu Jana Nowaka na 45" → edit_client, entities: {{"name": "Jan Nowak"}}
-- WAŻNE: wiadomości zaczynające się od "zmień", "zaktualizuj", "popraw", "edytuj" + dane klienta → edit_client, NIE add_client, nawet gdy zawierają numer telefonu.
+- "Jan Nowak ma nowy numer 609222333" → edit_client, entities: {{"name": "Jan Nowak"}}
+- "nowy telefon Jana Kowalskiego to 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
+- WAŻNE: wiadomości zawierające "zmień", "zaktualizuj", "popraw", "edytuj", "nowy telefon", "nowy numer", "ma nowy", "nie X a Y" + imię i nazwisko klienta → edit_client, NIE add_client, nawet gdy zawierają numer telefonu.
 - "dodaj notatkę do Jana Mazura: zadzwoń po 15" → add_note, entities: {{"name": "Jan Mazur"}}
 - "Jan Mazur interesuje się też magazynem" → add_note, entities: {{"name": "Jan Mazur"}}
 - "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
