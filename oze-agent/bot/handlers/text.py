@@ -1152,11 +1152,16 @@ async def handle_change_status(
     new_status = entities.get("status", "")
 
     _STATUS_MAPPING = {
-        "rezygnuje": "Odrzucone",
-        "rezygnacja": "Odrzucone",
+        "rezygnuje": "Rezygnacja z umowy",
+        "rezygnacja": "Rezygnacja z umowy",
         "odpada": "Odrzucone",
-        "spadła": "Odrzucone",
-        "spadł": "Odrzucone",
+        "spadła": "Rezygnacja z umowy",
+        "spadł": "Rezygnacja z umowy",
+        "nieaktywny": "Nieaktywny",
+        "zamontowana": "Zamontowana",
+        "zamontowane": "Zamontowana",
+        "zamontowali": "Zamontowana",
+        "gotowe": "Zamontowana",
     }
     if new_status:
         new_status = _STATUS_MAPPING.get(new_status.lower(), new_status)

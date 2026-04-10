@@ -46,7 +46,7 @@ Build a complete AI-powered sales assistant called **OZE-Agent** for B2C renewab
 
 | Component | Technology | Hosting |
 |-----------|-----------|---------|
-| Telegram bot | Python 3.13 + python-telegram-bot 21.x | Railway (process 1, webhook mode) |
+| Telegram bot | Python 3.3 + python-telegram-bot 21.x | Railway (process 1, webhook mode) |
 | API for dashboard | FastAPI | Railway (process 2, separate from bot) |
 | AI — complex tasks | Claude Sonnet 4.6 | API calls |
 | AI — simple tasks | Claude Haiku 4.5 | API calls |
@@ -292,7 +292,7 @@ Imię i nazwisko, Telefon, Adres, Miejscowość, Metraż domu (m²), Metraż dac
 Single tab, Status column. Headers cached in Supabase (refresh every 6h + manual "odśwież kolumny" command). Agent adapts to custom columns.
 
 ### Pipeline statuses (default, editable in dashboard):
-["Nowy lead", "Spotkanie umówione", "Spotkanie odbyte", "Oferta wysłana", "Negocjacje", "Podpisane", "Odrzucone"]
+["Nowy lead", "Spotkanie umówione", "Spotkanie odbyte", "Oferta wysłana", "Negocjacje", "Podpisane", "Zamontowana", "Rezygnacja z umowy", "Nieaktywny", "Odrzucone"]
 
 ### Search
 Fuzzy, case-insensitive, typo-tolerant. "Kowalsky" → "Czy chodziło o Kowalskiego?" Multiple matches → list with cities. 50+ clients → link to Sheets.

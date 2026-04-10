@@ -229,9 +229,13 @@ Przykłady:
 - "wysłałem ofertę Janowi Nowakowi" → change_status, entities: {{"name": "Jan Nowak", "status": "Oferta wysłana"}}
 - "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisał"}}
 - "Jan Kowalski podpisał kwit" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisał"}}
-- "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Odrzucone"}}
-- "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Odrzucone"}}
+- "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Rezygnacja z umowy"}}
+- "Jan Nowak rezygnuje" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
+- "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
 - "Jan Nowak odpada" → change_status, entities: {{"name": "Jan Nowak", "status": "Odrzucone"}}
+- "Jan Nowak nieaktywny" → change_status, entities: {{"name": "Jan Nowak", "status": "Nieaktywny"}}
+- "zamontowali u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
+- "gotowe u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
 - "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - "zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
 - "zmień numer Jana Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}

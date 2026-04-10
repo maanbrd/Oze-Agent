@@ -29,7 +29,7 @@ CREATE TABLE users (
     reminder_minutes_before INTEGER DEFAULT 60,
     default_meeting_duration INTEGER DEFAULT 60,
     working_days JSONB DEFAULT '[1,2,3,4,5]',
-    pipeline_statuses JSONB DEFAULT '["Nowy lead","Spotkanie umówione","Spotkanie odbyte","Oferta wysłana","Negocjacje","Podpisane","Odrzucone"]',
+    pipeline_statuses JSONB DEFAULT '["Nowy lead","Spotkanie umówione","Spotkanie odbyte","Oferta wysłana","Negocjacje","Podpisane","Zamontowana","Rezygnacja z umowy","Nieaktywny","Odrzucone"]',
     sheet_columns JSONB,
     subscription_status TEXT DEFAULT 'pending_payment',
     subscription_plan TEXT,
