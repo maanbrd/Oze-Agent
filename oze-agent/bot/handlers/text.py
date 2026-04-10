@@ -1228,7 +1228,8 @@ async def handle_confirm(
 
     flow = get_pending_flow(telegram_id)
     if not flow:
-        await update.effective_message.reply_text("Nie ma nic do potwierdzenia.")
+        if message_text:  # From text input: inform user. From button (empty ""): silent return.
+            await update.effective_message.reply_text("Nie ma nic do potwierdzenia.")
         return
 
     flow_type = flow.get("flow_type", "")
