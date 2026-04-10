@@ -1166,6 +1166,23 @@ async def handle_change_status(
         await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
         return
 
+    if len(results) > 1:
+        lines = [f"Mam {len(results)} klientów:"]
+        options = []
+        for i, c in enumerate(results[:10], start=1):
+            name = c.get("Imię i nazwisko", "?")
+            city = c.get("Miasto", "")
+            row = c.get("_row", 0)
+            label = f"{i}. {name}" + (f" — {city}" if city else "")
+            lines.append(label)
+            options.append((label, f"select_client:{row}"))
+        lines.append("Którego?")
+        await update.effective_message.reply_text(
+            "\n".join(lines),
+            reply_markup=build_choice_buttons(options),
+        )
+        return
+
     client = results[0]
     old_status = client.get("Status", "")
 
