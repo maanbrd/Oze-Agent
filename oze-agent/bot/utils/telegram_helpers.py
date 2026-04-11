@@ -128,7 +128,10 @@ async def send_rate_limit_message(
         f"(wykorzystano: {count}).\n\nLimit odnawia się o północy."
     )
     if can_borrow:
-        keyboard = build_confirm_buttons("borrow")
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Tak", callback_data="borrow:yes"),
+            InlineKeyboardButton("❌ Nie", callback_data="borrow:no"),
+        ]])
         await update.effective_message.reply_text(
             text + f"\n\nCzy chcesz pożyczyć do {BORROW_LIMIT} interakcji z jutra?",
             reply_markup=keyboard,
@@ -140,21 +143,29 @@ async def send_rate_limit_message(
 # ── Inline keyboard builders ──────────────────────────────────────────────────
 
 
-def build_confirm_buttons(callback_prefix: str) -> InlineKeyboardMarkup:
-    """Return [Tak] [Nie] inline keyboard with callback_data '{prefix}:yes/no'."""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Tak", callback_data=f"{callback_prefix}:yes"),
-            InlineKeyboardButton("❌ Nie", callback_data=f"{callback_prefix}:no"),
-        ]
-    ])
+def build_mutation_buttons(pending_id: str) -> InlineKeyboardMarkup:
+    """Return R1-compliant 3-button mutation card keyboard.
+
+    [✅ Zapisać]  [➕ Dopisać]  [❌ Anulować]
+    callback_data: save:{id}, append:{id}, cancel:{id}
+    """
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Zapisać", callback_data=f"save:{pending_id}"),
+        InlineKeyboardButton("➕ Dopisać", callback_data=f"append:{pending_id}"),
+        InlineKeyboardButton("❌ Anulować", callback_data=f"cancel:{pending_id}"),
+    ]])
 
 
-def build_save_buttons(callback_prefix: str) -> InlineKeyboardMarkup:
-    """Return single wide [Zapisz] button for add-client confirmation."""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Zapisz", callback_data=f"{callback_prefix}:yes")],
-    ])
+def build_duplicate_buttons(pending_id: str) -> InlineKeyboardMarkup:
+    """Return R4-compliant 2-button duplicate disambiguation keyboard.
+
+    [📋 Dopisz do istniejącego]  [➕ Utwórz nowy wpis]
+    callback_data: merge:{id}, new:{id}
+    """
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("📋 Dopisz do istniejącego", callback_data=f"merge:{pending_id}"),
+        InlineKeyboardButton("➕ Utwórz nowy wpis", callback_data=f"new:{pending_id}"),
+    ]])
 
 
 def build_choice_buttons(options: list[tuple[str, str]]) -> InlineKeyboardMarkup:
