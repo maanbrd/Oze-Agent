@@ -19,27 +19,22 @@ from shared.google_auth import get_google_credentials
 logger = logging.getLogger(__name__)
 
 DEFAULT_COLUMNS = [
-    "Imię i nazwisko",
-    "Telefon",
-    "Email",
-    "Miasto",
-    "Adres",
-    "Status",
-    "Produkt",
-    "Moc (kW)",
-    "Metraż domu (m²)",
-    "Metraż dachu (m²)",
-    "Kierunek dachu",
-    "Notatki",
-    "Data pierwszego kontaktu",
-    "Data ostatniego kontaktu",
-    "Następny krok",
-    "Źródło",
-    "Wartość kontraktu",
-    "Zdjęcia",
-    "Link do zdjęć",
-    "ID kalendarza",
-    "Dodatkowe info",
+    "Imię i nazwisko",        # A
+    "Telefon",                 # B
+    "Email",                   # C
+    "Miasto",                  # D
+    "Adres",                   # E
+    "Status",                  # F
+    "Produkt",                 # G
+    "Notatki",                 # H — tech specs (moc, metraż, kierunek) go here
+    "Data pierwszego kontaktu",  # I
+    "Data ostatniego kontaktu",  # J
+    "Następny krok",           # K — enum: Telefon / Spotkanie / Wysłać ofertę / …
+    "Data następnego kroku",   # L
+    "Źródło pozyskania",       # M
+    "Zdjęcia",                 # N
+    "Link do zdjęć",           # O
+    "ID wydarzenia Kalendarz", # P
 ]
 
 
