@@ -47,7 +47,6 @@ from shared.formatting import (
     format_daily_schedule,
     format_edit_comparison,
     format_error,
-    format_pipeline_stats,
     escape_markdown_v2,
 )
 from shared.google_calendar import (
@@ -55,12 +54,10 @@ from shared.google_calendar import (
     create_event,
     get_events_for_date,
     get_events_for_range,
-    get_free_slots,
 )
 from shared.google_sheets import (
     add_client,
     get_all_clients,
-    get_pipeline_stats,
     get_sheet_headers,
     search_clients,
     update_client,
@@ -75,13 +72,6 @@ SYSTEM_FIELDS = {
     "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz", "Data następnego kroku",
 }
 
-# Regex: 7+ consecutive digits after stripping spaces/hyphens/dots (phone number)
-# 7 catches Polish 8-digit numbers entered without leading country code
-_PHONE_RE = re.compile(r'\d{7,}')
-# Words that indicate lookup/question intent — not new client data
-_LOOKUP_WORDS = {"szukaj", "znajdź", "pokaż", "zmień", "edytuj", "usuń", "odwołaj",
-                 "zaktualizuj", "popraw", "zmiana", "aktualizuj", "nowy", "numer",
-                 "telefon", "adres", "metraż", "dach", "dom"}
 # Words that indicate a genuine meeting intent (date/time markers)
 _TEMPORAL_MARKERS = {
     "jutro", "pojutrze", "dziś", "dzisiaj", "wczoraj",
@@ -99,12 +89,6 @@ _TIME_RE = re.compile(
     r'|\bwpół\b'
     r'|\bkwadrans\b'
 )
-
-
-def _contains_phone(text: str) -> bool:
-    """Return True if text contains a 7+ digit phone-like number."""
-    digits_only = re.sub(r'[\s\-\.]', '', text)
-    return bool(_PHONE_RE.search(digits_only))
 
 
 # ── Guards ─────────────────────────────────────────────────────────────────────
@@ -156,25 +140,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
         # Flow was auto-cancelled — fall through to process the new message normally
 
-    text_lower = message_text.lower()
-    words = set(text_lower.split())
-
-    # "zapisz" keyword with other content → parse client data and save immediately
-    if "zapisz" in words and len(words) > 1:
-        await handle_add_client(update, context, user, {}, message_text, save_immediately=True)
-        await increment_interaction(telegram_id, "add_client", "local", 0, 0, 0.0)
-        return
-
-    # Phone number in message (not a question, not a lookup command) → add_client
-    if (
-        _contains_phone(message_text)
-        and "?" not in message_text
-        and not any(w in words for w in _LOOKUP_WORDS)
-    ):
-        await handle_add_client(update, context, user, {}, message_text)
-        await increment_interaction(telegram_id, "add_client", "local", 0, 0, 0.0)
-        return
-
     # Save message and get history
     save_conversation_message(telegram_id, "user", message_text)
     history = get_conversation_history(telegram_id, limit=3)
@@ -209,7 +174,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         "add_note":         handle_add_note,             # stub — Sesja D
         "change_status":    handle_change_status,
         "add_meeting":      handle_add_meeting,
-        "show_day_plan":    handle_view_meetings,        # temp; E.4 will rewrite to handle_show_day_plan
+        "show_day_plan":    handle_show_day_plan,
         # POST-MVP — R5 banner
         "edit_client":      handle_post_mvp_banner,
         "filtruj_klientów": handle_post_mvp_banner,
@@ -377,35 +342,19 @@ async def handle_add_client(
     user: dict,
     intent_data: dict,
     message_text: str,
-    save_immediately: bool = False,
 ) -> None:
-    """Extract client data, check for duplicates, show confirmation card.
-
-    If save_immediately=True (triggered by "zapisz" keyword), skip confirmation
-    and write to Sheets directly.
-    """
+    """Extract client data, check for duplicates, show R1 confirmation card."""
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
     await send_typing(context, telegram_id)
 
     headers = await get_sheet_headers(user_id)
-    # Strip "zapisz" from the message before extraction so it isn't mis-parsed
-    clean_message = re.sub(r'\bZapisz\b|\bzapisz\b', '', message_text).strip()
-    result = await extract_client_data(clean_message, headers)
+    result = await extract_client_data(message_text, headers)
     client_data = result.get("client_data", {})
 
     if not client_data:
         await update.effective_message.reply_text("Co chcesz zrobić?")
-        return
-
-    # save_immediately: write without showing card
-    if save_immediately:
-        row = await add_client(user_id, client_data)
-        if row:
-            await update.effective_message.reply_text("✅ Zapisane.")
-        else:
-            await update.effective_message.reply_markdown_v2(format_error("google_down"))
         return
 
     # Duplicate check
@@ -827,41 +776,6 @@ Zasady:
         await update.effective_message.reply_text(text)
 
 
-async def handle_delete_client(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user: dict,
-    intent_data: dict,
-    message_text: str,
-) -> None:
-    """Find client and confirm deletion."""
-    user_id = user["id"]
-    telegram_id = update.effective_user.id
-    query = intent_data.get("entities", {}).get("name") or message_text
-
-    results = await search_clients(user_id, query)
-    if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
-        return
-
-    client = results[0]
-    save_pending_flow(telegram_id, "delete_client", {"row": client.get("_row")})
-
-    try:
-        card = format_client_card(client)
-        await update.effective_message.reply_markdown_v2(
-            f"🗑️ Usunąć tego klienta?\n\n{card}",
-            reply_markup=build_confirm_buttons("confirm"),
-        )
-    except Exception as e:
-        logger.error("format_client_card failed: %s", e)
-        name = client.get("Imię i nazwisko", "?")
-        city = client.get("Miasto", "")
-        await update.effective_message.reply_text(
-            f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
-        )
-
-
 def _parse_warsaw(date_str: str, time_str: str) -> datetime:
     """Parse date+time strings as Europe/Warsaw and return an aware datetime."""
     naive = datetime.fromisoformat(f"{date_str}T{time_str}:00")
@@ -1020,41 +934,17 @@ async def handle_add_meeting(
         await update.effective_message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
 
 
-async def handle_view_meetings(
+async def handle_show_day_plan(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     user: dict,
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Show meetings for today, tomorrow, or this week. Detects free-slot queries."""
+    """Show meetings for today, tomorrow, or this week. Read-only — no free slots."""
     user_id = user["id"]
     entities = intent_data.get("entities", {})
     day_hint = entities.get("day", "").lower()
-    msg_lower = message_text.lower()
-
-    # Free slot detection
-    wants_free = any(kw in msg_lower for kw in [
-        "wolne okna", "wolny czas", "kiedy wolny", "wolne terminy",
-        "kiedy mogę", "wolna godzina", "kiedy mam czas",
-    ])
-    if wants_free:
-        today = date.today()
-        if "jutro" in day_hint or "jutro" in msg_lower:
-            target = today + timedelta(days=1)
-        else:
-            target = today
-        slots = await get_free_slots(user_id, target)
-        if not slots:
-            await update.effective_message.reply_text(
-                f"Brak wolnych okien na {target.strftime('%d.%m')} (9:00–18:00)."
-            )
-        else:
-            lines = [f"🕐 Wolne okna na {target.strftime('%d.%m')}:"]
-            for slot_start, slot_end in slots[:8]:
-                lines.append(f"• {slot_start.strftime('%H:%M')}–{slot_end.strftime('%H:%M')}")
-            await update.effective_message.reply_text("\n".join(lines))
-        return
 
     today = date.today()
     if "jutro" in day_hint or "tomorrow" in day_hint:
@@ -1069,97 +959,6 @@ async def handle_view_meetings(
 
     schedule = format_daily_schedule(events)
     await update.effective_message.reply_markdown_v2(schedule)
-
-
-async def handle_reschedule_meeting(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user: dict,
-    intent_data: dict,
-    message_text: str,
-) -> None:
-    """Placeholder — tell user to specify which meeting to reschedule."""
-    await update.effective_message.reply_text(
-        "Podaj nazwę lub datę spotkania które chcesz przełożyć, oraz nowy termin."
-    )
-
-
-async def handle_cancel_meeting(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user: dict,
-    intent_data: dict,
-    message_text: str,
-) -> None:
-    """Placeholder — tell user to specify which meeting to cancel."""
-    await update.effective_message.reply_text(
-        "Podaj nazwę lub datę spotkania które chcesz odwołać."
-    )
-
-
-async def handle_show_pipeline(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user: dict,
-    intent_data: dict,
-    message_text: str,
-) -> None:
-    """Show pipeline statistics."""
-    user_id = user["id"]
-    stats = await get_pipeline_stats(user_id)
-    dashboard_url = user.get("dashboard_url", "")
-
-    msg = format_pipeline_stats(stats)
-    if dashboard_url:
-        msg += f"\n\n[Otwórz dashboard]({escape_markdown_v2(dashboard_url)})"
-
-    await update.effective_message.reply_markdown_v2(msg)
-
-
-async def handle_filter_clients(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user: dict,
-    intent_data: dict,
-    message_text: str,
-) -> None:
-    """Filter clients by city, status, or product."""
-    user_id = user["id"]
-    telegram_id = update.effective_user.id
-    entities = intent_data.get("entities", {})
-    city_filter = entities.get("city", "").strip().lower()
-    status_filter = entities.get("status", "").strip().lower()
-    product_filter = entities.get("product", "").strip().lower()
-
-    await send_typing(context, telegram_id)
-    clients = await get_all_clients(user_id)
-    if not clients:
-        await update.effective_message.reply_text("Brak klientów w bazie.")
-        return
-
-    filtered = clients
-    if city_filter:
-        filtered = [c for c in filtered if city_filter in c.get("Miasto", "").lower()]
-    if status_filter:
-        filtered = [c for c in filtered if status_filter in c.get("Status", "").lower()]
-    if product_filter:
-        filtered = [c for c in filtered if product_filter in c.get("Produkt", "").lower()]
-
-    if not filtered:
-        await update.effective_message.reply_text("Brak klientów spełniających kryteria.")
-        return
-
-    lines = [f"Mam {len(filtered)} klientów:"]
-    for c in filtered[:20]:
-        name = c.get("Imię i nazwisko", "?")
-        city = c.get("Miasto", "")
-        status = c.get("Status", "")
-        line = f"• {name}" + (f" — {city}" if city else "") + (f" ({status})" if status else "")
-        lines.append(line)
-    if len(filtered) > 20:
-        lines.append(f"...i {len(filtered) - 20} więcej")
-
-    await update.effective_message.reply_text("\n".join(lines))
 
 
 async def handle_change_status(
