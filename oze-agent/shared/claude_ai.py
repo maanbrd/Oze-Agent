@@ -169,7 +169,7 @@ Wyciągnij WSZYSTKIE dane pasujące do kolumn. Zwróć TYLKO JSON:
 }}
 
 Zasady:
-- Produkty mapuj na: PV, Pompa ciepła, Magazyn energii, Klimatyzacja
+- Produkty mapuj na: PV, Pompa ciepła, Magazyn energii, PV + Magazyn energii
 - Tytuły po polsku: "Spotkanie z [imię]", "Wycena dla [nazwisko]"
 - NIE dodawaj pól których nie ma w transkrypcji
 - missing_columns = kolumny z arkusza BEZ wartości w transkrypcji
@@ -216,8 +216,8 @@ async def classify_intent(
 Przykłady:
 - "Jan Nowak Piaseczno 601234567 pompa" → add_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
 - "Stefan Jankowski PV 12kW" → add_client, entities: {{"name": "Stefan Jankowski"}}
-- "znajdź Jana Kowalskiego z Warszawy" → search_client, entities: {{"name": "Jan Kowalski", "city": "Warszawa"}}
-- "co mam o Janie Mazurze?" → search_client, entities: {{"name": "Jan Mazur"}}
+- "znajdź Jana Kowalskiego z Warszawy" → show_client, entities: {{"name": "Jan Kowalski", "city": "Warszawa"}}
+- "co mam o Janie Mazurze?" → show_client, entities: {{"name": "Jan Mazur"}}
 - "umów spotkanie na wtorek" → add_meeting, entities: {{"day": "wtorek"}}
 - "spotkanie 22 kwietnia o 17:30 Marki Fiołkowa 24" → add_meeting, entities: {{"date": "22 kwietnia", "time": "17:30", "location": "Marki Fiołkowa 24"}}
 - "jutro o 10 jadę do Jana Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Jan Nowak", "location": "ul. Różana 3 Piaseczno"}}
@@ -229,8 +229,8 @@ Przykłady:
 - "kto czeka na ofertę?" → filtruj_klientów, entities: {{"status": "Oferta wysłana"}}
 - "klienci z pompą ciepła" → filtruj_klientów, entities: {{"product": "Pompa ciepła"}}
 - "wysłałem ofertę Janowi Nowakowi" → change_status, entities: {{"name": "Jan Nowak", "status": "Oferta wysłana"}}
-- "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisał"}}
-- "Jan Kowalski podpisał kwit" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisał"}}
+- "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
+- "Jan Kowalski podpisał kwit" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
 - "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Rezygnacja z umowy"}}
 - "Jan Nowak rezygnuje" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
 - "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
@@ -252,7 +252,7 @@ Przykłady:
 - "tak" / "ok" / "zgadza się" → confirm_yes
 - "nie" / "anuluj" → confirm_no lub cancel_flow
 - "asdkjfhaskdjfh" / losowe znaki / niezrozumiały tekst → general_question, confidence: 0.1
-- WAŻNE: "podpisał", "podpisał kwit/papier/umowę", "klient podpisał" → change_status {{"status": "Podpisał"}}.
+- WAŻNE: "podpisał", "podpisał kwit/papier/umowę", "klient podpisał" → change_status {{"status": "Podpisane"}}.
 - WAŻNE: "wysłałem X", "rezygnuje", "spadł kwit" → change_status, NIE edit_client.
 - WAŻNE: Jeśli wiadomość dotyczy zmiany danych ISTNIEJĄCEGO klienta (metraż, telefon, notatki, produkt) → edit_client NIE add_client.
 
@@ -296,26 +296,25 @@ Zasady:
 - Parsuj TYLKO tę jedną wiadomość. Ignoruj wszelki wcześniejszy kontekst lub dane.
 - NIE dodawaj pól których nie ma w wiadomości
 - missing_columns = kolumny z listy BEZ wartości w wiadomości, z wyjątkiem pól systemowych
-- NIE wliczaj do missing_columns pól systemowych: "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status", "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email", "Dodatkowe info", "Notatki", "Następny krok"
+- NIE wliczaj do missing_columns pól systemowych: "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status", "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz", "Następny krok", "Data następnego kroku"
 
 Mapuj slang OZE (zawsze):
 - foto / fotowoltaika / fotowoltaikę / PV-ka / panele / pv → "PV"
 - pompa / pompeczka / pompa ciepła / pompę → "Pompa ciepła"
 - magazyn / magazyn energii → "Magazyn energii"
-- klimatyzacja → "Klimatyzacja"
-- Jeśli kilka produktów naraz ("magazyn, klima", "PV i pompa"), zapisz WSZYSTKIE w polu Produkt oddzielone przecinkami: np. "PV, Magazyn energii, Klimatyzacja".
+- Jeśli kilka produktów naraz ("PV i pompa", "PV i magazyn"), zapisz WSZYSTKIE w polu Produkt oddzielone przecinkami: np. "PV, Pompa ciepła".
 - NIE wrzucaj nazw produktów do pola Notatki.
 
 Parsuj bez pytania:
-- Metraż domu: "160m2" / "160 metrów" / "dom 160" → szukaj kolumny zawierającej "domu" lub "dom" (np. "Metraż domu (m²)"); jeśli nie ma → pomiń
-- Metraż dachu: "dach 40" / "40m2 dachu" → szukaj kolumny zawierającej "dachu" lub "dach" (np. "Metraż dachu (m²)"); jeśli nie ma → pomiń
-- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6" → kolumna "Moc" lub "Moc (kW)"; jeśli nie ma → pomiń
-- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ" → kolumna "Kierunek dachu"; jeśli nie ma → pomiń
+- Metraż domu: "160m2" / "160 metrów" / "dom 160" → szukaj kolumny zawierającej "domu" lub "dom" (np. "Metraż domu (m²)"); jeśli nie ma → zapisz w polu "Notatki"
+- Metraż dachu: "dach 40" / "40m2 dachu" → szukaj kolumny zawierającej "dachu" lub "dach" (np. "Metraż dachu (m²)"); jeśli nie ma → zapisz w polu "Notatki"
+- Moc: "8kW" / "ósemka" → "8", "szóstka" → "6" → kolumna "Moc" lub "Moc (kW)"; jeśli nie ma → zapisz w polu "Notatki"
+- Kierunek: "płd" / "południe" → "południe", "wsch" → "wschód", "zach" → "zachód", "płn" → "północ" → kolumna "Kierunek dachu"; jeśli nie ma → zapisz w polu "Notatki"
 - Telefon: tylko cyfry, bez spacji i myślników
 - Zużycie prądu / roczne zużycie: "500kWh" / "zużycie 500" → szukaj kolumny zawierającej "zużycie"; jeśli nie ma → pomiń
-- Follow-up / następny krok: "zadzwonię za tydzień" / "wracam za 3 dni" / "follow-up w piątek" → oblicz konkretną datę względem {date.today().strftime("%Y-%m-%d")} i zapisz w kolumnie "Następny krok" lub "Data następnego kontaktu"
+- Follow-up / następny krok: "zadzwonię za tydzień" / "wracam za 3 dni" / "follow-up w piątek" → oblicz konkretną datę względem {date.today().strftime("%Y-%m-%d")} i zapisz w kolumnie "Data następnego kroku"
 - Kontekst emocjonalny i sytuacyjny: "żona go przekręciła" / "obiekcje" / "nie był w domu" / "chory" / sytuacja rodzinna → zapisz w polu Notatki
-- WAŻNE: Dane techniczne (metraże, moc, kierunek) zapisuj w dedykowanych kolumnach gdy istnieją w arkuszu. Gdy nie istnieją — zapisz w "Dodatkowe info" lub "Notatki" jako tekst (np. "dom: 160m², dach: 40m², moc: 8kW, południe").
+- WAŻNE: Dane techniczne (metraże, moc, kierunek) zapisuj w dedykowanych kolumnach gdy istnieją w arkuszu. Gdy nie istnieją — zapisz w polu "Notatki" jako tekst (np. "dom: 160m², dach: 40m², moc: 8kW, południe").
 - Kolejność słów i interpunkcja nie mają znaczenia — parsuj intencję"""
 
     result = await call_claude(system_prompt, message, model_type="complex")
