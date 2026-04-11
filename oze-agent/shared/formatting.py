@@ -71,17 +71,6 @@ def format_error(error_type: str) -> str:
 
 # ── Add-client confirmation card ─────────────────────────────────────────────
 
-_DIR_ABBR = {
-    "południe": "płd.", "wschód": "wsch.", "zachód": "zach.", "północ": "płn.",
-}
-
-_MEASUREMENT_FIELDS = {
-    "house": ["Metraż domu (m²)", "Metraż domu", "Powierzchnia domu"],
-    "roof":  ["Metraż dachu (m²)", "Metraż dachu", "Powierzchnia dachu"],
-    "power": ["Moc (kW)", "Moc", "Moc instalacji"],
-    "dir":   ["Kierunek dachu"],
-}
-
 # Short display labels for verbose field names shown in extra-fields section
 _FIELD_LABEL = {
     "Źródło pozyskania": "Źródło",
@@ -152,36 +141,11 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
         lines.append(f"📋 {header}")
     rendered.update(["Imię i nazwisko", "Adres", "Miasto"])
 
-    # Line 2: product [power] [| measurements]
+    # Line 2: product (tech specs go to Notatki per 16-col schema)
     product = client_data.get("Produkt", "")
-    power = _find(client_data, _MEASUREMENT_FIELDS["power"])
-    house = _find(client_data, _MEASUREMENT_FIELDS["house"])
-    roof = _find(client_data, _MEASUREMENT_FIELDS["roof"])
-    direction = _find(client_data, _MEASUREMENT_FIELDS["dir"])
-
-    prod_part = product
-    if power:
-        prod_part = f"{prod_part} {power}kW" if prod_part else f"{power}kW"
-
-    meas_parts: list[str] = []
-    if house:
-        meas_parts.append(f"dom {house}m²")
-    if roof:
-        abbr = _DIR_ABBR.get(direction.lower(), direction)
-        meas_parts.append(f"dach {roof}m²" + (f" {abbr}" if abbr else ""))
-    elif direction:
-        meas_parts.append(direction)
-
-    if prod_part and meas_parts:
-        lines.append(f"{prod_part} | {', '.join(meas_parts)}")
-    elif prod_part:
-        lines.append(prod_part)
-    elif meas_parts:
-        lines.append(", ".join(meas_parts))
-
+    if product:
+        lines.append(product)
     rendered.add("Produkt")
-    for candidates in _MEASUREMENT_FIELDS.values():
-        rendered.update(candidates)
 
     # Line 3: phone
     phone = client_data.get("Telefon", "")
@@ -190,7 +154,7 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     rendered.add("Telefon")
 
     # Remaining fields: every non-empty field not already shown above
-    _FOLLOWUP_FIELDS = {"Następny krok", "Data następnego kontaktu"}
+    _FOLLOWUP_FIELDS = {"Następny krok", "Data następnego kroku"}
     for field, value in client_data.items():
         if field not in rendered and value:
             label = _FIELD_LABEL.get(field, field)
@@ -202,19 +166,15 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     if missing_clean:
         lines.append(f"❓ Brakuje: {', '.join(missing_clean)}")
 
-    # Always ask about next contact if not already provided (spec R4)
-    if not client_data.get("Następny krok") and not client_data.get("Data następnego kontaktu"):
-        lines.append("📅 Kiedy następny kontakt?")
-
     lines.append("Zapisać / dopisać / anulować?")
     return "\n".join(lines)
 
 
 # ── Client card ───────────────────────────────────────────────────────────────
 
-SKIP_FIELDS = {"_row", "Link do zdjęć", "ID kalendarza", "Wiersz"}
+SKIP_FIELDS = {"_row", "Link do zdjęć", "ID wydarzenia Kalendarz", "Wiersz"}
 
-_DATE_FIELDS = {"Data pierwszego kontaktu", "Data ostatniego kontaktu", "Data następnego kontaktu"}
+_DATE_FIELDS = {"Data pierwszego kontaktu", "Data ostatniego kontaktu", "Data następnego kroku"}
 
 
 _DAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
