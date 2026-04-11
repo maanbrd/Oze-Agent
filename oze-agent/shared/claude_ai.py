@@ -26,9 +26,11 @@ COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
 COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
 
 VALID_INTENTS = {
-    "add_client", "search_client", "edit_client", "add_note", "delete_client",
-    "add_meeting", "show_day_plan", "view_meetings", "reschedule_meeting", "cancel_meeting",
-    "lejek_sprzedazowy", "filtruj_klientów", "show_pipeline", "change_status",
+    # MVP (6)
+    "add_client", "show_client", "add_note", "change_status", "add_meeting", "show_day_plan",
+    # POST-MVP (3 — R5 banner when triggered)
+    "edit_client", "filtruj_klientów", "lejek_sprzedazowy",
+    # Utility
     "assign_photo", "refresh_columns",
     "general_question", "confirm_yes", "confirm_no", "cancel_flow",
 }
