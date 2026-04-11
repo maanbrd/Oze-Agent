@@ -43,7 +43,40 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     action, _, value = data.partition(":")
 
-    if action == "confirm":
+    if action == "save":
+        # R1: commit the pending flow
+        await handle_confirm(update, context, user, {}, "")
+
+    elif action == "append":
+        # R1: keep pending flow open, prompt user for more data
+        flow = get_pending_flow(telegram_id)
+        if flow:
+            await query.message.reply_text("Co chcesz dopisać?")
+        else:
+            await query.edit_message_text("Brak aktywnego wpisu.")
+
+    elif action == "cancel":
+        # R1: one-click cancel — delete pending flow immediately
+        flow = get_pending_flow(telegram_id)
+        if flow:
+            delete_pending_flow(telegram_id)
+        await query.edit_message_text("Anulowane.")
+
+    elif action == "merge":
+        # R4: update existing client with new data from duplicate flow
+        await _handle_duplicate_merge(query, telegram_id, user["id"])
+
+    elif action == "new":
+        # R4: create new client record despite detected duplicate
+        flow = get_pending_flow(telegram_id)
+        if flow and flow.get("flow_type") == "add_client_duplicate":
+            save_pending_flow(telegram_id, "add_client", {
+                "client_data": flow["flow_data"]["client_data"]
+            })
+        await handle_confirm(update, context, user, {}, "")
+
+    elif action == "confirm":
+        # Legacy fallback — kept for backward compat with cached messages
         if value == "yes":
             await handle_confirm(update, context, user, {}, "")
         else:
@@ -60,17 +93,6 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     elif action == "select_client":
         await _handle_select_client(query, context, user, value)
-
-    elif action == "duplicate":
-        if value == "add_anyway":
-            flow = get_pending_flow(telegram_id)
-            if flow and flow.get("flow_type") == "add_client_duplicate":
-                save_pending_flow(telegram_id, "add_client", {
-                    "client_data": flow["flow_data"]["client_data"]
-                })
-            await handle_confirm(update, context, user, {}, "")
-        else:
-            await handle_cancel_flow(update, context, user, {}, "")
 
     elif action == "edit":
         await _handle_edit_choice(query, telegram_id, user["id"], value)
@@ -102,13 +124,6 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     elif action == "phone":
         await _handle_phone_choice(query, telegram_id, user["id"], value)
-
-    elif action == "cancel_confirm":
-        if value == "yes":
-            delete_pending_flow(telegram_id)
-            await query.edit_message_text("❌ Anulowano.")
-        else:
-            await query.edit_message_text("Kontynuuj — co chcesz zmienić?")
 
     else:
         logger.warning("handle_button: unhandled action=%s value=%s", action, value)
@@ -159,6 +174,29 @@ async def _handle_phone_choice(query, telegram_id: int, user_id: str, value: str
 
     if ok:
         await query.edit_message_text(f"✅ {label}.")
+    else:
+        await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
+
+
+async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None:
+    """R4: update existing client row with new data from the duplicate detection flow."""
+    flow = get_pending_flow(telegram_id)
+    if not flow or flow.get("flow_type") != "add_client_duplicate":
+        await query.edit_message_text("Brak aktywnego duplikatu.")
+        return
+
+    flow_data = flow["flow_data"]
+    duplicate_row = flow_data.get("duplicate_row")
+    new_data = {k: v for k, v in flow_data.get("client_data", {}).items() if v}
+
+    if not duplicate_row:
+        await query.edit_message_text("Brak wiersza do aktualizacji.")
+        return
+
+    delete_pending_flow(telegram_id)
+    ok = await update_client(user_id, duplicate_row, new_data)
+    if ok:
+        await query.edit_message_text("✅ Dane zaktualizowane.")
     else:
         await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
 

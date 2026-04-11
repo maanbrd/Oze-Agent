@@ -12,9 +12,9 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.utils.telegram_helpers import (
-    build_confirm_buttons,
+    build_mutation_buttons,
+    build_duplicate_buttons,
     build_choice_buttons,
-    build_save_buttons,
     check_interaction_limit,
     check_subscription_active,
     check_user_registered,
@@ -249,7 +249,7 @@ async def _route_pending_flow(
             sheet_columns = user.get("sheet_columns") or headers
             missing = [col for col in sheet_columns if col and not old_client_data.get(col) and col not in SYSTEM_FIELDS]
             card = format_add_client_card(old_client_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+            await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
             return True
 
         # If the new message names a different client → start fresh, don't merge
@@ -260,7 +260,7 @@ async def _route_pending_flow(
             missing = [col for col in sheet_columns if col and not new_data.get(col) and col not in SYSTEM_FIELDS]
             save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
             card = format_add_client_card(new_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+            await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
             return True
 
         merged = {**old_client_data, **new_data}
@@ -297,7 +297,7 @@ async def _route_pending_flow(
             new_flow_data["_offer_remaining"] = old_flow_data["_offer_remaining"]
         save_pending_flow(telegram_id, "add_client", new_flow_data)
         card = format_add_client_card(merged, missing)
-        await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+        await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
         return True
     else:
         # New message arrived during a non-add_client pending flow → auto-cancel, process message normally
@@ -374,11 +374,8 @@ async def handle_add_client(
         dup_prod = duplicate.get("Produkt", "")
         dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
         await update.effective_message.reply_text(
-            f"⚠️ Masz już {dup_name} ({dup_info}).\nDodać nowego czy zaktualizować?",
-            reply_markup=build_choice_buttons([
-                ("Nowy", "duplicate:add_anyway"),
-                ("Aktualizuj", "duplicate:no"),
-            ]),
+            f"⚠️ Masz już {dup_name} ({dup_info}).\nDodać nowego czy dopisać do istniejącego?",
+            reply_markup=build_duplicate_buttons("confirm"),
         )
         return
 
@@ -389,7 +386,7 @@ async def handle_add_client(
     save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
 
     card = format_add_client_card(client_data, missing)
-    await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
+    await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_search_client(
@@ -426,7 +423,7 @@ async def handle_search_client(
             save_pending_flow(telegram_id, "confirm_search", {"row": client.get("_row")})
             await update.effective_message.reply_text(
                 f"Nie mam \"{query}\". Chodziło o {suggestion}?",
-                reply_markup=build_confirm_buttons("confirm"),
+                reply_markup=build_mutation_buttons("confirm"),
             )
             return
 
@@ -624,7 +621,7 @@ async def handle_edit_client(
         lines.append("Zmienić?")
         msg = "\n".join(lines)
 
-    await update.effective_message.reply_text(msg, reply_markup=build_confirm_buttons("confirm"))
+    await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_edit_client_v2(
@@ -742,7 +739,7 @@ Zasady:
             f"Będzie: {new_value}\n"
             f"Zmienić?"
         )
-        await update.effective_message.reply_text(msg, reply_markup=build_confirm_buttons("confirm"))
+        await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
 
     elif tool_name == "append_client_note":
         note_text = tool_input.get("note_text", "")
@@ -764,7 +761,7 @@ Zasady:
             f"Dodaję: \"{note_text}\"\n"
             f"Zapisać?"
         )
-        await update.effective_message.reply_text(msg, reply_markup=build_confirm_buttons("confirm"))
+        await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
 
     elif tool_name == "request_clarification":
         reason = tool_input.get("reason", "Nie rozumiem co chcesz zmienić. Opisz dokładniej.")
@@ -886,7 +883,7 @@ async def handle_add_meeting(
             "Miejsce": enriched["location"],
         }
         msg = format_confirmation("add_meeting", details) + conflict_warning
-        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
 
     else:
         # Multiple meetings — build all, check conflicts, confirm as a batch
@@ -931,7 +928,7 @@ async def handle_add_meeting(
             lines.append(f"• {fm.get('client_name', '?')} — {start.strftime('%d.%m %H:%M')}{loc}")
         lines.extend(conflict_warnings)
         msg = escape_markdown_v2("\n".join(lines))
-        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_confirm_buttons("confirm"))
+        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_show_day_plan(
@@ -1035,7 +1032,7 @@ async def handle_change_status(
     await update.effective_message.reply_markdown_v2(
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
         + format_edit_comparison("Status", old_status, new_status),
-        reply_markup=build_confirm_buttons("confirm"),
+        reply_markup=build_mutation_buttons("confirm"),
     )
 
 
@@ -1058,11 +1055,6 @@ async def handle_confirm(
 
     flow_type = flow.get("flow_type", "")
     flow_data = flow.get("flow_data", {})
-
-    if flow_data.get("_cancelling"):
-        delete_pending_flow(telegram_id)
-        await update.effective_message.reply_text("🫡 Anulowane.")
-        return
 
     # skip_delete: set True when we save a new flow inside the handler so the
     # finally block doesn't immediately delete it (delete_pending_flow removes
@@ -1141,7 +1133,7 @@ async def handle_confirm(
                     save_pending_flow(telegram_id, "offer_add_client", {"client_name": client_name})
                     await update.effective_message.reply_text(
                         f"✅ Spotkanie dodane. Nie mam {client_name} w bazie. Dodać?",
-                        reply_markup=build_confirm_buttons("confirm"),
+                        reply_markup=build_mutation_buttons("confirm"),
                     )
                     skip_delete = True
                 else:
@@ -1182,7 +1174,7 @@ async def handle_confirm(
                 msg_parts.append(f"Nie mam w bazie: {names_str}. Dodać?")
                 await update.effective_message.reply_text(
                     "\n".join(msg_parts),
-                    reply_markup=build_confirm_buttons("confirm"),
+                    reply_markup=build_mutation_buttons("confirm"),
                 )
                 skip_delete = True
             else:
@@ -1260,35 +1252,12 @@ async def handle_cancel_flow(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Cancel flow: ask once, delete on confirm."""
+    """R1 one-click cancel: delete pending flow immediately, no confirmation loop."""
     telegram_id = update.effective_user.id
     flow = get_pending_flow(telegram_id)
-    if not flow:
-        return
-
-    flow_data = flow.get("flow_data", {})
-
-    if flow_data.get("_cancelling"):
-        # User tapped [Nie] on the "Anulować?" question — keep flow, re-show card silently
-        flow_data.pop("_cancelling")
-        save_pending_flow(telegram_id, flow["flow_type"], flow_data)
-        if flow["flow_type"] == "add_client":
-            user_id = user["id"]
-            headers = await get_sheet_headers(user_id)
-            sheet_columns = user.get("sheet_columns") or headers
-            client_data = flow_data.get("client_data", {})
-            missing = [col for col in sheet_columns if col and not client_data.get(col) and col not in SYSTEM_FIELDS]
-            card = format_add_client_card(client_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_save_buttons("confirm"))
-        return
-
-    # First cancel request: set flag, ask with buttons
-    flow_data["_cancelling"] = True
-    save_pending_flow(telegram_id, flow["flow_type"], flow_data)
-    await update.effective_message.reply_text(
-        "Anulować?",
-        reply_markup=build_confirm_buttons("confirm"),
-    )
+    if flow:
+        delete_pending_flow(telegram_id)
+    await update.effective_message.reply_text("Anulowane.")
 
 
 async def handle_refresh_columns(
