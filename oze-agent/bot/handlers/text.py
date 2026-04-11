@@ -299,6 +299,21 @@ async def _route_pending_flow(
         card = format_add_client_card(merged, missing)
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
         return True
+    elif flow_type == "r7_prompt":
+        # R7 next-action response: temporal marker → add_meeting, otherwise close
+        telegram_id = update.effective_user.id
+        delete_pending_flow(telegram_id)
+        cancel_words = {"nie", "anuluj", "stop", "nic", "nie wiem", "odłóż", "later"}
+        if any(w in text_lower for w in cancel_words):
+            return True
+        has_temporal = (
+            any(w in text_lower for w in _TEMPORAL_MARKERS)
+            or bool(_TIME_RE.search(text_lower))
+        )
+        if has_temporal:
+            await handle_add_meeting(update, context, user, {}, message_text)
+        # Otherwise: unclear reply → consume silently (don't re-classify as add_client)
+        return True
     else:
         # New message arrived during a non-add_client pending flow → auto-cancel, process message normally
         telegram_id = update.effective_user.id
@@ -1067,6 +1082,7 @@ async def handle_confirm(
             row = await add_client(user_id, flow_data["client_data"])
             if row:
                 name = flow_data["client_data"].get("Imię i nazwisko", "klient")
+                city = flow_data["client_data"].get("Miasto", "")
                 if remaining:
                     next_client = remaining[0]
                     new_remaining = remaining[1:]
@@ -1080,6 +1096,8 @@ async def handle_confirm(
                     skip_delete = True
                 else:
                     await update.effective_message.reply_text("✅ Zapisane.")
+                    skip_delete = True  # r7_prompt flow created below
+                    await send_next_action_prompt(update, telegram_id, name, city)
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
@@ -1258,6 +1276,25 @@ async def handle_cancel_flow(
     if flow:
         delete_pending_flow(telegram_id)
     await update.effective_message.reply_text("Anulowane.")
+
+
+async def send_next_action_prompt(
+    update: Update,
+    telegram_id: int,
+    client_name: str,
+    city: str,
+) -> None:
+    """R7: send open-ended next-action prompt after a committed mutation.
+
+    Saves an r7_prompt pending flow. The user's reply is handled in
+    _route_pending_flow: temporal → add_meeting, otherwise → close silently.
+    """
+    name_city = f"{client_name} z {city}" if city else client_name
+    save_pending_flow(telegram_id, "r7_prompt", {"client_name": client_name, "city": city})
+    await update.effective_message.reply_text(
+        f"Co dalej z {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
+        reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
+    )
 
 
 async def handle_refresh_columns(
