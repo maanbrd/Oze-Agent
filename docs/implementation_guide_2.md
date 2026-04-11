@@ -1,5 +1,32 @@
 # OZE-Agent — Implementation Guide v2
 
+> ## ⚠️ UWAGA: Ten plik jest CZĘŚCIOWO NIEAKTUALNY (stan na 11.04.2026 popołudnie)
+>
+> Po pełnej synchronizacji czterech plików SSOT w dniu **11.04.2026 popołudnie** ten guide zawiera kroki odwołujące się do rzeczy, które już nie są w MVP albo działają inaczej niż opisane tutaj. Konkretnie:
+>
+> - **Intencje wycięte na stałe** (NIEPLANOWANE — nie wracają): `reschedule_meeting`, `cancel_meeting`, `free_slots`, `meeting_non_working_day_warning`. Jeśli któryś krok w tym guide mówi "zaimplementuj reschedule" / "parser free_slots" / "flow anulowania spotkania" — **pomiń go**, to już nie jest w MVP.
+> - **Intencje POST-MVP** (poza pierwszym wydaniem, wrócą później): `edit_client` (pełna edycja), `filtruj_klientów`, `lejek_sprzedazowy`. Jeśli krok dotyczy tych intencji — nie implementuj w MVP, dodaj POST-MVP banner w odpowiedzi bota zamiast pełnej logiki.
+> - **Pipeline statusów: 9 nie 10.** Status `Negocjacje` został wycięty 11.04. Jeśli widzisz w tym guide `["Nowy lead", ..., "Negocjacje", ...]` — usuń `Negocjacje` z listy.
+> - **Produkty: 4 nie 5.** `Klimatyzacja` została wycięta 11.04. Lista: `PV`, `Pompa ciepła`, `Magazyn energii`, `PV + Magazyn energii`. Moc (kW/kWh) zawsze do kolumny `Notatki`, nigdy do nazwy produktu.
+> - **3-button cards + one-click cancel (R1).** Każda karta mutacyjna ma `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`. Jeśli krok w guide mówi `[Tak][Nie]`, `[Zapisz bez]`, `[Nowy][Aktualizuj]` — to jest stary wzorzec, wycięty. Nowy wzorzec w `agent_system_prompt.md`.
+> - **R7 next_action_prompt jako free-text** (nie sztywna trójka meeting/call/not-interested). Jeśli guide mówi o trzech przyciskach po mutacji — odwróć na otwarte pytanie tekstowe.
+> - **Duplicate detection: default merge + 2-button disambiguation** `[📋 Dopisz do istniejącego] [➕ Utwórz nowy wpis]`, nie stary `[Nowy][Aktualizuj]`.
+> - **Compound fusion** dozwolony w MVP dla trzech kombinacji: `add_client + add_meeting`, `change_status + add_meeting`, `add_note + add_meeting` — jedna karta, nie dwie.
+> - **`add_meeting` emoji differentiation:** 📅 spotkanie / 📞 telefon / 📨 follow-up dokumentowy, rozpoznawane z tego co user napisał.
+> - **Schemat Sheets zamrożony na 16 kolumnach A-P** w `INTENCJE_MVP.md` sekcja 3. Kod ma być schema-agnostic (nagłówki z wiersza 1).
+>
+> **Hierarchia SSOT** — jeśli ten guide i cokolwiek niżej w hierarchii mówi inaczej, **wygrywa to co wyżej**:
+> 1. `docs/SOURCE_OF_TRUTH.md` — decision log + mapa dokumentów
+> 2. `docs/INTENCJE_MVP.md` — zamrożone kontrakty intencji + schemat Sheets + pipeline
+> 3. `docs/agent_behavior_spec_v5.md` — 52 testy akceptacyjne + R1-R8 reguły
+> 4. `docs/agent_system_prompt.md` — ton + wzorce odpowiedzi
+> 5. `docs/CURRENT_STATUS.md` — stan bieżącej sesji + bugi + task na następną
+> 6. **ten plik** — plan fazowy, częściowo stale
+>
+> **Jak z tego korzystać:** kiedy jesteś w trakcie konkretnego kroku implementacyjnego, **zweryfikuj każdy krok** przeciwko SSOT (punkty 1-5 wyżej) **przed napisaniem kodu**. Jeśli jest konflikt — STOP i poinformuj Maana. Używaj tego guide do kolejności kroków i micro-testów Telegram — ale nie do sprawdzania "co jest w MVP" albo "jak wygląda karta". Do tego są pliki SSOT.
+>
+> **Pełny przegląd i aktualizacja tego pliku** zaplanowany po przejściu audytu kodu (`docs/CODE_AUDIT_11-04-2026.md`) i fixach must-have — nie wcześniej, bo dopóki nie wiemy co zostaje a co wypada, przepisywanie guide'a to marnowanie czasu.
+
 ## How to use this document
 
 This guide is for **Claude Code** building the bot, and for **you (Maan)** testing it manually in Telegram.
@@ -152,11 +179,11 @@ YOU SEND:    Co mam o Kowalskim?
 
 BOT SHOULD REPLY:
 📋 Kowalski — Piłsudskiego 12, Warszawa
-PV 8kW | Dom 160m², dach 40m² płd.
+Produkt: PV
 Tel. 600 123 456
 Status: Oferta wysłana
 Źródło: Facebook
-Notatki: chce wycenę, żona się boi
+Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę, żona się boi
 
 FAIL IF:
 - Bot says "Szukam..." and nothing else follows
@@ -316,7 +343,7 @@ Before appending a new client, check if name + city combo already exists. If yes
 YOU SEND:    Kowalski Warszawa PV 10kW tel 609999999
 
 BOT SHOULD REPLY:
-⚠️ Masz już Kowalskiego z Warszawy (Piłsudskiego 12, PV 8kW).
+⚠️ Masz już Kowalskiego z Warszawy (Piłsudskiego 12, PV).
 Dodać nowego czy zaktualizować?
 [Nowy] [Aktualizuj]
 
