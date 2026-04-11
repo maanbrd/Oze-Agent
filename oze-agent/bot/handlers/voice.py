@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 
 from bot.handlers.text import _run_guards, handle_general, handle_text
 from bot.utils.telegram_helpers import (
-    build_confirm_buttons,
+    build_choice_buttons,
     increment_interaction,
     is_private_chat,
     send_processing_stage,
@@ -100,7 +100,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         escaped = transcription.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
         await update.message.reply_markdown_v2(
             f"🎙 Transkrypcja \\(niska pewność\\):\n\n_{escaped}_\n\nCzy to poprawne?",
-            reply_markup=build_confirm_buttons("voice_confirm"),
+            reply_markup=build_choice_buttons([
+                ("✅ Tak", "voice_confirm:yes"),
+                ("❌ Nie", "voice_confirm:no"),
+            ]),
         )
 
     # Log whisper usage
