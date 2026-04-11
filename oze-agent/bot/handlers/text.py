@@ -203,24 +203,24 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Route by intent
     handlers = {
-        "add_client": handle_add_client,
-        "search_client": handle_search_client,
-        "edit_client": handle_edit_client_v2,
-        "add_note": handle_edit_client_v2,         # note triggers in handle_edit_client_v2
-        "delete_client": handle_delete_client,
-        "add_meeting": handle_add_meeting,
-        "show_day_plan": handle_view_meetings,     # spec v5 name
-        "view_meetings": handle_view_meetings,
-        "reschedule_meeting": handle_reschedule_meeting,
-        "cancel_meeting": handle_cancel_meeting,
-        "lejek_sprzedazowy": handle_show_pipeline, # spec v5 rename
-        "show_pipeline": handle_show_pipeline,     # backwards compat
-        "filtruj_klientów": handle_filter_clients, # new
-        "change_status": handle_change_status,
-        "refresh_columns": handle_refresh_columns,
-        "confirm_yes": handle_confirm,
-        "confirm_no": handle_cancel_flow,
-        "cancel_flow": handle_cancel_flow,
+        # 6 MVP intents
+        "add_client":       handle_add_client,
+        "show_client":      handle_search_client,       # renamed from search_client; E.3 will rewrite
+        "add_note":         handle_add_note,             # stub — Sesja D
+        "change_status":    handle_change_status,
+        "add_meeting":      handle_add_meeting,
+        "show_day_plan":    handle_view_meetings,        # temp; E.4 will rewrite to handle_show_day_plan
+        # POST-MVP — R5 banner
+        "edit_client":      handle_post_mvp_banner,
+        "filtruj_klientów": handle_post_mvp_banner,
+        "lejek_sprzedazowy": handle_post_mvp_banner,
+        # Utility
+        "assign_photo":     handle_general,
+        "refresh_columns":  handle_refresh_columns,
+        # Flow control
+        "confirm_yes":      handle_confirm,
+        "confirm_no":       handle_cancel_flow,
+        "cancel_flow":      handle_cancel_flow,
         "general_question": handle_general,
     }
 
@@ -343,6 +343,32 @@ async def _route_pending_flow(
 
 
 # ── Sub-handlers ──────────────────────────────────────────────────────────────
+
+
+async def handle_post_mvp_banner(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    """R5: inform user this POST-MVP feature is coming soon."""
+    await update.effective_message.reply_text(
+        "Ta funkcja jest w przygotowaniu. Niedługo dostępna."
+    )
+
+
+async def handle_add_note(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    """Add note to existing client — stub until Sesja D."""
+    await update.effective_message.reply_text(
+        "Ta funkcja jest w przygotowaniu. Niedługo dostępna."
+    )
 
 
 async def handle_add_client(
