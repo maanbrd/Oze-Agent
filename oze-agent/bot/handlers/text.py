@@ -72,8 +72,7 @@ logger = logging.getLogger(__name__)
 # Fields managed automatically — never show as "missing" to the user
 SYSTEM_FIELDS = {
     "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status",
-    "Zdjęcia", "Link do zdjęć", "ID kalendarza", "Email",
-    "Dodatkowe info", "Notatki", "Następny krok",
+    "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz", "Data następnego kroku",
 }
 
 # Regex: 7+ consecutive digits after stripping spaces/hyphens/dots (phone number)
