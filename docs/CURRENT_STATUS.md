@@ -149,7 +149,7 @@ Pliki zaktualizowane w tej sesji:
 
 ## Zadanie na następną sesję
 
-**Pełny audyt kodu Python przeciwko zsynchronizowanym plikom SSOT.** Nie zmieniać kodu. Cel: wyprodukować dokument `docs/CODE_AUDIT_11-04-2026.md` z tabelą rozbieżności, który pozwoli Maanowi świadomie zdecydować co fixujemy przed testami i w jakiej kolejności.
+**Wykonanie fixów z audytu według `docs/NEXT_SESSION_PROMPT.md`, Sesja A–G, dyscyplina jedna rzecz naraz.** Audyt zakończony w poprzedniej sesji — wynik w `docs/CODE_AUDIT_11-04-2026.md` (0/15 punktów checklisty zgodnych, drift systemowy R1/R3/R4/R6/R7 + schema Sheets + retired intents/products/statuses). Plan krok-po-kroku podzielony na 7 sesji kodowych (A–G) + 1 sesja testowa (H) w `docs/NEXT_SESSION_PROMPT.md`. Smoke test Telegram (2–3 scenariusze) po zakończeniu każdej sesji, pełny `docs/TEST_PLAN_11-04-2026.md` (15 testów) w Sesji H na końcu. Poniższa sekcja (zakres audytu + 15-punktowa checklista) zostaje jako kontekst historyczny — audyt jest zamknięty, ta checklista była jego inputem.
 
 **Zakres audytu:**
 - `bot/` — cały router intencji, handlery, pending flow, 3-button keyboard builder
