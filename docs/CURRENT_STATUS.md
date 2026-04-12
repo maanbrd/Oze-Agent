@@ -738,11 +738,27 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 **Wynik F2: 5/8 ✅, 1/8 ⚠️, 2/8 ❌**
 
+### Batch F3 (8 testów, nowe scenariusze) — 12.04.2026, 18:30-18:39
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| F3-T1 | add_note Dopisać flow (Marcin Kowalski Gdańsk) | ❌ FAIL | Dopisać na add_note nie działa — canceluje pending note, pyta od nowa (bug-F3-1) |
+| F3-T2 | add_note Zapisać → verify no R7 | ✅ PASS | "Notatka dodana." + brak R7 — poprawne per spec (zamknięty akt) |
+| F3-T3 | change_status → Nowy lead (reset) | ✅ PASS | from→to: "Umówione spotkanie → Nowy lead", 3-button card |
+| F3-T4 | show_client by phone ("kto ma numer 5555555555") | ❌ FAIL | "Nie mam dostępu do Twoich danych" — API error lub misclassification (bug-E2-7 variant) |
+| F3-T5 | add_meeting "za tydzień" | ✅ PASS | "za tydzień" → 19.04.2026 (niedziela) poprawne (+7 dni), direct match Bartek Wojcik |
+| F3-T6 | general_question "jakie produkty oferujemy" | ⚠️ PARTIAL | Classified OK ale "Nie mam dostępu do asortymentu — sprawdź Drive". Powinno odpowiedzieć z OZE context |
+| F3-T7 | add_client minimal + Dopisać (phone+email) | ✅ PASS | Karta przebudowana z Tel+Email, "Brakuje" lista zaktualizowana, 3-button R1 |
+| F3-T8 | Anulować mid-flow on add_meeting | ✅ PASS | One-click cancel, natychmiastowe "Anulowane.", brak pętli "Na pewno?" |
+
+**Wynik F3: 4/8 ✅, 1/8 ⚠️, 2/8 ❌ (+ 1 nowy bug)**
+
 - Batch F-T: 6/8 ✅, 2/8 ⚠️, 0/8 ❌
 - Batch F2: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
-- **Razem: 176/244 ✅ (72%), 25/244 ⚠️ (10%), 39/244 ❌ (16%)**
+- Batch F3: 4/8 ✅, 1/8 ⚠️, 2/8 ❌
+- **Razem: 180/252 ✅ (71%), 26/252 ⚠️ (10%), 41/252 ❌ (16%)**
 
-**Nowe bugi znalezione w Sesji E+F (19):**
+**Nowe bugi znalezione w Sesji E+F (20):**
 
 | ID | Priorytet | Objaw |
 |----|-----------|-------|
@@ -765,6 +781,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-E23-9 | HIGH | show_client returns mutation card (Zapisać/Dopisać/Anulować) instead of read-only when pending add_client exists from rapid-fire message. Concurrent pending state contaminates intent |
 | bug-E4-7 | LOW | Same-status change creates no-op mutation card |
 | bug-F2-2 | MEDIUM | Exact name+city match ("Radek Sikorski Radom") triggers unnecessary disambiguation instead of direct match. Fuzzy matcher finds multiple city matches but doesn't prioritize exact name hit |
+| bug-F3-1 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` — dodano `elif flow_type == "add_note"` |
 
 **Co działa dobrze (potwierdzone 78 testami):**
 - add_client parsing (compound messages, minimal data, diacritics, tech specs→Notatki)
@@ -808,6 +825,12 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Fuzzy match fix (b40268b): word-to-word matching blocks wrong-client substitution
 - add_client compound 8-field parsing (name, city, phone, email, address, product, source)
 - R4 duplicate detection functional (detects existing client, offers update)
+- add_note Zapisać → no R7 (confirmed: zamknięty akt per spec)
+- add_note direct match (Marcin Kowalski Gdańsk — no disambiguation needed)
+- change_status from→to display with reverse transition (Umówione spotkanie → Nowy lead)
+- "za tydzień" relative date → correct +7 days calculation
+- add_client Dopisać flow: phone+email merged, Brakuje list updated correctly
+- One-click cancel on add_meeting: immediate "Anulowane.", zero confirmation loops
 - add_note full flow: extract note text, 3-button card, timestamp prefix
 - change_status from→to transition display (Nowy lead → Spotkanie umówione)
 - Disambiguation button-click → correct client card display
@@ -940,6 +963,28 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ## Znane bugi (stan 12.04.2026 po testach)
 
+### Naprawione w Sesji H (commit TODO, 12.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-F3-1 | Dopisać na add_note anulowało zamiast dopisywać — dodano `elif flow_type == "add_note"` w `_route_pending_flow` który appenduje tekst do istniejącej notatki i pokazuje przebudowaną kartę | `text.py` |
+| bug-E2-7 | Phone search "kto ma numer X" misclassified jako add_client — dodano 4 przykłady phone→show_client do classifier prompt + `phone` entity support w `handle_search_client` | `claude_ai.py`, `text.py` |
+| bug-E23-9 | show_client zwraca mutation card gdy pending add_client istnieje — dodano `_search_prefixes` guard w `elif flow_type == "add_client"` który auto-cancels i re-processes | `text.py` |
+| bug-F3-6 | General question "jakie produkty oferujemy" zwraca Drive error — naprawiono `handle_general` system context: usunięto fałszywe "Masz dostęp do Drive", dodano listę produktów i statusów, zakazano odsyłania do zewnętrznych plików | `text.py` |
+
+### Testy do wykonania po deploy (Sesja H)
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| H-T1 | "dodaj notatkę do Marcin Kowalski Gdańsk: dzwonił" → Dopisać → "i chce rabat" | Karta 📝 z notatką "dzwonił i chce rabat" + 3 przyciski |
+| H-T2 | "kto ma numer 600123456" | show_client → znalezieni klienci z tym numerem, NIE add_client |
+| H-T3 | "pokaż klienta z numerem 510620730" | show_client → Michał Grabowski znaleziony |
+| H-T4 | add_client "Anna Kowal Poznań" → rapid-fire "pokaż Michał Grabowski Kielce" | "⚠️ Anulowane." + karta read-only Michała Grabowskiego |
+| H-T5 | "jakie produkty oferujemy?" | Krótka odpowiedź z listą PV/Pompa ciepła/Magazyn energii/PV+Magazyn — BEZ Drive error |
+| H-T6 | "jakie są nasze statusy?" (general question) | Odpowiedź z listą 9 statusów |
+
+---
+
 ### Naprawione w Sesji G (commit `efcdf1d`, 12.04.2026)
 
 | ID | Co naprawiono | Commit |
@@ -976,14 +1021,14 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-B2-1 | Klimatyzacja nadal się pojawia jako produkt | `extract_client_data` / classifier prompt | HIGH |
 | bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
 | bug-E9-6 | Flow state leak — disambiguation state persists through intervening messages | `_route_pending_flow` / state cleanup | HIGH |
-| bug-E23-9 | show_client returns mutation card when pending add_client exists (rapid-fire) | `handle_text` pending flow check | HIGH |
+| bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
 ### Nowe otwarte
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
 | bug-E1-9 | Combined product "PV + Magazyn energii" parsed as two separate products | `extract_client_data` / classifier | MEDIUM |
-| bug-E2-7 | "kto ma numer X" misclassified jako add_client zamiast show_client | `classify_intent` system prompt | MEDIUM |
+| bug-E2-7 | ✅ NAPRAWIONE (Sesja H) | `classify_intent` + `handle_search_client` | — |
 | bug-E4-7 | Same-status change tworzy no-op mutation card | `handle_change_status` | LOW |
 | bug-E14-7 | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce | `extract_meeting_data` / location parser | MEDIUM |
 | bug-E19-9 | "się odbyło" → "Zamontowana" instead of "Spotkanie odbyte" | classifier / status mapping | MEDIUM |
