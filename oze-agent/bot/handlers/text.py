@@ -255,6 +255,18 @@ async def _route_pending_flow(
         await handle_cancel_flow(update, context, user, {}, message_text)
         return True
     elif flow_type == "add_client":
+        # If the message starts with a search/action verb, auto-cancel and re-process
+        _search_prefixes = (
+            "pokaż", "znajdź", "szukaj", "plan na", "co mam", "zmień status",
+            "zmień", "dodaj notatkę", "notatka", "spotkanie z", "umów spotkanie",
+            "kto ma numer", "kto to",
+        )
+        if any(text_lower.startswith(p) for p in _search_prefixes):
+            telegram_id = update.effective_user.id
+            delete_pending_flow(telegram_id)
+            await update.effective_message.reply_text("⚠️ Anulowane.")
+            return False
+
         # User is augmenting an in-progress add_client flow with more data
         telegram_id = update.effective_user.id
         user_id = user["id"]
@@ -320,6 +332,24 @@ async def _route_pending_flow(
         save_pending_flow(telegram_id, "add_client", new_flow_data)
         card = format_add_client_card(merged, missing)
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+        return True
+    elif flow_type == "add_note":
+        # User is appending more text after clicking Dopisać on add_note
+        telegram_id = update.effective_user.id
+        flow_data = flow.get("flow_data", {})
+        existing_note = flow_data.get("note_text", "")
+        new_note = f"{existing_note} {message_text}".strip() if existing_note else message_text
+        new_flow_data = {**flow_data, "note_text": new_note}
+        save_pending_flow(telegram_id, "add_note", new_flow_data)
+
+        display_note = new_note[:80] + ("..." if len(new_note) > 80 else "")
+        name = flow_data.get("client_name", "")
+        c_city = flow_data.get("city", "")
+        city_part = f", {c_city}" if c_city else ""
+        await update.effective_message.reply_text(
+            f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
+            reply_markup=build_mutation_buttons("confirm"),
+        )
         return True
     elif flow_type == "r7_prompt":
         # R7 next-action response: temporal marker → add_meeting, otherwise close
@@ -530,7 +560,8 @@ async def handle_search_client(
     """Search for clients and show results."""
     telegram_id = update.effective_user.id
     user_id = user["id"]
-    query = intent_data.get("entities", {}).get("name") or message_text
+    entities = intent_data.get("entities", {})
+    query = entities.get("name") or entities.get("phone") or message_text
 
     await send_typing(context, telegram_id)
     results = await search_clients(user_id, query)
@@ -1590,15 +1621,16 @@ async def handle_general(
     telegram_id = update.effective_user.id
     history = get_conversation_history(telegram_id, limit=10)
 
-    pipeline_statuses = user.get("pipeline_statuses", [])
     system_context = (
-        "Jesteś asystentem handlowca OZE w Polsce. Zarządzasz klientami, spotkaniami i lejkiem. "
-        "Masz pełny dostęp do Google Calendar, Google Sheets i Google Drive użytkownika. "
-        f"Statusy lejka: {pipeline_statuses}. "
+        "Jesteś asystentem handlowca OZE (odnawialne źródła energii) w Polsce. "
+        "Pomagasz zarządzać klientami (CRM w Google Sheets) i spotkaniami (Google Calendar). "
+        "Oferowane produkty: PV (fotowoltaika), Pompa ciepła, Magazyn energii, PV + Magazyn energii. "
+        f"Statusy lejka sprzedaży: {', '.join(_VALID_STATUSES)}. "
         "Odpowiadaj BARDZO krótko — maksimum 2 zdania. "
         "Ton: konkretny, bez entuzjazmu, bez formalności. "
         "NIGDY nie używaj: 'Oczywiście', 'Z przyjemnością', 'Świetnie', 'Czekam na polecenia', "
         "'Czy mogę w czymś pomóc', 'Mam nadzieję', 'Nie ma problemu', 'Rozumiem Twoją frustrację'. "
+        "NIGDY nie sugeruj sprawdzania zewnętrznych plików ani folderów — odpowiedz na podstawie wiedzy. "
         "Jeśli wiadomość to dane klienta (imię, miasto, telefon, produkt) — odpowiedz 'Co chcesz zrobić?' "
         "Jeśli wiadomość jest niezrozumiała (losowe znaki, brak sensu) — odpowiedz 'Co chcesz zrobić?' "
         "Bez propozycji. Tylko odpowiedź na to co zostało zapytane."
