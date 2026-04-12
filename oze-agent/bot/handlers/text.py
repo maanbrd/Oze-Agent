@@ -73,6 +73,20 @@ SYSTEM_FIELDS = {
     "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz", "Data następnego kroku",
 }
 
+# Canonical 9-status pipeline per INTENCJE_MVP.md (frozen)
+_VALID_STATUSES = [
+    "Nowy lead",
+    "Spotkanie umówione",
+    "Spotkanie odbyte",
+    "Oferta wysłana",
+    "Podpisane",
+    "Zamontowana",
+    "Rezygnacja z umowy",
+    "Nieaktywny",
+    "Odrzucone",
+]
+_VALID_STATUSES_LOWER = {s.lower() for s in _VALID_STATUSES}
+
 # Words that indicate a genuine meeting intent (date/time markers)
 _TEMPORAL_MARKERS = {
     "jutro", "pojutrze", "dziś", "dzisiaj", "wczoraj",
@@ -132,6 +146,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     message_text = update.effective_message.text.strip()
 
     await send_typing(context, telegram_id)
+
+    # Pre-check: "statusy" command → return formatted list, skip LLM
+    if message_text.lower().strip() in ("statusy", "lista statusów", "jakie są statusy", "pokaż statusy"):
+        statuses_text = "📋 Dostępne statusy lejka:\n" + "\n".join(f"• {s}" for s in _VALID_STATUSES)
+        await update.effective_message.reply_text(statuses_text)
+        await increment_interaction(telegram_id, "show_statuses", "none", 0, 0, 0.0)
+        return
 
     # Check for active pending flow first
     pending_flow = get_pending_flow(telegram_id)
@@ -386,6 +407,10 @@ async def handle_add_note(
             lines.append(label)
             options.append((label, f"select_client:{row}"))
         lines.append("Którego?")
+        save_pending_flow(telegram_id, "disambiguation", {
+            "intent": "add_note",
+            "note_text": note_text,
+        })
         await update.effective_message.reply_text(
             "\n".join(lines),
             reply_markup=build_choice_buttons(options),
@@ -983,6 +1008,15 @@ async def handle_add_meeting(
             await update.effective_message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
             return
 
+        # Temporal guard: reject past dates
+        if start_dt < datetime.now(WARSAW):
+            _DAYS_PL_TG = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
+            date_display = start_dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL_TG[start_dt.weekday()]})"
+            await update.effective_message.reply_text(
+                f"Data {date_display} o {start_dt.strftime('%H:%M')} jest w przeszłości. Podaj datę przyszłą."
+            )
+            return
+
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
@@ -1062,6 +1096,80 @@ async def handle_add_meeting(
         await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
 
 
+_DAY_NAME_TO_WEEKDAY = {
+    "poniedziałek": 0, "poniedzialek": 0,
+    "wtorek": 1,
+    "środę": 2, "środa": 2, "srode": 2, "sroda": 2,
+    "czwartek": 3,
+    "piątek": 4, "piatek": 4,
+    "sobotę": 5, "sobota": 5, "sobote": 5,
+    "niedzielę": 6, "niedziela": 6, "niedziele": 6,
+}
+
+_MONTH_NAME_TO_NUM = {
+    "stycznia": 1, "lutego": 2, "marca": 3, "kwietnia": 4, "maja": 5,
+    "czerwca": 6, "lipca": 7, "sierpnia": 8, "września": 9,
+    "wrzesnia": 9, "października": 10, "pazdziernika": 10,
+    "listopada": 11, "grudnia": 12,
+}
+
+_DATE_DD_MONTH_RE = re.compile(
+    r"(\d{1,2})\s+(" + "|".join(_MONTH_NAME_TO_NUM.keys()) + r")"
+)
+_DATE_DD_MM_RE = re.compile(r"(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?")
+
+
+def _parse_show_day_date(message_text: str, today: date) -> date | None:
+    """Parse a target date from a show_day_plan message. Returns None for week-range queries."""
+    text = message_text.lower()
+
+    # Week range
+    if re.search(r"\b(ten\s+)?tydzień\b|\bweek\b|\btygodniu\b", text):
+        return None  # caller handles as range
+
+    # Relative words
+    if re.search(r"\bpojutrze\b", text):
+        return today + timedelta(days=2)
+    if re.search(r"\bjutro\b|\btomorrow\b", text):
+        return today + timedelta(days=1)
+    if re.search(r"\bdziś\b|\bdzisiaj\b|\btoday\b", text):
+        return today
+
+    # Day names (next occurrence)
+    for name, weekday in _DAY_NAME_TO_WEEKDAY.items():
+        if name in text:
+            delta = (weekday - today.weekday()) % 7
+            if delta == 0:
+                delta = 7  # "na poniedziałek" when today IS Monday → next week
+            return today + timedelta(days=delta)
+
+    # "DD miesiąc" e.g. "15 kwietnia"
+    m = _DATE_DD_MONTH_RE.search(text)
+    if m:
+        day_num = int(m.group(1))
+        month_num = _MONTH_NAME_TO_NUM[m.group(2)]
+        year = today.year
+        try:
+            candidate = date(year, month_num, day_num)
+            if candidate < today:
+                candidate = date(year + 1, month_num, day_num)
+            return candidate
+        except ValueError:
+            pass
+
+    # "DD.MM" or "DD.MM.YYYY"
+    m = _DATE_DD_MM_RE.search(text)
+    if m:
+        d_num, mo_num = int(m.group(1)), int(m.group(2))
+        yr = int(m.group(3)) if m.group(3) else today.year
+        try:
+            return date(yr, mo_num, d_num)
+        except ValueError:
+            pass
+
+    return today  # default: today
+
+
 async def handle_show_day_plan(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1069,21 +1177,19 @@ async def handle_show_day_plan(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Show meetings for today, tomorrow, or this week. Read-only — no free slots."""
+    """Show meetings for a given day (or 7-day range). Read-only — no free slots."""
     user_id = user["id"]
-    entities = intent_data.get("entities", {})
-    day_hint = entities.get("day", "").lower()
-
     today = date.today()
-    if "jutro" in day_hint or "tomorrow" in day_hint:
-        target = today + timedelta(days=1)
-        events = await get_events_for_date(user_id, target)
-    elif "tydzień" in day_hint or "week" in day_hint:
+
+    target = _parse_show_day_date(message_text, today)
+
+    if target is None:
+        # Week range
         start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
         end = start + timedelta(days=7)
         events = await get_events_for_range(user_id, start, end)
     else:
-        events = await get_events_for_date(user_id, today)
+        events = await get_events_for_date(user_id, target)
 
     schedule = format_daily_schedule(events)
     await update.effective_message.reply_markdown_v2(schedule)
@@ -1134,6 +1240,10 @@ async def handle_change_status(
             lines.append(label)
             options.append((label, f"select_client:{row}"))
         lines.append("Którego?")
+        save_pending_flow(telegram_id, "disambiguation", {
+            "intent": "change_status",
+            "new_status": new_status,
+        })
         await update.effective_message.reply_text(
             "\n".join(lines),
             reply_markup=build_choice_buttons(options),
@@ -1150,12 +1260,22 @@ async def handle_change_status(
     old_status = client.get("Status", "")
 
     if not new_status:
-        pipeline_statuses = user.get("pipeline_statuses", [])
-        if pipeline_statuses:
-            options = [(s, f"set_status:{client.get('_row')}:{s}") for s in pipeline_statuses]
+        options = [(s, f"set_status:{client.get('_row')}:{s}") for s in _VALID_STATUSES]
+        await update.effective_message.reply_text(
+            f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
+            reply_markup=build_choice_buttons(options),
+        )
+        return
+
+    # Whitelist validation
+    if new_status not in _VALID_STATUSES:
+        matched = next((s for s in _VALID_STATUSES if s.lower() == new_status.lower()), None)
+        if matched:
+            new_status = matched
+        else:
             await update.effective_message.reply_text(
-                f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
-                reply_markup=build_choice_buttons(options),
+                f"Nie znam statusu \"{new_status}\".\n"
+                f"Dostępne: {', '.join(_VALID_STATUSES)}"
             )
             return
 
