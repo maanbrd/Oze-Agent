@@ -334,8 +334,19 @@ async def _route_pending_flow(
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
         return True
     elif flow_type == "add_note":
-        # User is appending more text after clicking Dopisać on add_note
         telegram_id = update.effective_user.id
+        # If the message starts with a known action prefix, auto-cancel and re-process
+        _search_prefixes = (
+            "pokaż", "znajdź", "szukaj", "plan na", "co mam", "zmień status",
+            "zmień", "dodaj notatkę", "notatka", "spotkanie z", "umów spotkanie",
+            "kto ma numer", "kto to",
+        )
+        if any(text_lower.startswith(p) for p in _search_prefixes):
+            delete_pending_flow(telegram_id)
+            await update.effective_message.reply_text("⚠️ Anulowane.")
+            return False
+
+        # User is appending more text after clicking Dopisać on add_note
         flow_data = flow.get("flow_data", {})
         existing_note = flow_data.get("note_text", "")
         new_note = f"{existing_note} {message_text}".strip() if existing_note else message_text

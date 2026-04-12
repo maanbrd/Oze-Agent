@@ -227,6 +227,8 @@ Przykłady:
 - "ile mam klientów?" / "pokaż lejek" / "ilu klientów mam" → lejek_sprzedazowy
 - "pokaż klientów z Warszawy" → filtruj_klientów, entities: {{"city": "Warszawa"}}
 - "kto czeka na ofertę?" → filtruj_klientów, entities: {{"status": "Oferta wysłana"}}
+- "wrocław" / "kraków" / [sama nazwa miasta, bez imienia, daty ani akcji] → show_client, entities: {{"city": "Wrocław"}}
+- WAŻNE: Sama nazwa miasta (bez klienta, daty, słowa akcji jak "zmień/dodaj/pokaż klientów") → show_client.
 - "klienci z pompą ciepła" → filtruj_klientów, entities: {{"product": "Pompa ciepła"}}
 - "wysłałem ofertę Janowi Nowakowi" → change_status, entities: {{"name": "Jan Nowak", "status": "Oferta wysłana"}}
 - "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
