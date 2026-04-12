@@ -1044,6 +1044,8 @@ async def handle_change_status(
         "field": "Status",
         "old_value": old_status,
         "new_value": new_status,
+        "client_name": client.get("Imię i nazwisko", ""),
+        "city": client.get("Miasto", ""),
     })
 
     await update.effective_message.reply_markdown_v2(
@@ -1233,6 +1235,12 @@ async def handle_confirm(
             ok = await update_client(user_id, flow_data["row"], {flow_data["field"]: flow_data["new_value"]})
             if ok:
                 await update.effective_message.reply_text(f"✅ Status zmieniony na: {flow_data['new_value']}")
+                skip_delete = True
+                await send_next_action_prompt(
+                    update, telegram_id,
+                    flow_data.get("client_name", "klient"),
+                    flow_data.get("city", ""),
+                )
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
