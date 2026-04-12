@@ -759,7 +759,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch H: 4/6 ✅, 2/6 ⚠️, 0/6 ❌
 - Batch I: 5/5 ✅, 0/5 ⚠️, 0/5 ❌
 - Batch J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌
-- **Razem: 191/268 ✅ (71%), 30/268 ⚠️ (11%), 42/268 ❌ (16%)**
+- Batch K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌
+- Batch L: TBD (testy po deploy)
+- **Razem: 194/273 ✅ (71%), 30/273 ⚠️ (11%), 44/273 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -1070,6 +1072,39 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | K-T4 | Regression: "pokaż Jan Kowalski Warszawa" | Karta Jana Kowalskiego z Warszawy — NIE fałszywy Wrocław match |
 | K-T5 | Regression: "wrocław" (single word city search) | Disambiguation list klientów z Wrocławia — single-word city search nadal działa |
 
+### Wyniki Batch K (5 testów, bug-fix verification) — 12.04.2026, 22:49-23:07
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| K-T1 | bug-E9-6: add_note pending + unrelated "pokaż Michała Grabowskiego z Kielc" | ❌ FAIL | Flow NIE został anulowany. Bot potraktował unrelated message jako Dopisać — dodał tekst do notatki: "dzwonił pokaż Michała Grabowskiego z Kielc". `_route_pending_flow` dla add_note appenduje tekst zamiast sprawdzać czy to unrelated intent. bug-E9-6 NIE naprawiony dla add_note pending flow |
+| K-T2 | klimatyzacja solo → Notatki wording | ✅ PASS | Produkt: puste ✅, Notatki: "Produkt nieobsługiwany: klimatyzacja" ✅ (standard wording). bug-B2-1 Notatki fix potwierdzone |
+| K-T3 | "PV i klimatyzacja" → compound split | ✅ PASS | Produkt: "PV" ✅, Notatki: "Produkt nieobsługiwany: klimatyzacja" ✅. Compound product split + standard wording |
+| K-T4 | Regression: "pokaż Jan Kowalski Warszawa" | ✅ PASS | Karta Jan Kowalski, Warszawa, Pompa ciepła — read-only, bez fałszywego Wrocław match. `_fuzzy_match` fix działa poprawnie |
+| K-T5 | Regression: "wrocław" single word city search | ❌ FAIL | Bot odpowiedział "Ta funkcja jest w przygotowaniu. Niedługo dostępna." zamiast disambiguation klientów z Wrocławia. Classifier nie rozpoznaje gołego "wrocław" jako show_client. Nie jest to regresja `_fuzzy_match` — message nigdy nie dociera do search logic bo classifier odrzuca |
+
+**Wynik K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌**
+
+---
+
+## Sesja L — ZAKOŃCZONA (12.04.2026)
+
+### Naprawione w Sesji L (commit `eaddb75`, 12.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-E9-6 (add_note leak) | `_route_pending_flow` add_note branch teraz sprawdza `_search_prefixes` przed appendowaniem tekstu. Wiadomości z "pokaż", "znajdź", "zmień status", itd. → `delete_pending_flow` + "⚠️ Anulowane." + `return False` (re-routing). Identyczna logika jak w add_client guard (linia ~259) | `bot/handlers/text.py` |
+| K-T5 (bare city classifier) | `classify_intent` prompt — dodano przykład: `"wrocław" / sama nazwa miasta → show_client, entities: {"city": "..."}` + WAŻNE rule | `shared/claude_ai.py` |
+
+### Testy do wykonania po deploy (Sesja L)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| L-T1 | K-T1 retest: "dodaj notatkę do Jana Kowalskiego: dzwonił" → karta add_note + 3 buttons → wpisz "pokaż Michała Grabowskiego z Kielc" | "⚠️ Anulowane." + karta Michała Grabowskiego (fresh routing) |
+| L-T2 | K-T5 retest: "wrocław" (single word) | Disambiguation list klientów z Wrocławia (show_client), NIE "Ta funkcja jest w przygotowaniu" |
+| L-T3 | Regression: add_note "Marcin Kowalski Gdańsk: dzwonił" → Dopisać → "i chce rabat" | Karta 📝 z notatką "dzwonił i chce rabat" (Dopisać flow nadal działa po dodaniu guard) |
+
+---
+
 ### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
 
 | ID | Co naprawiono | Plik |
@@ -1140,7 +1175,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
 | bug-B2-1 | ✅ NAPRAWIONE (Sesja J+K) | Sesja J: odrzuca z Produkt. Sesja K: normalizuje gdy LLM pisze do Notatki bezpośrednio | — |
 | bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
-| bug-E9-6 | ✅ NAPRAWIONE (Sesja K) | `_fuzzy_match` `v in q` check ograniczony — city nie matchuje name+city queries | — |
+| bug-E9-6 | ⚠️ CZĘŚCIOWO (Sesja L) — `_fuzzy_match` city false-positive naprawiony (K-T4 ✅). add_note flow leak naprawiony (Sesja L: `_search_prefixes` guard dodany, L-T1 do retestowania). Bare city classifier też naprawiony (L-T2 do retestowania) | `_fuzzy_match` + `_route_pending_flow` add_note branch | HIGH |
 | bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
 ### Nowe otwarte
