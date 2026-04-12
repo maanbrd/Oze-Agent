@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 12.04.2026 — Sesja D zaimplementowana (4 commity: C4-1, R7-2, D.1, D.2)_
+_Last updated: 12.04.2026 — Sesja K: fix bug-E9-6 (_fuzzy_match city false-positive) + J-T1/J-T2 Notatki wording_
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -758,7 +758,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch F3: 4/8 ✅, 1/8 ⚠️, 2/8 ❌
 - Batch H: 4/6 ✅, 2/6 ⚠️, 0/6 ❌
 - Batch I: 5/5 ✅, 0/5 ⚠️, 0/5 ❌
-- **Razem: 189/263 ✅ (72%), 28/263 ⚠️ (11%), 41/263 ❌ (16%)**
+- Batch J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌
+- **Razem: 191/268 ✅ (71%), 30/268 ⚠️ (11%), 42/268 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -954,6 +955,10 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Exact name match bypasses disambiguation in change_status (Radek Sikorski Radom) — bug-F2-2 fix
 - "spotkanie telefoniczne" → Miejsce: "telefonicznie" (not client's city) — bug-E14-7 fix
 - Text "tak" accepted as confirmation for phone search disambiguation (bot interprets free-text responses)
+- Exact phone search: "kto ma numer 600123456" → direct Jan Kowalski card (fixed from 7-client disambiguation)
+- Exact phone search: "pokaż klienta z numerem 510620730" → direct Michał Grabowski (fixed from "Nie mam... Chodziło o?")
+- Klimatyzacja rejected from Produkt field — moved to Notatki (wording "Zainteresowany klimatyzacją")
+- Mixed products "PV i klimatyzacja" → Produkt: "PV" only, klimatyzacja to Notatki
 
 ---
 
@@ -1032,6 +1037,39 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | J-T4 | "pokaż klienta z numerem 510620730" | Bezpośrednia karta Michała Grabowskiego — BEZ "Chodziło o?" pytania |
 | J-T5 | bug-E9-6 retest: show_client "Kowalski" → disambiguation → następnie wpisz "Ala Wrocław" | Bot mówi "⚠️ Anulowane." + obsługuje "Ala Wrocław" jak nowe zapytanie (nie pokazuje Kowalskiego) |
 
+### Wyniki Batch J (5 testów, bug-fix verification Sesja J) — 12.04.2026, 21:22-21:38
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| J-T1 | add_client "Marcin Bąk Rzeszów klimatyzacja 505111222" | ⚠️ PARTIAL | Produkt: puste ✅ (klimatyzacja odrzucona). Ale Notatki: "Zainteresowany klimatyzacją" zamiast spec "Produkt nieobsługiwany: klimatyzacja". Wording differs |
+| J-T2 | add_client "Jan Nowak Kraków PV i klimatyzacja 501222333" | ⚠️ PARTIAL | Produkt: "PV" ✅ (tylko valid product zachowany). Notatki: "Zainteresowany również klimatyzacją" zamiast "Produkt nieobsługiwany: klimatyzacja". Core behavior poprawny, wording nie z spec |
+| J-T3 | "kto ma numer 600123456" | ✅ PASS | Bezpośrednia karta Jan Kowalski — zero disambiguation! (w H-T2 było 7 klientów). Exact phone match fix potwierdzone |
+| J-T4 | "pokaż klienta z numerem 510620730" | ✅ PASS | Bezpośrednia karta Michał Grabowski — BEZ "Nie mam... Chodziło o?" (w H-T3 było pytanie potwierdzające). Direct phone match fix potwierdzone |
+| J-T5 | bug-E9-6 retest: "Kowalski" disambiguation → "Ala Wrocław" | ❌ FAIL | Brak "⚠️ Anulowane." — disambiguation state przetrwał. Bot wyświetlił Mariusz Kalamaga (Warszawa) — zupełnie wrong client, niezwiązany z "Ala Wrocław" ani z Kowalskim. **bug-E9-6 nadal aktywny** |
+
+**Wynik J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌**
+
+---
+
+## Sesja K — ZAKOŃCZONA (12.04.2026)
+
+### Naprawione w Sesji K (commit `334667d`, 12.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-E9-6 | **Root cause**: `_fuzzy_match` `v in q` check pozwala "Wrocław" (stored city, 1 słowo) matchować query "Ala Wrocław" (2 słowa), bo "wrocław" IS a substring of "ala wrocław". Po auto-cancel flow (else branch działa), re-processed "Ala Wrocław" znajdował Mariusza Kalamaga przez false city match. **Fix**: `v in q` teraz działa tylko gdy v ma >1 słowo LUB query ma 1 słowo. Zapobiega false-positive city-in-name-city-query | `shared/google_sheets.py` `_fuzzy_match` |
+| bug-B2-1 (Notatki wording) | `_filter_invalid_products` teraz sprawdza też pole Notatki. Gdy LLM wpisze klimatyzację bezpośrednio do Notatki (zamiast Produkt), helper normalizuje do standardowego "Produkt nieobsługiwany: klimatyzacja" | `bot/handlers/text.py` `_filter_invalid_products` |
+
+### Testy do wykonania po deploy (Sesja K)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| K-T1 | bug-E9-6: "dodaj notatkę do Jana Kowalskiego: dzwonił" → disambiguation → wpisz "pokaż Michała Grabowskiego z Kielc" | "⚠️ Anulowane." + fresh routing → karta Michała Grabowskiego (albo "Nie mam..." jeśli nie istnieje) |
+| K-T2 | J-T1 retest: add_client "Marcin Bąk Rzeszów klimatyzacja 505111222" | Produkt: puste, Notatki: "Produkt nieobsługiwany: klimatyzacja" (standard wording) |
+| K-T3 | J-T2 retest: add_client "Jan Nowak Kraków PV i klimatyzacja 501222333" | Produkt: "PV", Notatki: "Produkt nieobsługiwany: klimatyzacja" |
+| K-T4 | Regression: "pokaż Jan Kowalski Warszawa" | Karta Jana Kowalskiego z Warszawy — NIE fałszywy Wrocław match |
+| K-T5 | Regression: "wrocław" (single word city search) | Disambiguation list klientów z Wrocławia — single-word city search nadal działa |
+
 ### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
 
 | ID | Co naprawiono | Plik |
@@ -1100,9 +1138,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-E5-1 | ✅ NAPRAWIONE (Sesja G) | `_fmt_date` | — |
 | bug-A1-1 | "ID kalendarza" w arkuszu vs "ID wydarzenia Kalendarz" w kodzie → pojawia się w "Brakuje:" | Sheet-side fix (Maan) | HIGH |
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
-| bug-B2-1 | ✅ NAPRAWIONE (Sesja J) | `text.py` _filter_invalid_products | — |
+| bug-B2-1 | ✅ NAPRAWIONE (Sesja J+K) | Sesja J: odrzuca z Produkt. Sesja K: normalizuje gdy LLM pisze do Notatki bezpośrednio | — |
 | bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
-| bug-E9-6 | Flow state leak — else branch w `_route_pending_flow` powinien naprawiać (Sesja G), do retestowania | `_route_pending_flow` else branch | HIGH (do retest) |
+| bug-E9-6 | ✅ NAPRAWIONE (Sesja K) | `_fuzzy_match` `v in q` check ograniczony — city nie matchuje name+city queries | — |
 | bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
 ### Nowe otwarte
