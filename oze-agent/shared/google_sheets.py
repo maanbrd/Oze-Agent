@@ -7,6 +7,7 @@ Returns None / False / empty list on failure — never raises.
 import asyncio
 import difflib
 import logging
+import re
 from datetime import date
 from typing import Optional
 
@@ -51,6 +52,18 @@ def _get_sheets_service_sync(user_id: str):
 
 def _is_auth_error(error: HttpError) -> bool:
     return error.resp.status in (401, 403)
+
+
+def _digits_only(s: str) -> str:
+    """Strip all non-digit characters."""
+    return re.sub(r"\D", "", s)
+
+
+def _is_phone_query(q: str) -> bool:
+    """Return True if q is a phone-number query (7+ digits, ≤4 non-digit chars)."""
+    digits = _digits_only(q)
+    non_digits = len(q) - len(digits)
+    return len(digits) >= 7 and non_digits <= 4
 
 
 def _fuzzy_match(query: str, value: str, threshold: float = 0.75) -> bool:
@@ -180,10 +193,23 @@ async def search_clients(user_id: str, query: str) -> list[dict]:
 
     Tries both the raw query and a suffix-stripped version so inflected Polish
     names like "Kowalskiego" match stored "Kowalski".
+
+    Phone-number queries (7+ digits) use exact digit matching to avoid
+    fuzzy false-positives on similar numbers (e.g. 600123456 ≠ 601123456).
     """
     clients = await get_all_clients(user_id)
     if not clients:
         return []
+
+    # Phone-number path: exact digit matching only
+    if _is_phone_query(query):
+        q_digits = _digits_only(query)
+        results = []
+        for client in clients:
+            stored = _digits_only(client.get("Telefon", ""))
+            if stored and (stored == q_digits or q_digits in stored or stored in q_digits):
+                results.append(client)
+        return results
 
     stripped = _strip_polish_suffix(query)
     queries_to_try = [query] if stripped.lower() == query.lower() else [query, stripped]

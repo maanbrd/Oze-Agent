@@ -275,7 +275,7 @@ async def _route_pending_flow(
 
         headers = await get_sheet_headers(user_id)
         result = await extract_client_data(message_text, headers)
-        new_data = {k: v for k, v in result.get("client_data", {}).items() if v}
+        new_data = {k: v for k, v in _filter_invalid_products(result.get("client_data", {})).items() if v}
         logger.info("augment add_client: new_data=%s", new_data)
 
         if not new_data:
@@ -496,7 +496,7 @@ async def handle_add_client(
 
     headers = await get_sheet_headers(user_id)
     result = await extract_client_data(message_text, headers)
-    client_data = result.get("client_data", {})
+    client_data = _filter_invalid_products(result.get("client_data", {}))
 
     if not client_data:
         await update.effective_message.reply_text("Co chcesz zrobić?")
@@ -583,7 +583,10 @@ async def handle_search_client(
 
         # If the query is not literally present in the name (or vice versa), it's a typo match.
         # Ask the user to confirm instead of silently showing the wrong person's data.
-        is_exact = query_lower in name_lower or name_lower in query_lower
+        # Exception: phone-number queries are inherently exact matches (matched on digits).
+        _query_digits = re.sub(r"\D", "", query)
+        _is_phone = len(_query_digits) >= 7 and len(query.strip()) <= len(_query_digits) + 4
+        is_exact = query_lower in name_lower or name_lower in query_lower or _is_phone
         if not is_exact:
             city = client.get("Miasto", "")
             suggestion = client_name + (f" z {city}" if city else "")
@@ -941,6 +944,37 @@ Zasady:
         text = result.get("text") or "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej."
         logger.warning("handle_edit_client_v2: no tool called, text=%r", text[:100])
         await update.effective_message.reply_text(text)
+
+
+def _filter_invalid_products(client_data: dict) -> dict:
+    """Remove non-OZE products (e.g. 'klimatyzacja') from Produkt.
+
+    Invalid products are appended to Notatki so no data is silently lost.
+    Valid OZE products: PV, Pompa ciepła, Magazyn energii, PV + Magazyn energii.
+    """
+    product = client_data.get("Produkt", "")
+    if not product:
+        return client_data
+
+    _INVALID_KEYWORDS = {"klimatyzacj", "klima"}
+
+    parts = [p.strip() for p in product.split(",")]
+    valid_parts, invalid_parts = [], []
+    for part in parts:
+        if any(kw in part.lower() for kw in _INVALID_KEYWORDS):
+            invalid_parts.append(part)
+        else:
+            valid_parts.append(part)
+
+    if not invalid_parts:
+        return client_data
+
+    client_data = dict(client_data)
+    client_data["Produkt"] = ", ".join(valid_parts)
+    existing_notes = client_data.get("Notatki", "")
+    suffix = "Produkt nieobsługiwany: " + ", ".join(invalid_parts)
+    client_data["Notatki"] = f"{existing_notes} {suffix}".strip() if existing_notes else suffix
+    return client_data
 
 
 def _find_exact_name_match(name_query: str, results: list) -> dict | None:
