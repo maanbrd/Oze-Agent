@@ -1,35 +1,33 @@
 # OZE-Agent — Current Status
-_Last updated: 12.04.2026 — po testach Sesja A–C + obserwacje Claude Cowork (bug-A4-2, bug-B3-1)_
+_Last updated: 12.04.2026 — Sesja D zaimplementowana (4 commity: C4-1, R7-2, D.1, D.2)_
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
 ---
 
-## Stan faz implementacji (po Sesji A–C + testach 12.04.2026)
+## Stan faz implementacji (po Sesji D — 12.04.2026)
 
 ```
-Phase 1: Sheets — add client                       ✅ INFRASTRUKTURA OK / D.1 PENDING
-  R1 3-button card działa (A-T1 ✅). One-click cancel działa (A-T2 ✅).
-  Dopisać rebuild działa (A-T3 ✅). R4 merge działa (A-T4 ✅).
-  handle_add_client pełna implementacja (D.1) — R4 default-merge, R7 call → następna sesja.
+Phase 1: Sheets — add client                       ✅ GOTOWE
+  R1 3-button card (A-T1 ✅). One-click cancel (A-T2 ✅).
+  Dopisać rebuild (A-T3 ✅). R4 default-merge no-conflict (D.2 ✅).
+  R4 2-button conflict flow (A-T4 ✅). R7 po add_client (✅).
 
-Phase 2: Sheets — search / status / notes           ⚠️ CZĘŚCIOWO
-  - 2.1 show_client:       Działa read-only (search). Nie testowane po C.1.
-  - 2.2 add_note:          STUB (D.2 następna sesja). Bug-C2-1: stub mówi
-                            "w przygotowaniu" — identyczne z POST-MVP banner.
-  - 2.3 change_status:     Działa (B-T3/B-T4 ✅). Bug-R7-2: R7 nie odpala
-                            po change_status (tylko po add_client teraz).
-  - 2.4 duplicates:        R4 2-button działa (A-T4 ✅). Bug-A4-1: classifier
-                            czasem zwraca edit_client zamiast poprawnej intencji
-                            gdy dane są ambiguous.
+Phase 2: Sheets — search / status / notes           ✅ GOTOWE (MVP)
+  - 2.1 show_client:       Działa read-only. Nie retestowane po D.
+  - 2.2 add_note:          ✅ ZAIMPLEMENTOWANE (D.1). extract_note_data +
+                            R1 karta + append do Notatki + Data ostatniego
+                            kontaktu update. Bez R7 (zamknięty akt).
+  - 2.3 change_status:     ✅ Działa + R7 po commit (D.2 fix bug-R7-2).
+  - 2.4 duplicates:        R4 default-merge (D.2). R4 2-button conflict (A-T4 ✅).
 
 Phase 3: Calendar                                    ⚠️ CZĘŚCIOWO
   - 3.1 add_meeting:       Działa. Temporal guard aktywny.
   - 3.3 show_day_plan:     Przepisane na handle_show_day_plan (C.2) — bez
                             free_slots. Nie przetestowane po zmianie.
-  - 3.7 R7 fusion:         Bug-C4-1 KRYTYCZNY: R7→add_meeting routing
-                            martwy (C-T4 ❌). Kod wygląda poprawnie —
-                            prawdopodobnie edge case w _route_pending_flow.
+  - 3.7 R7 fusion:         ✅ FIX (D krok 1, bug-C4-1): cancel_words
+                            word-boundary — "poniedziałek"/"niedzielę"
+                            nie powodują false-cancel. Do retestowania.
 
 Phase 4: Drive (photos)                              ⏳ TODO
 Phase 5: Voice input                                 ⏳ TODO
@@ -39,44 +37,32 @@ Phase 7: Error handling + lejek POST-MVP banner      ⏳ TODO
 
 ---
 
-## Zadanie bieżącej sesji — Sesja D (priorytet bugów + D.1 + D.2)
+## Sesja D — ZAKOŃCZONA (12.04.2026)
 
-**Zanim D.1/D.2:** naprawić krytyczne bugi z testów.
+Commity: `7359848` (C4-1), `71b3c05` (R7-2), `86f1185` (D.1), `04721da` (D.2).
 
-### Krok 0 — Sheet-side fix (Maan, nie kod)
+### Krok 0 — Sheet-side fix (Maan, nie kod — PENDING)
 Maan musi ręcznie poprawić arkusz Google:
 1. Zmienić nazwę kolumny P z `ID kalendarza` na `ID wydarzenia Kalendarz`
 2. Usunąć pustą kolumnę bez nagłówka (pozycja 14, między "Źródło pozyskania" a "Zdjęcia")
 
 Następnie wpisać `odśwież kolumny` w bocie żeby odświeżyć cache.
 
-### Krok 1 — bug-C4-1 (KRYTYCZNY): R7→add_meeting routing
-Diagnoza: Po C-T3 ✅ wiemy że R7 prompt się wyświetla. Po C-T4 ❌ wiemy że
-user odpowiedź z datą/godziną nie trafia do `handle_add_meeting`.
-Podejrzewane przyczyny:
-- `is_yes` check w `_route_pending_flow` przechwytuje odpowiedź przed `flow_type == "r7_prompt"`
-- `_TEMPORAL_MARKERS` nie matchuje frazy której użył tester
-- `r7_prompt` flow nie przeżywa `finally: delete_pending_flow` w `handle_confirm`
-Fix: dodać logging do `_route_pending_flow` + przetestować z konkretnym inputem. Commit: `fix: bug-C4-1 r7_prompt routing to add_meeting`
+## Zadanie na Sesję E — testy manualne Sesji D
 
-### Krok 2 — bug-R7-2: R7 nie odpala po change_status
-W `handle_confirm`, gałąź `flow_type == "change_status"` nie woła `send_next_action_prompt`.
-Fix: dodać wywołanie R7 po udanym `update_client` w change_status branch.
-Commit: `fix: bug-R7-2 R7 after change_status commit`
+**Retest po Sesji D (Claude Cowork):**
 
-### Krok D.1 — handle_add_note (było D.2 w planie, ale wyższy priorytet niż D.1)
-Stub zastąpić prawdziwym handlerem:
-- Identyfikacja klienta: imię + nazwisko + miasto (search_clients)
-- Append do kolumny Notatki (z datą prefixem: `[12.04.2026]: treść`)
-- R1 3-button card
-- R7 po commicie
-Commit: `Phase D.1: handle_add_note — MVP implementation`
-
-### Krok D.2 — handle_add_client pełne (było D.1 w planie)
-- R4 default-merge gdy klient istnieje i pola się nie kłócą
-- R4 2-button disambiguation (`build_duplicate_buttons`) gdy konflikt
-- R7 już podpięty w C.4 — weryfikacja
-Commit: `Phase D.2: handle_add_client — R4 default-merge aligned`
+| Test | Co sprawdzić |
+|------|-------------|
+| D-T1 (C4-1 fix) | R7 prompt → "W poniedziałek o 10:00" → add_meeting flow (nie zamknąć) |
+| D-T2 (C4-1 fix) | R7 prompt → "W niedzielę o 14" → add_meeting flow |
+| D-T3 (C4-1 fix) | R7 prompt → "nie wiem" → zamknięty cicho ✅ |
+| D-T4 (R7-2 fix) | change_status commit → R7 prompt pojawia się po ✅ |
+| D-T5 (D.1) | "dodaj notatkę do Jan Kowalski Warszawa: dzwonił w sprawie gwarancji" → karta 📝 + 3 przyciski |
+| D-T6 (D.1) | Zapisać notatkę → sprawdź Sheets: Notatki ma `[12.04.2026]: dzwonił...` |
+| D-T7 (D.1) | Sprawdź że R7 NIE pojawia się po dodaniu notatki |
+| D-T8 (D.2) | Dodaj klienta który istnieje, brak konfliktu → karta "Zaktualizować X o: [pole]?" + 3 przyciski |
+| D-T9 (D.2) | Dodaj klienta który istnieje, z konfliktem (inny telefon) → "Masz już X" + 2 przyciski |
 
 ---
 
@@ -86,14 +72,14 @@ Commit: `Phase D.2: handle_add_client — R4 default-merge aligned`
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
-| bug-C4-1 | R7 free-text parser martwy — user odpowiedź z datą nie trafia do add_meeting | `_route_pending_flow`, linia ~302 | KRYTYCZNY |
-| bug-C2-1 | add_note zwraca "w przygotowaniu" — stub identyczny z POST-MVP banner, jest MVP intent | `handle_add_note` stub (C.1) | KRYTYCZNY — planowany D.1 |
+| bug-C4-1 | ✅ NAPRAWIONE (D krok 1) — cancel_words word-boundary | `_route_pending_flow` | — |
+| bug-C2-1 | ✅ NAPRAWIONE (D.1) — handle_add_note MVP | `handle_add_note` | — |
 
 ### Wysokie (psują UX)
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
-| bug-R7-2 | R7 nie odpala po change_status (tylko po add_client) | `handle_confirm` change_status branch | HIGH |
+| bug-R7-2 | ✅ NAPRAWIONE (D krok 2) — client_name/city w flow_data + send_next_action_prompt | `handle_confirm` | — |
 | bug-A1-1 | "ID kalendarza" w arkuszu vs "ID wydarzenia Kalendarz" w kodzie → pojawia się w "Brakuje:" | Sheet-side fix (Maan) | HIGH |
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
 | bug-B2-1 | Klimatyzacja nadal się pojawia jako produkt | Prawdopodobnie deployment lag (kod czysty, grep=0) | HIGH — zweryfikować po redeploy |
@@ -182,6 +168,13 @@ Commity: 40a69f0, e9c3698, 501a9a8, 8c6a78a, a2ae15b, 155a8f9.
 - C.4 `6834b99`: send_next_action_prompt, r7_prompt flow w _route_pending_flow
 
 Testy: 7/12 PASS, 3/12 krytyczne (C-T4 prawdziwy bug, B-T2 deployment, C-T2 oczekiwany stub).
+
+### 12.04.2026 — Sesja D (bug fixes + handle_add_note + default-merge)
+4 commity:
+- `7359848`: fix bug-C4-1 — cancel_words word-boundary (nie/poniedziałek false-match)
+- `71b3c05`: fix bug-R7-2 — R7 after change_status commit (client_name/city + send_next_action_prompt)
+- `86f1185`: Phase D.1 — handle_add_note MVP (extract_note_data, R1 karta, append Notatki, bez R7)
+- `04721da`: Phase D.2 — handle_add_client R4 default-merge (conflict-check, no-conflict → R1 karta merge)
 
 ---
 
