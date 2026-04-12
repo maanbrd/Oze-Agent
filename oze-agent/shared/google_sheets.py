@@ -56,19 +56,36 @@ def _is_auth_error(error: HttpError) -> bool:
 def _fuzzy_match(query: str, value: str, threshold: float = 0.75) -> bool:
     """Return True if query loosely matches value (case-insensitive).
 
-    Checks the full string and also each word individually, so 'Kowalsky'
-    matches 'Jan Kowalski' even though the full-string ratio is below threshold.
+    For multi-word queries (e.g. full names): uses word-to-word comparison only —
+    ALL query words must find a fuzzy match in value words. This prevents
+    last-name-only false positives where shared surnames inflate the full-string
+    ratio (e.g. "Marcin Kowalski" must NOT match "Jan Kowalski").
+
+    For single-word queries: checks full-string ratio then word-level ratio,
+    so "Kowalsky" matches "Jan Kowalski" even with a typo.
     """
     q = query.lower().strip()
     v = value.lower().strip()
+    # Exact substring match is always valid
     if q in v or v in q:
         return True
-    # Full-string ratio
+
+    q_words = q.split()
+    v_words = v.split()
+
+    if len(q_words) > 1:
+        # Multi-word query: skip full-string ratio (shared prefixes like "jan "
+        # inflate the score). Require ALL query words to match a value word.
+        for qw in q_words:
+            if not any(difflib.SequenceMatcher(None, qw, vw).ratio() >= threshold for vw in v_words):
+                return False
+        return True
+
+    # Single-word query: full-string ratio first, then word-level
     if difflib.SequenceMatcher(None, q, v).ratio() >= threshold:
         return True
-    # Word-level ratio — match query against each word in the value
-    for word in v.split():
-        if difflib.SequenceMatcher(None, q, word).ratio() >= threshold:
+    for vw in v_words:
+        if difflib.SequenceMatcher(None, q, vw).ratio() >= threshold:
             return True
     return False
 

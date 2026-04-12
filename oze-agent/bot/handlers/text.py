@@ -392,6 +392,14 @@ async def handle_add_note(
         )
         return
 
+    if not _first_name_ok(query, results[0]):
+        city_part = f" ({city})" if city else ""
+        await update.effective_message.reply_text(
+            f"Nie znalazłem '{client_name}{city_part}'. "
+            f"Chodziło o {results[0].get('Imię i nazwisko', '?')}?"
+        )
+        return
+
     client = results[0]
     row = client.get("_row")
     old_notes = client.get("Notatki", "")
@@ -872,6 +880,26 @@ Zasady:
         await update.effective_message.reply_text(text)
 
 
+def _first_name_ok(query: str, client: dict) -> bool:
+    """Return True if the found client's first name matches the query's first name.
+
+    For single-word queries: always True (no first-name check possible).
+    For multi-word queries: first word of query must be within edit-distance 2
+    of first word of the client's stored name.
+    """
+    from shared.search import levenshtein_distance, normalize_polish
+    q_words = query.strip().split()
+    if len(q_words) < 2:
+        return True  # single word — no first-name check
+    q_first = normalize_polish(q_words[0])
+    stored_name = client.get("Imię i nazwisko", "")
+    c_words = stored_name.strip().split()
+    if not c_words:
+        return True
+    c_first = normalize_polish(c_words[0])
+    return levenshtein_distance(q_first, c_first) <= 2
+
+
 def _parse_warsaw(date_str: str, time_str: str) -> datetime:
     """Parse date+time strings as Europe/Warsaw and return an aware datetime."""
     naive = datetime.fromisoformat(f"{date_str}T{time_str}:00")
@@ -886,7 +914,9 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
 
     if client_name:
         results = await search_clients(user_id, client_name)
-        if results:
+        # If first name doesn't match, client stays None — meeting is created with
+        # the original typed name and no Sheets enrichment (better than wrong client).
+        if results and _first_name_ok(client_name, results[0]):
             client = results[0]
             full_name = client.get("Imię i nazwisko", client_name)
 
@@ -1105,6 +1135,15 @@ async def handle_change_status(
         await update.effective_message.reply_text(
             "\n".join(lines),
             reply_markup=build_choice_buttons(options),
+        )
+        return
+
+    if not _first_name_ok(query, results[0]):
+        found_name = results[0].get("Imię i nazwisko", "?")
+        found_city = results[0].get("Miasto", "")
+        suggestion = found_name + (f" — {found_city}" if found_city else "")
+        await update.effective_message.reply_text(
+            f"Nie znalazłem '{query}'. Chodziło o {suggestion}?"
         )
         return
 
