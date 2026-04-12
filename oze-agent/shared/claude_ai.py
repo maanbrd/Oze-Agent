@@ -387,6 +387,45 @@ WAŻNE: client_name zapisuj w mianowniku (nominative): "Jan Nowak" nie "Janem No
     }
 
 
+# ── Note data extraction ──────────────────────────────────────────────────────
+
+
+async def extract_note_data(message: str) -> dict:
+    """Extract client name, city, and note text from an add_note message.
+
+    Returns: {"client_name": str, "city": str, "note": str,
+              "tokens_in": int, "tokens_out": int, "cost_usd": float}
+    """
+    system_prompt = """Wyciągnij z wiadomości: imię i nazwisko klienta, miasto, treść notatki.
+Zwróć TYLKO surowy JSON (bez markdown):
+{"client_name": "", "city": "", "note": ""}
+
+Zasady:
+- client_name: pełne imię i nazwisko w mianowniku ("Jan Kowalski" nie "Janowi Kowalskiemu")
+- city: samo miasto bez dodatkowych słów
+- note: treść notatki — reszta wiadomości po identyfikacji klienta
+- Jeśli nie możesz wyciągnąć pola, zostaw pusty string"""
+
+    result = await call_claude(system_prompt, message, model_type="simple")
+    raw = result["text"].strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        logger.error("extract_note_data: JSON parse failed: %s", result["text"][:200])
+        parsed = {"client_name": "", "city": "", "note": ""}
+    return {
+        **parsed,
+        "tokens_in": result["tokens_in"],
+        "tokens_out": result["tokens_out"],
+        "cost_usd": result["cost_usd"],
+    }
+
+
 # ── General bot response ──────────────────────────────────────────────────────
 
 

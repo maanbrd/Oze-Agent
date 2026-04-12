@@ -30,6 +30,7 @@ from shared.claude_ai import (
     classify_intent,
     extract_client_data,
     extract_meeting_data,
+    extract_note_data,
     generate_bot_response,
 )
 from shared.database import (
@@ -347,9 +348,69 @@ async def handle_add_note(
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """Add note to existing client — stub until Sesja D."""
+    """Add note to existing client — R1 card, append to Notatki with date prefix."""
+    telegram_id = update.effective_user.id
+    user_id = user["id"]
+
+    await send_typing(context, telegram_id)
+
+    result = await extract_note_data(message_text)
+    client_name = result.get("client_name", "")
+    city = result.get("city", "")
+    note_text = result.get("note", "")
+
+    if not client_name or not note_text:
+        await update.effective_message.reply_text(
+            "Podaj imię i nazwisko klienta, miasto i treść notatki.\n"
+            "Np.: 'dodaj notatkę do Jana Kowalskiego z Warszawy: dzwonił w sprawie gwarancji'"
+        )
+        return
+
+    query = f"{client_name} {city}".strip()
+    results = await search_clients(user_id, query)
+    if not results:
+        city_part = f" ({city})" if city else ""
+        await update.effective_message.reply_text(
+            f"Nie znalazłem klienta: '{client_name}{city_part}'"
+        )
+        return
+
+    if len(results) > 1:
+        lines = [f"Mam {len(results)} klientów:"]
+        options = []
+        for i, c in enumerate(results[:10], start=1):
+            name = c.get("Imię i nazwisko", "?")
+            c_city = c.get("Miasto", "")
+            row = c.get("_row", 0)
+            label = f"{i}. {name}" + (f" — {c_city}" if c_city else "")
+            lines.append(label)
+            options.append((label, f"select_client:{row}"))
+        lines.append("Którego?")
+        await update.effective_message.reply_text(
+            "\n".join(lines),
+            reply_markup=build_choice_buttons(options),
+        )
+        return
+
+    client = results[0]
+    row = client.get("_row")
+    old_notes = client.get("Notatki", "")
+    name = client.get("Imię i nazwisko", client_name)
+    c_city = client.get("Miasto", city)
+
+    save_pending_flow(telegram_id, "add_note", {
+        "row": row,
+        "note_text": note_text,
+        "client_name": name,
+        "city": c_city,
+        "old_notes": old_notes,
+    })
+
+    display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
+    city_part = f", {c_city}" if c_city else ""
     await update.effective_message.reply_text(
-        "Ta funkcja jest w przygotowaniu. Niedługo dostępna."
+        f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
+        reply_markup=build_mutation_buttons("confirm"),
     )
 
 
@@ -1243,6 +1304,21 @@ async def handle_confirm(
                 )
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
+
+        elif flow_type == "add_note":
+            today_str = date.today().strftime("%d.%m.%Y")
+            old_notes = flow_data.get("old_notes", "")
+            new_entry = f"[{today_str}]: {flow_data['note_text']}"
+            final_notes = f"{old_notes}; {new_entry}" if old_notes else new_entry
+            ok = await update_client(user_id, flow_data["row"], {
+                "Notatki": final_notes,
+                "Data ostatniego kontaktu": date.today().strftime("%Y-%m-%d"),
+            })
+            if ok:
+                await update.effective_message.reply_text("✅ Notatka dodana.")
+            else:
+                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+            # Per spec (INTENCJE_MVP.md §4.3): clean note is a closed act — no R7
 
         elif flow_type == "confirm_search":
             row = flow_data.get("row")
