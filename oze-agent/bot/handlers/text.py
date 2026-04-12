@@ -442,12 +442,33 @@ async def handle_add_client(
     duplicate = detect_potential_duplicate(name, city, all_clients) if name and city else None
 
     if duplicate:
+        dup_name = duplicate.get("Imię i nazwisko", "")
+        dup_city = duplicate.get("Miasto", "")
+        # Detect field conflicts: new data has a different non-empty value than existing
+        has_conflict = any(
+            v and duplicate.get(k) and duplicate.get(k) != v
+            for k, v in client_data.items()
+            if k not in SYSTEM_FIELDS and k != "Imię i nazwisko"
+        )
+        if not has_conflict:
+            # Default merge path: show R1 confirmation card (R1 rule — no silent writes)
+            new_data = {k: v for k, v in client_data.items() if v and k not in SYSTEM_FIELDS}
+            save_pending_flow(telegram_id, "add_client_duplicate", {
+                "client_data": new_data,
+                "duplicate_row": duplicate.get("_row"),
+            })
+            updated_fields = ", ".join(new_data.keys())
+            city_part = f" ({dup_city})" if dup_city else ""
+            await update.effective_message.reply_text(
+                f"Mam już {dup_name}{city_part}.\nZaktualizować o: {updated_fields}?",
+                reply_markup=build_mutation_buttons("confirm"),
+            )
+            return
+        # Conflict: ask user to choose
         save_pending_flow(telegram_id, "add_client_duplicate", {
             "client_data": client_data,
             "duplicate_row": duplicate.get("_row"),
         })
-        dup_name = duplicate.get("Imię i nazwisko", "")
-        dup_city = duplicate.get("Miasto", "")
         dup_addr = duplicate.get("Adres", "")
         dup_prod = duplicate.get("Produkt", "")
         dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
