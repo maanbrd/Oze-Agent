@@ -238,6 +238,11 @@ Przykłady:
 - "Jan Nowak nieaktywny" → change_status, entities: {{"name": "Jan Nowak", "status": "Nieaktywny"}}
 - "zamontowali u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
 - "gotowe u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
+- "spotkanie z Janem Nowakiem się odbyło" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
+- "byłem u Jana Nowaka, odbyło się" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
+- "Jana Nowaka odbyłem" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
+- "odwiedziłem Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
+- WAŻNE: "się odbyło" / "odbyłem" / "odbyło się" / "odwiedziłem" + imię klienta → change_status "Spotkanie odbyte", NIE "Zamontowana".
 - "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - "zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
 - "zmień numer Jana Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
@@ -306,7 +311,9 @@ Mapuj slang OZE (zawsze):
 - foto / fotowoltaika / fotowoltaikę / PV-ka / panele / pv → "PV"
 - pompa / pompeczka / pompa ciepła / pompę → "Pompa ciepła"
 - magazyn / magazyn energii → "Magazyn energii"
-- Jeśli kilka produktów naraz ("PV i pompa", "PV i magazyn"), zapisz WSZYSTKIE w polu Produkt oddzielone przecinkami: np. "PV, Pompa ciepła".
+- WAŻNE: "PV z magazynem" / "fotowoltaika z magazynem" / "PV i magazyn" / "PV + magazyn" / "PV z baterią" / "panele z magazynem" → "PV + Magazyn energii" (to jest JEDEN produkt, nie dwa osobne)
+- Jeśli klient chce JEDNOCZEŚNIE pompę ciepła i PV (bez magazynu), zapisz oba oddzielone przecinkami: "PV, Pompa ciepła"
+- Jeśli klient chce PV i pompę ciepła i magazyn — zapisz: "PV + Magazyn energii, Pompa ciepła"
 - NIE wrzucaj nazw produktów do pola Notatki.
 
 Parsuj bez pytania:
@@ -365,7 +372,8 @@ Rozumiej polskie wyrażenia dat i czasu:
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
-WAŻNE: client_name zapisuj w mianowniku (nominative): "Jan Nowak" nie "Janem Nowakiem", "Mazur" nie "Mazurem", "Anna Kowalska" nie "Anny Kowalskiej"."""
+WAŻNE: client_name zapisuj w mianowniku (nominative): "Jan Nowak" nie "Janem Nowakiem", "Mazur" nie "Mazurem", "Anna Kowalska" nie "Anny Kowalskiej".
+WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" / "przez telefon" / "rozmowa telefoniczna" → location: "telefonicznie". Gdy brak innego adresu a spotkanie jest telefoniczne — ustaw location na "telefonicznie", nie na miasto klienta."""
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)
 
