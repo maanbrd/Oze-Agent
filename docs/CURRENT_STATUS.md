@@ -48,7 +48,35 @@ Maan musi ręcznie poprawić arkusz Google:
 
 Następnie wpisać `odśwież kolumny` w bocie żeby odświeżyć cache.
 
-## Sesja E — TRWA (12.04.2026, autonomiczne testy A-C scope)
+## Sesja G — ZAKOŃCZONA (12.04.2026)
+
+Commit: `efcdf1d` — 7 bugów naprawionych jednym commitem.
+
+### Zmiany
+
+| Plik | Co zmieniono |
+|------|-------------|
+| `buttons.py` | `_handle_select_client` sprawdza pending `disambiguation` flow, kontynuuje change_status/add_note mutation card zamiast read-only. Dodano importy `build_mutation_buttons`, `build_choice_buttons`, `format_edit_comparison`, `escape_markdown_v2` |
+| `text.py` | `handle_change_status` i `handle_add_note` disambiguation branches zapisują `save_pending_flow("disambiguation", ...)` przed pokazaniem buttonsów. `_VALID_STATUSES` stała z 9 statusami. Whitelist walidacja w `handle_change_status`. Pre-check "statusy" keyword. `_parse_show_day_date` helper (nazwy dni, explicite daty, DD.MM). Temporal guard w `handle_add_meeting`. |
+| `formatting.py` | Usunięty "Odpowiedz tak/nie" z `format_confirmation`. `_fmt_date` obsługuje datetime strings z czasem ("2026-04-14 14:00"). |
+
+### Testy do wykonania (Claude Cowork po deploy Railway)
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| G-T1 | "zmień status Kowalski na Spotkanie umówione" → disambiguation → kliknij "Jan Kowalski Warszawa" | **Mutation card**: "Zmienić status Jan Kowalski? Status: → Spotkanie umówione" + 3 przyciski |
+| G-T2 | "dodaj notatkę do Mazur Radom: dzwonił" → disambiguation → kliknij klienta | **📝 Mutation card** z treścią notatki + 3 przyciski |
+| G-T3 | "statusy" | Sformatowana lista 9 statusów bez raw Python, bez Negocjacji |
+| G-T4 | "zmień status Jan Kowalski Warszawa na Zbanowany" | Odrzucenie: "Nie znam statusu Zbanowany. Dostępne: ..." |
+| G-T5 | "plan na poniedziałek" | Spotkania na najbliższy poniedziałek (nie "Brak na dziś") |
+| G-T6 | "plan na 20 kwietnia" | Spotkania na 20.04 |
+| G-T7 | add_meeting "wczoraj o 14 z Kowalskim" | Odrzucenie z komunikatem o dacie w przeszłości |
+| G-T8 | add_meeting dowolne → sprawdź kartę | Brak tekstu "Odpowiedz tak/nie" w treści karty |
+| G-T9 | show_client Mariusz Kalamaga | "Data następnego kroku: 14.04.2026 (wtorek)" (nie ISO) |
+
+---
+
+## Sesja E+F — TRWA (12.04.2026, autonomiczne testy A-D scope + fuzzy fix)
 
 ### Batch 1 (10 testów) — ZAKOŃCZONY
 
@@ -677,9 +705,44 @@ add_meeting parser obsługuje nazwy dni tygodnia ("w piątek" → 17.04.2026) al
 - Batch 21: 6/10 ✅, 1/10 ⚠️, 3/10 ❌
 - Batch 22: 9/10 ✅, 0/10 ⚠️, 1/10 ❌
 - Batch 23: 7/10 ✅, 2/10 ⚠️, 1/10 ❌
-- **Razem: 165/228 ✅ (72%), 22/228 ⚠️ (10%), 37/228 ❌ (16%)**
 
-**Nowe bugi znalezione w Sesji E (18):**
+### Batch F-T (8 testów, fuzzy fix) — 12.04.2026, 17:30-17:55
+
+Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first_name_ok` guard).
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| F-T1 | add_meeting "Radek Sikorski Radom jutro o 10" | ✅ PASS | Bezpośredni match, brak zbędnej disambiguation |
+| F-T2 | add_meeting "Jan Mazur Radom piątek 11:00" | ✅ PASS | Bezpośredni match, poprawny klient |
+| F-T3 | add_meeting "Ewa Mazur Szczecin środa 14:00" | ✅ PASS | "Nie mam 'Ewa Mazur Szczecin'" — poprawne (nie istnieje) |
+| F-T4 | show_client "Tomek Zieliński Lublin" | ⚠️ PARTIAL | Guard blokuje złego klienta (✅), ale wynik: disambiguation z 2 Lublin klientami zamiast direct match |
+| F-T5 | change_status "Radek Sikorski Radom → Umówione spotkanie" | ✅ PASS | Direct match, mutation card poprawna |
+| F-T6 | add_note "Ewa Mazur Szczecin: interesuje się PV" | ⚠️ PARTIAL | Guard blokuje złego klienta (✅), ale "Nie znaleziono klienta" — nie szuka dalej |
+| F-T7 | add_note "Marcin Kowalski Gdańsk: oferta wysłana" | ✅ PASS | Direct match, mutation card z notatką |
+| F-T8 | show_client "Jan Kowalski Warszawa" | ✅ PASS | Direct match, read-only card |
+
+**Wynik F-T: 6/8 ✅, 2/8 ⚠️ (0 ❌)**
+
+### Batch F2 (8 testów, regresja + nowe) — 12.04.2026, 18:00-18:11
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| F2-T1 | add_note "Jan Kowalski Warszawa" via disambiguation (3 Warszawa) | ❌ FAIL | bug-E10-4: intent loss → show_client card zamiast add_note mutation |
+| F2-T2 | add_note "Radek Sikorski Radom" exact match | ❌ FAIL | Zbędna disambiguation (3 Radom) + bug-E10-4: intent loss → show_client card |
+| F2-T3 | change_status "Marcin Kowalski Gdańsk → Umówione spotkanie" + R7 | ✅ PASS | Direct match, 3-button card, R7 prompt pojawił się, cancel działa |
+| F2-T4 | add_client "Tomasz Nowicki Łódź" + Zapisać + R7 + cancel | ✅ PASS | Pełny flow: parsed 4 pola, Zapisane, R7 prompt, Anulowane |
+| F2-T5 | show_day_plan "co mam jutro" | ✅ PASS | 3 spotkania poprawnie wyświetlone, read-only (brak przycisków). Minor: brak daty w nagłówku |
+| F2-T6 | add_meeting "Piotr Zieliński Radom środa 14:00" + Zapisać | ✅ PASS | Direct match, data 15.04.2026 (środa) poprawna, "Spotkanie dodane do kalendarza", brak R7 (poprawne per spec) |
+| F2-T7 | R4 duplicate "Jan Kowalski Warszawa" | ⚠️ PARTIAL | Duplikat wykryty (✅), ale R1 3-button zamiast R4 2-button card. Funkcjonalnie OK |
+| F2-T8 | add_client compound (8 pól w jednej wiadomości) | ✅ PASS | Anna Wiśniewska Kraków — name, address, city, product, phone, email, source wyekstrahowane poprawnie |
+
+**Wynik F2: 5/8 ✅, 1/8 ⚠️, 2/8 ❌**
+
+- Batch F-T: 6/8 ✅, 2/8 ⚠️, 0/8 ❌
+- Batch F2: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
+- **Razem: 176/244 ✅ (72%), 25/244 ⚠️ (10%), 39/244 ❌ (16%)**
+
+**Nowe bugi znalezione w Sesji E+F (19):**
 
 | ID | Priorytet | Objaw |
 |----|-----------|-------|
@@ -701,6 +764,7 @@ add_meeting parser obsługuje nazwy dni tygodnia ("w piątek" → 17.04.2026) al
 | bug-E14-7 | MEDIUM | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce. Client city auto-filled instead |
 | bug-E23-9 | HIGH | show_client returns mutation card (Zapisać/Dopisać/Anulować) instead of read-only when pending add_client exists from rapid-fire message. Concurrent pending state contaminates intent |
 | bug-E4-7 | LOW | Same-status change creates no-op mutation card |
+| bug-F2-2 | MEDIUM | Exact name+city match ("Radek Sikorski Radom") triggers unnecessary disambiguation instead of direct match. Fuzzy matcher finds multiple city matches but doesn't prioritize exact name hit |
 
 **Co działa dobrze (potwierdzone 78 testami):**
 - add_client parsing (compound messages, minimal data, diacritics, tech specs→Notatki)
@@ -737,6 +801,13 @@ add_meeting parser obsługuje nazwy dni tygodnia ("w piątek" → 17.04.2026) al
 - One-click cancel timing — immediate, no confirmation loop
 - "fotowoltaika" synonym correctly mapped to "PV"
 - Custom meeting duration "1.5 godziny" → 90 min
+- R7 next_action_prompt po change_status commit (free-text + "❌ Anuluj / nic" button)
+- R7 next_action_prompt po add_client commit (free-text + cancel)
+- R7 correctly skipped after add_meeting (meeting itself defines next contact)
+- R7 "❌ Anuluj / nic" → clean "Anulowane." closure
+- Fuzzy match fix (b40268b): word-to-word matching blocks wrong-client substitution
+- add_client compound 8-field parsing (name, city, phone, email, address, product, source)
+- R4 duplicate detection functional (detects existing client, offers update)
 - add_note full flow: extract note text, 3-button card, timestamp prefix
 - change_status from→to transition display (Nowy lead → Spotkanie umówione)
 - Disambiguation button-click → correct client card display
@@ -869,6 +940,18 @@ add_meeting parser obsługuje nazwy dni tygodnia ("w piątek" → 17.04.2026) al
 
 ## Znane bugi (stan 12.04.2026 po testach)
 
+### Naprawione w Sesji G (commit `efcdf1d`, 12.04.2026)
+
+| ID | Co naprawiono | Commit |
+|----|---------------|--------|
+| bug-E10-4 | Intent loss po disambiguation — `_handle_select_client` teraz sprawdza pending `disambiguation` flow i kontynuuje change_status/add_note mutation card | efcdf1d |
+| bug-E9-9 | "statusy" zwraca stary raw Python list — teraz pre-check keyword, formatted lista z `_VALID_STATUSES` | efcdf1d |
+| bug-E2-5 | Brak whitelist walidacji statusów — dodano `_VALID_STATUSES` + walidacja + status menu | efcdf1d |
+| bug-E2-1 | show_day_plan nie parsuje nazw dni ani explicite dat — przepisano na `_parse_show_day_date` helper | efcdf1d |
+| bug-E3-3 | Temporal guard nie działa — dodano past-date check przed save_pending_flow w add_meeting | efcdf1d |
+| bug-E1-3 | Stary "Odpowiedz tak/nie" tekst w add_meeting card — usunięty z `format_confirmation` | efcdf1d |
+| bug-E5-1 | "Data następnego kroku" w ISO — naprawiono `_fmt_date` żeby obsługiwał "YYYY-MM-DD HH:MM" | efcdf1d |
+
 ### Krytyczne (blokują MVP)
 
 | ID | Objaw | Lokalizacja | Priorytet |
@@ -880,31 +963,31 @@ add_meeting parser obsługuje nazwy dni tygodnia ("w piątek" → 17.04.2026) al
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
-| bug-R7-2 | ✅ NAPRAWIONE (D krok 2) — client_name/city w flow_data + send_next_action_prompt | `handle_confirm` | — |
+| bug-R7-2 | ✅ NAPRAWIONE (D krok 2) | `handle_confirm` | — |
+| bug-E10-4 | ✅ NAPRAWIONE (Sesja G) | `_handle_select_client` | — |
+| bug-E9-9 | ✅ NAPRAWIONE (Sesja G) | `handle_text` pre-check | — |
+| bug-E2-5 | ✅ NAPRAWIONE (Sesja G) | `handle_change_status` | — |
+| bug-E2-1 | ✅ NAPRAWIONE (Sesja G) | `handle_show_day_plan` | — |
+| bug-E3-3 | ✅ NAPRAWIONE (Sesja G) | `handle_add_meeting` | — |
+| bug-E1-3 | ✅ NAPRAWIONE (Sesja G) | `format_confirmation` | — |
+| bug-E5-1 | ✅ NAPRAWIONE (Sesja G) | `_fmt_date` | — |
 | bug-A1-1 | "ID kalendarza" w arkuszu vs "ID wydarzenia Kalendarz" w kodzie → pojawia się w "Brakuje:" | Sheet-side fix (Maan) | HIGH |
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
-| bug-B2-1 | Klimatyzacja nadal się pojawia jako produkt | Prawdopodobnie deployment lag (kod czysty, grep=0) | HIGH — zweryfikować po redeploy |
+| bug-B2-1 | Klimatyzacja nadal się pojawia jako produkt | `extract_client_data` / classifier prompt | HIGH |
+| bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
+| bug-E9-6 | Flow state leak — disambiguation state persists through intervening messages | `_route_pending_flow` / state cleanup | HIGH |
+| bug-E23-9 | show_client returns mutation card when pending add_client exists (rapid-fire) | `handle_text` pending flow check | HIGH |
 
-### Nowe (Sesja E Batch 1-9)
+### Nowe otwarte
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
-| bug-E1-3 | add_meeting card body has old "tak/nie" text remnant alongside new 3-button R1 keyboard | `handle_add_meeting` response text | MEDIUM |
 | bug-E1-9 | Combined product "PV + Magazyn energii" parsed as two separate products | `extract_client_data` / classifier | MEDIUM |
-| bug-E2-1 | show_day_plan nie parsuje nazwy dnia z wiadomości — zawsze defaultuje do "dziś" | `handle_show_day_plan` | HIGH |
-| bug-E2-5 | Bot akceptuje dowolny string jako status (np. "Zbanowany") bez walidacji whitelist | `handle_change_status` / `extract_status_data` | HIGH |
 | bug-E2-7 | "kto ma numer X" misclassified jako add_client zamiast show_client | `classify_intent` system prompt | MEDIUM |
-| bug-E3-3 | Temporal guard NIE działa — "spotkanie wczoraj" tworzy kartę na datę w przeszłości | `handle_add_meeting` / `extract_meeting_data` | HIGH |
-| bug-B2-1 | POTWIERDZONE w E3-T8 — "klimatyzacja" nadal akceptowana, nie deployment lag | `extract_client_data` / classifier prompt | HIGH |
-| bug-E4-7 | Same-status change tworzy no-op mutation card (Rezygnacja→Rezygnacja) | `handle_change_status` | LOW |
-| bug-E5-1 | "Data następnego kroku" w show_client wyświetlana w ISO (2026-04-14) zamiast DD.MM.YYYY (Dzień tygodnia) | `handle_show_client` / `format_client_card` | MEDIUM |
-| bug-E6-1 | Bot silently substitutes wrong client — "Tomek Zieliński Lublin" matched to "Piotr Zieliński". Fuzzy match on last name+city ignores first name mismatch, no disambiguation | `find_client` / fuzzy matching | HIGH |
-| bug-E9-6 | Flow state leak — after disambiguation ("pokaż Mariusza" → 3 options), intervening messages, then "Ala Wrocław" shows Mariusz Kalamaga card instead of fresh routing | `_route_pending_flow` / state cleanup | HIGH |
-| bug-E9-9 | "statusy" command returns raw Python list `['Nowy lead', ..., 'Negocjacje', ..., 'Odrzucone']`. Contains removed Negocjacje, missing Zamontowana/Nieaktywny/Rezygnacja z umowy. 7/9 statuses. Raw format violates "no raw system data" rule | `handle_status_list` or classifier routing | HIGH |
-| bug-E10-2 | Fuzzy search too broad — exact "Jan Kowalski Warszawa" returns "Jan Nowak Piaseczno" as match (first-name-only match + wrong city). In add_meeting, silently picks first result = wrong client | `find_client` / fuzzy matching threshold | HIGH |
-| bug-E10-4 | Intent loss after disambiguation in change_status — user selects client from disambiguation buttons but original change_status intent is dropped, only read-only card shown. Mutation flow lost | `_route_pending_flow` / disambiguation callback | HIGH |
-| bug-E10-7 | add_meeting "Ewa Mazur Szczecin" matched to "Jan Mazur" — fuzzy matcher matches last name only, ignoring first name mismatch entirely. 4th confirmed case of wrong-client (extends E6-1, E10-2) | `find_client` / fuzzy matching | HIGH |
-| bug-E14-7 | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce. Client city auto-filled instead. Standalone "telefoniczne" worked in earlier tests | `extract_meeting_data` / location parser | MEDIUM |
+| bug-E4-7 | Same-status change tworzy no-op mutation card | `handle_change_status` | LOW |
+| bug-E14-7 | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce | `extract_meeting_data` / location parser | MEDIUM |
+| bug-E19-9 | "się odbyło" → "Zamontowana" instead of "Spotkanie odbyte" | classifier / status mapping | MEDIUM |
+| bug-F2-2 | Exact name+city triggers unnecessary disambiguation instead of direct match | fuzzy matching | MEDIUM |
 
 ### Niskie / kosmetyczne
 
