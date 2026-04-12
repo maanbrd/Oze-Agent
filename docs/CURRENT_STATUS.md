@@ -757,7 +757,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch F2: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
 - Batch F3: 4/8 ✅, 1/8 ⚠️, 2/8 ❌
 - Batch H: 4/6 ✅, 2/6 ⚠️, 0/6 ❌
-- **Razem: 184/258 ✅ (71%), 28/258 ⚠️ (11%), 41/258 ❌ (16%)**
+- Batch I: 5/5 ✅, 0/5 ⚠️, 0/5 ❌
+- **Razem: 189/263 ✅ (72%), 28/263 ⚠️ (11%), 41/263 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -773,15 +774,15 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-E10-2 | HIGH | Fuzzy search too broad — exact "Jan Kowalski Warszawa" returns "Jan Nowak Piaseczno". add_meeting silently picks first/wrong result |
 | bug-E10-4 | HIGH | Intent loss after disambiguation in change_status — drops mutation flow, shows only read-only card |
 | bug-E10-7 | HIGH | add_meeting fuzzy match ignores first name — "Ewa Mazur Szczecin" → "Jan Mazur" (4th wrong-client case) |
-| bug-E1-3 | MEDIUM | add_meeting card body ma stary tekst "tak/nie" |
-| bug-E1-9 | MEDIUM | "PV + Magazyn energii" parsowane jako dwa produkty |
+| bug-E1-3 | ✅ NAPRAWIONE (Sesja G) | add_meeting card body — stary tekst "tak/nie" usunięty |
+| bug-E1-9 | ✅ NAPRAWIONE (Sesja I, potwierdzone I-T2) | "PV + Magazyn energii" jako jeden compound produkt |
 | bug-E2-7 | ⚠️ CZĘŚCIOWO (Sesja H) | Classifier naprawiony (show_client nie add_client). Ale phone search zbyt szeroki — exact "600123456" zwrócił 7 klientów zamiast exact match |
 | bug-E5-1 | MEDIUM | "Data następnego kroku" w show_client w formacie ISO zamiast DD.MM.YYYY |
-| bug-E19-9 | MEDIUM | "się odbyło" mapped to "Zamontowana" instead of "Spotkanie odbyte". Natural language status mapping error |
-| bug-E14-7 | MEDIUM | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce. Client city auto-filled instead |
-| bug-E23-9 | HIGH | show_client returns mutation card (Zapisać/Dopisać/Anulować) instead of read-only when pending add_client exists from rapid-fire message. Concurrent pending state contaminates intent |
-| bug-E4-7 | LOW | Same-status change creates no-op mutation card |
-| bug-F2-2 | MEDIUM | Exact name+city match ("Radek Sikorski Radom") triggers unnecessary disambiguation instead of direct match. Fuzzy matcher finds multiple city matches but doesn't prioritize exact name hit |
+| bug-E19-9 | ✅ NAPRAWIONE (Sesja I, potwierdzone I-T1) | "się odbyło" → "Spotkanie odbyte" (not Zamontowana) |
+| bug-E14-7 | ✅ NAPRAWIONE (Sesja I, potwierdzone I-T5) | "telefoniczne" → Miejsce: "telefonicznie" (not client city) |
+| bug-E23-9 | ✅ NAPRAWIONE (Sesja H, potwierdzone H-T4) | show_client during pending add_client → "⚠️ Anulowane." + clean re-process |
+| bug-E4-7 | ✅ NAPRAWIONE (Sesja I, potwierdzone I-T3) | Same-status → "Status klienta X jest już: Y." (info message, no card) |
+| bug-F2-2 | ✅ NAPRAWIONE (Sesja I, potwierdzone I-T1+I-T4) | Exact name match bypasses disambiguation (add_note + change_status) |
 | bug-F3-1 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` — dodano `elif flow_type == "add_note"` |
 
 **Co działa dobrze (potwierdzone 78 testami):**
@@ -941,6 +942,18 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - change_status Zapisać commit confirmed: Rezygnacja z umowy → Spotkanie umówione in Sheets
 - "fotowoltaika" synonym → PV mapping (confirmed 2nd time)
 - "z internetu" source extraction → Źródło: Internet
+- add_note Dopisać flow: text appended correctly, card rebuilt with merged note (bug-F3-1 fix)
+- Phone search "kto ma numer X" → show_client (not add_client) — classifier fixed (bug-E2-7)
+- show_client during pending add_client → "⚠️ Anulowane." + clean re-process (bug-E23-9 fix)
+- General question "jakie produkty oferujemy" → product list from agent knowledge, no Drive error (bug-F3-6 fix)
+- General question "jakie są nasze statusy" → 9 statusów from agent knowledge, no Negocjacje
+- "się odbyło" → change_status "Spotkanie odbyte" (not "Zamontowana") — bug-E19-9 fix
+- "PV + Magazyn energii" → single compound product (not two) — bug-E1-9 fix
+- Same-status no-op guard: "Status klienta X jest już: Y." — no mutation card (bug-E4-7 fix)
+- Exact name match bypasses disambiguation in add_note (Radek Sikorski Radom, multiple Radom clients) — bug-F2-2 fix
+- Exact name match bypasses disambiguation in change_status (Radek Sikorski Radom) — bug-F2-2 fix
+- "spotkanie telefoniczne" → Miejsce: "telefonicznie" (not client's city) — bug-E14-7 fix
+- Text "tak" accepted as confirmation for phone search disambiguation (bot interprets free-text responses)
 
 ---
 
@@ -984,7 +997,40 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | I-T4 | add_note "Radek Sikorski Radom: dzwonił" (przy wielu klientach z Radom) | Bezpośredni match Radek Sikorski bez disambiguation |
 | I-T5 | "spotkanie telefoniczne z Marcin Kowalski Gdańsk jutro o 11" | add_meeting card: Miejsce: "telefonicznie" (nie "Gdańsk") |
 
+### Wyniki Batch I (5 testów, bug-fix verification) — 12.04.2026, 20:37-20:51
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| I-T1 | "spotkanie z Radkiem Sikorskim Radom się odbyło" | ✅ PASS | change_status → "Spotkanie odbyte" (nie Zamontowana). bug-E19-9 fix potwierdzone. Bonus: exact match bez disambiguation (bug-F2-2 fix potwierdzone na change_status) |
+| I-T2 | add_client "Adam Baran Poznań PV + Magazyn energii" | ✅ PASS | Produkt: "PV + Magazyn energii" — jeden compound produkt, nie dwa. bug-E1-9 fix potwierdzone |
+| I-T3 | "zmień status Michał Grabowski Kielce na Nowy lead" (status już Nowy lead) | ✅ PASS | "Status klienta Michał Grabowski jest już: Nowy lead." — info message, brak karty mutacyjnej. bug-E4-7 fix potwierdzone |
+| I-T4 | "notatka Radek Sikorski Radom: dzwonił" (wielu klientów z Radom) | ✅ PASS | Bezpośredni match "Radek Sikorski, Radom" → karta add_note bez disambiguation. bug-F2-2 fix potwierdzone na add_note |
+| I-T5 | "spotkanie telefoniczne z Marcin Kowalski Gdańsk jutro o 11" | ✅ PASS | Miejsce: "telefonicznie" (nie Gdańsk). Data: 13.04.2026 (poniedziałek), Godzina: 11:00. bug-E14-7 fix potwierdzone |
+
+**Wynik I: 5/5 ✅, 0/5 ⚠️, 0/5 ❌ — wszystkie bug-fixy z Sesji I potwierdzone!**
+
 ---
+
+---
+
+## Sesja J — ZAKOŃCZONA (12.04.2026)
+
+### Naprawione w Sesji J (commit TODO, 12.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-B2-1 | "klimatyzacja" deterministycznie odrzucana z Produkt — dodano `_filter_invalid_products` helper. Invalid products przenoszone do Notatki. Wywoływane w `handle_add_client` i Dopisać branch `_route_pending_flow` | `text.py` |
+| bug-E2-7 (phone precision) | Phone search zbyt szeroki (fuzzy ratio 0.89 na 1-cyfrową różnicę) — dodano `_is_phone_query` + `_digits_only` helpers w `google_sheets.py`. `search_clients` używa exact digit matching dla phone queries (7+ cyfr). `handle_search_client` pomija "Chodziło o?" confirmation dla phone queries | `google_sheets.py`, `text.py` |
+
+### Testy do wykonania po deploy (Sesja J)
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| J-T1 | add_client "Marcin Bąk Rzeszów klimatyzacja 505111222" | Produkt: "" (puste), Notatki: "Produkt nieobsługiwany: klimatyzacja". Karta BEZ "klimatyzacja" w Produkt |
+| J-T2 | add_client "Jan Nowak Kraków PV i klimatyzacja 501222333" | Produkt: "PV", Notatki: "Produkt nieobsługiwany: klimatyzacja". Tylko PV zachowane |
+| J-T3 | "kto ma numer 600123456" | show_client → dokładne wyniki (tylko klienci z tym numerem), NIE 7 klientów |
+| J-T4 | "pokaż klienta z numerem 510620730" | Bezpośrednia karta Michała Grabowskiego — BEZ "Chodziło o?" pytania |
+| J-T5 | bug-E9-6 retest: show_client "Kowalski" → disambiguation → następnie wpisz "Ala Wrocław" | Bot mówi "⚠️ Anulowane." + obsługuje "Ala Wrocław" jak nowe zapytanie (nie pokazuje Kowalskiego) |
 
 ### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
 
@@ -1005,6 +1051,19 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | H-T4 | add_client "Anna Kowal Poznań" → rapid-fire "pokaż Michał Grabowski Kielce" | "⚠️ Anulowane." + karta read-only Michała Grabowskiego |
 | H-T5 | "jakie produkty oferujemy?" | Krótka odpowiedź z listą PV/Pompa ciepła/Magazyn energii/PV+Magazyn — BEZ Drive error |
 | H-T6 | "jakie są nasze statusy?" (general question) | Odpowiedź z listą 9 statusów |
+
+### Wyniki Batch H (6 testów, bug-fix verification) — 12.04.2026, 19:00-19:40
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| H-T1 | add_note Dopisać flow (dzwonił → i chce rabat) | ✅ PASS | Dopisać appenduje tekst, karta przebudowana z "dzwonił i chce rabat". bug-F3-1 fix potwierdzone |
+| H-T2 | "kto ma numer 600123456" → show_client | ⚠️ PARTIAL | Classifier naprawiony (show_client ✅ nie add_client). Ale phone search zbyt szeroki — 7 klientów w disambiguation zamiast exact match. Po kliknięciu "Jan Kowalski — Warszawa" → poprawna karta read-only |
+| H-T3 | "pokaż klienta z numerem 510620730" → Michał Grabowski | ⚠️ PARTIAL | Bot znalazł prawidłowego klienta (Michał Grabowski Kielce), ale powiedział "Nie mam 510620730" mimo że numer JEST w Sheets row 23. Po potwierdzeniu "tak" → poprawna karta read-only |
+| H-T4 | add_client Anna Kowal + rapid-fire show_client | ✅ PASS | "⚠️ Anulowane." + karta Michała Grabowskiego read-only. bug-E23-9 fix potwierdzone — zero kontaminacji stanu |
+| H-T5 | "jakie produkty oferujemy?" | ✅ PASS | "PV, Pompa ciepła, Magazyn energii, PV + Magazyn energii." — z wiedzy agenta, bez Drive error. bug-F3-6 fix potwierdzone |
+| H-T6 | "jakie są nasze statusy?" | ✅ PASS | 9 statusów z wiedzy agenta: Nowy lead, Spotkanie umówione, Spotkanie odbyte, Oferta wysłana, Podpisane, Zamontowana, Rezygnacja z umowy, Nieaktywny, Odrzucone. Bez Negocjacji ✅ |
+
+**Wynik H: 4/6 ✅, 2/6 ⚠️, 0/6 ❌**
 
 ---
 
@@ -1041,9 +1100,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-E5-1 | ✅ NAPRAWIONE (Sesja G) | `_fmt_date` | — |
 | bug-A1-1 | "ID kalendarza" w arkuszu vs "ID wydarzenia Kalendarz" w kodzie → pojawia się w "Brakuje:" | Sheet-side fix (Maan) | HIGH |
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
-| bug-B2-1 | Klimatyzacja nadal się pojawia jako produkt | `extract_client_data` / classifier prompt | HIGH |
+| bug-B2-1 | ✅ NAPRAWIONE (Sesja J) | `text.py` _filter_invalid_products | — |
 | bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
-| bug-E9-6 | Flow state leak — disambiguation state persists through intervening messages | `_route_pending_flow` / state cleanup | HIGH |
+| bug-E9-6 | Flow state leak — else branch w `_route_pending_flow` powinien naprawiać (Sesja G), do retestowania | `_route_pending_flow` else branch | HIGH (do retest) |
 | bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
 ### Nowe otwarte
@@ -1051,7 +1110,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
 | bug-E1-9 | ✅ NAPRAWIONE (Sesja I) | `claude_ai.py` extract_client_data prompt | — |
-| bug-E2-7 | ✅ NAPRAWIONE (Sesja H) | `classify_intent` + `handle_search_client` | — |
+| bug-E2-7 | ✅ NAPRAWIONE (Sesja H + J) | `classify_intent`, `handle_search_client` (is_exact skip), `google_sheets.py` (exact phone match) | — |
 | bug-E4-7 | ✅ NAPRAWIONE (Sesja I) | `handle_change_status` no-op guard | — |
 | bug-E14-7 | ✅ NAPRAWIONE (Sesja I) | `claude_ai.py` extract_meeting_data prompt | — |
 | bug-E19-9 | ✅ NAPRAWIONE (Sesja I) | `claude_ai.py` classify_intent prompt | — |
