@@ -392,15 +392,14 @@ async def handle_add_note(
         )
         return
 
-    if not _first_name_ok(query, results[0]):
+    client = next((r for r in results if _first_name_ok(query, r)), None)
+    if not client:
         city_part = f" ({city})" if city else ""
         await update.effective_message.reply_text(
-            f"Nie znalazłem '{client_name}{city_part}'. "
-            f"Chodziło o {results[0].get('Imię i nazwisko', '?')}?"
+            f"Nie znalazłem '{client_name}{city_part}' w bazie."
         )
         return
 
-    client = results[0]
     row = client.get("_row")
     old_notes = client.get("Notatki", "")
     name = client.get("Imię i nazwisko", client_name)
@@ -530,7 +529,10 @@ async def handle_search_client(
             save_pending_flow(telegram_id, "confirm_search", {"row": client.get("_row")})
             await update.effective_message.reply_text(
                 f"Nie mam \"{query}\". Chodziło o {suggestion}?",
-                reply_markup=build_mutation_buttons("confirm"),
+                reply_markup=build_choice_buttons([
+                    ("✅ Tak, pokaż", "confirm:yes"),
+                    ("❌ Nie", "cancel:search"),
+                ]),
             )
             return
 
@@ -916,8 +918,8 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
         results = await search_clients(user_id, client_name)
         # If first name doesn't match, client stays None — meeting is created with
         # the original typed name and no Sheets enrichment (better than wrong client).
-        if results and _first_name_ok(client_name, results[0]):
-            client = results[0]
+        client = next((r for r in results if _first_name_ok(client_name, r)), None)
+        if client:
             full_name = client.get("Imię i nazwisko", client_name)
 
             addr = client.get("Adres", "")
@@ -1138,16 +1140,13 @@ async def handle_change_status(
         )
         return
 
-    if not _first_name_ok(query, results[0]):
-        found_name = results[0].get("Imię i nazwisko", "?")
-        found_city = results[0].get("Miasto", "")
-        suggestion = found_name + (f" — {found_city}" if found_city else "")
+    client = next((r for r in results if _first_name_ok(query, r)), None)
+    if not client:
         await update.effective_message.reply_text(
-            f"Nie znalazłem '{query}'. Chodziło o {suggestion}?"
+            f"Nie znalazłem '{query}' w bazie."
         )
         return
 
-    client = results[0]
     old_status = client.get("Status", "")
 
     if not new_status:
