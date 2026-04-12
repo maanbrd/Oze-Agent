@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 12.04.2026 — po testach manualnych Sesja A–C (12 testów)_
+_Last updated: 12.04.2026 — po testach Sesja A–C + obserwacje Claude Cowork (bug-A4-2, bug-B3-1)_
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -39,7 +39,7 @@ Phase 7: Error handling + lejek POST-MVP banner      ⏳ TODO
 
 ---
 
-## Zadanie na następną sesję — Sesja D (priorytet bugów + D.1 + D.2)
+## Zadanie bieżącej sesji — Sesja D (priorytet bugów + D.1 + D.2)
 
 **Zanim D.1/D.2:** naprawić krytyczne bugi z testów.
 
@@ -103,6 +103,8 @@ Commit: `Phase D.2: handle_add_client — R4 default-merge aligned`
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
 | bug-A4-1 | Classifier false-positive edit_client na ambiguous inputs → R5 banner zamiast właściwej akcji | `classify_intent` system prompt | MEDIUM |
+| bug-A4-2 | R7 nie pali po merge-path (A-T4 R4 "Dopisz do istniejącego") — do ustalenia z Maanem czy spec wymaga R7 po merge | `_handle_duplicate_merge` w `buttons.py` | LOW (do spec-clarification) |
+| bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
 | bug-A1-4 | "Co dalej z Jan Nowak" zamiast "Co dalej z Janem Nowakiem" — brak narzędnika w R7 | `send_next_action_prompt` (format stringa) | LOW |
 | Bug #8 | Multi-meeting parser gubi imię gdy odmienione formy | `extract_meeting_data` | MEDIUM |
 | Bug #10 | "Spotkanie z Jan Mazur" bez odmiany | `_enrich_meeting` | LOW |

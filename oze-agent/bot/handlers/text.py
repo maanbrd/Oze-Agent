@@ -303,8 +303,10 @@ async def _route_pending_flow(
         # R7 next-action response: temporal marker → add_meeting, otherwise close
         telegram_id = update.effective_user.id
         delete_pending_flow(telegram_id)
-        cancel_words = {"nie", "anuluj", "stop", "nic", "nie wiem", "odłóż", "later"}
-        if any(w in text_lower for w in cancel_words):
+        _cancel_single = {"nie", "anuluj", "stop", "nic", "later"}
+        _cancel_phrases = {"nie wiem", "odłóż", "odłożyć"}
+        text_words = set(text_lower.split())
+        if (text_words & _cancel_single) or any(p in text_lower for p in _cancel_phrases):
             return True
         has_temporal = (
             any(w in text_lower for w in _TEMPORAL_MARKERS)
