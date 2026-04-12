@@ -190,12 +190,17 @@ def _fmt_date(serial) -> str:
             return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
     except (TypeError, ValueError):
         pass
-    # Handle ISO string "YYYY-MM-DD"
-    if serial and isinstance(serial, str) and len(serial) == 10 and serial[4] == "-":
+    # Handle ISO string "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM"
+    if serial and isinstance(serial, str) and len(serial) >= 10 and serial[4:5] == "-":
         try:
             from datetime import datetime as _datetime2
-            dt = _datetime2.fromisoformat(serial)
-            return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
+            date_part = str(serial)[:10]
+            time_part = str(serial)[11:16] if len(serial) > 10 else ""
+            dt = _datetime2.fromisoformat(date_part)
+            result = dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
+            if time_part:
+                result += f" {time_part}"
+            return result
         except Exception:
             pass
     return str(serial) if serial else ""
@@ -368,7 +373,6 @@ def format_confirmation(action: str, details: dict) -> str:
     for key, value in details.items():
         if value:
             lines.append(f"• {_e(str(key))}: {_e(str(value))}")
-    lines.append("\nOdpowiedz *tak* aby potwierdzić lub *nie* aby anulować\\.")
     return "\n".join(lines)
 
 

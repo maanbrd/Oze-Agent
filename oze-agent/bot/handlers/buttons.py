@@ -10,13 +10,18 @@ from bot.handlers.text import (
     handle_confirm,
     _run_guards,
 )
-from bot.utils.telegram_helpers import is_private_chat
+from bot.utils.telegram_helpers import (
+    build_choice_buttons,
+    build_mutation_buttons,
+    is_private_chat,
+)
 from shared.database import (
     delete_pending_flow,
     get_pending_flow,
     increment_daily_interaction_count,
     save_pending_flow,
 )
+from shared.formatting import escape_markdown_v2, format_client_card, format_edit_comparison
 from shared.google_sheets import get_all_clients, update_client
 
 logger = logging.getLogger(__name__)
@@ -130,7 +135,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def _handle_select_client(query, context, user: dict, row_str: str) -> None:
-    """Show full client card for the selected row number."""
+    """Show full client card, or resume pending disambiguation flow (change_status / add_note)."""
     try:
         row = int(row_str)
     except ValueError:
@@ -143,7 +148,63 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
         await query.edit_message_text("Nie znaleziono klienta.")
         return
 
-    from shared.formatting import format_client_card
+    telegram_id = query.from_user.id
+    flow = get_pending_flow(telegram_id)
+
+    if flow and flow.get("flow_type") == "disambiguation":
+        intent = flow["flow_data"].get("intent")
+        delete_pending_flow(telegram_id)
+
+        if intent == "change_status":
+            new_status = flow["flow_data"].get("new_status", "")
+            old_status = client.get("Status", "")
+            if not new_status:
+                pipeline_statuses = user.get("pipeline_statuses", [])
+                if pipeline_statuses:
+                    options = [(s, f"set_status:{client.get('_row')}:{s}") for s in pipeline_statuses]
+                    await query.edit_message_text(
+                        f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
+                        reply_markup=build_choice_buttons(options),
+                    )
+                else:
+                    await query.edit_message_text("Podaj nowy status dla klienta.")
+                return
+            save_pending_flow(telegram_id, "change_status", {
+                "row": client.get("_row"),
+                "field": "Status",
+                "old_value": old_status,
+                "new_value": new_status,
+                "client_name": client.get("Imię i nazwisko", ""),
+                "city": client.get("Miasto", ""),
+            })
+            await query.edit_message_text(
+                f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
+                + format_edit_comparison("Status", old_status, new_status),
+                parse_mode="MarkdownV2",
+                reply_markup=build_mutation_buttons("confirm"),
+            )
+            return
+
+        elif intent == "add_note":
+            note_text = flow["flow_data"].get("note_text", "")
+            old_notes = client.get("Notatki", "")
+            name = client.get("Imię i nazwisko", "")
+            c_city = client.get("Miasto", "")
+            save_pending_flow(telegram_id, "add_note", {
+                "row": client.get("_row"),
+                "note_text": note_text,
+                "client_name": name,
+                "city": c_city,
+                "old_notes": old_notes,
+            })
+            display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
+            city_part = f", {c_city}" if c_city else ""
+            await query.edit_message_text(
+                f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
+                reply_markup=build_mutation_buttons("confirm"),
+            )
+            return
+
     card = format_client_card(client)
     await query.edit_message_text(card, parse_mode="MarkdownV2")
 
