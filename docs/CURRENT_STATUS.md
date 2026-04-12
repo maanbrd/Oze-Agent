@@ -756,7 +756,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch F-T: 6/8 ✅, 2/8 ⚠️, 0/8 ❌
 - Batch F2: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
 - Batch F3: 4/8 ✅, 1/8 ⚠️, 2/8 ❌
-- **Razem: 180/252 ✅ (71%), 26/252 ⚠️ (10%), 41/252 ❌ (16%)**
+- Batch H: 4/6 ✅, 2/6 ⚠️, 0/6 ❌
+- **Razem: 184/258 ✅ (71%), 28/258 ⚠️ (11%), 41/258 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -774,7 +775,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-E10-7 | HIGH | add_meeting fuzzy match ignores first name — "Ewa Mazur Szczecin" → "Jan Mazur" (4th wrong-client case) |
 | bug-E1-3 | MEDIUM | add_meeting card body ma stary tekst "tak/nie" |
 | bug-E1-9 | MEDIUM | "PV + Magazyn energii" parsowane jako dwa produkty |
-| bug-E2-7 | MEDIUM | Phone search misclassified jako add_client (potwierdzone 2x) |
+| bug-E2-7 | ⚠️ CZĘŚCIOWO (Sesja H) | Classifier naprawiony (show_client nie add_client). Ale phone search zbyt szeroki — exact "600123456" zwrócił 7 klientów zamiast exact match |
 | bug-E5-1 | MEDIUM | "Data następnego kroku" w show_client w formacie ISO zamiast DD.MM.YYYY |
 | bug-E19-9 | MEDIUM | "się odbyło" mapped to "Zamontowana" instead of "Spotkanie odbyte". Natural language status mapping error |
 | bug-E14-7 | MEDIUM | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce. Client city auto-filled instead |
@@ -963,7 +964,29 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ## Znane bugi (stan 12.04.2026 po testach)
 
-### Naprawione w Sesji H (commit TODO, 12.04.2026)
+### Naprawione w Sesji I (commit `6e97e62`, 12.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-E19-9 | "się odbyło" → "Zamontowana" zamiast "Spotkanie odbyte" — dodano przykłady do `classify_intent`: "się odbyło / odwiedziłem / odbyłem" + WAŻNE rule | `claude_ai.py` |
+| bug-E1-9 | "PV + Magazyn energii" parsowane jako dwa produkty — dodano explicit rule: "PV i/z magazynem / PV + magazyn" → "PV + Magazyn energii" (jeden produkt) | `claude_ai.py` |
+| bug-E4-7 | Same-status no-op mutation card — dodano guard w `handle_change_status`: jeśli `old_status == new_status` → "Status klienta X jest już: Y." | `text.py` |
+| bug-F2-2 | Exact name+city triggers unnecessary disambiguation — dodano `_find_exact_name_match` helper; w `handle_add_note` i `handle_change_status` exact full-name match bypasses disambiguation | `text.py` |
+| bug-E14-7 | "spotkanie telefoniczne" adjective nie parsowane jako Miejsce — dodano rule do `extract_meeting_data`: "telefoniczne/telefonicznie/przez telefon" → location: "telefonicznie" | `claude_ai.py` |
+
+### Testy do wykonania po deploy (Sesja I)
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| I-T1 | "spotkanie z Radkiem Sikorskim Radom się odbyło" | change_status → "Spotkanie odbyte" mutation card (nie Zamontowana) |
+| I-T2 | add_client "Adam Baran PV + Magazyn energii" | Produkt: "PV + Magazyn energii" (jeden produkt, nie "PV, Magazyn energii") |
+| I-T3 | "zmień status Michał Grabowski Kielce na Nowy lead" gdy status już jest "Nowy lead" | "Status klienta Michał Grabowski jest już: Nowy lead." (brak karty) |
+| I-T4 | add_note "Radek Sikorski Radom: dzwonił" (przy wielu klientach z Radom) | Bezpośredni match Radek Sikorski bez disambiguation |
+| I-T5 | "spotkanie telefoniczne z Marcin Kowalski Gdańsk jutro o 11" | add_meeting card: Miejsce: "telefonicznie" (nie "Gdańsk") |
+
+---
+
+### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
 
 | ID | Co naprawiono | Plik |
 |----|---------------|------|
@@ -1027,12 +1050,12 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
-| bug-E1-9 | Combined product "PV + Magazyn energii" parsed as two separate products | `extract_client_data` / classifier | MEDIUM |
+| bug-E1-9 | ✅ NAPRAWIONE (Sesja I) | `claude_ai.py` extract_client_data prompt | — |
 | bug-E2-7 | ✅ NAPRAWIONE (Sesja H) | `classify_intent` + `handle_search_client` | — |
-| bug-E4-7 | Same-status change tworzy no-op mutation card | `handle_change_status` | LOW |
-| bug-E14-7 | "spotkanie telefoniczne" — "telefoniczne" as adjective not parsed as Miejsce | `extract_meeting_data` / location parser | MEDIUM |
-| bug-E19-9 | "się odbyło" → "Zamontowana" instead of "Spotkanie odbyte" | classifier / status mapping | MEDIUM |
-| bug-F2-2 | Exact name+city triggers unnecessary disambiguation instead of direct match | fuzzy matching | MEDIUM |
+| bug-E4-7 | ✅ NAPRAWIONE (Sesja I) | `handle_change_status` no-op guard | — |
+| bug-E14-7 | ✅ NAPRAWIONE (Sesja I) | `claude_ai.py` extract_meeting_data prompt | — |
+| bug-E19-9 | ✅ NAPRAWIONE (Sesja I) | `claude_ai.py` classify_intent prompt | — |
+| bug-F2-2 | ✅ NAPRAWIONE (Sesja I) | `text.py` _find_exact_name_match + handle_add_note + handle_change_status | — |
 
 ### Niskie / kosmetyczne
 
