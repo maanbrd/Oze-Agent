@@ -949,31 +949,36 @@ Zasady:
 def _filter_invalid_products(client_data: dict) -> dict:
     """Remove non-OZE products (e.g. 'klimatyzacja') from Produkt.
 
-    Invalid products are appended to Notatki so no data is silently lost.
+    Also normalizes Notatki when the LLM puts klimatyzacja there directly.
     Valid OZE products: PV, Pompa ciepła, Magazyn energii, PV + Magazyn energii.
     """
-    product = client_data.get("Produkt", "")
-    if not product:
-        return client_data
-
     _INVALID_KEYWORDS = {"klimatyzacj", "klima"}
+    product = client_data.get("Produkt", "")
+    existing_notes = client_data.get("Notatki", "")
 
-    parts = [p.strip() for p in product.split(",")]
-    valid_parts, invalid_parts = [], []
-    for part in parts:
-        if any(kw in part.lower() for kw in _INVALID_KEYWORDS):
-            invalid_parts.append(part)
-        else:
-            valid_parts.append(part)
+    parts = [p.strip() for p in product.split(",")] if product else []
+    valid_parts = [p for p in parts if not any(kw in p.lower() for kw in _INVALID_KEYWORDS)]
+    invalid_parts = [p for p in parts if any(kw in p.lower() for kw in _INVALID_KEYWORDS)]
 
-    if not invalid_parts:
+    notes_has_klima = any(kw in existing_notes.lower() for kw in _INVALID_KEYWORDS) if existing_notes else False
+
+    if not invalid_parts and not notes_has_klima:
         return client_data
 
     client_data = dict(client_data)
-    client_data["Produkt"] = ", ".join(valid_parts)
-    existing_notes = client_data.get("Notatki", "")
-    suffix = "Produkt nieobsługiwany: " + ", ".join(invalid_parts)
-    client_data["Notatki"] = f"{existing_notes} {suffix}".strip() if existing_notes else suffix
+
+    if invalid_parts:
+        client_data["Produkt"] = ", ".join(valid_parts)
+
+    labels = invalid_parts if invalid_parts else ["klimatyzacja"]
+    standard_note = "Produkt nieobsługiwany: " + ", ".join(labels)
+
+    if notes_has_klima:
+        # LLM wrote klimatyzacja in Notatki — replace with standard wording
+        client_data["Notatki"] = standard_note
+    else:
+        client_data["Notatki"] = f"{existing_notes} {standard_note}".strip() if existing_notes else standard_note
+
     return client_data
 
 
