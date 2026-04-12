@@ -54,9 +54,10 @@ Agent prowadzi Twoją bazę klientów w arkuszu Google Sheets. Ale Ty nigdy nie 
 
 *Agent: "📋 Zapisuję klienta:*
 *Jan Kowalski, Piłsudskiego 12, Warszawa*
-*Dom 160m², dach 40m² południe, PV 8kW*
+*Produkt: PV*
 *Tel. 600 123 456*
-*❓ Brakuje: zużycie prądu, źródło leada*
+*Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę do środy*
+*❓ Brakuje: źródło leada*
 *Zapisać?"*
 
 *Ty: "Tak"*
@@ -97,13 +98,13 @@ Agent zaproponuje zmianę statusu i poczeka na Twoje potwierdzenie.
 Agent zarządza Twoim dedykowanym kalendarzem Google. To osobny kalendarz tylko dla spotkań OZE — nie miesza się z Twoimi prywatnymi wydarzeniami. Możesz dodawać, przeglądać, przenosić i odwoływać spotkania — wszystko głosem lub tekstem.
 
 **Dodawanie spotkań** — mów naturalnie:
-- *"Jutro o 10 jadę do Kowalskiego"*
+- *"Jutro o 10 jadę do Marka Kowalskiego"*
 - *"Umów spotkanie z Nowakiem w piątek o czternastej"*
-- *"W środę o szesnastej wycena u Wiśniewskiego w Legionowie"*
-- *"Wpół do ósmej jestem u Majewskiego"* (agent zrozumie że to 7:30)
+- *"W środę o szesnastej wycena u Czarka Wiśniewskiego w Legionowie"*
+- *"Wpół do ósmej jestem u Krzysztofa Majewskiego"* (agent zrozumie że to 7:30)
 
 Możesz dodać kilka spotkań w jednej wiadomości:
-*"Jutro o 10 Kowalski, o 14 Nowak, o 17 Wiśniewski"*
+*"Jutro o 10 Wojtek Kowalski, o 14 Marek Nowak, o 17 Jarek Wiśniewski"*
 Agent stworzy trzy wydarzenia naraz, a potem zapyta czy dodać tych klientów do bazy (tych, którzy jeszcze nie są w arkuszu).
 
 Jeśli w danym terminie masz już inne spotkanie — agent ostrzeże o konflikcie, ale pozwoli dodać jeśli potwierdzisz.
@@ -178,23 +179,24 @@ Agent rozumie polskie sposoby podawania czasu:
 
 Przy rejestracji agent zaproponuje domyślne kolumny dostosowane do branży OZE:
 
-Imię i nazwisko, Telefon, Adres, Miejscowość, Zużycie prądu (kWh/rok), Produkt, , Status, Źródło leada, Data pierwszego kontaktu, Data ostatniego kontaktu, Data następnego kontaktu, Notatki, Zdjęcia.
+Imię i nazwisko, Telefon, Email, Adres, Miejscowość, Produkt, Status, Źródło leada, Data pierwszego kontaktu, Data ostatniego kontaktu, Data następnego kontaktu, Notatki, Zdjęcia.
 
-Ale to Twój arkusz — możesz dodawać i zmieniać kolumny w ustawieniach na dashboardzie albo bezpośrednio w Google Sheets. Agent odczytuje nagłówki co kilka godzin i dostosowuje się automatycznie. Jeśli dodasz kolumnę "Numer działki" — agent zacznie pytać o numer działki przy następnych klientach.
+**Gdzie trafiają szczegóły techniczne?** Metraż domu, metraż dachu, kierunek dachu, zużycie prądu, typ dachu i wszelkie inne dane techniczne lądują w kolumnie **Notatki** — jako tekst, w jednej kolumnie, wyszukiwalne. Agent celowo nie tworzy osobnych kolumn dla każdego parametru, bo każdy handlowiec ma trochę inne potrzeby. Jeśli potrzebujesz wyciągnąć wszystkich klientów z dachem 40m² — wyszukasz w Notatkach.
+
+**Moc produktu** (np. 8kW, 12kW, 10kWh) trafia do kolumny **Notatki** razem z resztą specs technicznych — tak samo jak metraż domu, dachu czy kierunek. Kolumna **Produkt** zawiera tylko typ produktu (PV, Pompa ciepła, Magazyn energii, PV + Magazyn), bez wartości liczbowych. Nie ma osobnej kolumny "moc".
+
+Ale to Twój arkusz — możesz dodawać i zmieniać kolumny w ustawieniach na dashboardzie. Agent odczytuje nagłówki co kilka godzin i dostosowuje się automatycznie. Jeśli dodasz kolumnę "Numer działki" — agent zacznie pytać o numer działki przy następnych klientach.
 
 **Ważne:** Jeśli właśnie zmieniłeś kolumny w arkuszu i chcesz żeby agent od razu to widział, napisz do niego "odśwież kolumny" — agent natychmiast odczyta nowe nagłówki.
 
-Niektóre kolumny są chronione i nie da się ich usunąć: Imię i nazwisko, Adres, Telefon, Status, Notatki. To fundamenty bazy klientów — bez nich agent nie mógłby działać.
+Niektóre kolumny są chronione i nie da się ich usunąć: Imię i nazwisko, Telefon, Adres, Miejscowość, Produkt, Status, Notatki. To fundamenty bazy klientów — bez nich agent nie mógłby działać.
 
-Statusy pipeline'u też możesz edytować. Domyślne to: Nowy lead → Spotkanie umówione → Spotkanie odbyte → Oferta wysłana → Negocjacje → Podpisane → Odrzucone. Dodaj własne, zmień nazwy, zmień kolejność — agent używa tego co ustawisz.
-
+Statusy lejka sprzedażowego możesz edytować. Domyślne to: Nowy lead → Spotkanie umówione → Spotkanie odbyte → Oferta wysłana → Negocjacje → Podpisane → Zamontowana → Rezygnacja z umowy → Nieaktywny → Odrzucone.
 ---
 
 ## Adresy i miejscowości
 
 Agent zawsze zapisuje adres klienta w dwóch miejscach: w arkuszu Google Sheets i w wydarzeniu w kalendarzu (w polu "lokalizacja"). Dzięki temu widzisz adres klienta bezpośrednio w aplikacji Kalendarz na telefonie — np. możesz kliknąć i otworzyć nawigację.
-
-W Polsce jest wiele miejscowości o tej samej nazwie. Jeśli agent nie jest pewny, o którą miejscowość chodzi, zapyta o kod pocztowy żeby uniknąć pomyłki.
 
 ---
 
@@ -210,16 +212,15 @@ Agent nigdy nie zrobi niczego ważnego bez Twojego OK. Dodanie klienta, edycja, 
 
 Jeśli przy pytaniu "Zapisać?" powiesz "nie" — agent zapyta czy anulować całą operację. Jeśli potwierdzisz — dane są odrzucone. Jeśli nie — agent czeka na poprawki.
 
----
 
 ## Pamięć rozmowy
 
 Agent pamięta ostatnie 10 wiadomości (lub do 30 minut przerwy). Możesz prowadzić naturalną rozmowę bez powtarzania o kim mówisz:
 
 *Ty: "Dodaj Kowalskiego z Warszawy, Piłsudskiego 12, PV 8kW, tel 600123456"*
-*Agent: "📋 Zapisuję Kowalskiego. Brakuje: metraż domu, metraż dachu, kierunek dachu, zużycie prądu. Uzupełnisz czy zapisać tak?"*
-*Ty: "Dom 160, dach 40 metrów, południe. Resztę nie wiem."*
-*Agent: "✅ Zapisane: Kowalski, Warszawa, PV 8kW, 160m², dach 40m² płd. Zużycie puste."*
+*Agent: "📋 Zapisuję Jana Kowalskiego. Brakuje: email, źródło leada. Zapisać?"*
+*Ty: "Tak, dodaj jeszcze że dom 160 metrów i dach 40 metrów na południe"*
+*Agent: "✅ Zapisane: Jan Kowalski, Warszawa, Produkt: PV. Do Notatek dołożyłem: moc PV 8kW, dom 160m², dach 40m² płd."*
 
 ---
 
