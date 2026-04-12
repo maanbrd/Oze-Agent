@@ -246,6 +246,10 @@ Przykłady:
 - "Jan Nowak ma nowy numer 609222333" → edit_client, entities: {{"name": "Jan Nowak"}}
 - "nowy telefon Jana Kowalskiego to 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - WAŻNE: wiadomości zawierające "zmień", "zaktualizuj", "popraw", "edytuj", "nowy telefon", "nowy numer", "ma nowy", "nie X a Y" + imię i nazwisko klienta → edit_client, NIE add_client, nawet gdy zawierają numer telefonu.
+- "kto ma numer 600123456" → show_client, entities: {{"phone": "600123456"}}
+- "pokaż klienta z numerem 501234567" → show_client, entities: {{"phone": "501234567"}}
+- "znajdź klienta po numerze 48601111222" → show_client, entities: {{"phone": "601111222"}}
+- WAŻNE: Wiadomości zawierające "kto ma numer", "znajdź po numerze", "klient z numerem", "pokaż klienta X numerze" → show_client, NIE add_client.
 - "dodaj notatkę do Jana Mazura: zadzwoń po 15" → add_note, entities: {{"name": "Jan Mazur"}}
 - "Jan Mazur interesuje się też magazynem" → add_note, entities: {{"name": "Jan Mazur"}}
 - "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
