@@ -79,12 +79,20 @@ def _fuzzy_match(query: str, value: str, threshold: float = 0.75) -> bool:
     """
     q = query.lower().strip()
     v = value.lower().strip()
-    # Exact substring match is always valid
-    if q in v or v in q:
+
+    # q in v: query is a substring of the stored value — always valid
+    if q in v:
         return True
 
     q_words = q.split()
     v_words = v.split()
+
+    # v in q: allow only when v is a multi-word phrase (full name contained inside a
+    # longer query like "Jan Kowalski Wrocław") or the query is a single word.
+    # This prevents single-word stored values (e.g. city "Wrocław") from falsely
+    # matching multi-word name+city queries (e.g. "Ala Wrocław").
+    if v in q and (len(v_words) > 1 or len(q_words) == 1):
+        return True
 
     if len(q_words) > 1:
         # Multi-word query: skip full-string ratio (shared prefixes like "jan "
