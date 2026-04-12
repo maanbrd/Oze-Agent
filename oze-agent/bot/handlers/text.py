@@ -427,33 +427,38 @@ async def handle_add_note(
         return
 
     if len(results) > 1:
-        lines = [f"Mam {len(results)} klientów:"]
-        options = []
-        for i, c in enumerate(results[:10], start=1):
-            name = c.get("Imię i nazwisko", "?")
-            c_city = c.get("Miasto", "")
-            row = c.get("_row", 0)
-            label = f"{i}. {name}" + (f" — {c_city}" if c_city else "")
-            lines.append(label)
-            options.append((label, f"select_client:{row}"))
-        lines.append("Którego?")
-        save_pending_flow(telegram_id, "disambiguation", {
-            "intent": "add_note",
-            "note_text": note_text,
-        })
-        await update.effective_message.reply_text(
-            "\n".join(lines),
-            reply_markup=build_choice_buttons(options),
-        )
-        return
-
-    client = next((r for r in results if _first_name_ok(query, r)), None)
-    if not client:
-        city_part = f" ({city})" if city else ""
-        await update.effective_message.reply_text(
-            f"Nie znalazłem '{client_name}{city_part}' w bazie."
-        )
-        return
+        # Exact full-name match short-circuits disambiguation (bug-F2-2)
+        client = _find_exact_name_match(client_name, results)
+        if not client:
+            client = next((r for r in results if _first_name_ok(query, r)), None)
+        if not client:
+            lines = [f"Mam {len(results)} klientów:"]
+            options = []
+            for i, c in enumerate(results[:10], start=1):
+                c_name = c.get("Imię i nazwisko", "?")
+                c_city = c.get("Miasto", "")
+                c_row = c.get("_row", 0)
+                label = f"{i}. {c_name}" + (f" — {c_city}" if c_city else "")
+                lines.append(label)
+                options.append((label, f"select_client:{c_row}"))
+            lines.append("Którego?")
+            save_pending_flow(telegram_id, "disambiguation", {
+                "intent": "add_note",
+                "note_text": note_text,
+            })
+            await update.effective_message.reply_text(
+                "\n".join(lines),
+                reply_markup=build_choice_buttons(options),
+            )
+            return
+    else:
+        client = next((r for r in results if _first_name_ok(query, r)), None)
+        if not client:
+            city_part = f" ({city})" if city else ""
+            await update.effective_message.reply_text(
+                f"Nie znalazłem '{client_name}{city_part}' w bazie."
+            )
+            return
 
     row = client.get("_row")
     old_notes = client.get("Notatki", "")
@@ -938,6 +943,21 @@ Zasady:
         await update.effective_message.reply_text(text)
 
 
+def _find_exact_name_match(name_query: str, results: list) -> dict | None:
+    """Return the first result whose stored full name exactly matches name_query.
+
+    Comparison is normalized (lowercase, no diacritics). Returns None when no
+    exact match exists — caller should fall back to disambiguation.
+    """
+    from shared.search import normalize_polish
+    q_norm = normalize_polish(name_query.strip())
+    for r in results:
+        stored_norm = normalize_polish(r.get("Imię i nazwisko", "").strip())
+        if stored_norm == q_norm:
+            return r
+    return None
+
+
 def _first_name_ok(query: str, client: dict) -> bool:
     """Return True if the found client's first name matches the query's first name.
 
@@ -1261,34 +1281,48 @@ async def handle_change_status(
         return
 
     if len(results) > 1:
-        lines = [f"Mam {len(results)} klientów:"]
-        options = []
-        for i, c in enumerate(results[:10], start=1):
-            name = c.get("Imię i nazwisko", "?")
-            city = c.get("Miasto", "")
-            row = c.get("_row", 0)
-            label = f"{i}. {name}" + (f" — {city}" if city else "")
-            lines.append(label)
-            options.append((label, f"select_client:{row}"))
-        lines.append("Którego?")
-        save_pending_flow(telegram_id, "disambiguation", {
-            "intent": "change_status",
-            "new_status": new_status,
-        })
-        await update.effective_message.reply_text(
-            "\n".join(lines),
-            reply_markup=build_choice_buttons(options),
-        )
-        return
-
-    client = next((r for r in results if _first_name_ok(query, r)), None)
-    if not client:
-        await update.effective_message.reply_text(
-            f"Nie znalazłem '{query}' w bazie."
-        )
-        return
+        # Exact full-name match short-circuits disambiguation (bug-F2-2)
+        name_hint = entities.get("name") or ""
+        client = _find_exact_name_match(name_hint or query, results)
+        if not client:
+            client = next((r for r in results if _first_name_ok(query, r)), None)
+        if not client:
+            lines = [f"Mam {len(results)} klientów:"]
+            options = []
+            for i, c in enumerate(results[:10], start=1):
+                c_name = c.get("Imię i nazwisko", "?")
+                c_city = c.get("Miasto", "")
+                c_row = c.get("_row", 0)
+                label = f"{i}. {c_name}" + (f" — {c_city}" if c_city else "")
+                lines.append(label)
+                options.append((label, f"select_client:{c_row}"))
+            lines.append("Którego?")
+            save_pending_flow(telegram_id, "disambiguation", {
+                "intent": "change_status",
+                "new_status": new_status,
+            })
+            await update.effective_message.reply_text(
+                "\n".join(lines),
+                reply_markup=build_choice_buttons(options),
+            )
+            return
+    else:
+        client = next((r for r in results if _first_name_ok(query, r)), None)
+        if not client:
+            await update.effective_message.reply_text(
+                f"Nie znalazłem '{query}' w bazie."
+            )
+            return
 
     old_status = client.get("Status", "")
+
+    # No-op guard: new status == current status
+    if new_status and old_status and old_status.lower() == new_status.lower():
+        name = client.get("Imię i nazwisko", "klient")
+        await update.effective_message.reply_text(
+            f"Status klienta {name} jest już: {old_status}."
+        )
+        return
 
     if not new_status:
         options = [(s, f"set_status:{client.get('_row')}:{s}") for s in _VALID_STATUSES]
