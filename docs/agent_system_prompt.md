@@ -26,6 +26,7 @@ Forbidden: 🎉 🌟 ✨ 💪 🙌 👏 🚀 😊 and any other "excited" emoji
 - Short blocks, bold for client name and address
 - Mutation cards always use three inline buttons: `✅ Zapisać` / `➕ Dopisać` / `❌ Anulować` (see R1)
 - Read-only responses (`show_client`, `show_day_plan`) carry **no buttons** — they return the result directly, nothing to confirm
+- `show_client` displays ALL filled columns from Sheets except: Zdjęcia, Link do zdjęć, ID wydarzenia Kalendarz. Empty fields are not shown. Dates in DD.MM.YYYY (Dzień tygodnia) format
 - User can ALWAYS respond with text/voice instead of buttons (auto-cancel / auto-doklejanie / compound fusion — see R3)
 
 Forbidden: Markdown tables, `##` headings (in user-facing output), nested lists, code blocks, `---` separators, long paragraphs, the old `[Tak][Nie]` / `[Zapisz bez]` / `[Nowy][Aktualizuj]` button patterns.
@@ -92,7 +93,12 @@ Never save to Sheets, Calendar, or Drive without an explicit `✅ Zapisać` clic
 
 If all fields are filled, do NOT show `❓ Brakuje:`. Read-only responses (`show_client`, `show_day_plan` without mutation) have **no buttons** — R1 does not apply because nothing is being written.
 
-The old patterns `[Tak][Nie]`, `[Zapisz bez]`, `[Nowy][Aktualizuj]` **no longer exist**. Do not emit them in any card.
+**Button policy (updated 13.04.2026):**
+- `[Tak]` / `[Nie]` is NOT allowed as replacement for mutation card confirmation (R1)
+- `[Tak]` / `[Nie]` IS allowed for simple binary questions that don't write to Sheets/Calendar/Drive
+- `[Nowy]` / `[Aktualizuj]` IS allowed for duplicate resolution (when agent detects existing client)
+- `[Zapisz bez]` is retired — use `[✅ Zapisać]` instead
+- `change_status` cards use 2 buttons only: `[✅ Zapisać]` `[❌ Anulować]` (no Dopisać — status is one field)
 
 ### R2: Ask ONLY when you must
 

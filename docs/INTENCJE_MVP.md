@@ -14,7 +14,7 @@ Jeśli coś w kodzie nie zgadza się z tym dokumentem → zmienia się kod. Jeś
 
 **Google Sheets** to statyczna baza klientów. Handlowiec do niej wchodzi rzadko — głównie gdy coś sprawdza, rozlicza się z szefem, albo eksportuje dane. Sheets mówi **co** wiemy o kliencie.
 
-**Google Calendar** to codzienne narzędzie robocze. Handlowiec otwiera go wielokrotnie dziennie: żeby sprawdzić gdzie jechać, komu zadzwonić, kiedy wrócić do oferty. Calendar mówi **co** trzeba zrobić **kiedy** i **z kim**.
+**Google Calendar** to codzienne narzędzie robocze. Handlowiec otwiera go wielokrotnie dziennie: żeby sprawdzić gdzie jechać, do kogo zadzwonić, kiedy wrócić do oferty. Calendar mówi **co** trzeba zrobić **kiedy** i **z kim**.
 
 **Reguła dual-write:** każda informacja zapisana w Sheets musi mieć swoje odzwierciedlenie w Kalendarzu — jako wydarzenie (spotkanie, telefon, oferta, follow-up dokumentowy) w odpowiednim momencie na osi czasu. Klient przechodzi przez lejek sprzedażowy **wraz z przejściami w Kalendarzu**. Status w Sheets to skutek, nie przyczyna — przyczyną jest wydarzenie, które się odbyło lub się odbędzie.
 
@@ -409,7 +409,48 @@ Każda mutacja, która wygląda jak `add_client` albo `add_note`, przechodzi prz
 
 Ta detekcja pilnuje, żeby handlowiec nie zrobił duplikatu tego samego klienta w trzech miejscach arkusza, kiedy wpisze "dodaj Kowalskiego z Warszawy" pół roku po pierwszym wpisie.
 
+**Duplicate resolution — decyzja 13.04.2026:**
 
+Gdy agent wykryje istniejącego klienta (match = 1, pewny):
+- Agent od razu wyciąga istniejącego klienta i proponuje aktualizację
+- Jeśli użytkownik chce jawnie dodać duplikat ALBO match jest niepewny, agent pokazuje wybór: `[Nowy]` / `[Aktualizuj]`
+- `[Nowy]` = dodaj drugi osobny rekord
+- `[Aktualizuj]` = nadpisz/uzupełnij dane istniejącego klienta tym, co podał użytkownik
+
+Ta decyzja zastępuje wcześniejsze "domyślnie dopisz do istniejącego bez pytania". Przyciski `[Nowy]` / `[Aktualizuj]` są dopuszczalne w kontekście duplicate resolution — to nie jest karta mutacyjna, to pytanie o routing.
+
+### 5.4. Calendar ↔ Sheets sync (decyzja 13.04.2026)
+
+Gdy zmienia się termin w Calendar (reschedule lub przeniesienie):
+- `Data następnego kroku` (kolumna L) aktualizuje się w Sheets
+- `Następny krok` (kolumna K) aktualizuje się jeśli zmiana typu (np. spotkanie → telefon)
+- `Status` (kolumna F) może się zmienić jeśli przeniesienie zmienia pozycję w lejku
+
+Gdy `add_meeting` commituje:
+- `Data ostatniego kontaktu` (kolumna J) = dziś
+- `Data następnego kroku` (kolumna L) = data spotkania
+- `Następny krok` (kolumna K) = typ spotkania
+
+### 5.5. Wyświetlanie danych klienta (decyzja 13.04.2026)
+
+W kartach klienta (`show_client`) i podsumowaniach wyświetlamy **wszystkie uzupełnione kolumny z Sheets** z wyjątkiem:
+- Zdjęcia (kolumna N) — osobny flow
+- Link do zdjęć (kolumna O) — techniczne
+- ID wydarzenia Kalendarz (kolumna P) — techniczne
+
+Nie pokazujemy pustych pól. Nie pokazujemy surowych danych technicznych (`_row`, serial dates, sheet IDs).
+
+### 5.6. Polityka przycisków (decyzja 13.04.2026)
+
+| Kontekst | Przyciski |
+|----------|-----------|
+| Karta mutacyjna (add_client, add_note, add_meeting) | `[✅ Zapisać]` `[➕ Dopisać]` `[❌ Anulować]` |
+| Karta change_status | `[✅ Zapisać]` `[❌ Anulować]` (bez Dopisać — status to jedno pole) |
+| Duplicate resolution | `[Nowy]` `[Aktualizuj]` |
+| Proste pytanie binarne (nie karta zapisu) | `[Tak]` `[Nie]` dopuszczalne |
+| Karta read-only (show_client, show_day_plan) | Brak przycisków |
+
+`[Tak]` / `[Nie]` **NIE zastępuje** karty zapisu do Sheets/Calendar/Drive. Jest dopuszczalne tylko w pytaniach binarnych nie-mutacyjnych.
 
 Każda intencja mutująca przechodzi przez **3 stany**: `parsed → pending → committed` (lub `cancelled`).
 

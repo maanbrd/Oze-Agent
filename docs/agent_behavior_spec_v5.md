@@ -1,6 +1,6 @@
 # OZE-Agent — Behavior Spec v5
 
-_Last updated: 11.04.2026 popołudnie — synchronizacja po Sesji 1 Regresja i zamrożeniu kontraktów intencji MVP (`INTENCJE_MVP.md`, `SOURCE_OF_TRUTH.md` sekcja 4 z 11.04). Zmiany od poprzedniej wersji: (a) wszystkie specs techniczne (włącznie z mocą) idą do Notatek — wycofano decyzję "moc doklejona do produktu" z 10.04 wieczór, (b) karty mutacyjne mają 3 przyciski `✅ Zapisać / ➕ Dopisać / ❌ Anulować` zamiast starego `[Tak][Nie]` / `[Tak][Zapisz bez]`, (c) `next_action_prompt` PRZYWRÓCONY jako wolnotekstowe pytanie po commit mutacji (odwrócenie "R4 usunięta" z 10.04), (d) "Negocjacje" wycięte z lejka (9 statusów, nie 10), (e) "Klimatyzacja" wycięta z listy produktów, (f) schemat Sheets zamrożony na 16 kolumn, (g) zakres MVP ograniczony do 6 intencji — `edit_client`, `lejek_sprzedazowy`, `filtruj_klientów`, `reschedule`, `free_slots` są POST-MVP._
+_Last updated: 11.04.2026 popołudnie — synchronizacja po Sesji 1 Regresja i zamrożeniu kontraktów intencji MVP (`INTENCJE_MVP.md`, `SOURCE_OF_TRUTH.md` sekcja 4 z 11.04). Zmiany od poprzedniej wersji: (a) wszystkie specs techniczne (włącznie z mocą) idą do Notatek — wycofano decyzję "moc doklejona do produktu" z 10.04 wieczór, (b) karty mutacyjne mają 3 przyciski `✅ Zapisać / ➕ Dopisać / ❌ Anulować` zamiast starego `[Tak][Nie]` / `, (c) `next_action_prompt` PRZYWRÓCONY jako wolnotekstowe pytanie po commit mutacji (odwrócenie "R4 usunięta" z 10.04), (d) "Negocjacje" wycięte z lejka (9 statusów, nie 10), (e) "Klimatyzacja" wycięta z listy produktów, (f) schemat Sheets zamrożony na 16 kolumn, (g) zakres MVP ograniczony do 6 intencji — `edit_client`, `lejek_sprzedazowy`, `filtruj_klientów`, `reschedule`, `free_slots` są POST-MVP._
 
 Wersja na bazie 8 rund testów Telegram + Sesji 1 Regresja (52 testy akceptacyjne).
 Definiuje KIM jest agent, JAK się komunikuje i CO robi.
@@ -26,7 +26,7 @@ NIGDY nie zapisuj bez jawnego kliknięcia `✅ Zapisać`. Wzorzec karty mutacyjn
 1. Pokaż co zrozumiałeś (pola, które poszły tam, gdzie powinny)
 2. Lista WSZYSTKICH brakujących pól opcjonalnych-ale-ważnych naraz (email, źródło, telefon, adres, produkt — **nigdy** specs techniczne typu metraż/dach/moc)
 3. Trzy przyciski: `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`
-4. Na `✅` — commit do Sheets/Calendar zgodnie z kontraktem intencji (`INTENCJE_MVP.md`)
+4. Na `✅` — commit do Sheets/Calendar/Drive zgodnie z kontraktem intencji (`INTENCJE_MVP.md`)
 
 **Semantyka przycisków:**
 - `✅ Zapisać` (zielony) — commit, karta znika, potem ewentualnie `next_action_prompt` (R7)
@@ -89,7 +89,13 @@ Identyfikacja klienta zawsze po **imieniu i nazwisku + miejscowość**. Nigdy sa
 - **Match ≥ 2:** multi-match disambiguation (lista z pełnym imieniem + miasto + data pierwszego kontaktu), handlowiec wybiera numerem
 - **Brak miasta w inpucie + ≥ 1 wynik po imieniu+nazwisku:** agent dopyta "Który Kowalski — Warszawa czy Piaseczno?" zanim cokolwiek zrobi
 
-Stary wzorzec `[Nowy][Aktualizuj]` **przestaje istnieć** — agent domyślnie dopisuje do istniejącego, handlowiec ma `❌ Anulować` jeśli chce zatrzymać. Uzasadnienie: handlowiec rzadko chce duplikować klienta; standardowy przypadek "wracam do Jana Kowalskiego z notatką" ma być zero-friction.
+**Duplicate resolution (updated 13.04.2026):**
+- **Match = 1, pewny:** agent wyciąga istniejącego klienta i proponuje aktualizację
+- **Match = 1, niepewny / user chce jawnie dodać duplikat:** agent pokazuje `[Nowy]` / `[Aktualizuj]`
+  - `[Nowy]` = dodaj drugi osobny rekord
+  - `[Aktualizuj]` = nadpisz/uzupełnij dane istniejącego klienta
+- Przyciski `[Nowy]` / `[Aktualizuj]` są dopuszczalne w duplicate resolution — to routing decision, nie karta mutacyjna
+- Stary "domyślnie dopisz bez pytania" zastąpiony jawnym wyborem przy niepewności
 
 **Konflikt kalendarza** (gdy `add_meeting` trafia na zajęty slot): agent pokazuje kartę z ostrzeżeniem w treści i trzema standardowymi przyciskami:
 \`\`\`
@@ -174,6 +180,30 @@ Nigdy sam numer, nigdy bez dnia tygodnia.
 ### Pola wewnętrzne
 
 Nigdy nie pokazuj: `_row`, `_sheet_id`, nazw arkuszy, surowych wartości z API.
+
+### Wyświetlanie danych klienta (decyzja 13.04.2026)
+
+`show_client` wyświetla **wszystkie uzupełnione kolumny** z Sheets z wyjątkiem:
+- Zdjęcia (kolumna N)
+- Link do zdjęć (kolumna O)
+- ID wydarzenia Kalendarz (kolumna P)
+
+Puste pola nie są wyświetlane. Daty w formacie DD.MM.YYYY (Dzień tygodnia).
+
+### Calendar ↔ Sheets sync (decyzja 13.04.2026)
+
+Gdy `add_meeting` commituje → aktualizuj w Sheets:
+- `Data ostatniego kontaktu` (J) = dziś
+- `Data następnego kroku` (L) = data spotkania
+- `Następny krok` (K) = typ spotkania
+
+Gdy termin w Calendar jest przenoszony → aktualizuj `Data następnego kroku` w Sheets.
+
+### Polityka przycisków (decyzja 13.04.2026)
+
+- `[Tak]` / `[Nie]` NIE zastępuje R1 mutation card, ale jest dopuszczalne w prostych pytaniach binarnych
+- `[Nowy]` / `[Aktualizuj]` dopuszczalne przy duplicate resolution
+- `change_status` karta ma 2 przyciski: `[✅ Zapisać]` `[❌ Anulować]`
 
 ### 'Brakuje:'
 
