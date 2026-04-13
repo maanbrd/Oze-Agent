@@ -1121,9 +1121,42 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ---
 
+## Sesja O — ZAKOŃCZONA (13.04.2026)
+
+Commit: `91fe4b5`
+
+### Naprawione w Sesji O
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-A4-1 | Classifier false-positive edit_client — usunięto szerokie przykłady "ma nowy numer/telefon" → edit_client. Teraz edit_client TYLKO gdy jawne "zmień/zaktualizuj/popraw + pole + na + wartość". Ambiguous inputs → add_client (R4 merge). Usunięto szeroką regułę "danych ISTNIEJĄCEGO klienta → edit_client" | `shared/claude_ai.py` `classify_intent` |
+| Bug #8 | Multi-meeting parser gubił imię w odmienionej formie — wzmocniono WAŻNE: "kto? co?" framing, dodano "Dotyczy KAŻDEGO spotkania w liście", konkretne przykłady z imionami w dopełniaczu → mianownik | `shared/claude_ai.py` `extract_meeting_data` |
+
+### Testy do wykonania po restarcie bota (Sesja O)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| O-T1 | "Jan Nowak ma nowy numer 609222333" | add_client (NIE edit_client R5 banner) — pójdzie przez R4 duplicate detection |
+| O-T2 | "nowy telefon Jana Kowalskiego to 601000222" | add_client (NIE edit_client R5 banner) |
+| O-T3 | "zmień telefon Jana Nowaka na 601234567" | edit_client R5 banner (jawna poprawka — poprawne) |
+| O-T4 | "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → Zapisać | 2 spotkania: meetings[0].client_name="Jan Nowak", meetings[1].client_name="Anna Kowalska" (mianownik, NIE genetyw) |
+
+### Pozostałe otwarte bugi po Sesji O
+
+| ID | Status | Priorytet |
+|----|--------|-----------|
+| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
+| bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
+| bug-A4-1 | ✅ NAPRAWIONE (Sesja O, do potwierdzenia O-T1–O-T3) | — |
+| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification z Maanem | LOW |
+| Bug #8 | ✅ NAPRAWIONE (Sesja O, do potwierdzenia O-T4) | — |
+
+---
+
 ## Sesja N — ZAKOŃCZONA (13.04.2026)
 
-### Naprawione w Sesji N (commit TBD, 13.04.2026)
+### Naprawione w Sesji N (commit `65e1470`, 13.04.2026)
 
 | ID | Co naprawiono | Plik |
 |----|---------------|------|
