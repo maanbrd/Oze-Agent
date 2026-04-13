@@ -47,7 +47,7 @@ Phase 7: Error handling + lejek POST-MVP banner      ⏳ TODO
 |----|-----------------|-----------|
 | bug-A1-1 | Zmień nazwę kolumny P w arkuszu: "ID kalendarza" → "ID wydarzenia Kalendarz". Potem wpisz `odśwież kolumny` w bocie | HIGH |
 | bug-B1-1 | Usuń pustą kolumnę bez nagłówka na pozycji 14 (między "Źródło pozyskania" a "Zdjęcia"). Potem `odśwież kolumny` | HIGH |
-| bug-B3-1 | Decyzja: czy `[➕ Dopisać]` ma być na karcie change_status? Jeśli nie — zmienię na 2 przyciski [Zapisać][Anulować] | LOW |
+| bug-B3-1 | ✅ NAPRAWIONE — change_status ma teraz 2 przyciski [Zapisać][Anulować] (bez Dopisać) | — |
 
 ### Naprawione (pełna lista — 27 bugów)
 
@@ -1323,7 +1323,7 @@ Commit: `91fe4b5`
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
 | bug-A4-1 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T1–O-T3) | — |
-| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification z Maanem | LOW |
+| bug-B3-1 | ✅ NAPRAWIONE (Sesja P) — 2 przyciski na change_status | — |
 | Bug #8 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T4) | — |
 
 ---
@@ -1354,7 +1354,7 @@ Commit: `91fe4b5`
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
 | bug-A4-1 | ✅ NAPRAWIONE (Sesja O) | — |
-| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
+| bug-B3-1 | ✅ NAPRAWIONE (Sesja P) — 2 przyciski na change_status | — |
 | Bug #8 | ✅ NAPRAWIONE (Sesja O) | — |
 
 ---
@@ -1410,7 +1410,7 @@ Commit: `91fe4b5`
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
 | bug-A4-1 | ✅ NAPRAWIONE (Sesja O) | — |
 | bug-A4-2 | ✅ NAPRAWIONE (Sesja N) | — |
-| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
+| bug-B3-1 | ✅ NAPRAWIONE (Sesja P) — 2 przyciski na change_status | — |
 | Bug #8 | ✅ NAPRAWIONE (Sesja O) | — |
 
 ---
@@ -1527,7 +1527,7 @@ Commit: `91fe4b5`
 |----|-------|-------------|-----------|
 | bug-A4-1 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T1–O-T3) | `classify_intent` system prompt | — |
 | bug-A4-2 | ✅ NAPRAWIONE (Sesja N, potwierdzone N-T2) — R7 pali po "Dopisz do istniejącego" merge | `_handle_duplicate_merge` w `buttons.py` | — |
-| bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
+| bug-B3-1 | ✅ NAPRAWIONE (Sesja P) — change_status ma teraz `build_confirm_cancel_buttons` (2 przyciski: Zapisać + Anulować, bez Dopisać) | `text.py` + `buttons.py` + `telegram_helpers.py` | — |
 | bug-A1-4 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T1+M-T3) — "Co dalej — Anna Retest (Kraków)?" zamiast "Co dalej z X z Y" | `send_next_action_prompt` | — |
 | Bug #8 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T4) | `extract_meeting_data` | — |
 | Bug #10 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T2) — "Spotkanie — Anna Retest" zamiast "Spotkanie z X" | `_enrich_meeting` | — |

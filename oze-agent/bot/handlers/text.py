@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 
 from bot.utils.telegram_helpers import (
     build_mutation_buttons,
+    build_confirm_cancel_buttons,
     build_duplicate_buttons,
     build_choice_buttons,
     check_interaction_limit,
@@ -1435,7 +1436,7 @@ async def handle_change_status(
     await update.effective_message.reply_markdown_v2(
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
         + format_edit_comparison("Status", old_status, new_status),
-        reply_markup=build_mutation_buttons("confirm"),
+        reply_markup=build_confirm_cancel_buttons("confirm"),
     )
 
 

@@ -156,6 +156,17 @@ def build_mutation_buttons(pending_id: str) -> InlineKeyboardMarkup:
     ]])
 
 
+def build_confirm_cancel_buttons(pending_id: str) -> InlineKeyboardMarkup:
+    """Return 2-button keyboard for single-field mutations (e.g. change_status).
+
+    [✅ Zapisać]  [❌ Anulować]
+    """
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Zapisać", callback_data=f"save:{pending_id}"),
+        InlineKeyboardButton("❌ Anulować", callback_data=f"cancel:{pending_id}"),
+    ]])
+
+
 def build_duplicate_buttons(pending_id: str) -> InlineKeyboardMarkup:
     """Return R4-compliant 2-button duplicate disambiguation keyboard.
 
