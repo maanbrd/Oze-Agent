@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 12.04.2026 — Sesja K: fix bug-E9-6 (_fuzzy_match city false-positive) + J-T1/J-T2 Notatki wording_
+_Last updated: 13.04.2026 — Sesja M: fix bug-A1-4 (R7 prompt accusative) + Bug #10 (calendar title declension)_
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -759,7 +759,10 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch H: 4/6 ✅, 2/6 ⚠️, 0/6 ❌
 - Batch I: 5/5 ✅, 0/5 ⚠️, 0/5 ❌
 - Batch J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌
-- **Razem: 191/268 ✅ (71%), 30/268 ⚠️ (11%), 42/268 ❌ (16%)**
+- Batch K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌
+- Batch L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌
+- Batch M: TBD (testy po deploy)
+- **Razem: 197/276 ✅ (71%), 30/276 ⚠️ (11%), 44/276 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -1070,6 +1073,81 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | K-T4 | Regression: "pokaż Jan Kowalski Warszawa" | Karta Jana Kowalskiego z Warszawy — NIE fałszywy Wrocław match |
 | K-T5 | Regression: "wrocław" (single word city search) | Disambiguation list klientów z Wrocławia — single-word city search nadal działa |
 
+### Wyniki Batch K (5 testów, bug-fix verification) — 12.04.2026, 22:49-23:07
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| K-T1 | bug-E9-6: add_note pending + unrelated "pokaż Michała Grabowskiego z Kielc" | ❌ FAIL | Flow NIE został anulowany. Bot potraktował unrelated message jako Dopisać — dodał tekst do notatki: "dzwonił pokaż Michała Grabowskiego z Kielc". `_route_pending_flow` dla add_note appenduje tekst zamiast sprawdzać czy to unrelated intent. bug-E9-6 NIE naprawiony dla add_note pending flow |
+| K-T2 | klimatyzacja solo → Notatki wording | ✅ PASS | Produkt: puste ✅, Notatki: "Produkt nieobsługiwany: klimatyzacja" ✅ (standard wording). bug-B2-1 Notatki fix potwierdzone |
+| K-T3 | "PV i klimatyzacja" → compound split | ✅ PASS | Produkt: "PV" ✅, Notatki: "Produkt nieobsługiwany: klimatyzacja" ✅. Compound product split + standard wording |
+| K-T4 | Regression: "pokaż Jan Kowalski Warszawa" | ✅ PASS | Karta Jan Kowalski, Warszawa, Pompa ciepła — read-only, bez fałszywego Wrocław match. `_fuzzy_match` fix działa poprawnie |
+| K-T5 | Regression: "wrocław" single word city search | ❌ FAIL | Bot odpowiedział "Ta funkcja jest w przygotowaniu. Niedługo dostępna." zamiast disambiguation klientów z Wrocławia. Classifier nie rozpoznaje gołego "wrocław" jako show_client. Nie jest to regresja `_fuzzy_match` — message nigdy nie dociera do search logic bo classifier odrzuca |
+
+**Wynik K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌**
+
+---
+
+## Sesja L — ZAKOŃCZONA (12.04.2026)
+
+### Naprawione w Sesji L (commit `eaddb75`, 12.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-E9-6 (add_note leak) | `_route_pending_flow` add_note branch teraz sprawdza `_search_prefixes` przed appendowaniem tekstu. Wiadomości z "pokaż", "znajdź", "zmień status", itd. → `delete_pending_flow` + "⚠️ Anulowane." + `return False` (re-routing). Identyczna logika jak w add_client guard (linia ~259) | `bot/handlers/text.py` |
+| K-T5 (bare city classifier) | `classify_intent` prompt — dodano przykład: `"wrocław" / sama nazwa miasta → show_client, entities: {"city": "..."}` + WAŻNE rule | `shared/claude_ai.py` |
+
+### Testy do wykonania po deploy (Sesja L)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| L-T1 | K-T1 retest: "dodaj notatkę do Jana Kowalskiego: dzwonił" → karta add_note + 3 buttons → wpisz "pokaż Michała Grabowskiego z Kielc" | "⚠️ Anulowane." + karta Michała Grabowskiego (fresh routing) |
+| L-T2 | K-T5 retest: "wrocław" (single word) | Disambiguation list klientów z Wrocławia (show_client), NIE "Ta funkcja jest w przygotowaniu" |
+| L-T3 | Regression: add_note "Marcin Kowalski Gdańsk: dzwonił" → Dopisać → "i chce rabat" | Karta 📝 z notatką "dzwonił i chce rabat" (Dopisać flow nadal działa po dodaniu guard) |
+
+### Wyniki Batch L (3 testy, bug-fix verification) — 12.04.2026, 23:32-23:38
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| L-T1 | bug-E9-6: add_note pending + "pokaż Michała Grabowskiego z Kielc" | ✅ PASS | "⚠️ Anulowane." + karta Michała Grabowskiego (Kielce, 510620730, Nowy lead, PV). `_search_prefixes` guard w add_note branch działa — "pokaż" triggeruje cancel + fresh routing. bug-E9-6 NAPRAWIONY |
+| L-T2 | "wrocław" single word → show_client | ✅ PASS | Bot znalazł Krzysztofa Dąbrowskiego z Wrocławia: "Nie mam 'wrocław'. Chodziło o Krzysztof Dąbrowski z Wrocław?" z [Tak, pokaż][Nie]. Classifier rozpoznaje bare city → show_client. Jeden klient w Wrocławiu → confirmation zamiast disambiguation list (correct). K-T5 fix potwierdzone |
+| L-T3 | Regression: add_note Dopisać "dzwonił" + "i chce rabat" | ✅ PASS | Karta: "Marcin Kowalski, Gdańsk: dodaj notatkę 'dzwonił i chce rabat'?" z 3 buttons. Dopisać appenduje tekst poprawnie — guard nie blokuje legitimate Dopisać input |
+
+**Wynik L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌**
+
+---
+
+## Sesja M — ZAKOŃCZONA (13.04.2026)
+
+### Naprawione w Sesji M (commit TBD, 13.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-A1-4 | R7 prompt "Co dalej z Jan Nowak z Gdańsk" (błędna składnia) → "Co dalej — Jan Nowak (Gdańsk)?" — nazwa w mianowniku, bez prefiksów wymagających odmiany. Zmieniono format `name_city` z `"{name} z {city}"` na `"{name} ({city})"` | `bot/handlers/text.py` `send_next_action_prompt` |
+| Bug #10 | Tytuł zdarzenia kalendarza "Spotkanie z Jan Mazur" (bez odmiany) → "Spotkanie — Jan Mazur" — myślnik zamiast "z X" eliminuje potrzebę narzędnika. Zmiana w `_enrich_meeting` | `bot/handlers/text.py` `_enrich_meeting` |
+
+### Testy do wykonania po deploy (Sesja M)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| M-T1 | add_client "Piotr Testowy Lublin PV 509111222" → Zapisać | R7 prompt: "Co dalej — Piotr Testowy (Lublin)? Spotkanie, telefon, mail, odłożyć na później?" (NIE "Co dalej z Piotr Testowy z Lublin") |
+| M-T2 | add_meeting "Jan Kowalski Warszawa jutro o 10" → Zapisać → sprawdź Google Calendar | Tytuł: "Spotkanie — Jan Kowalski" (NIE "Spotkanie z Jan Kowalski") |
+| M-T3 (regression) | change_status "Marcin Kowalski Gdańsk na Podpisane" → Zapisać | R7 prompt pojawia się z nowym formatem (bez broken Polish) |
+| M-T4 (regression) | add_note "Jan Kowalski Warszawa: dzwonił" → Zapisać | Brak R7 po add_note (zamknięty akt per spec) |
+
+### Pozostałe otwarte bugi po Sesji M
+
+| ID | Status | Priorytet |
+|----|--------|-----------|
+| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
+| bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
+| bug-A4-1 | Classifier false-positive edit_client na niejednoznacznych inputach → R5 banner | MEDIUM |
+| bug-A4-2 | R7 nie pali po merge-path (A-T4) — wymaga spec-clarification | LOW |
+| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
+| Bug #8 | Multi-meeting parser gubi imię w odmienionej formie | MEDIUM |
+
+---
+
 ### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
 
 | ID | Co naprawiono | Plik |
@@ -1140,7 +1218,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
 | bug-B2-1 | ✅ NAPRAWIONE (Sesja J+K) | Sesja J: odrzuca z Produkt. Sesja K: normalizuje gdy LLM pisze do Notatki bezpośrednio | — |
 | bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
-| bug-E9-6 | ✅ NAPRAWIONE (Sesja K) | `_fuzzy_match` `v in q` check ograniczony — city nie matchuje name+city queries | — |
+| bug-E9-6 | ✅ NAPRAWIONE (Sesja K+L) — Sesja K: `_fuzzy_match` city false-positive (K-T4 ✅). Sesja L: `_route_pending_flow` add_note `_search_prefixes` guard (L-T1 ✅). Oba root causes naprawione | `_fuzzy_match` + `_route_pending_flow` | — |
 | bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
 ### Nowe otwarte
@@ -1161,9 +1239,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-A4-1 | Classifier false-positive edit_client na ambiguous inputs → R5 banner zamiast właściwej akcji | `classify_intent` system prompt | MEDIUM |
 | bug-A4-2 | R7 nie pali po merge-path (A-T4 R4 "Dopisz do istniejącego") — do ustalenia z Maanem czy spec wymaga R7 po merge | `_handle_duplicate_merge` w `buttons.py` | LOW (do spec-clarification) |
 | bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
-| bug-A1-4 | "Co dalej z Jan Nowak" zamiast "Co dalej z Janem Nowakiem" — brak narzędnika w R7 | `send_next_action_prompt` (format stringa) | LOW |
+| bug-A1-4 | ✅ NAPRAWIONE (Sesja M) — "Co dalej — Jan Nowak (Gdańsk)?" zamiast "Co dalej z Jan Nowak z Gdańsk" | `send_next_action_prompt` | — |
 | Bug #8 | Multi-meeting parser gubi imię gdy odmienione formy | `extract_meeting_data` | MEDIUM |
-| Bug #10 | "Spotkanie z Jan Mazur" bez odmiany | `_enrich_meeting` | LOW |
+| Bug #10 | ✅ NAPRAWIONE (Sesja M) — "Spotkanie — Jan Mazur" zamiast "Spotkanie z Jan Mazur" | `_enrich_meeting` | — |
 
 ### Zamknięte przez Sesje A–C
 
@@ -1259,6 +1337,9 @@ Testy: 7/12 PASS, 3/12 krytyczne (C-T4 prawdziwy bug, B-T2 deployment, C-T2 ocze
 - R7 next_action_prompt po add_client commit
 - Wyszukiwanie — fuzzy match, diakrytyki, odmiana
 - Format daty DD.MM.YYYY (Dzień tygodnia)
+- Flow state cancel — unrelated message during add_note/add_client pending → "⚠️ Anulowane." + fresh routing (L-T1)
+- Bare city search — "wrocław" → show_client z klientem z Wrocławia (L-T2)
+- Dopisać guard — `_search_prefixes` nie blokuje legitimate Dopisać text (L-T3)
 
 ---
 

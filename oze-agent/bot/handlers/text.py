@@ -1066,7 +1066,7 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
                 parts.append(f"Następny krok: {client['Następny krok']}")
             description = "\n".join(parts)
 
-    title = f"Spotkanie z {full_name}" if full_name else "Spotkanie"
+    title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
     return {"title": title, "location": location, "description": description, "full_name": full_name}
 
 
@@ -1669,10 +1669,10 @@ async def send_next_action_prompt(
     Saves an r7_prompt pending flow. The user's reply is handled in
     _route_pending_flow: temporal → add_meeting, otherwise → close silently.
     """
-    name_city = f"{client_name} z {city}" if city else client_name
+    name_city = f"{client_name} ({city})" if city else client_name
     save_pending_flow(telegram_id, "r7_prompt", {"client_name": client_name, "city": city})
     await update.effective_message.reply_text(
-        f"Co dalej z {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
+        f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
         reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
     )
 
