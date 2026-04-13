@@ -97,7 +97,9 @@ Standardowa karta mutacyjna ma trzy akcje:
 `❌ Anulować` jest one-click cancel.
 Nie ma drugiego pytania „na pewno?”.
 
-Stare wzorce `[Tak]`, `[Nie]`, `[Nowy]`, `[Aktualizuj]`, `[Zapisz bez]` nie są aktualnym standardem UX.
+`[Nowy]` / `[Aktualizuj]` dopuszczalne przy duplicate resolution (routing decision).
+`[Tak]` / `[Nie]` dopuszczalne przy prostych pytaniach binarnych (nie jako potwierdzenie zapisu).
+`[Zapisz bez]` retired.
 
 ### Google vs Supabase
 
@@ -135,6 +137,7 @@ Na dziś poza aktualnym MVP / selective rewrite są:
 - `free_slots`
 - import CSV / Excel
 - pełny dashboard
+- limit interakcji dziennych (100/dzień z pożyczaniem — wizja, nie MVP)
 
 `poznaj_swojego_agenta_v5_FINAL.md` może opisywać te funkcje jako wizję produktu, ale nie oznacza to, że są częścią obecnej implementacji.
 

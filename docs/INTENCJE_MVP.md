@@ -402,7 +402,7 @@ Każda mutacja, która wygląda jak `add_client` albo `add_note`, przechodzi prz
 
 1. Parser wyciąga `imię + nazwisko + miasto` (jeśli podane).
 2. Agent odpyta Sheets o istniejących klientów po tym kluczu.
-3. **Jeśli match = 1** → agent nie tworzy nowego klienta; mutacja idzie na istniejący wiersz jako `add_note`/`change_status`/`add_meeting` (zależnie od treści). Na karcie pojawia się banner: `⚠️ Ten klient już istnieje — dopiszę do wiersza z 05.04.2026`.
+3. **Jeśli match = 1** → agent pokazuje dane istniejącego klienta + `[Nowy]` / `[Aktualizuj]`. `[Aktualizuj]` = merge do istniejącego wiersza. `[Nowy]` = utwórz osobny rekord. To jest routing decision, nie karta mutacyjna — R1 mutation card pojawia się po wyborze.
 4. **Jeśli match ≥ 2** → multi-match disambiguation (numerowana lista miast/dat pierwszego kontaktu), handlowiec wybiera.
 5. **Jeśli match = 0** → normalny flow `add_client`.
 6. **Jeśli brak miasta w inpucie**, a po imieniu+nazwisku jest ≥ 1 wynik → agent dopyta "Który Kowalski — Warszawa czy Piaseczno?" zanim zacznie tworzyć cokolwiek.
@@ -453,6 +453,8 @@ Nie pokazujemy pustych pól. Nie pokazujemy surowych danych technicznych (`_row`
 `[Tak]` / `[Nie]` **NIE zastępuje** karty zapisu do Sheets/Calendar/Drive. Jest dopuszczalne tylko w pytaniach binarnych nie-mutacyjnych.
 
 Każda intencja mutująca przechodzi przez **3 stany**: `parsed → pending → committed` (lub `cancelled`).
+
+> **Uwaga:** poniższy diagram używa starego [Tak]/[Nie]. Aktualne przyciski: sekcja 5.0 i 5.6.
 
 ```
        user input

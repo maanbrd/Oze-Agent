@@ -1,11 +1,10 @@
 # OZE-Agent — Behavior Spec v5
 
-_Last updated: 11.04.2026 popołudnie — synchronizacja po Sesji 1 Regresja i zamrożeniu kontraktów intencji MVP (`INTENCJE_MVP.md`, `SOURCE_OF_TRUTH.md` sekcja 4 z 11.04). Zmiany od poprzedniej wersji: (a) wszystkie specs techniczne (włącznie z mocą) idą do Notatek — wycofano decyzję "moc doklejona do produktu" z 10.04 wieczór, (b) karty mutacyjne mają 3 przyciski `✅ Zapisać / ➕ Dopisać / ❌ Anulować` zamiast starego `[Tak][Nie]` / `, (c) `next_action_prompt` PRZYWRÓCONY jako wolnotekstowe pytanie po commit mutacji (odwrócenie "R4 usunięta" z 10.04), (d) "Negocjacje" wycięte z lejka (9 statusów, nie 10), (e) "Klimatyzacja" wycięta z listy produktów, (f) schemat Sheets zamrożony na 16 kolumn, (g) zakres MVP ograniczony do 6 intencji — `edit_client`, `lejek_sprzedazowy`, `filtruj_klientów`, `reschedule`, `free_slots` są POST-MVP._
+_Last updated: 13.04.2026._
 
-Wersja na bazie 8 rund testów Telegram + Sesji 1 Regresja (52 testy akceptacyjne).
 Definiuje KIM jest agent, JAK się komunikuje i CO robi.
 
-**Hierarchia SSOT:** ten plik jest #3 w kolejności pierwszeństwa, po `SOURCE_OF_TRUTH.md` (#1) i `INTENCJE_MVP.md` (#2). W razie konfliktu z #2 — wygrywa `INTENCJE_MVP.md`.
+**Hierarchia SSOT:** ten plik jest #7 per `SOURCE_OF_TRUTH.md` sekcja 5. W razie konfliktu z wyżej rankowanym plikiem — wygrywa wyższy.
 
 ---
 
@@ -84,18 +83,17 @@ Compound fusion **nie obejmuje** dwóch `change_status` pod rząd ani `add_note`
 Identyfikacja klienta zawsze po **imieniu i nazwisku + miejscowość**. Nigdy samo nazwisko.
 
 **Detekcja istniejącego klienta przed `add_client`** (patrz `INTENCJE_MVP.md` sekcja 5.3): zanim agent pokaże kartę nowego klienta, sprawdza, czy imię+nazwisko+miasto już istnieje w Sheets.
+
 - **Match = 0:** normalny flow `add_client`, pokazuje kartę z `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`
-- **Match = 1:** agent domyślnie routuje intencję na istniejący wiersz (jako `add_note` / `change_status` / `add_meeting` zależnie od treści), pokazuje banner `⚠️ Ten klient już istnieje — dopiszę do wiersza z DD.MM.YYYY` i kartę mutacji istniejącego klienta
+- **Match = 1:** agent pokazuje dane istniejącego klienta + `[Nowy]` / `[Aktualizuj]`. `[Aktualizuj]` = merge do istniejącego wiersza. `[Nowy]` = utwórz osobny rekord
 - **Match ≥ 2:** multi-match disambiguation (lista z pełnym imieniem + miasto + data pierwszego kontaktu), handlowiec wybiera numerem
 - **Brak miasta w inpucie + ≥ 1 wynik po imieniu+nazwisku:** agent dopyta "Który Kowalski — Warszawa czy Piaseczno?" zanim cokolwiek zrobi
 
-**Duplicate resolution (updated 13.04.2026):**
-- **Match = 1, pewny:** agent wyciąga istniejącego klienta i proponuje aktualizację
-- **Match = 1, niepewny / user chce jawnie dodać duplikat:** agent pokazuje `[Nowy]` / `[Aktualizuj]`
-  - `[Nowy]` = dodaj drugi osobny rekord
-  - `[Aktualizuj]` = nadpisz/uzupełnij dane istniejącego klienta
-- Przyciski `[Nowy]` / `[Aktualizuj]` są dopuszczalne w duplicate resolution — to routing decision, nie karta mutacyjna
-- Stary "domyślnie dopisz bez pytania" zastąpiony jawnym wyborem przy niepewności
+`[Nowy]` / `[Aktualizuj]` to routing decision — nie karta mutacyjna. R1 mutation card pojawia się dopiero po wyborze jednej z opcji.
+
+### Auto-przejście statusu (decyzja 13.04.2026)
+
+Gdy `add_meeting(in_person)` i klient ma status `Nowy lead` → karta spotkania proponuje automatyczną zmianę statusu na `Spotkanie umówione`. Handlowiec widzi to na karcie przed Zapisać.
 
 **Konflikt kalendarza** (gdy `add_meeting` trafia na zajęty slot): agent pokazuje kartę z ostrzeżeniem w treści i trzema standardowymi przyciskami:
 \`\`\`

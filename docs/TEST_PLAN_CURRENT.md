@@ -74,6 +74,7 @@ Tests are manual Telegram tests unless stated otherwise.
 | AM-4 | Past date | "Data X jest w przeszłości. Podaj datę przyszłą." |
 | AM-5 | Calendar conflict | Warning shown on card: "masz już spotkanie o tej porze" |
 | AM-6 | Calendar event created after Zapisać | Event in Calendar with title, location, description from Sheets |
+| AM-7 | add_meeting with client in "Nowy lead" status | Card shows "Status: Nowy lead → Spotkanie umówione" auto-transition |
 
 ---
 

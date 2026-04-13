@@ -97,7 +97,13 @@ Mutation cards use:
 
 `❌ Anulować` is one-click cancel.
 
-Old confirmation patterns like `[Tak]`, `[Nie]`, `[Nowy]`, `[Aktualizuj]`, `[Zapisz bez]` are not the current UX standard unless an active SSOT document explicitly says otherwise.
+`change_status` cards use 2 buttons only: `✅ Zapisać` + `❌ Anulować` (no Dopisać).
+
+`[Nowy]` / `[Aktualizuj]` is allowed for duplicate resolution (routing decision, not mutation confirmation).
+
+`[Tak]` / `[Nie]` is allowed for simple binary questions, but NEVER as mutation confirmation.
+
+`[Zapisz bez]` is retired.
 
 ### Data ownership
 
