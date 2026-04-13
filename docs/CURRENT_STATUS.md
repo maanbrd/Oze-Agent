@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Sesja P kontynuacja: naprawiamy bug-P4-1 (add_meeting R4 client check) + bug-P8-1 (bare last name disambiguation)._
+_Last updated: 13.04.2026 — Sesja P runda 3: cofnięto bug-P4-1 client check (zbyt agresywny — blokował spotkania z klientami spoza bazy). bug-P8-1 ✅. Retest P3._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -765,7 +765,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch N: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
 - Batch O: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
 - Batch P: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
-- **Razem: 214/296 ✅ (72%), 31/296 ⚠️ (10%), 46/296 ❌ (16%)**
+- Batch P2: 4/5 ✅, 0/5 ⚠️, 1/5 ❌
+- **Razem: 218/301 ✅ (72%), 31/301 ⚠️ (10%), 47/301 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -1187,6 +1188,35 @@ Pełny retest F-T1–F-T8 (bug-E6-1/E10-2/E10-7 fix verification):
 | P2-T3 | add_meeting "Jan Mazur Radom jutro o 10" | Direct match: karta spotkania Jan Mazur ✅ (regresja check — istniejący klient) |
 | P2-T4 | show_client "Jan Kowalski Warszawa" | Direct match: read-only card (regresja check — 2+ słowa query) |
 | P2-T5 | add_meeting "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" | 2 spotkania (regresja check multi-meeting z istniejącymi klientami) |
+
+### Wyniki Batch P2 (5 testów, 13.04.2026, 14:37-14:39)
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| P2-T1 | add_meeting "Ewa Mazur Szczecin środa 14:00" | ✅ PASS | "Nie znalazłem klienta: 'Ewa Mazur'" — bug-P4-1 fix potwierdzone! |
+| P2-T2 | show_client "Kowalski" (bare last name) | ✅ PASS | Disambiguation: "Mam 2 klientów: 1. Jan Kowalski — Warszawa, 2. Marcin Kowalski — Gdańsk. Którego?" + przyciski. bug-P8-1 fix potwierdzone! |
+| P2-T3 | add_meeting "Jan Mazur Radom jutro o 10" (regression) | ✅ PASS | Direct match: Klient Jan Mazur, 14.04.2026, 10:00, Radom. Brak regresji |
+| P2-T4 | show_client "Jan Kowalski Warszawa" (regression) | ✅ PASS | Direct match: read-only card. Brak regresji |
+| P2-T5 | multi-meeting "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" | ❌ FAIL | "Nie znalazłem klienta: 'Anna Kowalska'" — client_found verification rejects multi-meeting when client not in DB. Regresja vs O-T4 (które pokazywało 2 spotkania). Anna Kowalska nie istnieje w Sheets |
+
+**Wynik P2: 4/5 ✅, 0/5 ⚠️, 1/5 ❌**
+
+**Nowy bug:**
+- **bug-P2-5**: Multi-meeting z klientem spoza bazy → "Nie znalazłem klienta" zamiast karty spotkania. Regresja po bug-P4-1 fix. `_enrich_meeting` client_found check blokuje całą multi-meeting kartę gdy jeden z klientów nie istnieje. Pytanie produktowe: czy add_meeting powinno wymagać klienta w bazie? (INTENCJE_MVP mówi: "Klient może nie istnieć — handlowiec wpisuje nazwisko ręcznie, spotkanie się dodaje"). Jeśli tak — fix P4-1 jest za agresywny i powinien być cofnięty/ograniczony.
+
+### Runda 3 — cofnięcie bug-P4-1 client check
+
+**Decyzja:** client_found check w `handle_add_meeting` cofnięty. Handlowiec może tworzyć spotkania z klientami spoza bazy (nowy lead, jeszcze nie dodany do CRM). Guard `_first_name_ok` nadal chroni przed ZŁYM klientem (np. "Jan Kowalski" ≠ "Jan Nowak"), ale brak klienta w bazie NIE blokuje spotkania.
+
+bug-P4-1 reklasyfikowany: to nie jest bug — add_meeting tworzy event w Calendar, nie mutuje Sheets. R4 (identyfikacja klienta) dotyczy mutacji CRM (add_note, change_status), ale add_meeting to Calendar event, nie Sheets mutation.
+
+### Testy P3 po restarcie bota
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| P3-T1 | "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" | 2 spotkania: Jan Nowak (enriched) + Anna Kowalska (nie w bazie, ale karta OK) |
+| P3-T2 | "Ewa Mazur Szczecin środa 14:00" | Karta spotkania z "Ewa Mazur" (nie w bazie, ale tworzy event) |
+| P3-T3 | "Jan Mazur Radom jutro o 10" | Direct match: Jan Mazur enriched (regresja check) |
 
 ---
 

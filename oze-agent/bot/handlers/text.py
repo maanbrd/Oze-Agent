@@ -1149,13 +1149,6 @@ async def handle_add_meeting(
 
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
 
-        # R4: client identification required before mutation
-        if m.get("client_name") and not enriched["client_found"]:
-            await update.effective_message.reply_text(
-                f"Nie znalazłem klienta: '{m['client_name']}'"
-            )
-            return
-
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
         if conflicts:
@@ -1203,13 +1196,6 @@ async def handle_add_meeting(
                 continue
 
             enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
-
-            # R4: client identification required before mutation
-            if m.get("client_name") and not enriched["client_found"]:
-                await update.effective_message.reply_text(
-                    f"Nie znalazłem klienta: '{m['client_name']}'"
-                )
-                return
 
             conflicts = await check_conflicts(user_id, start_dt, end_dt)
             if conflicts:
