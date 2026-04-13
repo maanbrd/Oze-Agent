@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Sesja P ZAKOŃCZONA. Wszystkie code-fixable bugi naprawione i potwierdzone. Pozostały: 2 sheet-side (A1-1, B1-1) + 1 spec question (B3-1). Kumulatywnie 221/304 ✅ (73%)._
+_Last updated: 13.04.2026 — Sesja Q: show_day_plan format rewrite (compact per §4.6). Do testowania._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -22,12 +22,9 @@ Phase 2: Sheets — search / status / notes           ✅ GOTOWE (MVP)
   - 2.4 duplicates:        R4 default-merge (D.2). R4 2-button conflict (A-T4 ✅).
 
 Phase 3: Calendar                                    ⚠️ CZĘŚCIOWO
-  - 3.1 add_meeting:       Działa. Temporal guard aktywny.
-  - 3.3 show_day_plan:     Przepisane na handle_show_day_plan (C.2) — bez
-                            free_slots. Nie przetestowane po zmianie.
-  - 3.7 R7 fusion:         ✅ FIX (D krok 1, bug-C4-1): cancel_words
-                            word-boundary — "poniedziałek"/"niedzielę"
-                            nie powodują false-cancel. Do retestowania.
+  - 3.1 add_meeting:       ✅ Działa. Temporal guard, multi-meeting, enrichment.
+  - 3.3 show_day_plan:     Format przepisany na compact (§4.6). Do testowania.
+  - 3.7 R7 fusion:         ✅ FIX (D krok 1, bug-C4-1).
 
 Phase 4: Drive (photos)                              ⏳ TODO
 Phase 5: Voice input                                 ⏳ TODO
@@ -1178,6 +1175,29 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | L-T3 | Regression: add_note Dopisać "dzwonił" + "i chce rabat" | ✅ PASS | Karta: "Marcin Kowalski, Gdańsk: dodaj notatkę 'dzwonił i chce rabat'?" z 3 buttons. Dopisać appenduje tekst poprawnie — guard nie blokuje legitimate Dopisać input |
 
 **Wynik L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌**
+
+---
+
+## Sesja Q — W TOKU (13.04.2026)
+
+Cel: show_day_plan format rewrite — compact format per INTENCJE_MVP.md §4.6.
+
+### Zmiany w Sesji Q
+
+| Plik | Zmiana |
+|------|--------|
+| `shared/formatting.py` | Nowy `format_schedule_entry` (compact one-liner per event) + rewrite `format_daily_schedule` (header z datą DD.MM.YYYY + dzień tygodnia, empty day message) |
+| `bot/handlers/text.py` | `handle_show_day_plan` przekazuje `target` date do `format_daily_schedule` |
+
+### Testy Q do wykonania po restarcie bota
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| Q-T1 | "Co mam dziś?" (z istniejącymi spotkaniami) | Header: "📅 Plan na DD.MM.YYYY (dzień):" + compact entries (HH:MM 🤝 Klient (Miasto) — spotkanie) |
+| Q-T2 | "Co mam w niedzielę?" (pusty dzień) | "Na DD.MM.YYYY (niedziela) nic nie masz w kalendarzu." — 1 linia |
+| Q-T3 | "Plan na jutro" | Poprawna data jutro + header + eventy |
+| Q-T4 | "Plan na piątek" | Day name → następny piątek, poprawna data w header |
+| Q-T5 | "Co mam 15 kwietnia?" | Explicit date → header "📅 Plan na 15.04.2026 (środa):" |
 
 ---
 

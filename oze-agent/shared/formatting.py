@@ -275,14 +275,91 @@ def format_meeting(event: dict) -> str:
     return "\n".join(lines)
 
 
-def format_daily_schedule(events: list[dict]) -> str:
-    """Format a full day's schedule."""
+def _parse_client_from_title(title: str) -> str:
+    """Extract client name from event title like 'Spotkanie — Jan Kowalski'."""
+    if "—" in title:
+        return title.split("—", 1)[1].strip()
+    if "-" in title:
+        return title.split("-", 1)[1].strip()
+    return title
+
+
+def _parse_product_from_description(description: str) -> str:
+    """Extract 'Produkt: X' from event description."""
+    for line in description.split("\n"):
+        if line.startswith("Produkt:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def format_schedule_entry(event: dict) -> str:
+    """Format a single calendar event as a compact schedule line (MarkdownV2).
+
+    Output per INTENCJE_MVP.md §4.6:
+        09:00 🤝 Jan Kowalski \\(Warszawa\\) — spotkanie
+              Kościuszki 15, Warszawa • Produkt: PV
+    """
+    start = event.get("start", "")
+    title = event.get("title", "Spotkanie")
+    location = event.get("location", "")
+    description = event.get("description", "")
+
+    # Time HH:MM
+    time_str = start[11:16] if len(start) >= 16 else "??:??"
+
+    # Client name from title
+    client = _parse_client_from_title(title)
+
+    # City from location (first part or full)
+    city = ""
+    address = ""
+    if location:
+        parts = [p.strip() for p in location.split(",")]
+        if len(parts) >= 2:
+            address = location
+            city = parts[-1]  # last part is usually city
+        else:
+            city = location
+
+    # Build main line
+    city_part = f" \\({_e(city)}\\)" if city else ""
+    main_line = f"{_e(time_str)} 🤝 {_e(client)}{city_part} — spotkanie"
+
+    # Build detail line (address + product) for in-person meetings
+    details = []
+    if address:
+        details.append(_e(address))
+    product = _parse_product_from_description(description)
+    if product:
+        details.append(f"Produkt: {_e(product)}")
+
+    if details:
+        detail_line = "      " + " • ".join(details)
+        return f"{main_line}\n{detail_line}"
+    return main_line
+
+
+def format_daily_schedule(events: list[dict], target_date=None) -> str:
+    """Format a full day's schedule per INTENCJE_MVP.md §4.6.
+
+    Header: 📅 Plan na DD.MM.YYYY (Dzień tygodnia)
+    Empty:  Na DD.MM.YYYY nic nie masz w kalendarzu.
+    """
+    from datetime import date as _date
+    if target_date is None:
+        target_date = _date.today()
+
+    date_str = target_date.strftime("%d.%m.%Y")
+    day_name = _DAYS_PL[target_date.weekday()]
+    header = f"{_e(date_str)} \\({_e(day_name)}\\)"
+
     if not events:
-        return "📭 Brak spotkań na dziś\\."
-    parts = ["📅 *Plan dnia:*\n"]
+        return f"Na {header} nic nie masz w kalendarzu\\."
+
+    lines = [f"📅 *Plan na {header}:*\n"]
     for event in events:
-        parts.append(format_meeting(event))
-    return "\n\n".join(parts)
+        lines.append(format_schedule_entry(event))
+    return "\n".join(lines)
 
 
 # ── Pipeline stats ────────────────────────────────────────────────────────────

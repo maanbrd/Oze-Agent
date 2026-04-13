@@ -1322,7 +1322,7 @@ async def handle_show_day_plan(
     else:
         events = await get_events_for_date(user_id, target)
 
-    schedule = format_daily_schedule(events)
+    schedule = format_daily_schedule(events, target or today)
     await update.effective_message.reply_markdown_v2(schedule)
 
 
