@@ -245,14 +245,12 @@ Przykłady:
 - "Jana Nowaka odbyłem" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
 - "odwiedziłem Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
 - WAŻNE: "się odbyło" / "odbyłem" / "odbyło się" / "odwiedziłem" + imię klienta → change_status "Spotkanie odbyte", NIE "Zamontowana".
-- "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - "zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
 - "zmień numer Jana Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
 - "zaktualizuj telefon Jana Kowalskiego na 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
 - "popraw metraż dachu Jana Nowaka na 45" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "Jan Nowak ma nowy numer 609222333" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "nowy telefon Jana Kowalskiego to 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
-- WAŻNE: wiadomości zawierające "zmień", "zaktualizuj", "popraw", "edytuj", "nowy telefon", "nowy numer", "ma nowy", "nie X a Y" + imię i nazwisko klienta → edit_client, NIE add_client, nawet gdy zawierają numer telefonu.
+- WAŻNE: edit_client TYLKO gdy użytkownik jawnie poprawia istniejące pole kluczowym słowem "zmień", "zaktualizuj", "popraw", "edytuj" + pole + "na" + nowa wartość. BEZ tych słów → NIE edit_client.
+- WAŻNE: "Jan Nowak ma nowy numer 609222333" / "nowy telefon Jana Kowalskiego to 601000222" / "ma numer" + imię → add_client (pójdzie przez R4 merge), NIE edit_client.
 - "kto ma numer 600123456" → show_client, entities: {{"phone": "600123456"}}
 - "pokaż klienta z numerem 501234567" → show_client, entities: {{"phone": "501234567"}}
 - "znajdź klienta po numerze 48601111222" → show_client, entities: {{"phone": "601111222"}}
@@ -265,7 +263,6 @@ Przykłady:
 - "asdkjfhaskdjfh" / losowe znaki / niezrozumiały tekst → general_question, confidence: 0.1
 - WAŻNE: "podpisał", "podpisał kwit/papier/umowę", "klient podpisał" → change_status {{"status": "Podpisane"}}.
 - WAŻNE: "wysłałem X", "rezygnuje", "spadł kwit" → change_status, NIE edit_client.
-- WAŻNE: Jeśli wiadomość dotyczy zmiany danych ISTNIEJĄCEGO klienta (metraż, telefon, notatki, produkt) → edit_client NIE add_client.
 
 Kontekst poprzednich wiadomości:
 {context_str}"""
@@ -374,7 +371,10 @@ Rozumiej polskie wyrażenia dat i czasu:
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
-WAŻNE: client_name zapisuj w mianowniku (nominative): "Jan Nowak" nie "Janem Nowakiem", "Mazur" nie "Mazurem", "Anna Kowalska" nie "Anny Kowalskiej".
+WAŻNE: client_name ZAWSZE w mianowniku (kto? co?): "Jan Nowak" NIE "Janem Nowakiem", "Anna Kowalska" NIE "Anny Kowalskiej", "Mazur" NIE "Mazurem", "Grabowski" NIE "Grabowskim". Dotyczy KAŻDEGO spotkania w liście — sprawdź wszystkie client_name przed zwróceniem.
+Przykłady wielu spotkań z odmienionymi formami:
+- "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00"}}, {{"client_name": "Anna Kowalska", "time": "15:00"}}]
+- "Spotkanie z Markiem Zielińskim jutro o 9 i z Barbarą Wiśniewską o 14" → meetings: [{{"client_name": "Marek Zieliński", "time": "09:00"}}, {{"client_name": "Barbara Wiśniewska", "time": "14:00"}}]
 WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" / "przez telefon" / "rozmowa telefoniczna" → location: "telefonicznie". Gdy brak innego adresu a spotkanie jest telefoniczne — ustaw location na "telefonicznie", nie na miasto klienta."""
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)

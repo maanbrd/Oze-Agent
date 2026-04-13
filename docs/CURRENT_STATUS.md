@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Sesja N: bug-A4-2 + no-conflict merge fix (update_client zamiast add_client). N-T1–N-T4 do wykonania po restarcie bota._
+_Last updated: 13.04.2026 — Batch N potwierdzone 4/4 ✅. Sesja O w toku: naprawiamy bug-A4-1 (classifier) + Bug #8 (multi-meeting declined names)._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -762,7 +762,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌
 - Batch L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌
 - Batch M: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆 (retest po restarcie bota)
-- **Razem: 201/280 ✅ (72%), 30/280 ⚠️ (11%), 44/280 ❌ (16%)**
+- Batch N: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
+- **Razem: 205/284 ✅ (72%), 30/284 ⚠️ (11%), 44/284 ❌ (15%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -1201,9 +1202,31 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
 | bug-A4-1 | Classifier false-positive edit_client na niejednoznacznych inputach → R5 banner | MEDIUM |
-| bug-A4-2 | R7 nie pali po merge-path (A-T4) — wymaga spec-clarification | LOW |
+| bug-A4-2 | ✅ NAPRAWIONE (Sesja N, potwierdzone N-T2) | — |
 | bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
 | Bug #8 | Multi-meeting parser gubi imię w odmienionej formie | MEDIUM |
+
+---
+
+## Sesja N — ZAKOŃCZONA (13.04.2026)
+
+### Naprawione w Sesji N
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-A4-2 | R7 nie paliło po "Dopisz do istniejącego" (conflict-path merge). `_handle_duplicate_merge` w `buttons.py` teraz wysyła R7 prompt po `update_client` | `bot/handlers/buttons.py` |
+| no-conflict merge bug | `handle_confirm` dla `add_client_duplicate` wywoływał `add_client` (tworzył nowy wiersz!) zamiast `update_client`. Krytyczny bug danych — naprawiony. Dodano R7 po sukcesie | `bot/handlers/text.py` |
+
+### Wyniki Batch N (4 testy, 13.04.2026, 13:20-13:26)
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| N-T1 | add_client istniejący (bez konfliktu) "Anna Retest Kraków anna.retest@gmail.com" → Zapisać | ✅ PASS | "✅ Dane zaktualizowane." (update, nie nowy wiersz) + R7 "Co dalej — Anna Retest (Kraków)?" ✅ |
+| N-T2 | add_client z konfliktem "Anna Retest Kraków 600999888 pompa ciepła" → Dopisz do istniejącego | ✅ PASS | "✅ Dane zaktualizowane." + R7 "Co dalej — Anna Retest (Kraków)?" ✅ — bug-A4-2 fix potwierdzone! |
+| N-T3 | add_client nowy "Tomasz Nowy Wrocław PV 505111222" → Zapisać (regression) | ✅ PASS | "✅ Zapisane." + R7 "Co dalej — Tomasz Nowy (Wrocław)?" ✅ — brak regresji |
+| N-T4 | add_client duplikat "Tomasz Nowy Wrocław 777888999 pompa ciepła" → Utwórz nowy wpis (regression) | ✅ PASS | "✅ Zapisane." + R7 "Co dalej — Tomasz Nowy (Wrocław)?" ✅ — brak regresji |
+
+**Wynik N: 4/4 ✅, 0/4 ⚠️, 0/4 ❌** 🏆
 
 ---
 
@@ -1296,7 +1319,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
 | bug-A4-1 | Classifier false-positive edit_client na ambiguous inputs → R5 banner zamiast właściwej akcji | `classify_intent` system prompt | MEDIUM |
-| bug-A4-2 | R7 nie pali po merge-path (A-T4 R4 "Dopisz do istniejącego") — do ustalenia z Maanem czy spec wymaga R7 po merge | `_handle_duplicate_merge` w `buttons.py` | LOW (do spec-clarification) |
+| bug-A4-2 | ✅ NAPRAWIONE (Sesja N, potwierdzone N-T2) — R7 pali po "Dopisz do istniejącego" merge | `_handle_duplicate_merge` w `buttons.py` | — |
 | bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
 | bug-A1-4 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T1+M-T3) — "Co dalej — Anna Retest (Kraków)?" zamiast "Co dalej z X z Y" | `send_next_action_prompt` | — |
 | Bug #8 | Multi-meeting parser gubi imię gdy odmienione formy | `extract_meeting_data` | MEDIUM |
