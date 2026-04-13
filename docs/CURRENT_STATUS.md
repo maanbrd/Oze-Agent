@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Sesja P runda 3: cofnięto bug-P4-1 client check (zbyt agresywny — blokował spotkania z klientami spoza bazy). bug-P8-1 ✅. Retest P3._
+_Last updated: 13.04.2026 — Sesja P ZAKOŃCZONA. Wszystkie code-fixable bugi naprawione i potwierdzone. Pozostały: 2 sheet-side (A1-1, B1-1) + 1 spec question (B3-1). Kumulatywnie 221/304 ✅ (73%)._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -34,6 +34,58 @@ Phase 5: Voice input                                 ⏳ TODO
 Phase 6: Proactive messages                          ⏳ TODO
 Phase 7: Error handling + lejek POST-MVP banner      ⏳ TODO
 ```
+
+---
+
+## Stan bugów po Sesji P (13.04.2026)
+
+**Wszystkie code-fixable bugi naprawione i potwierdzone testami.**
+
+### Otwarte (wymagają ręcznej akcji Maana)
+
+| ID | Co trzeba zrobić | Priorytet |
+|----|-----------------|-----------|
+| bug-A1-1 | Zmień nazwę kolumny P w arkuszu: "ID kalendarza" → "ID wydarzenia Kalendarz". Potem wpisz `odśwież kolumny` w bocie | HIGH |
+| bug-B1-1 | Usuń pustą kolumnę bez nagłówka na pozycji 14 (między "Źródło pozyskania" a "Zdjęcia"). Potem `odśwież kolumny` | HIGH |
+| bug-B3-1 | Decyzja: czy `[➕ Dopisać]` ma być na karcie change_status? Jeśli nie — zmienię na 2 przyciski [Zapisać][Anulować] | LOW |
+
+### Naprawione (pełna lista — 27 bugów)
+
+| ID | Sesja naprawy | Potwierdzenie |
+|----|--------------|---------------|
+| bug-E1-3 | Sesja G | E-tests ✅ |
+| bug-E1-9 | Sesja I | I-T2 ✅ |
+| bug-E2-1 | Sesja G | G-tests ✅ |
+| bug-E2-5 | Sesja G | G-tests ✅ |
+| bug-E2-7 | Sesja H+J | J-T3, J-T4 ✅ |
+| bug-E3-3 | Sesja G | G-tests ✅ |
+| bug-E4-7 | Sesja I | I-T3 ✅ |
+| bug-E5-1 | Sesja G | G-tests ✅ |
+| bug-E6-1/E10-2/E10-7 | Sesja F+P | P-T2,3,5,6,7 ✅ |
+| bug-E9-6 | Sesja K+L | K-T4, L-T1 ✅ |
+| bug-E9-9 | Sesja G | G-tests ✅ |
+| bug-E10-4 | Sesja G | G-tests ✅ |
+| bug-E14-7 | Sesja I | I-T5 ✅ |
+| bug-E19-9 | Sesja I | I-T1 ✅ |
+| bug-E23-9 | Sesja H | H-T4 ✅ |
+| bug-F2-2 | Sesja I | I-T1, I-T4 ✅ |
+| bug-F3-1 | Sesja H | H-T1 ✅ |
+| bug-B2-1 | Sesja J+K | J-tests ✅ |
+| bug-C2-1 | Sesja D | D-tests ✅ |
+| bug-C4-1 | Sesja D | D-tests ✅ |
+| bug-R7-2 | Sesja D | D-tests ✅ |
+| bug-A1-4 | Sesja M | M-T1, M-T3 ✅ |
+| bug-A4-1 | Sesja O | O-T1–O-T3 ✅ |
+| bug-A4-2 | Sesja N | N-T2 ✅ |
+| Bug #8 | Sesja O | O-T4 ✅ |
+| Bug #10 | Sesja M | M-T2 ✅ |
+| bug-P8-1 | Sesja P | P2-T2 ✅ |
+
+### Reklasyfikowane (nie bug)
+
+| ID | Powód |
+|----|-------|
+| bug-P4-1 | add_meeting tworzy Calendar event — nie wymaga klienta w bazie. Handlowiec może mieć spotkanie z nowym leadem nie dodanym do CRM |
 
 ---
 
@@ -766,7 +818,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch O: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
 - Batch P: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
 - Batch P2: 4/5 ✅, 0/5 ⚠️, 1/5 ❌
-- **Razem: 218/301 ✅ (72%), 31/301 ⚠️ (10%), 47/301 ❌ (16%)**
+- Batch P3: 3/3 ✅, 0/3 ⚠️, 0/3 ❌ 🏆
+- **Razem: 221/304 ✅ (73%), 31/304 ⚠️ (10%), 47/304 ❌ (15%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -1128,9 +1181,10 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ---
 
-## Sesja P — W TOKU (13.04.2026)
+## Sesja P — ZAKOŃCZONA (13.04.2026)
 
 Cel: naprawić F-T4 partial (show_client disambiguation zamiast direct match) + pełny retest bug-E6-1/E10-2/E10-7.
+Commity: `78c7efa` (show_client fix), `de0719a` (bug-P4-1 + P8-1), `95968fc` (revert P4-1 client check)
 
 ### Naprawione w Sesji P
 
@@ -1218,6 +1272,16 @@ bug-P4-1 reklasyfikowany: to nie jest bug — add_meeting tworzy event w Calenda
 | P3-T2 | "Ewa Mazur Szczecin środa 14:00" | Karta spotkania z "Ewa Mazur" (nie w bazie, ale tworzy event) |
 | P3-T3 | "Jan Mazur Radom jutro o 10" | Direct match: Jan Mazur enriched (regresja check) |
 
+### Wyniki Batch P3 (3 testy, 13.04.2026, 14:48-14:49)
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| P3-T1 | multi-meeting "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" | ✅ PASS | 2 spotkania: "Jan Nowak — 14.04 10:00, Piaseczno" + "Anna Kowalska — 14.04 15:00". Mianownik ✅. Regresja P2-T5 naprawiona |
+| P3-T2 | add_meeting "Ewa Mazur Szczecin środa 14:00" | ✅ PASS | Karta: Klient Ewa Mazur, 15.04.2026 (środa) 14:00, Szczecin. Tworzy bez enrichment (klient nie w bazie) |
+| P3-T3 | add_meeting "Jan Mazur Radom jutro o 10" (regression) | ✅ PASS | Direct match: Klient Jan Mazur, 14.04.2026 (wtorek) 10:00, Radom. Enriched z bazy. Brak regresji |
+
+**Wynik P3: 3/3 ✅, 0/3 ⚠️, 0/3 ❌** 🏆
+
 ---
 
 ## Sesja O — ZAKOŃCZONA (13.04.2026)
@@ -1255,7 +1319,7 @@ Commit: `91fe4b5`
 
 | ID | Status | Priorytet |
 |----|--------|-----------|
-| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-E6-1/E10-2/E10-7 | ✅ NAPRAWIONE (Fix 1+2+2b, potwierdzone Sesja P: P-T2,3,5,6,7 ✅) | — |
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
 | bug-A4-1 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T1–O-T3) | — |
@@ -1286,12 +1350,12 @@ Commit: `91fe4b5`
 
 | ID | Status | Priorytet |
 |----|--------|-----------|
-| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-E6-1/E10-2/E10-7 | ✅ NAPRAWIONE (Sesja P) | — |
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
-| bug-A4-1 | Classifier false-positive edit_client na niejednoznacznych inputach → R5 banner | MEDIUM |
+| bug-A4-1 | ✅ NAPRAWIONE (Sesja O) | — |
 | bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
-| Bug #8 | Multi-meeting parser gubi imię w odmienionej formie | MEDIUM |
+| Bug #8 | ✅ NAPRAWIONE (Sesja O) | — |
 
 ---
 
@@ -1341,13 +1405,13 @@ Commit: `91fe4b5`
 
 | ID | Status | Priorytet |
 |----|--------|-----------|
-| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-E6-1/E10-2/E10-7 | ✅ NAPRAWIONE (Sesja P) | — |
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
-| bug-A4-1 | Classifier false-positive edit_client na niejednoznacznych inputach → R5 banner | MEDIUM |
-| bug-A4-2 | ✅ NAPRAWIONE (Sesja N, potwierdzone N-T2) | — |
+| bug-A4-1 | ✅ NAPRAWIONE (Sesja O) | — |
+| bug-A4-2 | ✅ NAPRAWIONE (Sesja N) | — |
 | bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
-| Bug #8 | Multi-meeting parser gubi imię w odmienionej formie | MEDIUM |
+| Bug #8 | ✅ NAPRAWIONE (Sesja O) | — |
 
 ---
 
@@ -1442,7 +1506,7 @@ Commit: `91fe4b5`
 | bug-A1-1 | "ID kalendarza" w arkuszu vs "ID wydarzenia Kalendarz" w kodzie → pojawia się w "Brakuje:" | Sheet-side fix (Maan) | HIGH |
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
 | bug-B2-1 | ✅ NAPRAWIONE (Sesja J+K) | Sesja J: odrzuca z Produkt. Sesja K: normalizuje gdy LLM pisze do Notatki bezpośrednio | — |
-| bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
+| bug-E6-1/E10-2/E10-7 | ✅ NAPRAWIONE (Sesja F+P) — `_first_name_ok` guard + `_fuzzy_match` word-to-word + show_client direct match. Potwierdzone P-T2,3,5,6,7 ✅ | `google_sheets.py` + `text.py` | — |
 | bug-E9-6 | ✅ NAPRAWIONE (Sesja K+L) — Sesja K: `_fuzzy_match` city false-positive (K-T4 ✅). Sesja L: `_route_pending_flow` add_note `_search_prefixes` guard (L-T1 ✅). Oba root causes naprawione | `_fuzzy_match` + `_route_pending_flow` | — |
 | bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
@@ -1461,11 +1525,11 @@ Commit: `91fe4b5`
 
 | ID | Objaw | Lokalizacja | Priorytet |
 |----|-------|-------------|-----------|
-| bug-A4-1 | Classifier false-positive edit_client na ambiguous inputs → R5 banner zamiast właściwej akcji | `classify_intent` system prompt | MEDIUM |
+| bug-A4-1 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T1–O-T3) | `classify_intent` system prompt | — |
 | bug-A4-2 | ✅ NAPRAWIONE (Sesja N, potwierdzone N-T2) — R7 pali po "Dopisz do istniejącego" merge | `_handle_duplicate_merge` w `buttons.py` | — |
 | bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
 | bug-A1-4 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T1+M-T3) — "Co dalej — Anna Retest (Kraków)?" zamiast "Co dalej z X z Y" | `send_next_action_prompt` | — |
-| Bug #8 | Multi-meeting parser gubi imię gdy odmienione formy | `extract_meeting_data` | MEDIUM |
+| Bug #8 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T4) | `extract_meeting_data` | — |
 | Bug #10 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T2) — "Spotkanie — Anna Retest" zamiast "Spotkanie z X" | `_enrich_meeting` | — |
 
 ### Zamknięte przez Sesje A–C
