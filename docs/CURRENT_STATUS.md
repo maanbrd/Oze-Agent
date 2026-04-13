@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 12.04.2026 — Sesja K: fix bug-E9-6 (_fuzzy_match city false-positive) + J-T1/J-T2 Notatki wording_
+_Last updated: 13.04.2026 — Sesja M: fix bug-A1-4 (R7 prompt accusative) + Bug #10 (calendar title declension)_
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -761,6 +761,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌
 - Batch K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌
 - Batch L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌
+- Batch M: TBD (testy po deploy)
 - **Razem: 197/276 ✅ (71%), 30/276 ⚠️ (11%), 44/276 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
@@ -1115,6 +1116,38 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ---
 
+## Sesja M — ZAKOŃCZONA (13.04.2026)
+
+### Naprawione w Sesji M (commit TBD, 13.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-A1-4 | R7 prompt "Co dalej z Jan Nowak z Gdańsk" (błędna składnia) → "Co dalej — Jan Nowak (Gdańsk)?" — nazwa w mianowniku, bez prefiksów wymagających odmiany. Zmieniono format `name_city` z `"{name} z {city}"` na `"{name} ({city})"` | `bot/handlers/text.py` `send_next_action_prompt` |
+| Bug #10 | Tytuł zdarzenia kalendarza "Spotkanie z Jan Mazur" (bez odmiany) → "Spotkanie — Jan Mazur" — myślnik zamiast "z X" eliminuje potrzebę narzędnika. Zmiana w `_enrich_meeting` | `bot/handlers/text.py` `_enrich_meeting` |
+
+### Testy do wykonania po deploy (Sesja M)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| M-T1 | add_client "Piotr Testowy Lublin PV 509111222" → Zapisać | R7 prompt: "Co dalej — Piotr Testowy (Lublin)? Spotkanie, telefon, mail, odłożyć na później?" (NIE "Co dalej z Piotr Testowy z Lublin") |
+| M-T2 | add_meeting "Jan Kowalski Warszawa jutro o 10" → Zapisać → sprawdź Google Calendar | Tytuł: "Spotkanie — Jan Kowalski" (NIE "Spotkanie z Jan Kowalski") |
+| M-T3 (regression) | change_status "Marcin Kowalski Gdańsk na Podpisane" → Zapisać | R7 prompt pojawia się z nowym formatem (bez broken Polish) |
+| M-T4 (regression) | add_note "Jan Kowalski Warszawa: dzwonił" → Zapisać | Brak R7 po add_note (zamknięty akt per spec) |
+
+### Pozostałe otwarte bugi po Sesji M
+
+| ID | Status | Priorytet |
+|----|--------|-----------|
+| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
+| bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
+| bug-A4-1 | Classifier false-positive edit_client na niejednoznacznych inputach → R5 banner | MEDIUM |
+| bug-A4-2 | R7 nie pali po merge-path (A-T4) — wymaga spec-clarification | LOW |
+| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
+| Bug #8 | Multi-meeting parser gubi imię w odmienionej formie | MEDIUM |
+
+---
+
 ### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
 
 | ID | Co naprawiono | Plik |
@@ -1206,9 +1239,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-A4-1 | Classifier false-positive edit_client na ambiguous inputs → R5 banner zamiast właściwej akcji | `classify_intent` system prompt | MEDIUM |
 | bug-A4-2 | R7 nie pali po merge-path (A-T4 R4 "Dopisz do istniejącego") — do ustalenia z Maanem czy spec wymaga R7 po merge | `_handle_duplicate_merge` w `buttons.py` | LOW (do spec-clarification) |
 | bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
-| bug-A1-4 | "Co dalej z Jan Nowak" zamiast "Co dalej z Janem Nowakiem" — brak narzędnika w R7 | `send_next_action_prompt` (format stringa) | LOW |
+| bug-A1-4 | ✅ NAPRAWIONE (Sesja M) — "Co dalej — Jan Nowak (Gdańsk)?" zamiast "Co dalej z Jan Nowak z Gdańsk" | `send_next_action_prompt` | — |
 | Bug #8 | Multi-meeting parser gubi imię gdy odmienione formy | `extract_meeting_data` | MEDIUM |
-| Bug #10 | "Spotkanie z Jan Mazur" bez odmiany | `_enrich_meeting` | LOW |
+| Bug #10 | ✅ NAPRAWIONE (Sesja M) — "Spotkanie — Jan Mazur" zamiast "Spotkanie z Jan Mazur" | `_enrich_meeting` | — |
 
 ### Zamknięte przez Sesje A–C
 
