@@ -257,7 +257,15 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
     delete_pending_flow(telegram_id)
     ok = await update_client(user_id, duplicate_row, new_data)
     if ok:
+        client_name = flow_data.get("client_name", "")
+        city = flow_data.get("city", "")
+        name_city = f"{client_name} ({city})" if city else (client_name or "klient")
+        save_pending_flow(telegram_id, "r7_prompt", {"client_name": client_name, "city": city})
         await query.edit_message_text("✅ Dane zaktualizowane.")
+        await query.message.reply_text(
+            f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
+            reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
+        )
     else:
         await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
 

@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Sesja M: fix bug-A1-4 (R7 prompt accusative) + Bug #10 (calendar title declension)_
+_Last updated: 13.04.2026 — Sesja N: bug-A4-2 + no-conflict merge fix (update_client zamiast add_client). N-T1–N-T4 do wykonania po restarcie bota._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -761,8 +761,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌
 - Batch K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌
 - Batch L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌
-- Batch M: TBD (testy po deploy)
-- **Razem: 197/276 ✅ (71%), 30/276 ⚠️ (11%), 44/276 ❌ (16%)**
+- Batch M: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆 (retest po restarcie bota)
+- **Razem: 201/280 ✅ (72%), 30/280 ⚠️ (11%), 44/280 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -954,6 +954,10 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - "się odbyło" → change_status "Spotkanie odbyte" (not "Zamontowana") — bug-E19-9 fix
 - "PV + Magazyn energii" → single compound product (not two) — bug-E1-9 fix
 - Same-status no-op guard: "Status klienta X jest już: Y." — no mutation card (bug-E4-7 fix)
+- add_note Zapisać → no R7 (confirmed M-T4 retest: zamknięty akt per spec — "Notatka dodana." i koniec, brak follow-up)
+- change_status Zapisać → status committed + R7 fires with new format (confirmed M-T3 retest: "Co dalej — X (Y)?")
+- R7 new format "Co dalej — Name (City)?" with em-dash + parentheses (confirmed M-T1+M-T3 retest: bug-A1-4 fix)
+- Calendar title "Spotkanie — Name" with em-dash (confirmed M-T2 retest: Bug #10 fix)
 - Exact name match bypasses disambiguation in add_note (Radek Sikorski Radom, multiple Radom clients) — bug-F2-2 fix
 - Exact name match bypasses disambiguation in change_status (Radek Sikorski Radom) — bug-F2-2 fix
 - "spotkanie telefoniczne" → Miejsce: "telefonicznie" (not client's city) — bug-E14-7 fix
@@ -1116,9 +1120,40 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ---
 
+## Sesja N — ZAKOŃCZONA (13.04.2026)
+
+### Naprawione w Sesji N (commit TBD, 13.04.2026)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-A4-2 | R7 nie paliło po conflict-path merge ("Dopisz do istniejącego"). Dodano R7 do `_handle_duplicate_merge` w buttons.py — po `update_client` wysyła prompt + zapisuje `r7_prompt` flow. | `bot/handlers/buttons.py` |
+| no-conflict merge | `handle_confirm` dla `add_client_duplicate` wywoływał `add_client` (nowy wiersz!) zamiast `update_client` (aktualizacja istniejącego). Naprawiono: teraz wywołuje `update_client` + R7 po sukcesie. | `bot/handlers/text.py` |
+
+### Testy do wykonania po restarcie bota (Sesja N)
+
+| # | Wiadomość / kroki | Oczekiwany wynik |
+|---|-----------|-----------------|
+| N-T1 | add_client klient który już istnieje (bez konfliktu) → Zapisać | "✅ Dane zaktualizowane." + R7 prompt "Co dalej — X (Y)?" (NIE "✅ Zapisane." bez R7) |
+| N-T2 | add_client klient który już istnieje (z konfliktem inny tel./produkt) → "Dopisz do istniejącego" | "✅ Dane zaktualizowane." + R7 prompt "Co dalej — X (Y)?" |
+| N-T3 (regression) | add_client klient który nie istnieje → Zapisać | "✅ Zapisane." + R7 prompt (bez regresji) |
+| N-T4 (regression) | add_client duplicate → "Utwórz nowy wpis" | Nowy klient dodany (nie duplikat-merge) |
+
+### Pozostałe otwarte bugi po Sesji N
+
+| ID | Status | Priorytet |
+|----|--------|-----------|
+| bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
+| bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
+| bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
+| bug-A4-1 | Classifier false-positive edit_client na niejednoznacznych inputach → R5 banner | MEDIUM |
+| bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification | LOW |
+| Bug #8 | Multi-meeting parser gubi imię w odmienionej formie | MEDIUM |
+
+---
+
 ## Sesja M — ZAKOŃCZONA (13.04.2026)
 
-### Naprawione w Sesji M (commit TBD, 13.04.2026)
+### Naprawione w Sesji M (commit `8e35db8`, 13.04.2026)
 
 | ID | Co naprawiono | Plik |
 |----|---------------|------|
@@ -1133,6 +1168,30 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | M-T2 | add_meeting "Jan Kowalski Warszawa jutro o 10" → Zapisać → sprawdź Google Calendar | Tytuł: "Spotkanie — Jan Kowalski" (NIE "Spotkanie z Jan Kowalski") |
 | M-T3 (regression) | change_status "Marcin Kowalski Gdańsk na Podpisane" → Zapisać | R7 prompt pojawia się z nowym formatem (bez broken Polish) |
 | M-T4 (regression) | add_note "Jan Kowalski Warszawa: dzwonił" → Zapisać | Brak R7 po add_note (zamknięty akt per spec) |
+
+### Wyniki Batch M — runda 1 (4 testy, 13.04.2026, 12:22-12:35) — BEZ RESTARTU BOTA
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| M-T1 | add_client "Piotr Testowy Lublin PV 509111222" → Zapisać → R7 | ❌ FAIL | R7 prompt: "Co dalej z Piotr Testowy z Lublin?" — stary format. Bot nie zrestartowany po deploy |
+| M-T2 | add_meeting "Jan Kowalski Warszawa jutro o 10" → Zapisać → Calendar | ❌ FAIL | Calendar title: "Spotkanie z Jan Kowalski" — stary format. Bot nie zrestartowany |
+| M-T3 | change_status "Jan Kowalski Warszawa na Spotkanie umówione" → Zapisać | ❌ FAIL | R7 prompt: stary format "Co dalej z X z Y?" |
+| M-T4 | add_note "Jan Kowalski Warszawa klient zainteresowany PV 10kW" → Zapisać | ✅ PASS | Brak R7 po add_note — poprawne (zamknięty akt) |
+
+**Wynik M runda 1: 1/4 ✅, 3/4 ❌** — bot działał na starym kodzie (brak restartu)
+
+### Wyniki Batch M — runda 2 RETEST (4 testy, 13.04.2026, 12:56-13:01) — PO RESTARCIE BOTA
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| M-T1 | add_client "Anna Retest Kraków PV 501222333" → Zapisać → R7 | ✅ PASS | R7 prompt: **"Co dalej — Anna Retest (Kraków)?"** — nowy format z em-dash ✅ |
+| M-T2 | add_meeting "Anna Retest Kraków jutro o 15" → Zapisać → Calendar | ✅ PASS | Calendar title: **"Spotkanie — Anna Retest"** — nowy format z em-dash ✅ |
+| M-T3 | change_status "Anna Retest Kraków na Spotkanie umówione" → Zapisać | ✅ PASS | R7 prompt: **"Co dalej — Anna Retest (Kraków)?"** — nowy format z em-dash ✅ |
+| M-T4 | add_note "Anna Retest Kraków klientka zainteresowana PV 8kW" → Zapisać | ✅ PASS | "✅ Notatka dodana." — brak R7 po add_note. Poprawne: zamknięty akt per spec ✅ |
+
+**Wynik M runda 2: 4/4 ✅, 0/4 ⚠️, 0/4 ❌** 🏆
+
+**Wniosek:** Obie zmiany z Sesji M (bug-A1-4 R7 format + Bug #10 Calendar title) **działają poprawnie**. Runda 1 failowała bo bot nie został zrestartowany po deploy — pracował na starym kodzie w pamięci.
 
 ### Pozostałe otwarte bugi po Sesji M
 
@@ -1239,9 +1298,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-A4-1 | Classifier false-positive edit_client na ambiguous inputs → R5 banner zamiast właściwej akcji | `classify_intent` system prompt | MEDIUM |
 | bug-A4-2 | R7 nie pali po merge-path (A-T4 R4 "Dopisz do istniejącego") — do ustalenia z Maanem czy spec wymaga R7 po merge | `_handle_duplicate_merge` w `buttons.py` | LOW (do spec-clarification) |
 | bug-B3-1 | `[➕ Dopisać]` na karcie change_status jest niejasne — może tylko 2 przyciski [Zapisać][Anulować]? | `handle_change_status` card buttons | LOW (question, do ustalenia z Maanem) |
-| bug-A1-4 | ✅ NAPRAWIONE (Sesja M) — "Co dalej — Jan Nowak (Gdańsk)?" zamiast "Co dalej z Jan Nowak z Gdańsk" | `send_next_action_prompt` | — |
+| bug-A1-4 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T1+M-T3) — "Co dalej — Anna Retest (Kraków)?" zamiast "Co dalej z X z Y" | `send_next_action_prompt` | — |
 | Bug #8 | Multi-meeting parser gubi imię gdy odmienione formy | `extract_meeting_data` | MEDIUM |
-| Bug #10 | ✅ NAPRAWIONE (Sesja M) — "Spotkanie — Jan Mazur" zamiast "Spotkanie z Jan Mazur" | `_enrich_meeting` | — |
+| Bug #10 | ✅ NAPRAWIONE (Sesja M, potwierdzone retest M-T2) — "Spotkanie — Anna Retest" zamiast "Spotkanie z X" | `_enrich_meeting` | — |
 
 ### Zamknięte przez Sesje A–C
 

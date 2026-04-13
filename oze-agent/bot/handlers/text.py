@@ -534,6 +534,8 @@ async def handle_add_client(
             save_pending_flow(telegram_id, "add_client_duplicate", {
                 "client_data": new_data,
                 "duplicate_row": duplicate.get("_row"),
+                "client_name": duplicate.get("Imię i nazwisko", ""),
+                "city": duplicate.get("Miasto", ""),
             })
             updated_fields = ", ".join(new_data.keys())
             city_part = f" ({dup_city})" if dup_city else ""
@@ -546,6 +548,8 @@ async def handle_add_client(
         save_pending_flow(telegram_id, "add_client_duplicate", {
             "client_data": client_data,
             "duplicate_row": duplicate.get("_row"),
+            "client_name": duplicate.get("Imię i nazwisko", ""),
+            "city": duplicate.get("Miasto", ""),
         })
         dup_addr = duplicate.get("Adres", "")
         dup_prod = duplicate.get("Produkt", "")
@@ -1461,11 +1465,23 @@ async def handle_confirm(
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "add_client_duplicate":
-            row = await add_client(user_id, flow_data["client_data"])
-            if row:
-                await update.effective_message.reply_text("✅ Zapisane.")
+            duplicate_row = flow_data.get("duplicate_row")
+            if duplicate_row:
+                ok = await update_client(user_id, duplicate_row, flow_data["client_data"])
+                if ok:
+                    name = flow_data.get("client_name", "klient")
+                    city = flow_data.get("city", "")
+                    await update.effective_message.reply_text("✅ Dane zaktualizowane.")
+                    skip_delete = True
+                    await send_next_action_prompt(update, telegram_id, name, city)
+                else:
+                    await update.effective_message.reply_markdown_v2(format_error("google_down"))
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                row = await add_client(user_id, flow_data["client_data"])
+                if row:
+                    await update.effective_message.reply_text("✅ Zapisane.")
+                else:
+                    await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "edit_client":
             updates = flow_data["updates"]
