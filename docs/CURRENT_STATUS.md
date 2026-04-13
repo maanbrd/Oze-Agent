@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Batch N potwierdzone 4/4 ✅. Sesja O w toku: naprawiamy bug-A4-1 (classifier) + Bug #8 (multi-meeting declined names)._
+_Last updated: 13.04.2026 — Sesja P: fix show_client disambiguation (F-T4 partial) + retest bug-E6-1/E10-2/E10-7._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -763,7 +763,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌
 - Batch M: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆 (retest po restarcie bota)
 - Batch N: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
-- **Razem: 205/284 ✅ (72%), 30/284 ⚠️ (11%), 44/284 ❌ (15%)**
+- Batch O: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
+- **Razem: 209/288 ✅ (73%), 30/288 ⚠️ (10%), 44/288 ❌ (15%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -800,6 +801,9 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Dopisać flow (card rebuild with merged data, "Brakuje" update)
 - One-click cancel (Anulować) — zero regressions across all 38 tests
 - R5 POST-MVP banners (edit_client, filtruj, lejek, add_note stub)
+- Classifier: ambiguous "ma nowy numer/telefon" → add_client (nie edit_client false-positive)
+- Classifier: jawne "zmień/popraw" → edit_client R5 banner (poprawne)
+- Multi-meeting parser: declined Polish names (genetyw→mianownik) — "Jana Nowaka"→"Jan Nowak", "Anny Kowalskiej"→"Anna Kowalska"
 - 3-button R1 keyboard — present on all mutation cards, consistent
 - Classifier routing (Rezygnacja→change_status, general questions, gibberish)
 - Date format DD.MM.YYYY (Dzień tygodnia) — consistent on mutation cards (ale nie na show_client → bug-E5-1)
@@ -1121,6 +1125,33 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 
 ---
 
+## Sesja P — W TOKU (13.04.2026)
+
+Cel: naprawić F-T4 partial (show_client disambiguation zamiast direct match) + pełny retest bug-E6-1/E10-2/E10-7.
+
+### Naprawione w Sesji P
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| F-T4 partial | `handle_search_client` multi-result path brakowało `_find_exact_name_match` + `_first_name_ok` filtra — szło prosto w disambiguation. Dodano ten sam pattern co w `handle_add_note` i `handle_change_status`: jeśli dokładnie jeden wynik pasuje po imieniu, pokaż kartę bezpośrednio | `bot/handlers/text.py` |
+
+### Testy do wykonania po restarcie bota (Sesja P)
+
+Pełny retest F-T1–F-T8 (bug-E6-1/E10-2/E10-7 fix verification):
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| P-T1 | "pokaż Tomka Zielińskiego z Lublina" (show_client) | Bezpośrednia karta Tomek Zieliński (direct match, BEZ disambiguation) |
+| P-T2 | add_meeting "Radek Sikorski Radom jutro o 10" | Bezpośredni match, karta spotkania z Radek Sikorski |
+| P-T3 | add_meeting "Jan Mazur Radom piątek 11:00" | Bezpośredni match Jan Mazur (NIE inny Mazur) |
+| P-T4 | add_meeting "Ewa Mazur Szczecin środa 14:00" | "Nie mam" / "Nie znaleziono" (Ewa Mazur nie istnieje — guard blokuje Jana Mazura) |
+| P-T5 | change_status "Radek Sikorski Radom → Umówione spotkanie" | Direct match, mutation card |
+| P-T6 | add_note "Marcin Kowalski Gdańsk: oferta wysłana" | Direct match, mutation card z notatką |
+| P-T7 | show_client "Jan Kowalski Warszawa" | Direct match, read-only card (BEZ disambiguation) |
+| P-T8 | show_client "Kowalski" (bare last name, 2+ klientów) | Disambiguation z listą Kowalskich (poprawne — brak imienia do filtrowania) |
+
+---
+
 ## Sesja O — ZAKOŃCZONA (13.04.2026)
 
 Commit: `91fe4b5`
@@ -1141,6 +1172,17 @@ Commit: `91fe4b5`
 | O-T3 | "zmień telefon Jana Nowaka na 601234567" | edit_client R5 banner (jawna poprawka — poprawne) |
 | O-T4 | "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → Zapisać | 2 spotkania: meetings[0].client_name="Jan Nowak", meetings[1].client_name="Anna Kowalska" (mianownik, NIE genetyw) |
 
+### Wyniki Batch O (4 testy, 13.04.2026, 13:55-13:56)
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| O-T1 | "Jan Nowak ma nowy numer 609222333" | ✅ PASS | add_client 3-button card (Jan Nowak, Tel. 609 222 333). NIE edit_client R5 banner. bug-A4-1 fix potwierdzone! |
+| O-T2 | "nowy telefon Jana Kowalskiego to 601000222" | ✅ PASS | add_client 3-button card (Jan Kowalski, Tel. 601 000 222). NIE edit_client R5 banner. bug-A4-1 fix potwierdzone! |
+| O-T3 | "zmień telefon Jana Nowaka na 601234567" | ✅ PASS | R5 POST-MVP banner: "Ta funkcja jest w przygotowaniu. Niedługo dostępna." Jawne "zmień" → poprawnie edit_client |
+| O-T4 | "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" | ✅ PASS | 2 spotkania: "Jan Nowak — 14.04 10:00" + "Anna Kowalska — 14.04 15:00". Mianownik ✅ (NIE genetyw). Bug #8 fix potwierdzone! |
+
+**Wynik O: 4/4 ✅, 0/4 ⚠️, 0/4 ❌** 🏆
+
 ### Pozostałe otwarte bugi po Sesji O
 
 | ID | Status | Priorytet |
@@ -1148,9 +1190,9 @@ Commit: `91fe4b5`
 | bug-E6-1/E10-2/E10-7 | Zaimplementowane (Fix 1+2+2b), do retestowania (F-T1–F-T8) | HIGH |
 | bug-A1-1 | Sheet-side — Maan musi zmienić nazwę kol. P w arkuszu | HIGH |
 | bug-B1-1 | Sheet-side — Maan musi usunąć pustą kolumnę poz. 14 | HIGH |
-| bug-A4-1 | ✅ NAPRAWIONE (Sesja O, do potwierdzenia O-T1–O-T3) | — |
+| bug-A4-1 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T1–O-T3) | — |
 | bug-B3-1 | Dopisać na change_status card — wymaga spec-clarification z Maanem | LOW |
-| Bug #8 | ✅ NAPRAWIONE (Sesja O, do potwierdzenia O-T4) | — |
+| Bug #8 | ✅ NAPRAWIONE (Sesja O, potwierdzone O-T4) | — |
 
 ---
 

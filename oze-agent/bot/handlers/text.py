@@ -634,7 +634,23 @@ async def handle_search_client(
         )
         return
 
-    # 2–49 results: numbered list
+    # 2–49 results: try exact/first-name match before disambiguation
+    client = _find_exact_name_match(query, results)
+    if not client:
+        client = next((r for r in results if _first_name_ok(query, r)), None)
+    if client:
+        try:
+            card = format_client_card(client)
+            await update.effective_message.reply_markdown_v2(card)
+        except Exception as e:
+            logger.error("format_client_card failed: %s", e)
+            cname = client.get("Imię i nazwisko", "?")
+            ccity = client.get("Miasto", "")
+            await update.effective_message.reply_text(
+                f"Błąd formatowania karty dla {cname}{' (' + ccity + ')' if ccity else ''}. Sprawdź logi."
+            )
+        return
+
     lines = [f"Mam {len(results)} klientów:"]
     options = []
     for i, c in enumerate(results[:10], start=1):
