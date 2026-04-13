@@ -760,8 +760,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch I: 5/5 ✅, 0/5 ⚠️, 0/5 ❌
 - Batch J: 2/5 ✅, 2/5 ⚠️, 1/5 ❌
 - Batch K: 3/5 ✅, 0/5 ⚠️, 2/5 ❌
-- Batch L: TBD (testy po deploy)
-- **Razem: 194/273 ✅ (71%), 30/273 ⚠️ (11%), 44/273 ❌ (16%)**
+- Batch L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌
+- **Razem: 197/276 ✅ (71%), 30/276 ⚠️ (11%), 44/276 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -1103,6 +1103,16 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | L-T2 | K-T5 retest: "wrocław" (single word) | Disambiguation list klientów z Wrocławia (show_client), NIE "Ta funkcja jest w przygotowaniu" |
 | L-T3 | Regression: add_note "Marcin Kowalski Gdańsk: dzwonił" → Dopisać → "i chce rabat" | Karta 📝 z notatką "dzwonił i chce rabat" (Dopisać flow nadal działa po dodaniu guard) |
 
+### Wyniki Batch L (3 testy, bug-fix verification) — 12.04.2026, 23:32-23:38
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| L-T1 | bug-E9-6: add_note pending + "pokaż Michała Grabowskiego z Kielc" | ✅ PASS | "⚠️ Anulowane." + karta Michała Grabowskiego (Kielce, 510620730, Nowy lead, PV). `_search_prefixes` guard w add_note branch działa — "pokaż" triggeruje cancel + fresh routing. bug-E9-6 NAPRAWIONY |
+| L-T2 | "wrocław" single word → show_client | ✅ PASS | Bot znalazł Krzysztofa Dąbrowskiego z Wrocławia: "Nie mam 'wrocław'. Chodziło o Krzysztof Dąbrowski z Wrocław?" z [Tak, pokaż][Nie]. Classifier rozpoznaje bare city → show_client. Jeden klient w Wrocławiu → confirmation zamiast disambiguation list (correct). K-T5 fix potwierdzone |
+| L-T3 | Regression: add_note Dopisać "dzwonił" + "i chce rabat" | ✅ PASS | Karta: "Marcin Kowalski, Gdańsk: dodaj notatkę 'dzwonił i chce rabat'?" z 3 buttons. Dopisać appenduje tekst poprawnie — guard nie blokuje legitimate Dopisać input |
+
+**Wynik L: 3/3 ✅, 0/3 ⚠️, 0/3 ❌**
+
 ---
 
 ### Naprawione w Sesji H (commit `16dce63`, 12.04.2026)
@@ -1175,7 +1185,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 | bug-B1-1 | Pusta kolumna bez nazwy na pozycji 14 → 17 col zamiast 16 | Sheet-side fix (Maan) | HIGH |
 | bug-B2-1 | ✅ NAPRAWIONE (Sesja J+K) | Sesja J: odrzuca z Produkt. Sesja K: normalizuje gdy LLM pisze do Notatki bezpośrednio | — |
 | bug-E6-1/E10-2/E10-7 | Wrong-client substitution (first name mismatch) — Fix 1+2+2b zaimplementowane | zaimplementowane, do retestowania | HIGH |
-| bug-E9-6 | ⚠️ CZĘŚCIOWO (Sesja L) — `_fuzzy_match` city false-positive naprawiony (K-T4 ✅). add_note flow leak naprawiony (Sesja L: `_search_prefixes` guard dodany, L-T1 do retestowania). Bare city classifier też naprawiony (L-T2 do retestowania) | `_fuzzy_match` + `_route_pending_flow` add_note branch | HIGH |
+| bug-E9-6 | ✅ NAPRAWIONE (Sesja K+L) — Sesja K: `_fuzzy_match` city false-positive (K-T4 ✅). Sesja L: `_route_pending_flow` add_note `_search_prefixes` guard (L-T1 ✅). Oba root causes naprawione | `_fuzzy_match` + `_route_pending_flow` | — |
 | bug-E23-9 | ✅ NAPRAWIONE (Sesja H) | `_route_pending_flow` add_client guard | — |
 
 ### Nowe otwarte
@@ -1294,6 +1304,9 @@ Testy: 7/12 PASS, 3/12 krytyczne (C-T4 prawdziwy bug, B-T2 deployment, C-T2 ocze
 - R7 next_action_prompt po add_client commit
 - Wyszukiwanie — fuzzy match, diakrytyki, odmiana
 - Format daty DD.MM.YYYY (Dzień tygodnia)
+- Flow state cancel — unrelated message during add_note/add_client pending → "⚠️ Anulowane." + fresh routing (L-T1)
+- Bare city search — "wrocław" → show_client z klientem z Wrocławia (L-T2)
+- Dopisać guard — `_search_prefixes` nie blokuje legitimate Dopisać text (L-T3)
 
 ---
 
