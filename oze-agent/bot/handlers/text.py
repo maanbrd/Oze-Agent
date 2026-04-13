@@ -635,8 +635,10 @@ async def handle_search_client(
         return
 
     # 2–49 results: try exact/first-name match before disambiguation
+    # Only use first-name guard when query has 2+ words (i.e., includes a first name).
+    # Single-word queries like "Kowalski" must go to disambiguation.
     client = _find_exact_name_match(query, results)
-    if not client:
+    if not client and len(query.strip().split()) >= 2:
         client = next((r for r in results if _first_name_ok(query, r)), None)
     if client:
         try:
@@ -1055,10 +1057,16 @@ def _parse_warsaw(date_str: str, time_str: str) -> datetime:
 
 
 async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) -> dict:
-    """Look up client in Sheets and return enriched title/location/description."""
+    """Look up client in Sheets and return enriched title/location/description.
+
+    Returns dict with extra key 'client_found' (bool) indicating if the client
+    was identified in Sheets. When client_name is provided but not found,
+    the caller should warn the user (per INTENCJE_MVP.md R4).
+    """
     full_name = client_name
     location = location_hint
     description = ""
+    client_found = False
 
     if client_name:
         results = await search_clients(user_id, client_name)
@@ -1066,6 +1074,7 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
         # the original typed name and no Sheets enrichment (better than wrong client).
         client = next((r for r in results if _first_name_ok(client_name, r)), None)
         if client:
+            client_found = True
             full_name = client.get("Imię i nazwisko", client_name)
 
             addr = client.get("Adres", "")
@@ -1087,7 +1096,7 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
             description = "\n".join(parts)
 
     title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
-    return {"title": title, "location": location, "description": description, "full_name": full_name}
+    return {"title": title, "location": location, "description": description, "full_name": full_name, "client_found": client_found}
 
 
 async def handle_add_meeting(
@@ -1140,6 +1149,13 @@ async def handle_add_meeting(
 
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
 
+        # R4: client identification required before mutation
+        if m.get("client_name") and not enriched["client_found"]:
+            await update.effective_message.reply_text(
+                f"Nie znalazłem klienta: '{m['client_name']}'"
+            )
+            return
+
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
         if conflicts:
@@ -1187,6 +1203,13 @@ async def handle_add_meeting(
                 continue
 
             enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
+
+            # R4: client identification required before mutation
+            if m.get("client_name") and not enriched["client_found"]:
+                await update.effective_message.reply_text(
+                    f"Nie znalazłem klienta: '{m['client_name']}'"
+                )
+                return
 
             conflicts = await check_conflicts(user_id, start_dt, end_dt)
             if conflicts:

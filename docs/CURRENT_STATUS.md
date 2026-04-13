@@ -1,5 +1,5 @@
 # OZE-Agent — Current Status
-_Last updated: 13.04.2026 — Sesja P: fix show_client disambiguation (F-T4 partial) + retest bug-E6-1/E10-2/E10-7._
+_Last updated: 13.04.2026 — Sesja P kontynuacja: naprawiamy bug-P4-1 (add_meeting R4 client check) + bug-P8-1 (bare last name disambiguation)._
 
 > **Jak czytać ten plik.** To jest drugi plik który czytasz w nowej sesji (pierwszy: `SOURCE_OF_TRUTH.md`). Tu jest: stan aktualnej sesji, task na następną sesję, historia sesji, lista bugów. Wszystkie decyzje produktowe są w `SOURCE_OF_TRUTH.md` — tu tylko skróty i odniesienia. Jeśli coś się nie zgadza, wygrywa `SOURCE_OF_TRUTH.md`.
 
@@ -764,7 +764,8 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Batch M: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆 (retest po restarcie bota)
 - Batch N: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
 - Batch O: 4/4 ✅, 0/4 ⚠️, 0/4 ❌ 🏆
-- **Razem: 209/288 ✅ (73%), 30/288 ⚠️ (10%), 44/288 ❌ (15%)**
+- Batch P: 5/8 ✅, 1/8 ⚠️, 2/8 ❌
+- **Razem: 214/296 ✅ (72%), 31/296 ⚠️ (10%), 46/296 ❌ (16%)**
 
 **Nowe bugi znalezione w Sesji E+F (20):**
 
@@ -804,6 +805,7 @@ Testy po commit `b40268b` (fuzzy match fix: `_fuzzy_match` word-to-word, `_first
 - Classifier: ambiguous "ma nowy numer/telefon" → add_client (nie edit_client false-positive)
 - Classifier: jawne "zmień/popraw" → edit_client R5 banner (poprawne)
 - Multi-meeting parser: declined Polish names (genetyw→mianownik) — "Jana Nowaka"→"Jan Nowak", "Anny Kowalskiej"→"Anna Kowalska"
+- show_client direct match z `_first_name_ok` guard (P-T7: "Jan Kowalski Warszawa" → direct card bez disambiguation)
 - 3-button R1 keyboard — present on all mutation cards, consistent
 - Classifier routing (Rezygnacja→change_status, general questions, gibberish)
 - Date format DD.MM.YYYY (Dzień tygodnia) — consistent on mutation cards (ale nie na show_client → bug-E5-1)
@@ -1149,6 +1151,42 @@ Pełny retest F-T1–F-T8 (bug-E6-1/E10-2/E10-7 fix verification):
 | P-T6 | add_note "Marcin Kowalski Gdańsk: oferta wysłana" | Direct match, mutation card z notatką |
 | P-T7 | show_client "Jan Kowalski Warszawa" | Direct match, read-only card (BEZ disambiguation) |
 | P-T8 | show_client "Kowalski" (bare last name, 2+ klientów) | Disambiguation z listą Kowalskich (poprawne — brak imienia do filtrowania) |
+
+### Wyniki Batch P (8 testów, 13.04.2026, 14:24-14:28)
+
+| # | Test | Wynik | Notatka |
+|---|------|-------|---------|
+| P-T1 | show_client "pokaż Tomka Zielińskiego z Lublina" | ⚠️ PARTIAL | "Nie mam Tomek Zieliński w bazie" — brak fałszywej disambiguation (fix działa ✅), ale klient nie istnieje (w bazie jest Piotr Zieliński Lublin, nie Tomek). Test zakładał że klient istnieje |
+| P-T2 | add_meeting "Radek Sikorski Radom jutro o 10" | ✅ PASS | Direct match: Klient Radek Sikorski, 14.04.2026 (wtorek) 10:00, Radom. Brak disambiguation |
+| P-T3 | add_meeting "Jan Mazur Radom piątek 11:00" | ✅ PASS | Direct match: Klient Jan Mazur, 17.04.2026 (piątek) 11:00, Radom. Brak disambiguation |
+| P-T4 | add_meeting "Ewa Mazur Szczecin środa 14:00" | ❌ FAIL | Bot pokazał kartę spotkania z "Ewa Mazur" zamiast "Nie znaleziono". add_meeting nie weryfikuje czy klient istnieje w bazie — tworzy kartę z dowolnym imieniem |
+| P-T5 | change_status "Radek Sikorski Radom na Spotkanie umówione" | ✅ PASS | Direct match: mutation card "Zmienić status klienta Radek Sikorski? → Spotkanie umówione" + 3 przyciski |
+| P-T6 | add_note "Marcin Kowalski Gdańsk: oferta wysłana" | ✅ PASS | Direct match: "📝 Marcin Kowalski, Gdańsk: dodaj notatkę 'oferta wysłana'?" + 3 przyciski |
+| P-T7 | show_client "Jan Kowalski Warszawa" | ✅ PASS | Direct match: read-only card z pełnymi danymi. BEZ disambiguation. Fix show_client działa ✅ |
+| P-T8 | show_client "Kowalski" (bare last name) | ❌ FAIL | Bot pokazał kartę Jan Kowalski Warszawa bezpośrednio zamiast disambiguation. Brak listy Kowalskich do wyboru |
+
+**Wynik P: 5/8 ✅, 1/8 ⚠️, 2/8 ❌**
+
+**Nowe bugi z Sesji P:**
+- **bug-P4-1**: add_meeting nie weryfikuje czy klient istnieje w bazie — tworzy kartę spotkania z dowolnym imieniem (Ewa Mazur Szczecin nie istnieje, a dostała kartę). Regresja vs F-T3 który mówił "Nie mam".
+- **bug-P8-1**: show_client z samym nazwiskiem (bare last name "Kowalski") nie wywołuje disambiguation — pokazuje pierwszego znalezionego bezpośrednio. `_first_name_ok` guard prawdopodobnie nie filtruje gdy brak imienia w query.
+
+### Naprawione w Sesji P (runda 2)
+
+| ID | Co naprawiono | Plik |
+|----|---------------|------|
+| bug-P4-1 | `_enrich_meeting` teraz zwraca `client_found` flag. `handle_add_meeting` sprawdza: jeśli `client_name` podane ale klient nie znaleziony w Sheets → "Nie znalazłem klienta: '{name}'" (per INTENCJE_MVP.md R4). Dotyczy zarówno single jak i multi-meeting path | `bot/handlers/text.py` |
+| bug-P8-1 | W `handle_search_client` multi-result path, `_first_name_ok` guard jest teraz pomijany gdy query ma <2 słów (np. "Kowalski"). Single-word query → zawsze disambiguation. `_first_name_ok` działa tylko gdy query zawiera imię (2+ słów) | `bot/handlers/text.py` |
+
+### Testy P2 do wykonania po restarcie bota
+
+| # | Wiadomość | Oczekiwany wynik |
+|---|-----------|-----------------|
+| P2-T1 | add_meeting "Ewa Mazur Szczecin środa 14:00" | "Nie znalazłem klienta: 'Ewa Mazur'" (klient nie istnieje) |
+| P2-T2 | show_client "Kowalski" (bare last name) | Disambiguation: lista Kowalskich z przyciskami |
+| P2-T3 | add_meeting "Jan Mazur Radom jutro o 10" | Direct match: karta spotkania Jan Mazur ✅ (regresja check — istniejący klient) |
+| P2-T4 | show_client "Jan Kowalski Warszawa" | Direct match: read-only card (regresja check — 2+ słowa query) |
+| P2-T5 | add_meeting "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" | 2 spotkania (regresja check multi-meeting z istniejącymi klientami) |
 
 ---
 
