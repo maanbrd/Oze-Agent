@@ -1,6 +1,6 @@
 # OZE-Agent — Multi-Agent Workflow
 
-_Last updated: 13.04.2026_
+_Last updated: 14.04.2026_
 
 ---
 
@@ -10,9 +10,12 @@ _Last updated: 13.04.2026_
 
 **Responsible for:**
 - Consistency of `SOURCE_OF_TRUTH.md`
+- Consistency of `CURRENT_STATUS.md`
 - Consistency of `INTENCJE_MVP.md`
 - Consistency of `agent_system_prompt.md`
+- Consistency of `agent_behavior_spec_v5.md`
 - Separating MVP scope from product vision
+- Vision stewardship: `poznaj_swojego_agenta_v5_FINAL.md` stays aligned as Product Vision / UX North Star, not a runtime contract
 
 **Does NOT:** Edit Python code. Make architecture decisions. Implement features.
 
@@ -25,6 +28,7 @@ _Last updated: 13.04.2026_
 - Module boundaries and responsibilities
 - Decisions: what to reuse, what to rewrite
 - Technical risk identification
+- Boundary between core behavior rewrite, deferred flows (voice / photo / multi-meeting), and stable wrappers vs behavior layer
 
 **Does NOT:** Change product decisions. Edit spec documents. Implement features without plan approval.
 
@@ -37,7 +41,7 @@ _Last updated: 13.04.2026_
 - Small, controlled changes per phase
 - No off-plan features
 
-**Does NOT:** Change SSOT documents without Maan's approval. Skip phases. Add features not in the current phase.
+**Does NOT:** Change SSOT documents without Maan's approval. Skip phases. Add features not in the current phase. Implement POST-MVP or vision-only features without explicit Maan approval — especially `reschedule_meeting`, `cancel_meeting`, `free_slots`, `delete_client`, voice / photo / multi-meeting.
 
 ---
 
@@ -48,6 +52,10 @@ _Last updated: 13.04.2026_
 - Manual Telegram tests
 - Regression testing
 - Reporting drift between code and `.md` specs
+- Verifying unified 3-button mutation cards across all mutating intents
+- Verifying duplicate resolution via `[Nowy]` / `[Aktualizuj]` (no default-merge)
+- Verifying R7 conditional firing per fires / doesn't-fire lists
+- Verifying agent does not send pre-meeting reminders
 
 **Does NOT:** Fix bugs directly. Change specs. Skip test scenarios.
 
@@ -58,7 +66,12 @@ _Last updated: 13.04.2026_
 **Responsible for:**
 - Reviewing diffs before commit
 - Checking R1 compliance (no writes without confirmation)
-- Checking that old patterns don't return (`[Tak][Nie]` as mutation confirm, etc.)
+- Checking that old patterns don't return, including:
+  - `[Tak]` / `[Nie]` used as mutation confirmation
+  - default-merge duplicate resolution
+  - 2-button `change_status` card
+  - agent-side pre-meeting reminders
+  - `reschedule_meeting` / `cancel_meeting` / `delete_client` treated as MVP scope
 - Verifying alignment with SSOT
 
 **Does NOT:** Implement. Change specs. Make product decisions.

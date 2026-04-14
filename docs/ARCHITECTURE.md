@@ -1,6 +1,6 @@
 # OZE-Agent — Architecture
 
-_Last updated: 13.04.2026_
+_Last updated: 14.04.2026_
 
 ---
 
@@ -26,7 +26,7 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 
 ---
 
-## What Gets Rewritten
+## Core rewrite
 
 | Component | Current Location | Problem |
 |-----------|-----------------|---------|
@@ -35,9 +35,19 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 | Confirmation cards | `bot/utils/telegram_helpers.py` + inline in handlers | Card building mixed with business logic |
 | Mutation pipeline | Inline in `handle_confirm` | Sheets/Calendar writes interleaved with Telegram responses |
 | Prompt layer | Hardcoded in `shared/claude_ai.py` | System prompts as string literals, not configurable |
+| Proactive scheduler | `bot/scheduler.py` | Morning brief and evening follow-up — scheduler/dedup fragile. No pre-meeting reminders; those belong to native Google Calendar. |
+
+---
+
+## Deferred flows
+
+| Component | Current Location | Problem |
+|-----------|-----------------|---------|
 | Voice flow | `bot/handlers/voice.py` | Whisper → text → re-route, fragile |
 | Photo flow | `bot/handlers/photo.py` | Drive upload, not fully tested |
-| Proactive scheduler | `bot/scheduler.py` | Morning brief, reminders — in-memory dedup, fragile |
+| Multi-meeting | Handlers / parser fragments (not centralized) | Batch of several meetings in one message |
+
+Current voice/photo code and any batch/multi-meeting fragments are legacy reference only — not the contract. These flows are POST-MVP roadmap candidates.
 
 ---
 
@@ -58,6 +68,8 @@ bot/
   handlers/            # Telegram handlers: thin, delegate to shared/
   utils/               # Telegram helpers: buttons, typing indicators
 ```
+
+`shared/voice/` and `shared/photo/` are POST-MVP module candidates, not part of the core first-version behavior layer.
 
 ---
 
@@ -100,3 +112,5 @@ bot/
 6. **Pending state machine is explicit** — not scattered across a 1700-line file
 7. **Cards are built by card builders** — not inline in handlers
 8. **Mutations are atomic pipelines** — Sheets → Calendar → response, with error handling
+9. **Unified 3-button mutation cards** — all mutation intents (`add_client`, `add_note`, `change_status`, `add_meeting`) use the same pattern: `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`. `❌ Anulować` is one-click.
+10. **Duplicate resolution is explicit** — a first name + last name + city match routes through `[Nowy]` / `[Aktualizuj]` before any mutation card. No default merge.

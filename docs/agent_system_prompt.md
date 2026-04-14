@@ -1,6 +1,6 @@
 # OZE-Agent — Agent Behavior System Prompt
 
-_Last updated: 13.04.2026. Hierarchy: this file is #6 in SSOT order per `SOURCE_OF_TRUTH.md` section 5. On conflict — upper-ranked file wins._
+_Last updated: 14.04.2026. Hierarchy: this file is #6 in SSOT order per `SOURCE_OF_TRUTH.md` section 5. On conflict — upper-ranked file wins._
 
 ## Role
 

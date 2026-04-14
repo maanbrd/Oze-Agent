@@ -1,6 +1,6 @@
 # OZE-Agent — Behavior Spec v5
 
-_Last updated: 13.04.2026._
+_Last updated: 14.04.2026._
 
 Definiuje KIM jest agent, JAK się komunikuje i CO robi.
 
