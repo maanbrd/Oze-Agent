@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 13.04.2026_
+_Last updated: 14.04.2026_
 
 ---
 
@@ -30,10 +30,16 @@ We do not delete infrastructure blindly.
 - pending flow / state machine
 - confirmation cards
 - prompts / orchestration layer
-- voice flow
-- photo flow
 - proactive scheduler / morning brief
 - agent decision layer
+
+### Deferred beyond first version
+
+- voice flow
+- photo flow
+- multi-meeting
+
+Current voice/photo code (and any batch/multi-meeting fragments) is legacy reference only.
 
 ---
 
@@ -44,12 +50,19 @@ We do not delete infrastructure blindly.
 3. Stworzyć `IMPLEMENTATION_PLAN.md` — done
 4. Stworzyć `TEST_PLAN_CURRENT.md` — done
 5. Stworzyć `AGENT_WORKFLOW.md` — done
-6. Zsynchronizować `INTENCJE_MVP.md`, `agent_system_prompt.md`, `agent_behavior_spec_v5.md` — done
-7. Dopiero potem: przepisywać behavior layer
+6. Zsynchronizować dokumenty z decyzjami 13-14.04 — done:
+   - `INTENCJE_MVP.md`, `agent_system_prompt.md`, `agent_behavior_spec_v5.md`
+   - `poznaj_swojego_agenta_v5_FINAL.md`
+   - `TEST_PLAN_CURRENT.md`
+   - `CLAUDE.md`
+   - `SOURCE_OF_TRUTH.md`
+7. Przepisywać behavior layer zgodnie z `IMPLEMENTATION_PLAN.md`
 
 ---
 
 ## What Changed
+
+### Sesja 13.04
 
 - `CLAUDE.md` — przepisany pod nową strategię (selective rewrite, not patch-track)
 - `SOURCE_OF_TRUTH.md` — przepisany na czystą mapę projektu
@@ -61,3 +74,10 @@ We do not delete infrastructure blindly.
 - `INTENCJE_MVP.md` — zsynchronizowany (dual-write, duplicate resolution, display fields, Calendar sync)
 - `agent_system_prompt.md` — zsynchronizowany (button policies, display rules)
 - `agent_behavior_spec_v5.md` — zsynchronizowany (duplicate flow, show_client fields, Calendar sync, button rules)
+
+### Sesja 14.04
+
+- `poznaj_swojego_agenta_v5_FINAL.md` — zsynchronizowany jako Product Vision / UX North Star (ramka wizji, 16 kolumn kanonicznych, 9 statusów bez Negocjacji, 3-button, sekcja "Gdy klient już jest w bazie", pre-meeting reminders i twardy limit 100/dzień usunięte z runtime)
+- `TEST_PLAN_CURRENT.md` — change_status 3-button, duplicate resolution testy (AC-4a/4b, AN-4, AM-8), show_day_plan (SDP-1..5), voice/photo flow usunięte, morning brief bez pipeline stats, evening follow-up dodany
+- `CLAUDE.md` — unified 3-button dla wszystkich mutacji (usunięty wyjątek change_status 2-button), Read First rozszerzone o ARCHITECTURE/IMPLEMENTATION_PLAN/AGENT_WORKFLOW/TEST_PLAN_CURRENT, rewrite list bez voice/photo (POST-MVP)
+- `SOURCE_OF_TRUTH.md` — czterowarstwowy podział zakresu prac (MVP / POST-MVP roadmap / Product vision only-wymaga decyzji / NIEPLANOWANE); reschedule_meeting, cancel_meeting, free_slots, delete_client eksplicite vision-only; Voice/photo/multi-meeting jako sekcja deferred; sekcja "Najbliższy krok" bez obietnicy "Phase 2"
