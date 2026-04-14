@@ -1,12 +1,11 @@
 # OZE-Agent — Macierz intencji MVP
 
-_Ostatnia aktualizacja: 11.04.2026_
-_Status: blueprint implementacyjny po Sesji 1 Regresja (10.04 wieczór)_
-_Owner: Maan_
+_Ostatnia aktualizacja: 14.04.2026_
+_Hierarchia SSOT: ten plik jest #5 per `SOURCE_OF_TRUTH.md` sekcja 5. W razie konfliktu — wygrywa wyższy._
 
-Ten dokument definiuje **pełny kontrakt intencji MVP** — co agent ma robić w Sheets i Kalendarzu dla każdej rozpoznanej intencji, w jakiej kolejności, z jakimi potwierdzeniami. Jest to zamrożony blueprint produktowy — implementacja idzie fazowo, ale **projekt musi być kompletny od dnia 1**, żeby nie robić drugiego razu pracy jak dodajemy Kalendarz.
+Ten dokument definiuje **kontrakt 6 intencji MVP** — co agent robi w Sheets i Kalendarzu dla każdej rozpoznanej intencji, w jakiej kolejności, z jakimi potwierdzeniami.
 
-Jeśli coś w kodzie nie zgadza się z tym dokumentem → zmienia się kod. Jeśli coś w produkcie ma być zmienione → najpierw edytujesz ten plik, potem kod.
+Jeśli kod nie zgadza się z tym dokumentem → zmienia się kod. Jeśli kontrakt ma być zmieniony → najpierw decyzja Maana + edycja tego pliku, potem kod.
 
 ---
 
@@ -20,9 +19,7 @@ Jeśli coś w kodzie nie zgadza się z tym dokumentem → zmienia się kod. Jeś
 
 **Implikacja techniczna:** każda intencja mutująca stan (add_client, change_status, add_meeting, add_note gdy note implikuje telefon) zawsze produkuje **parę**: wiersz w Sheets + wydarzenie w Kalendarzu. Nigdy jedno bez drugiego.
 
-**Implikacja produktowa:** nie wydajemy beta-testerom agenta który tylko pisze do Sheets. Dla handlowca to nic nie zmienia — musiałby i tak ręcznie kopiować rzeczy do kalendarza. Agent bez Kalendarza to notatnik, nie asystent.
-
-**Implikacja dla fazowania:** Sheets implementujemy pierwszy (to baza), ale **każda intencja Sheets od razu zawiera stub Calendar** (parametr `calendar_event: CalendarEventDraft | None`). W Phase A implementujemy tylko Sheets-side i zwracamy stub. W Phase B podpinamy Calendar API pod te same kontrakty, bez przerabiania intencji. Tworzenie stuba zajmuje 5 minut na intencję, oszczędza tygodnie przerabiania logiki później.
+**Implikacja produktowa:** agent bez Kalendarza to notatnik, nie asystent. MVP wydajemy z dual-write od dnia 1.
 
 ---
 
@@ -64,23 +61,24 @@ Wszystkie intencje które pracują na istniejącym kliencie (`show_client`, `add
 
 **R4 nie stosuje się do `show_day_plan`** — bo to lista wszystkich wydarzeń dnia, nie operacja na konkretnym kliencie.
 
+**Duplicate resolution:** gdy przy `add_client` match = 1 w Sheets → agent przechodzi przez flow duplicate resolution (sekcja 5.3): krótki komunikat + `[Nowy]` / `[Aktualizuj]`, potem karta mutacyjna.
+
 ---
 
-## 4. Kontrakty intencji (6 × parser → karta → Sheets → Kalendarz → R4 → gap)
+## 4. Kontrakty intencji (5 × parser → karta → Sheets → Kalendarz → R4)
 
-Każda intencja ma 6 sekcji:
+Każda intencja ma 5 sekcji:
 1. **Parser** — co LLM wyciąga z inputu użytkownika, jakie są pola wymagane vs opcjonalne
 2. **Karta potwierdzenia** — dokładnie co agent pokazuje przed zapisem (R1)
 3. **Efekt w Sheets** — które komórki się zmieniają
 4. **Efekt w Kalendarzu** — jakie wydarzenie powstaje/aktualizuje się
 5. **Zachowanie R4** — jak identyfikowany jest klient
-6. **Gap dziś** — co w obecnym kodzie łamie ten kontrakt (bug z Sesji 1 lub starszy)
 
 ### 4.1. `add_client` — dodanie klienta
 
 **Parser:**
 - Pola obowiązkowe: `imię`, `nazwisko`, `miasto`
-- Pola opcjonalne na karcie: `telefon`, `email`, `adres` (ulica + numer), `produkt` (typ bez mocy), `źródło leada`, `data następnego kontaktu` (jeśli user sam poda — w przeciwnym razie po commit agent zadaje `next_action_prompt`, sekcja 5.1)
+- Pola opcjonalne na karcie: `telefon`, `email`, `adres` (ulica + numer), `produkt` (typ bez mocy), `źródło pozyskania`, `data następnego kontaktu` (jeśli user sam poda — w przeciwnym razie po commit agent zadaje `next_action_prompt`, sekcja 5.1)
 - Pola do Notatek: wszystko inne co rozpoznane — `moc PV/pompy/magazynu`, `metraż domu`, `metraż dachu`, `kierunek dachu`, `zużycie kWh`, `typ dachu`, `napięcie`, kontekst emocjonalny, luźne komentarze
 - Typ produktu: `PV` / `Pompa ciepła` / `Magazyn energii` / `PV + Magazyn` / kombinacje. **Nigdy moc w tej kolumnie.** (Klimatyzacja została świadomie wycięta z MVP — OZE-Agent nie obsługuje tego segmentu.)
 
@@ -104,18 +102,13 @@ Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę
 
 **Efekt w Sheets (po `✅ Zapisać`):**
 - Nowy wiersz w arkuszu
-- Kolumny: `A=Imię nazwisko`, `B=Telefon`, `C=Email`, `D=Miasto`, `E=Adres`, `F=Status="Nowy lead"`, `G=Produkt` (tylko typ), `H=Notatki` (wszystko inne, w tym moc/metraż/dach), `I=Data pierwszego kontaktu=dziś`, `J=Data ostatniego kontaktu=dziś`, `K=Następny krok` (z dropdowna, pusty chyba że user podał), `L=Data następnego kroku` (pusta chyba że user podał), `M=Źródło pozyskania` (jeśli parser wyciągnął), `N/O=Zdjęcia` (puste — Phase 4), `P=ID wydarzenia Kalendarz` (puste — Faza B)
+- Kolumny: `A=Imię nazwisko`, `B=Telefon`, `C=Email`, `D=Miasto`, `E=Adres`, `F=Status="Nowy lead"`, `G=Produkt` (tylko typ), `H=Notatki` (wszystko inne, w tym moc/metraż/dach), `I=Data pierwszego kontaktu=dziś`, `J=Data ostatniego kontaktu=dziś`, `K=Następny krok` (z dropdowna, pusty chyba że user podał), `L=Data następnego kroku` (pusta chyba że user podał), `M=Źródło pozyskania` (jeśli parser wyciągnął), `N/O` (puste — POST-MVP photo flow), `P=ID wydarzenia Kalendarz` (puste — POST-MVP)
 
-**Efekt w Kalendarzu (po [Tak]):**
-- **Jeśli user podał datę follow-upu** → wydarzenie typu `doc_followup` lub `phone_call` (zależnie czy użył słowa "zadzwonię" vs "wyślę") na podaną datę.
-- **Jeśli user NIE podał daty follow-upu** → brak wydarzenia w Kalendarzu (faza A: nie wymuszamy follow-upu; faza B: opcjonalnie domyślny "sprawdź lead" +3 dni — do decyzji).
+**Efekt w Kalendarzu (po `✅ Zapisać`):**
+- Jeśli user podał datę follow-upu ("zadzwonię jutro", "wyślę ofertę za tydzień") → wydarzenie typu `phone_call`/`doc_followup`/`in_person` zależnie od słów kluczowych.
+- Jeśli user nie podał daty → brak wydarzenia w Kalendarzu.
 
-**R4:** nie stosuje się (tworzymy nowego).
-
-**Gap dziś:**
-- Bug #14 (Sesja 1): moc obecnie nie była sklejana z produktem (próbowała → parser nie radził sobie z inflacją). **Ten bug znika razem z decyzją "moc → Notatki"** — nie trzeba go naprawiać, trzeba zmienić kontrakt parsera i system prompt.
-- Bug #15 (Sesja 1): brakujące pola na karcie czasem listują `dom 160m²` jako brakujące. Trzeba wyraźnie w system promptie: `Brakuje:` to tylko email/źródło/tel/adres/produkt, NIGDY specs techniczne.
-- Stare Bug #2 (regres po 10.04): parser czasem próbuje stworzyć kolumnę `moc_kw` mimo że nie ma takiej w schemacie. Musi być wyciągnięte z kodu parsera razem z decyzją moc→Notatki.
+**R4:** nie stosuje się (tworzymy nowego klienta; detekcja istniejącego klienta z match=1 → sekcja 5.3).
 
 ---
 
@@ -141,6 +134,7 @@ Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę, żona się boi
 ```
 
 **Zasady karty:**
+- Wyświetlaj **wszystkie uzupełnione kolumny** z Sheets **z wyjątkiem**: Zdjęcia (N), Link do zdjęć (O), ID wydarzenia Kalendarz (P). Nie pokazuj pustych pól.
 - Linia `Produkt:` zawiera tylko typ produktu, bez mocy i bez liczb.
 - `Ostatni kontakt` i `Następny krok` w formacie `DD.MM.YYYY (Dzień tygodnia)` — nigdy Excel serial, nigdy ISO.
 - Notatki zawsze jako ostatnia linia, w całości (bez skracania — handlowiec chce widzieć co wpisał).
@@ -162,10 +156,6 @@ Po wyborze (numer lub imię+miasto) → pokazuje pełną kartę jak single match
 **Efekt w Kalendarzu:** brak (read-only).
 
 **R4:** pełna reguła (samo nazwisko → zawsze multi-match disambiguation).
-
-**Gap dziś:**
-- Bug #16 (Sesja 1): polska odmiana gubi klienta katastrofalnie. "u Krzywińskim" → agent wymyśla "Kriwiński" i nie znajduje nikogo. Musi istnieć lematyzacja **przed** wyszukaniem — nie próba dopasować jak jest.
-- Stary Bug (Sesja 1 Test 6): Excel serial date leci do karty jako `46120` zamiast `11.04.2026 (Sobota)`. Formatowanie dat jest po stronie agenta, nie po stronie Sheets — trzeba konwertować w `format_client_card()`.
 
 ---
 
@@ -233,10 +223,6 @@ Jeśli handlowiec wciśnie `Dopisać` i dopisze `"ale o 14"` → karta się prze
 
 **R4:** pełna reguła.
 
-**Gap dziś:**
-- **Bug #6 (backlog):** `add_note` intent: "dodaj notatkę do Jana Nowaka" tworzy nowego klienta zamiast routingu do edit-note-of-existing. Musi istnieć jawna intencja `add_note`, nie udawana `add_client`. Routing w klasyfikatorze intencji.
-- **Bug #17 (Sesja 1):** add_note ignoruje miasto — jeśli user pisze "do Krzywińskiego z Wołomina", agent zapisuje do innego Krzywińskiego (Marki). Identyfikacja musi uwzględniać miasto nawet wtedy, gdy user dał jawny sygnał.
-
 ---
 
 ### 4.4. `change_status` — zmiana statusu + prompt o next action
@@ -273,19 +259,17 @@ Status: Oferta wysłana → Spotkanie umówione
 - Kolumna `F=Status`: nowa wartość
 - Kolumna `J=Data ostatniego kontaktu`: aktualizowana na dziś
 
-**Efekt w Kalendarzu (po [Tak]):**
-- **Opcjonalnie** wydarzenie "Status change" (faza B — do decyzji czy nas interesuje audyt przejść statusów w kalendarzu)
-- **Zawsze** po zmianie statusu agent pokazuje **prompt o next action** (sekcja 5 — state machine)
+**Efekt w Kalendarzu (po `✅ Zapisać`):**
+- Brak wydarzenia (change_status nie tworzy eventu w Calendar).
+- Po commit agent może pokazać `next_action_prompt` (sekcja 5.1) — tylko jeśli z mutacji nie wynika już następny krok.
 
 **R4:** pełna reguła.
-
-**Gap dziś:**
-- Bug z Sesji 1: multi-match disambiguation działa dla samego nazwiska, ale status change nie zawsze. Sprawdzić `intent_change_status` czy używa tej samej funkcji `identify_client` co pozostałe intencje.
-- Po [Tak] w change_status brak next action prompt — musi być dodany (sekcja 5 opisuje).
 
 ---
 
 ### 4.5. `add_meeting` — wydarzenie w Kalendarzu (4 typy)
+
+**Scope MVP:** single meeting tylko. Multi-meeting (kilka spotkań w jednej wiadomości) — POST-MVP (sekcja 8.1).
 
 **Parser:**
 - Pola obowiązkowe: identyfikator klienta (R4), data, godzina, typ wydarzenia
@@ -322,18 +306,13 @@ Typ: rozmowa telefoniczna
 - Kolumna `J=Data ostatniego kontaktu`: aktualizowana na dziś
 - Jeśli to spotkanie fizyczne i klient jest w statusie `Nowy lead` → **auto-przejście statusu na `Spotkanie umówione`** (bo status lejka powinien odzwierciedlać fakt że spotkanie jest w kalendarzu). Karta pokaże to w polu "Status: Nowy lead → Spotkanie umówione".
 
-**Efekt w Kalendarzu (po [Tak]):**
-- Nowe wydarzenie Google Calendar, title: `{imię nazwisko} ({miasto})`, opis: produkt + notatki, lokalizacja: adres klienta (dla in_person) lub telefon (dla phone_call), czas trwania: 1h (in_person), 15 min (phone_call), 0 min (offer_email, doc_followup — tylko termin)
-- Wydarzenie ma metadane `{client_sheet_row: X, event_type: "in_person"}` w polu extendedProperties (żeby reschedule/cancel mogło je znaleźć)
+**Efekt w Kalendarzu (po `✅ Zapisać`):**
+- Nowe wydarzenie Google Calendar, title: `{imię nazwisko} ({miasto})`, opis: produkt + notatki, lokalizacja: adres klienta (dla in_person) lub telefon (dla phone_call), czas trwania: 1h (in_person), 15 min (phone_call), 0 min (offer_email, doc_followup — tylko termin).
+- Wydarzenie ma metadane `{client_sheet_row: X, event_type: "in_person", managed_by: "oze-agent"}` w `extendedProperties`.
+
+**add_meeting dla istniejącego klienta:** agent identyfikuje klienta po imię+nazwisko+miasto (R4). Jeśli match=1 → enrichment z Sheets (adres, telefon, notatki, produkt trafiają do eventu). Jeśli match=0 → event tworzy się bez CRM context (user może dodać klienta osobno później).
 
 **R4:** pełna reguła.
-
-**Gap dziś:**
-- Stary Bug #1 (naprawiony bc765a2): "Spotkanie z Nowak" zamiast pełnego imienia → już działa.
-- Bug #8 (backlog): multi-meeting parser gubi imię w niektórych edge cases. MVP: nie robimy multi-meeting, tylko single — zgłaszamy jedno wydarzenie na raz.
-- Bug #9 (backlog): multi-meeting format daty bez roku. Jak wyżej, niedotyczy MVP single.
-- Bug #10 (backlog): polska odmiana w opisie wydarzenia — "Spotkanie z Jan Mazur" powinno być "z Janem Mazurem". Low priority.
-- **New:** auto-przejście statusu z `Nowy lead` → `Spotkanie umówione` jeszcze nie istnieje w kodzie — do dodania razem z add_meeting.
 
 ---
 
@@ -372,10 +351,6 @@ Typ: rozmowa telefoniczna
 
 **R4:** nie stosuje się.
 
-**Gap dziś:**
-- Stary gap: day plan jest "Option A partial" — pełne imiona OK, ale brak pełnego adresu i statusu dla in_person. To jest zaplanowane jako Option A polish (~2-3h po Option C).
-- Compact day plan format jest w system prompcie, ale rozrasta się dla >5 wydarzeń. MVP: akceptujemy długość, później ewentualnie "5 widocznych + X ukrytych, rozwiń?".
-
 ---
 
 ## 5. State machine pending flow (R1)
@@ -394,7 +369,7 @@ Wszystkie karty mutacyjne (add_client, add_note, change_status, add_meeting, com
 - **Karty read-only (`show_client`, `show_day_plan`) nie mają żadnych przycisków** — agent zwraca sam wynik, bo nic nie mutuje, R1 się nie stosuje.
 - **"Dopisać" nie jest tym samym co "dodać do istniejącego klienta"** — to tryb edycji pending karty, nie flow `add_note`. Disambiguacja "nowy klient vs dopisać do istniejącego" dzieje się na etapie parsera (sekcja 5.3), zanim karta w ogóle się pojawi.
 - **Compound flow** (jedna karta dla note + status + meeting, sekcja 5.2) używa tych samych 3 przycisków — `Zapisać` commituje wszystko atomowo, `Dopisać` pozwala doprecyzować (np. dorzucić godzinę spotkania), `Anulować` porzuca cały compound.
-- Stary wzorzec `[Tak] [Nie]` oraz `[Tak] [Zapisz bez]` **przestaje istnieć** — nie pojawia się w żadnej nowej karcie, a istniejące w kodzie miejsca są do migracji w Fazie A (krok A.9, sekcja 10).
+- Stary wzorzec `[Tak] [Zapisz bez]` **nie pojawia się w żadnej karcie mutacyjnej**. `[Tak] [Nie]` jest dopuszczalne tylko w pytaniach binarnych nie-mutacyjnych (sekcja 5.6).
 
 ### 5.3. Disambiguacja "nowy klient vs dopisać do istniejącego"
 
@@ -402,22 +377,15 @@ Każda mutacja, która wygląda jak `add_client` albo `add_note`, przechodzi prz
 
 1. Parser wyciąga `imię + nazwisko + miasto` (jeśli podane).
 2. Agent odpyta Sheets o istniejących klientów po tym kluczu.
-3. **Jeśli match = 1** → agent pokazuje dane istniejącego klienta + `[Nowy]` / `[Aktualizuj]`. `[Aktualizuj]` = merge do istniejącego wiersza. `[Nowy]` = utwórz osobny rekord. To jest routing decision, nie karta mutacyjna — R1 mutation card pojawia się po wyborze.
+3. **Jeśli match = 1** → agent pokazuje krótki komunikat "Ten klient już istnieje w arkuszu." + skrót danych istniejącego klienta + `[Nowy]` / `[Aktualizuj]`. Po kliknięciu → standardowa karta mutacyjna 3-button (`✅ Zapisać` / `➕ Dopisać` / `❌ Anulować`).
+   - `[Aktualizuj]` = merge do istniejącego wiersza (update pól z nowych danych)
+   - `[Nowy]` = utwórz osobny rekord (duplikat świadomy)
+   - To jest routing decision, nie karta mutacyjna — R1 mutation card pojawia się po wyborze.
 4. **Jeśli match ≥ 2** → multi-match disambiguation (numerowana lista miast/dat pierwszego kontaktu), handlowiec wybiera.
 5. **Jeśli match = 0** → normalny flow `add_client`.
 6. **Jeśli brak miasta w inpucie**, a po imieniu+nazwisku jest ≥ 1 wynik → agent dopyta "Który Kowalski — Warszawa czy Piaseczno?" zanim zacznie tworzyć cokolwiek.
 
 Ta detekcja pilnuje, żeby handlowiec nie zrobił duplikatu tego samego klienta w trzech miejscach arkusza, kiedy wpisze "dodaj Kowalskiego z Warszawy" pół roku po pierwszym wpisie.
-
-**Duplicate resolution — decyzja 13.04.2026:**
-
-Gdy agent wykryje istniejącego klienta (match = 1, pewny):
-- Agent od razu wyciąga istniejącego klienta i proponuje aktualizację
-- Jeśli użytkownik chce jawnie dodać duplikat ALBO match jest niepewny, agent pokazuje wybór: `[Nowy]` / `[Aktualizuj]`
-- `[Nowy]` = dodaj drugi osobny rekord
-- `[Aktualizuj]` = nadpisz/uzupełnij dane istniejącego klienta tym, co podał użytkownik
-
-Ta decyzja zastępuje wcześniejsze "domyślnie dopisz do istniejącego bez pytania". Przyciski `[Nowy]` / `[Aktualizuj]` są dopuszczalne w kontekście duplicate resolution — to nie jest karta mutacyjna, to pytanie o routing.
 
 ### 5.4. Calendar ↔ Sheets sync (decyzja 13.04.2026)
 
@@ -430,6 +398,8 @@ Gdy `add_meeting` commituje:
 - `Data ostatniego kontaktu` (kolumna J) = dziś
 - `Data następnego kroku` (kolumna L) = data spotkania
 - `Następny krok` (kolumna K) = typ spotkania
+
+**Uwaga:** `reschedule_meeting` jako intencja jest wycięta (sekcja 8.2). Jeśli handlowiec ręcznie zmienia event w Google Calendar, agent tego nie widzi — sync jest one-way przy mutacjach agentowych. Stan Sheets może się rozjechać z Calendar, jeśli user edytuje Calendar poza botem.
 
 ### 5.5. Wyświetlanie danych klienta (decyzja 13.04.2026)
 
@@ -444,71 +414,45 @@ Nie pokazujemy pustych pól. Nie pokazujemy surowych danych technicznych (`_row`
 
 | Kontekst | Przyciski |
 |----------|-----------|
-| Karta mutacyjna (add_client, add_note, add_meeting) | `[✅ Zapisać]` `[➕ Dopisać]` `[❌ Anulować]` |
-| Karta change_status | `[✅ Zapisać]` `[❌ Anulować]` (bez Dopisać — status to jedno pole) |
+| Karta mutacyjna (add_client, add_note, change_status, add_meeting) | `[✅ Zapisać]` `[➕ Dopisać]` `[❌ Anulować]` |
 | Duplicate resolution | `[Nowy]` `[Aktualizuj]` |
-| Proste pytanie binarne (nie karta zapisu) | `[Tak]` `[Nie]` dopuszczalne |
+| Proste pytanie binarne (nie karta zapisu) | `[Tak]` `[Nie]` dopuszczalne — np. potwierdzenie fuzzy match ("Chodziło o Kowalskiego z Warszawy?"), potwierdzenie transkrypcji voice |
 | Karta read-only (show_client, show_day_plan) | Brak przycisków |
 
 `[Tak]` / `[Nie]` **NIE zastępuje** karty zapisu do Sheets/Calendar/Drive. Jest dopuszczalne tylko w pytaniach binarnych nie-mutacyjnych.
 
 Każda intencja mutująca przechodzi przez **3 stany**: `parsed → pending → committed` (lub `cancelled`).
 
-> **Uwaga:** poniższy diagram używa starego [Tak]/[Nie]. Aktualne przyciski: sekcja 5.0 i 5.6.
+**Przejścia:**
 
-```
-       user input
-           │
-           ▼
-     ┌─────────────┐
-     │   parsed    │   LLM wyciągnął intencję + pola
-     └──────┬──────┘
-            │  agent pokazuje kartę
-            ▼
-     ┌─────────────┐
-     │   pending   │   czeka na [Tak] / [Nie] / wiadomość
-     └──────┬──────┘
-            │
-     ┌──────┴──────┐
-     ▼             ▼
-┌─────────┐   ┌──────────┐
-│ [Tak]   │   │  [Nie]   │
-└────┬────┘   └────┬─────┘
-     │             │
-     ▼             ▼
-┌─────────┐   ┌──────────┐
-│committed│   │cancelled │
-└────┬────┘   └──────────┘
-     │
-     │ (post-commit effects)
-     │
-     ├── Sheets write
-     ├── Calendar write
-     └── next_action_prompt (change_status only)
-```
-
-**Zasady przejść:**
-
-1. **`parsed → pending`:** agent ZAWSZE pokazuje kartę potwierdzenia (R1). Wyjątek: intencje read-only (`show_client`, `show_day_plan`) — one pomijają `pending` i idą wprost do wyniku.
-
-2. **`pending → committed`:** tylko po jawnym [Tak] lub tekstowym potwierdzeniu ("tak", "ok", "zapisz"). Każda inna wiadomość podczas `pending` → **state-lock fix**: anuluj bieżący pending, potraktuj nową wiadomość jako nowy input (intent classification). Ten fix już działa i jest lessons learned z Round 4.
-
-3. **`pending → cancelled`:** [Nie] lub "anuluj". Pending stan znika, user widzi krótkie "Anulowane. Co chcesz zrobić?".
-
-4. **`committed` → post-commit effects:**
-   - Sheets write (ZAWSZE przed Calendar write)
-   - Calendar write (jeśli kontrakt intencji tego wymaga)
-   - Dla `change_status` → **next_action_prompt** (sekcja 5.1)
+- `parsed → pending`: agent zawsze pokazuje kartę potwierdzenia (R1). Wyjątek: intencje read-only (`show_client`, `show_day_plan`) pomijają `pending` i idą wprost do wyniku.
+- `pending → committed`: tylko po kliknięciu `✅ Zapisać` na karcie mutacyjnej.
+- `pending → cancelled`: kliknięcie `❌ Anulować` lub tekstowe "anuluj". Pending znika, user widzi krótkie "Anulowane.".
+- Każda inna wiadomość podczas pending (która nie pasuje do schematu uzupełnienia, auto-doklejania ani compound fusion — sekcja 5.6 / R3) → auto-cancel pending + nowa wiadomość przechodzi przez klasyfikator jako świeży input.
+- `committed` → post-commit effects:
+  - Sheets write (zawsze przed Calendar write)
+  - Calendar write (jeśli kontrakt intencji tego wymaga)
+  - `next_action_prompt` (sekcja 5.1) — tylko gdy z mutacji nie wynika jeszcze następny krok
 
 **Niezmienniki:**
-- W żadnym momencie agent nie pisze do Sheets/Kalendarza zanim nie przejdzie przez `pending`+[Tak]. R1 to absolut.
+- W żadnym momencie agent nie pisze do Sheets/Kalendarza zanim nie przejdzie przez `pending` + `✅ Zapisać`. R1 to absolut.
 - Jeśli Sheets write uda się, ale Calendar write spadnie → agent informuje "Zapisałem do Sheets, ale kalendarz nie odpowiada. Spróbuj jeszcze raz za chwilę" i w Supabase/logu oznacza niespójność do ręcznego dopełnienia. Nie retry automatycznie (accepted tradeoff MVP).
 
-### 5.1. Next action prompt (po każdej mutacji, wolnotekstowy)
+### 5.1. Next action prompt (R7, warunkowy wolnotekstowy)
 
-**Zamrożone 11.04.2026** — odwrócenie decyzji z 10.04 wieczór (która usunęła R4 "zapytaj o następny kontakt"). Wracamy do pytania, ale w nowej, elastycznej formie.
+Po committed mutacji agent pokazuje **jedno wolnotekstowe pytanie** o następny krok — **ale tylko gdy z mutacji nie wynika jeszcze wprost następny krok.**
 
-Po każdym committed `add_client`, `add_note`, `change_status`, `add_meeting` — **o ile z tej mutacji nie wynika jeszcze wprost następny krok** (np. `add_meeting` sam w sobie definiuje następny krok, więc prompt się nie pojawia; ale `change_status → Oferta wysłana` bez meeting-follow-up = wyświetlamy prompt) — agent pokazuje **jedno wolnotekstowe pytanie**:
+**R7 ODPALA się po:**
+- `add_client` bez daty follow-upu (user nie podał kiedy kontakt dalej)
+- `add_note` czysty (bez komponentu czasowego w notatce)
+- `change_status` bez compound meeting (sam status zmieniony, brak follow-up spotkania)
+
+**R7 NIE ODPALA się po:**
+- `add_meeting` (samo definiuje następny krok — data spotkania)
+- Compound z `add_meeting` (Variant 1 post-visit flow, sekcja 5.2 — meeting już zdefiniował następny krok)
+- `add_client` z podaną datą follow-upu (user już określił co dalej)
+
+**Format:**
 
 ```
 ✅ Zapisane.
@@ -518,13 +462,12 @@ Co dalej z Janem Kowalskim z Warszawy? Spotkanie, telefon, mail, odłożyć na p
 ```
 
 **Zasady:**
-- To jest **jedno pytanie**, nie 4-przyciskowa trójka. Handlowiec odpowiada prozą.
+- To jedno pytanie, nie sztywna trójka. Handlowiec odpowiada prozą.
 - Jeśli odpowiedź zawiera typ akcji + datę/godzinę (`"telefon w piątek o 10"`) → agent parsuje jako `add_meeting(phone_call)` i startuje normalny flow z kartą potwierdzenia.
-- Jeśli odpowiedź to `"nie wiem jeszcze"`, `"później"`, `"zobaczę"` → agent zamyka flow bez tworzenia wydarzenia. Klient zostaje z `K=Następny krok` pustym (albo poprzednim, jeśli był).
-- Jeśli handlowiec wciśnie `❌ Anuluj / nic` → to samo co "nie wiem" — koniec flow.
-- **Wolnotekstowość jest celowa:** stara trójka meeting/call/not interested blokowała flow i irytowała. Teraz handlowiec może odpowiedzieć "zadzwoni sam, zostaw" i koniec — bez żadnej sztywnej procedury.
+- Jeśli odpowiedź to "nie wiem jeszcze", "później", "zobaczę" → agent zamyka flow bez tworzenia wydarzenia. Klient zostaje z `K=Następny krok` pustym.
+- Jeśli handlowiec wciśnie `❌ Anuluj / nic` → koniec flow.
 
-**Uzasadnienie:** bez tego pytania klienci zamierają w lejku w statusie "Nawiązano kontakt" tygodniami. Wolnotekstowa wersja nie blokuje, a jednocześnie przypomina handlowcowi, że ma klienta do obsłużenia dalej. Szczegóły decyzji: `SOURCE_OF_TRUTH.md` sekcja 4, 11.04.2026, punkt 3.
+**Uzasadnienie:** bez tego pytania klienci zamierają w lejku tygodniami. Wolnotekstowa wersja nie blokuje, a przypomina o kliencie.
 
 ### 5.2. Post-visit flow (notatki po spotkaniu) — Variant 1
 
@@ -544,9 +487,11 @@ Zapisuję:
 [✅ Zapisać] [➕ Dopisać] [❌ Anulować]
 ```
 
-3. Po [Tak] → wszystko leci w 3 sequential writes: Sheets (notatka), Sheets (status), Calendar (wydarzenie). Jeden commit, jedna karta — handlowiec nie klika 3 razy.
+3. Po `✅ Zapisać` → wszystko leci w 3 sequential writes: Sheets (notatka), Sheets (status), Calendar (wydarzenie). Jeden commit, jedna karta — handlowiec nie klika 3 razy.
 
-Variant 1 różni się od naiwnego "osobna karta dla każdej intencji" tym że **grupuje compound intencje w jedno pytanie**. To jest kluczowe dla UX w polu — handlowiec wraca ze spotkania i chce jednym ruchem zamknąć temat, nie odpowiadać 3x [Tak] na kolejne karty.
+**Compound z `add_meeting` NIE odpala R7** — następny krok już zdefiniowany przez meeting.
+
+Variant 1 różni się od naiwnego "osobna karta dla każdej intencji" tym że **grupuje compound intencje w jedno pytanie**. To jest kluczowe dla UX w polu — handlowiec wraca ze spotkania i chce jednym ruchem zamknąć temat, nie odpowiadać 3x na kolejne karty.
 
 ---
 
@@ -569,9 +514,9 @@ Kolumny w arkuszu "OZE Klienci", w kolejności. Ten schemat jest **zgodny 1:1 z 
 | K | Następny krok | enum | **TAK** (7 opcji) | Dropdown: Telefon, Spotkanie, Wysłać ofertę, Follow-up dokumentowy, Czekać na decyzję klienta, Nic — zamknięte, Inne. |
 | L | Data następnego kroku | date / datetime | — | `DD.MM.YYYY` lub `DD.MM.YYYY HH:MM`. Wypełniana automatycznie przy `add_meeting` (z daty wydarzenia) albo ręcznie przez handlowca. |
 | M | Źródło pozyskania | string | — | Np. "Facebook", "polecenie", "targi", "strona www". Opcjonalne. |
-| N | Zdjęcia | int / string | — | Licznik zdjęć lub krótki opis (np. "3 zdj. dachu"). Uzupełniany w Phase 4 (Drive). Dziś pole może być puste. |
-| O | Link do zdjęć | url | — | URL do folderu klienta w Google Drive: `/OZE-Agent/{imię nazwisko}_{miasto}/`. Uzupełniany w Phase 4. |
-| P | ID wydarzenia Kalendarz | string | — | Last-used Google Calendar event ID powiązany z klientem (do reverse lookup / aktualizacji). Może trzymać też `extendedProperties` hash. Uzupełniany w Fazie B. |
+| N | Zdjęcia | int / string | — | **POST-MVP (photo flow)**. W MVP pole puste. |
+| O | Link do zdjęć | url | — | **POST-MVP (photo flow)**. W MVP pole puste. |
+| P | ID wydarzenia Kalendarz | string | — | **POST-MVP**. Miało służyć reverse-lookup dla reschedule/cancel, ale te intencje są wycięte (sekcja 8.2). W MVP pole puste. |
 
 **Wiersz 1 (nagłówki) jest chroniony** (Protected range `A1:P1`) — handlowiec ani agent nie mogą go przepisywać, bo mapowanie kolumn przez `get_sheet_headers()` zależy od tego, żeby `H` zawsze zawierało dokładnie `"Notatki"`.
 
@@ -601,128 +546,36 @@ Plan dnia filtruje po `extendedProperties.managed_by == "oze-agent"` — żeby n
 
 ### 8.1. POST-MVP (wróci w późniejszej fazie)
 
-| Intencja | Dlaczego nie teraz | Kiedy |
-|---|---|---|
-| `filtruj_klientów` | Handlowiec rzadko filtruje w locie. Częściej robi to w dashboardzie (który powstaje w Phase późniejszej). Dla beta wystarczy `show_client` z nazwiskiem. | Po MVP beta, jeśli testerzy tego chcą |
-| `edit_client` | Pokrycie przez `add_note` + `change_status` wystarczy na MVP. Pełna edycja pola wymaga dodatkowego parsera i walidacji. | Po MVP, zależnie od feedbacku |
-| `lejek_sprzedazowy` | Funkcja dashboardowa, czeka na dashboard Next.js. W bocie wzorzec zostaje jako referencja. | Razem z dashboardem |
-| `voice input` | Phase 5 w implementation_guide. Whisper API + polski. Duża infra. | Phase 5 |
-| `Drive photos` | Phase 4. Zdjęcia z terenu → Drive folder klienta. | Phase 4 |
-| `proactive messages` | Brief poranny, podsumowanie wieczorne — scheduler-driven, wymaga APScheduler + dedupy. | Phase 6 |
+| Funkcja | Dlaczego nie teraz |
+|---|---|
+| `filtruj_klientów` | Handlowiec rzadko filtruje w locie. Dla beta wystarczy `show_client` z nazwiskiem. Później może w dashboardzie. |
+| `edit_client` | Pokrycie przez `add_note` + `change_status` wystarczy na MVP. Pełna edycja pola wymaga dodatkowego parsera i walidacji. |
+| `delete_client` | Nieplanowane w MVP. Poznaj-agenta opisuje jako wizję, ale w pierwszej wersji bota nie obsługujemy kasowania klientów. Handlowiec usuwa ręcznie w Sheets. |
+| `lejek_sprzedazowy` | Funkcja dashboardowa, czeka na dashboard Next.js. W bocie zostaje jako referencja. |
+| `multi-meeting` | Batch kilku spotkań w jednej wiadomości. MVP obsługuje single meeting tylko. |
+| `voice input` | Whisper API + polski. Duża infra + post-processing dla polskich nazw własnych. |
+| `Drive photos` | Zdjęcia z terenu → Drive folder klienta. Kolumny N i O w Sheets zostają puste w MVP. |
+| `proactive morning brief` | Scheduler-driven, wymaga APScheduler + dedupy. |
 
 ### 8.2. NIEPLANOWANE — wycięte na stałe (decyzja 11.04.2026 popołudnie)
 
 Te intencje **nigdy nie wejdą do produktu**. Były wcześniej oznaczone jako POST-MVP, ale po namyśle zostały wyrzucone — `SOURCE_OF_TRUTH.md` sekcja 4, 11.04.2026 popołudnie.
 
-| Intencja | Dlaczego na stałe wycięte | Co robi handlowiec zamiast |
+| Funkcja | Dlaczego na stałe wycięte | Co robi handlowiec zamiast |
 |---|---|---|
 | `reschedule_meeting` | Dwa flow (edycja wydarzenia + wyszukiwanie którego wydarzenia dotyczy) dla marginalnej wartości. Jedno spójne flow jest prostsze: skasuj stare, dodaj nowe. | Kasuje stare wydarzenie w Kalendarzu ręcznie i pisze `add_meeting` komendą |
 | `cancel_meeting` | Irreversible delete na podstawie interpretacji tekstu to ryzyko, którego agent nie bierze na siebie. | Kasuje wydarzenie w Kalendarzu bezpośrednio |
 | `free_slots` | Handlowiec widzi luki z `show_day_plan`. Osobna intencja liczenia wolnych slotów to overhead bez realnej wartości. | Patrzy na plan dnia komendą `co mam w X` |
 | `meeting_non_working_day_warning` | Handlowcy OZE pracują w soboty, niedziele, święta. Warning byłby fałszywym założeniem z innego segmentu. | Nic — `add_meeting` w weekend działa identycznie jak w dzień roboczy |
+| `pre-meeting reminders` | Agent nie wysyła przypomnień godzinę/30 min przed spotkaniem. Handlowiec ma Google Calendar na telefonie — native reminders działają. Duplikacja z poziomu bota to szum. | Używa natywnych przypomnień Google Calendar |
+| `daily interaction limit (100/day)` | Mechanizm limitu + pożyczania interakcji z następnego dnia. Opisany w product vision jako wizja, ale nie w MVP — nie komplikujemy pricing/quota na starcie. | — (MVP bez limitu) |
 
 Klasyfikator intencji musi rozpoznać wyrażenia "przełóż / zmień spotkanie / przesuń", "wolne okna / kiedy mam wolne", "odwołaj / skasuj spotkanie" — ale tylko po to, żeby odpowiedzieć jedną linią tłumaczącą co handlowiec ma zrobić zamiast. Nie ma karty, nie ma flow mutacji.
 
 ---
 
-## 9. Przyszłość: Phase 4 (Drive) + Phase 5 (Voice)
+## 9. Zakończenie
 
-**Phase 4 — Drive (zdjęcia klienta):**
-- Każdy klient ma folder w Google Drive: `/OZE-Agent/{imię nazwisko}_{miasto}/`
-- Handlowiec w terenie robi zdjęcie dachu → wysyła do bota → agent wrzuca do folderu klienta
-- Intencja: `add_photo` — pobiera telegram file, uploaduje do Drive, aktualizuje kolumny `N=Zdjęcia` (licznik/opis) + `O=Link do zdjęć` (URL do folderu)
-- **Mobile reminder (mobile Google Drive w terenie):** gdy handlowiec wrzuci zdjęcie do Telegrama, agent przypomni, że w apce Google Drive na telefonie można **skanować dokumenty** (przycisk "+" → "Skanuj") i że skany też można kierować do folderu klienta przez bota. To jest miękki push — krótka wiadomość po uploadzie, raz na sesję, bez zakłębienia.
-- Kontrakt już zaprojektowany: kolumny `N=Zdjęcia` i `O=Link do zdjęć` siedzą w zamrożonym schemacie sekcji 6. Dziś są puste, w Phase 4 zaczynają się wypełniać.
+Ten plik definiuje kontrakty 6 intencji MVP. Jeśli kod różni się od kontraktu — zmienia się kod. Jeśli kontrakt ma być zmieniony — najpierw decyzja Maana + edycja tego pliku, potem kod.
 
-**Phase 5 — Voice input:**
-- Telegram voice message → Whisper API (polski) → transkrypcja → normalny flow intencji
-- Intencja nie zmienia się, tylko wejście staje się głosem
-- Kontrakt: voice flow = text flow + transcription step z przodu
-- Ryzyko: Whisper gubi polskie nazwy własne (Krzywiński → Krivinski) — wymaga post-processingu przez lekki LLM fuzzy-match z listą istniejących klientów
-
----
-
-## 10. Kolejność implementacji (fazowanie)
-
-Produktowo: **wszystkie intencje MVP są zaprojektowane teraz**, kod pisany **fazowo**.
-
-### Faza A — Sheets-side + bugfixy z Sesji 1 Regresja
-
-Cel: wyprostować bugi z Sesji 1 Regresji, zamrozić kontrakty intencji na nowym schemacie 16-kolumnowym, dodać detekcję istniejącego klienta i context-aware resolution. Kalendarz jest już **częściowo podpięty** (Phase 3.1 single meeting + 3.3 day plan są w stanie PARTIAL, sekcja `CURRENT_STATUS.md`), więc Faza A nie jest "Sheets only" — raczej "Sheets + porządki + infrastruktura dla Fazy B". Kontrakty intencji już zawierają pole `calendar_event: CalendarEventDraft | None` — w tej fazie dla nowych intencji zostaje `None`, ale sygnatura się nie zmienia.
-
-1. **Bug #14 (moc → Notatki):** zmienić system prompt + parser, żeby moc nie trafiała do `G=Produkt`. Upewnić się że add_client test G1-G5 przechodzi.
-2. **Bug #15 (karta niespójna `Brakuje:`):** poprawić formatter karty, lista `Brakuje:` tylko pola opcjonalne-ważne.
-3. **Bug #16 (polska odmiana w search):** dodać lematyzację przed fuzzy match (biblioteka `morfeusz2` lub prosty pattern replace dla najczęstszych form przypadków).
-4. **Bug #17 (add_note ignoruje miasto):** poprawić identify_client żeby zawsze patrzył na miasto jeśli user je podał.
-5. **Bug #6 (add_note routing):** klasyfikator intencji musi rozpoznawać "dodaj notatkę do X" jako `add_note`, nie `add_client`.
-6. **Excel serial date bug:** formatowanie dat w `format_client_card()` (konwersja z Google Sheets serial na `DD.MM.YYYY (Dzień tygodnia)`).
-7. **Schemat 16-kolumnowy + dropdowny + ochrona nagłówka:** upewnić się, że realny arkusz Maana ma nazwy kolumn zgodne z sekcją 6, dropdowny na F (9 opcji) i K (7 opcji), oraz Protected range `A1:P1`. Kod nie potrzebuje zmiany (jest schema-agnostic), ale setup arkusza musi być zweryfikowany.
-8. **A.8 — Context-aware client resolution (NOWY krok):** implementacja funkcji `resolve_active_client(user_id, history_window=10)` + mechanizmu `user_data["active_client"]`. Gdy handlowiec mówi "dodaj że ma duży dom" bez wskazania klienta, agent bierze ostatnio aktywnego klienta z kontekstu (ostatnie 10 wiadomości). Infrastruktura (`get_conversation_history`) już istnieje w `shared/database.py`, brakuje tylko pamięci aktywnego klienta. Patrz `SOURCE_OF_TRUTH.md` sekcja 4 (11.04, punkt 9).
-9. **A.9 — Migracja kart do 3-przyciskowego UI:** wszystkie `[Tak] [Nie]` i `[Tak] [Zapisz bez]` w kodzie formatterów kart (`shared/formatting.py`, `bot/handlers/text.py`) zamieniamy na `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]` zgodnie z sekcją 5.0. Dopisywanie wymaga nowego handlera przycisku Dopisać, który utrzymuje pending w `user_data` i re-parsuje kolejną wiadomość z doklejonymi polami.
-10. **A.10 — Detekcja istniejącego klienta przed mutacją:** dodać krok "czy klient już istnieje" (sekcja 5.3) do parserów `add_client`, `add_note`, `change_status`, `add_meeting`. Bez tego flow `add_client` dla istniejącego klienta tworzy duplikat.
-11. **A.11 — `next_action_prompt` (wolnotekstowy):** po każdym commit mutacji (z wyjątkami z sekcji 5.1), agent wysyła otwarte pytanie o następny krok. Implementacja jako stan maszyny (`awaiting_next_action`) — kolejna wiadomość handlowca jest parsowana w kontekście tego pending prompt.
-12. **Stara R4 usunąć:** jeśli jeszcze gdzieś w kodzie jest "zapytaj o następny kontakt po add_client" w formie sztywnej trójki meeting/call/not interested — wyciąć i zastąpić wolnotekstowym (punkt 11).
-
-**Deliverable:** intencje `add_client`, `show_client`, `add_note`, `change_status` działają zgodnie z nowym kontraktem dla Sheets-side, z 3-button UI, detekcją istniejącego klienta, wolnotekstowym next_action_prompt i context-aware resolution. Calendar-side dla nowych intencji zawraca stub, ale istniejące meeting/day plan z Phase 3 działają dalej (nie psujemy).
-
-**Czas:** ~2-3 sesje Claude Code.
-
-### Faza B — Calendar-side (od day 1 tego samego contractu)
-
-Cel: podpiąć Google Calendar API pod intencje `add_meeting` i `show_day_plan`, plus dodać Calendar writes do `add_client` (follow-up optional), `add_note` (compound), `change_status` (next_action_prompt), `add_meeting` (wszystkie 4 typy).
-
-1. **Google Calendar API setup:** OAuth credentials, calendar list query, create/read/update event functions. Code path: `shared/google_calendar.py`.
-2. **`add_meeting` — 4 typy wydarzeń:** parser rozpoznaje typ, CalendarEventDraft buduje się na bazie typu, write do Calendar z extendedProperties.
-3. **`show_day_plan` — query Calendar:** filtr po `managed_by == "oze-agent"`, format output, sortowanie chronologiczne, pełne imię+miasto+adres+status dla in_person.
-4. **Auto-przejście statusu:** przy `add_meeting(in_person)`, jeśli klient jest w `Nowy lead`, automatyczna zmiana na `Spotkanie umówione` — pokazać to na karcie przed [Tak].
-5. **Next action prompt:** po `change_status` committed, zawsze pokazuj 4 przyciski.
-6. **Compound `add_note` + `phone_call`:** detekcja + karta z dwiema opcjami.
-7. **Variant 1 post-visit flow:** jedna karta zbiorcza dla compound (note + status + meeting).
-
-**Deliverable:** pełny MVP wszystkich intencji z dual-write Sheets+Calendar.
-
-**Czas:** ~3-4 sesje Claude Code.
-
-### Faza C — Bugfixy z Sesji Kalendarzowej (po pierwszych testach B)
-
-Będą. Nie znamy ich jeszcze. Przewidywane obszary:
-- Konflikty czasowe przy `add_meeting` (dodajesz 14:00 a masz już tam innego klienta)
-- Strefy czasowe (Europe/Warsaw) i letni/zimowy czas (edge case ~2 razy na rok)
-- Polska odmiana w tytule wydarzenia ("Jan Mazur" vs "Jana Mazura")
-
----
-
-## 11. Mapping bugów Sesji 1 (#11–#17) do intencji
-
-| Bug | Opis | Intencja | Faza naprawy |
-|---|---|---|---|
-| **#11** | `show_client` z samym nazwiskiem nie pokazuje multi-match nawet gdy jest 3 Kowalskich (zamiast tego zwraca pierwszego) | `show_client` | Faza A |
-| **#12** | `add_client` karta listuje `dom 160m²` jako "Brakuje:" (powinno iść do Notatek bez wspomnienia) | `add_client` | Faza A (Bug #15) |
-| **#13** | Format daty w `show_client` karta pokazuje `46120` zamiast `11.04.2026 (Sobota)` | `show_client` | Faza A |
-| **#14** | Moc (`8kW`) zostawiana w Notatkach jako "moc 8kW" ale produkt pozostaje "PV 8kW" — podwójna | `add_client` | Faza A (kontrakt zmieniony: moc → Notatki, produkt = typ) |
-| **#15** | `Brakuje:` w karcie add_client listuje rzeczy które nie powinny być listowane (metraż, kierunek dachu) | `add_client` | Faza A |
-| **#16** | Polska odmiana gubi klienta katastrofalnie ("u Krzywińskim" → bot halucynuje "Kriwiński") | `show_client`, `add_note`, `change_status`, `add_meeting` (wszystkie identyfikujące) | Faza A |
-| **#17** | `add_note` ignoruje miasto — zapis do wrong row mimo że user dał "z Wołomina" | `add_note` | Faza A |
-
-Stare bugi z wcześniejszych rund (#1-#10) są w `CURRENT_STATUS.md`. Bug #6 (add_note routing) i #8-#10 (multi-meeting/polska odmiana) nadal otwarte, wchodzą do Fazy A (#6) lub Fazy B/C (reszta).
-
----
-
-## 12. Zakończenie
-
-Ten plik jest **zamrożony** jako blueprint MVP. Zmiany tylko po decyzji produktowej Maana. Jeśli Claude Code w trakcie implementacji znajdzie rozbieżność z kontraktem → STOP, wyjaśnij konflikt, nie zmieniaj kontraktu samodzielnie.
-
-Po implementacji Fazy A + B + C, ten plik stanie się historycznym artefaktem (podobnie jak brief v5 dziś) — ale dopóki jesteśmy w fazie MVP, jest **drugim po SOURCE_OF_TRUTH.md** najwyższym dokumentem w hierarchii. Konflikty z `agent_behavior_spec_v5.md` rozstrzyga ten plik (bo jest nowszy i zawiera post-Sesja-1 decyzje).
-
-**Hierarchia SSOT po dodaniu tego pliku (zsynchronizowana z `SOURCE_OF_TRUTH.md` sekcja 6):**
-
-1. `docs/SOURCE_OF_TRUTH.md` — mapa + decision log
-2. `docs/INTENCJE_MVP.md` — **ten plik** — kontrakty intencji MVP, zamrożony schemat Sheets (najbardziej aktualny po 11.04)
-3. `docs/agent_behavior_spec_v5.md` — reguły R1-R6 + 52 testy akceptacyjne
-4. `docs/agent_system_prompt.md` — ton + wzorce odpowiedzi
-5. `docs/CURRENT_STATUS.md` — aktualny stan implementacji
-6. `docs/implementation_guide_2.md` — plan budowy
-7. `docs/poznaj_swojego_agenta_v5_FINAL.md` — opis user-facing
-8. `docs/archive/...` — historyczne artefakty
-
-`SOURCE_OF_TRUTH.md` sekcja 6 została zaktualizowana 11.04 (po Sesji 1 Regresja) i trzyma tę samą hierarchię — jeśli zobaczysz rozjazd, najpierw sprawdź datę edycji.
+**Hierarchia SSOT:** patrz `SOURCE_OF_TRUTH.md` sekcja 5.
