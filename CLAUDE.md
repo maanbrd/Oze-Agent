@@ -35,10 +35,10 @@ The current Python behavior layer is useful as reference, but not trusted as the
 - pending flow
 - confirmation cards
 - prompts
-- voice flow
-- photo flow
 - proactive scheduler / morning brief
 - agent decision layer
+
+Voice flow, photo flow, and multi-meeting are POST-MVP and not on the current rewrite list.
 
 Do not delete large parts of the codebase without explicit approval from Maan.
 
@@ -56,11 +56,23 @@ Then read task-specific docs:
 - Intent logic / Sheets schema / mutation contracts:
   - `docs/INTENCJE_MVP.md`
 
+- Architecture (layers, module boundaries, data flow):
+  - `docs/ARCHITECTURE.md`
+
+- Implementation roadmap / phasing / priorities:
+  - `docs/IMPLEMENTATION_PLAN.md`
+
+- Multi-agent / subagent workflow rules:
+  - `docs/AGENT_WORKFLOW.md`
+
 - Bot tone / response format / prompt behavior:
   - `docs/agent_system_prompt.md`
 
 - Behavioral rules / acceptance tests:
   - `docs/agent_behavior_spec_v5.md`
+
+- Manual Telegram test plan:
+  - `docs/TEST_PLAN_CURRENT.md`
 
 - Product vision / UX direction:
   - `docs/poznaj_swojego_agenta_v5_FINAL.md`
@@ -95,9 +107,9 @@ Mutation cards use:
 - `➕ Dopisać`
 - `❌ Anulować`
 
-`❌ Anulować` is one-click cancel.
+`❌ Anulować` is one-click cancel (no "Na pewno?" loop).
 
-`change_status` cards use 2 buttons only: `✅ Zapisać` + `❌ Anulować` (no Dopisać).
+All mutation cards — `add_client`, `add_note`, `change_status`, `add_meeting` — use the same 3-button pattern.
 
 `[Nowy]` / `[Aktualizuj]` is allowed for duplicate resolution (routing decision, not mutation confirmation).
 
@@ -220,9 +232,13 @@ Active docs have these roles:
 
 - `SOURCE_OF_TRUTH.md` — hierarchy and strategy
 - `CURRENT_STATUS.md` — current state and next step
-- `INTENCJE_MVP.md` — current intent contracts
+- `INTENCJE_MVP.md` — current intent contracts (MVP scope, Sheets schema)
+- `ARCHITECTURE.md` — layers, module boundaries, data flow
+- `IMPLEMENTATION_PLAN.md` — phasing and priorities for the selective rewrite
+- `AGENT_WORKFLOW.md` — multi-agent / subagent workflow rules
 - `agent_system_prompt.md` — runtime response style
 - `agent_behavior_spec_v5.md` — behavior rules and acceptance tests
+- `TEST_PLAN_CURRENT.md` — manual Telegram test plan
 - `poznaj_swojego_agenta_v5_FINAL.md` — product vision, not runtime contract
 
 ---
@@ -248,8 +264,6 @@ Follow `docs/CURRENT_STATUS.md`.
 
 At the current stage, the expected direction is:
 
-1. clean active documentation
-2. create `ARCHITECTURE.md`
-3. create `IMPLEMENTATION_PLAN.md`
-4. create `TEST_PLAN_CURRENT.md`
-5. then start selective rewrite of the behavior layer
+1. active documentation synchronized with 13-14.04 decisions (done)
+2. `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`, `AGENT_WORKFLOW.md`, `TEST_PLAN_CURRENT.md` in place (done)
+3. selective rewrite of the behavior layer per `docs/IMPLEMENTATION_PLAN.md` — next
