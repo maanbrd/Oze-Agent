@@ -56,7 +56,23 @@ Current voice/photo code (and any batch/multi-meeting fragments) is legacy refer
    - `TEST_PLAN_CURRENT.md`
    - `CLAUDE.md`
    - `SOURCE_OF_TRUTH.md`
-7. Przepisywać behavior layer zgodnie z `IMPLEMENTATION_PLAN.md`
+7. Phase 1 Infrastructure Audit — done (see `docs/PHASE1_AUDIT.md`)
+8. Phase 2 Behavior Contract Freeze — **next**
+9. Dopiero potem: przepisywać behavior layer zgodnie z `IMPLEMENTATION_PLAN.md`
+
+---
+
+## Phase 2 Behavior Contract Freeze — next
+
+Derived from `docs/PHASE1_AUDIT.md`. Top decisions to freeze before `shared/intent/` / `shared/mutations/` / `shared/clients/` work starts:
+
+1. **Sheets date format** — ISO (`YYYY-MM-DD` writes, formatter renders PL) vs direct PL (`DD.MM.YYYY` writes). Blocker before Phase 5.
+2. **Calendar timezone contract** — wrapper assumes naive datetimes are Warsaw (and attaches tzinfo) vs wrapper requires tz-aware datetimes from callers. Also: `get_events_for_date` must use Warsaw-local midnight boundary. Blocker before Phase 5 `add_meeting`.
+3. **Calendar reminders policy** — `reminders: {useDefault: True}` (rely on native Google Calendar default) vs `{useDefault: False, overrides: []}` (explicit suppression) vs no-touch-implicit (documented). Maan's direction: agent does not create reminders.
+4. **`Następny krok` (column K) enum values** — reconcile inline code hints (`Telefon / Spotkanie / Wysłać ofertę`) with canonical enum in `INTENCJE_MVP.md` / `agent_system_prompt.md` (`phone_call / in_person / doc_followup`).
+5. **Voice / photo handler registration scope (`bot/main.py`)** — unregister (fall through to fallback) vs register-to-POST-MVP-stub vs feature flags. Tie to intent router scope tiers from Phase 3.
+
+Full list of 9 decisions + ~32 housekeeping / security items: `docs/PHASE1_AUDIT.md`.
 
 ---
 
@@ -81,3 +97,4 @@ Current voice/photo code (and any batch/multi-meeting fragments) is legacy refer
 - `TEST_PLAN_CURRENT.md` — change_status 3-button, duplicate resolution testy (AC-4a/4b, AN-4, AM-8), show_day_plan (SDP-1..5), voice/photo flow usunięte, morning brief bez pipeline stats, evening follow-up dodany
 - `CLAUDE.md` — unified 3-button dla wszystkich mutacji (usunięty wyjątek change_status 2-button), Read First rozszerzone o ARCHITECTURE/IMPLEMENTATION_PLAN/AGENT_WORKFLOW/TEST_PLAN_CURRENT, rewrite list bez voice/photo (POST-MVP)
 - `SOURCE_OF_TRUTH.md` — czterowarstwowy podział zakresu prac (MVP / POST-MVP roadmap / Product vision only-wymaga decyzji / NIEPLANOWANE); reschedule_meeting, cancel_meeting, free_slots, delete_client eksplicite vision-only; Voice/photo/multi-meeting jako sekcja deferred; sekcja "Najbliższy krok" bez obietnicy "Phase 2"
+- `docs/PHASE1_AUDIT.md` — **stworzony**. Per-wrapper audyt 7 plików infrastruktury (Google Sheets/Calendar/Drive, Supabase, OpenAI/Claude, OAuth, Telegram plumbing). 6 MVP blockerów, 9 Phase 2 decisions, ~32 housekeeping/security items. Zero rewrite'ów — wszystkie wrappery zostają z adjustmentami.
