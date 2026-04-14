@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 13.04.2026_
+_Last updated: 14.04.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -27,16 +27,24 @@ Obecna strategia to **selective rewrite**.
 - auth / config
 - podstawowy Telegram plumbing
 
-### Do przepisania
+### Do przepisania w ramach selective rewrite
 
 - intent routing
 - pending flow
 - confirmation cards
 - prompts
-- voice flow
-- photo flow
 - proactive scheduler / morning brief
 - warstwa decyzyjna agenta
+
+### Odłożone poza pierwszą wersję behavior layer
+
+- voice flow
+- photo flow
+- multi-meeting
+
+Obecny kod voice/photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+
+Kolejność przepisywania w ramach selective rewrite (w tym czy proactive scheduler/morning brief wchodzi w pierwszej rundzie, czy później) jest decyzją `IMPLEMENTATION_PLAN.md`, nie SSOT.
 
 Największą wartością projektu są aktualne pliki `.md`, nie obecna implementacja behavior layer.
 
@@ -50,8 +58,8 @@ Największą wartością projektu są aktualne pliki `.md`, nie obecna implement
 | `CURRENT_STATUS.md` | aktywny | krótki stan bieżący i najbliższy krok |
 | `INTENCJE_MVP.md` | aktywny | kontrakt intencji MVP, Sheets schema, mutacje |
 | `agent_system_prompt.md` | aktywny | ton agenta, zakazane frazy, wzorce odpowiedzi |
-| `agent_behavior_spec_v5.md` | aktywny, do synchronizacji | reguły zachowania, testy akceptacyjne, scenariusze |
-| `poznaj_swojego_agenta_v5_FINAL.md` | aktywny jako wizja | opis produktu / UX North Star, nie kontrakt implementacyjny |
+| `agent_behavior_spec_v5.md` | aktywny, zsynchronizowany 14.04 | reguły zachowania, testy akceptacyjne, scenariusze |
+| `poznaj_swojego_agenta_v5_FINAL.md` | aktywny jako Product Vision / UX North Star, zsynchronizowany 14.04 | opis produktu, nie kontrakt implementacyjny |
 | `ARCHITECTURE.md` | aktywny | architektura nowej wersji behavior layer |
 | `IMPLEMENTATION_PLAN.md` | aktywny | kolejność przepisywania agenta |
 | `TEST_PLAN_CURRENT.md` | aktywny | aktualny plan testów dla nowej wersji |
@@ -126,32 +134,41 @@ Kanoniczny schemat arkusza jest w `INTENCJE_MVP.md`.
 
 Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
-### Intencje out of MVP
+### Zakres prac — warstwy
 
-Na dziś poza aktualnym MVP / selective rewrite są:
+**MVP** (kontrakt w `INTENCJE_MVP.md`):
+
+- 6 intencji MVP: `add_client`, `show_client`, `add_note`, `change_status`, `add_meeting`, `show_day_plan`
+- `general_question` (catch-all dla pytań poza 6 intencjami)
+
+**POST-MVP roadmap** (realnie planowane po MVP, wymaga tylko harmonogramu):
 
 - `edit_client`
-- `delete_client`
+- `multi-meeting` (batch kilku spotkań w jednej wiadomości)
+- `voice_input`
+- `photo_upload` (Drive)
+- import CSV / Excel
+- pełny dashboard
+
+**Product vision only / wymaga osobnej decyzji Maana** — opisane w `poznaj_swojego_agenta_v5_FINAL.md` jako wizja, ale **nie zatwierdzone jako roadmapa**. Każdą trzeba osobno zaakceptować przed wejściem do implementacji. **Nie są NIEPLANOWANE i nie są POST-MVP roadmap** — zostają w tej warstwie dopóki Maan nie zdecyduje inaczej:
+
 - `reschedule_meeting`
 - `cancel_meeting`
 - `free_slots`
-- import CSV / Excel
-- pełny dashboard
-- limit interakcji dziennych (100/dzień z pożyczaniem — wizja, nie MVP)
+- `delete_client` (ryzykowna mutacja — wymaga dodatkowej ostrożności)
+- nauka nawyków (np. domyślna długość spotkania)
+- elastyczne kolumny arkusza / refresh kolumn
+- dzienny budżet interakcji — product/business direction, bez zatwierdzonej liczby i bez mechaniki pożyczania z dnia następnego. Nie jest kontraktem MVP.
 
-`poznaj_swojego_agenta_v5_FINAL.md` może opisywać te funkcje jako wizję produktu, ale nie oznacza to, że są częścią obecnej implementacji.
+**NIEPLANOWANE** (trwale poza zakresem):
 
-### Voice i photo
+- pre-meeting reminders po stronie agenta — przypomnienia przed spotkaniem obsługuje natywnie Google Calendar
 
-Voice i photo są częścią wizji produktu, ale obecna implementacja nie jest zaufana.
+### Voice, photo i multi-meeting
 
-W selective rewrite trzeba zdecydować jawnie:
-
-- czy voice wchodzi do pierwszej wersji nowego behavior layer
-- czy photo wchodzi do pierwszej wersji nowego behavior layer
-- jakie mają confirmation flow
-
-Do czasu tej decyzji nie traktujemy obecnego voice/photo flow jako kanonicznego.
+- Nie wchodzą do pierwszej wersji selective rewrite.
+- Zostają jako POST-MVP / późniejsza runda.
+- Obecny kod voice/photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
 
 ### Product Vision
 
@@ -235,7 +252,7 @@ Czytaj:
 | `INTENCJE_MVP.md` | ✅ Zsynchronizowany (dual-write, duplicate resolution, buttons, display) |
 | `agent_system_prompt.md` | ✅ Zsynchronizowany (button policies, display rules) |
 | `agent_behavior_spec_v5.md` | ✅ Zsynchronizowany (duplicate flow, show_client, Calendar sync) |
-| `poznaj_swojego_agenta_v5_FINAL.md` | Bez zmian — product vision, not runtime contract |
+| `poznaj_swojego_agenta_v5_FINAL.md` | ✅ Zsynchronizowany 14.04 jako Product Vision / UX North Star, nie runtime contract |
 
 ---
 
@@ -243,4 +260,4 @@ Czytaj:
 
 Phase 1 z `IMPLEMENTATION_PLAN.md`: Infrastructure Audit.
 
-Sprawdzić wrappery → verdict per wrapper → potem Phase 2 (behavior contracts sync) → Phase 3 (intent router rewrite).
+Sprawdzić wrappery → verdict per wrapper → potem kontynuować rewrite zgodnie z `IMPLEMENTATION_PLAN.md`.
