@@ -4,6 +4,7 @@ from bot.handlers.text import (
     _BANNER_INTENTS,
     _HANDLERS,
     _intent_result_to_legacy_dict,
+    _message_with_r7_client_context,
     handle_banner,
     handle_general,
 )
@@ -105,3 +106,27 @@ def test_general_question_fallback_resolves_to_handle_general():
     legacy = _intent_result_to_legacy_dict(result, "?")
     assert legacy["intent"] == "general_question"
     assert legacy["confidence"] == 0.0
+
+
+def test_r7_context_injected_when_reply_has_no_client_name():
+    text = _message_with_r7_client_context(
+        "Spotkanie 18 kwietnia o 14",
+        {"client_name": "Jan Kowalski", "city": "Warszawa"},
+    )
+    assert text == "Spotkanie 18 kwietnia o 14 z Jan Kowalski Warszawa"
+
+
+def test_r7_context_not_injected_when_reply_mentions_client_name():
+    text = _message_with_r7_client_context(
+        "Spotkanie z Kowalskim 18 kwietnia o 14",
+        {"client_name": "Jan Kowalski", "city": "Warszawa"},
+    )
+    assert text == "Spotkanie z Kowalskim 18 kwietnia o 14"
+
+
+def test_r7_context_not_injected_when_reply_has_explicit_with_phrase():
+    text = _message_with_r7_client_context(
+        "Spotkanie z Nowakiem 18 kwietnia o 14",
+        {"client_name": "Jan Kowalski", "city": "Warszawa"},
+    )
+    assert text == "Spotkanie z Nowakiem 18 kwietnia o 14"

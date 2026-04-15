@@ -136,6 +136,25 @@ def _intent_result_to_legacy_dict(result: IntentResult, message_text: str) -> di
     }
 
 
+def _message_with_r7_client_context(message_text: str, flow_data: dict) -> str:
+    client_name = (flow_data.get("client_name") or "").strip()
+    if not client_name:
+        return message_text
+
+    text_lower = message_text.lower()
+    name_parts = [p for p in re.split(r"\s+", client_name.lower()) if len(p) > 2]
+    if any(part in text_lower for part in name_parts):
+        return message_text
+    if re.search(r"\bz\s+\S+", text_lower):
+        return message_text
+
+    city = (flow_data.get("city") or "").strip()
+    context = client_name
+    if city and city.lower() not in text_lower:
+        context = f"{context} {city}"
+    return f"{message_text} z {context}"
+
+
 # ── Guards ─────────────────────────────────────────────────────────────────────
 
 
@@ -394,7 +413,10 @@ async def _route_pending_flow(
             or bool(_TIME_RE.search(text_lower))
         )
         if has_temporal:
-            await handle_add_meeting(update, context, user, {}, message_text)
+            meeting_text = _message_with_r7_client_context(
+                message_text, flow.get("flow_data", {})
+            )
+            await handle_add_meeting(update, context, user, {}, meeting_text)
         # Otherwise: unclear reply → consume silently (don't re-classify as add_client)
         return True
     else:
