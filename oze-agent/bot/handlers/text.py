@@ -39,6 +39,7 @@ from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
     AddNotePayload,
+    ChangeStatusPayload,
     PendingFlow,
     PendingFlowType,
     payload_to_flow_data,
@@ -1509,14 +1510,22 @@ async def handle_change_status(
             )
             return
 
-    save_pending_flow(telegram_id, "change_status", {
-        "row": client.get("_row"),
-        "field": "Status",
-        "old_value": old_status,
-        "new_value": new_status,
-        "client_name": client.get("Imię i nazwisko", ""),
-        "city": client.get("Miasto", ""),
-    })
+    row = client.get("_row")
+    if row is None:
+        logger.error("handle_change_status: client without _row: %s", client)
+        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        return
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.CHANGE_STATUS,
+        flow_data=payload_to_flow_data(ChangeStatusPayload(
+            row=row,
+            new_value=new_status,
+            client_name=client.get("Imię i nazwisko", ""),
+            old_value=old_status,
+            city=client.get("Miasto", ""),
+        )),
+    ))
 
     await update.effective_message.reply_markdown_v2(
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"

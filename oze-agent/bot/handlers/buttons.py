@@ -25,6 +25,7 @@ from shared.database import (
 from shared.pending import (
     AddClientPayload,
     AddNotePayload,
+    ChangeStatusPayload,
     PendingFlow,
     PendingFlowType,
     payload_to_flow_data,
@@ -182,14 +183,22 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                 else:
                     await query.edit_message_text("Podaj nowy status dla klienta.")
                 return
-            save_pending_flow(telegram_id, "change_status", {
-                "row": client.get("_row"),
-                "field": "Status",
-                "old_value": old_status,
-                "new_value": new_status,
-                "client_name": client.get("Imię i nazwisko", ""),
-                "city": client.get("Miasto", ""),
-            })
+            row = client.get("_row")
+            if row is None:
+                logger.error("buttons change_status: client without _row: %s", client)
+                await query.edit_message_text("❌ Wystąpił błąd. Spróbuj ponownie.")
+                return
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.CHANGE_STATUS,
+                flow_data=payload_to_flow_data(ChangeStatusPayload(
+                    row=row,
+                    new_value=new_status,
+                    client_name=client.get("Imię i nazwisko", ""),
+                    old_value=old_status,
+                    city=client.get("Miasto", ""),
+                )),
+            ))
             await query.edit_message_text(
                 f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
                 + format_edit_comparison("Status", old_status, new_status),
