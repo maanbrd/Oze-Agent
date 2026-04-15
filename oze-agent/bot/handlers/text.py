@@ -556,7 +556,7 @@ async def handle_add_client(
     all_clients = await get_all_clients(user_id)
     name = client_data.get("Imię i nazwisko", "")
     city = client_data.get("Miasto", "")
-    duplicate = detect_potential_duplicate(name, city, all_clients) if name and city else None
+    duplicate = detect_potential_duplicate(name, city, all_clients) if name else None
 
     if duplicate:
         dup_name = duplicate.get("Imię i nazwisko", "")

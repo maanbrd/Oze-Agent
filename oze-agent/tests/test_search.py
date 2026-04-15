@@ -135,15 +135,66 @@ def test_detect_potential_duplicate_finds_typo():
     assert result["Imię i nazwisko"] == "Jan Kowalski"
 
 
-def test_detect_potential_duplicate_different_city():
+def test_detect_potential_duplicate_different_city_still_matches():
+    """Same full name in a different city is now flagged as a potential duplicate."""
     existing = [
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
     ]
     result = detect_potential_duplicate("Jan Kowalski", "Kraków", existing)
-    assert result is None
+    assert result is not None
+    assert result["Imię i nazwisko"] == "Jan Kowalski"
 
 
 def test_detect_potential_duplicate_no_match():
     existing = [{"Imię i nazwisko": "Anna Nowak", "Miasto": "Kraków", "_row": 2}]
     result = detect_potential_duplicate("Piotr Wiśniewski", "Gdańsk", existing)
     assert result is None
+
+
+def test_detect_potential_duplicate_new_missing_city_matches():
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
+    ]
+    result = detect_potential_duplicate("Jan Kowalski", "", existing)
+    assert result is not None
+    assert result["Imię i nazwisko"] == "Jan Kowalski"
+
+
+def test_detect_potential_duplicate_existing_missing_city_matches():
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "", "_row": 2},
+    ]
+    result = detect_potential_duplicate("Jan Kowalski", "Warszawa", existing)
+    assert result is not None
+    assert result["Imię i nazwisko"] == "Jan Kowalski"
+
+
+def test_detect_potential_duplicate_both_missing_city_matches():
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "", "_row": 2},
+    ]
+    result = detect_potential_duplicate("Jan Kowalski", "", existing)
+    assert result is not None
+    assert result["Imię i nazwisko"] == "Jan Kowalski"
+
+
+def test_detect_potential_duplicate_first_name_only_no_match():
+    """Single-token input like 'Jan' must not match 'Jan Kowalski' — guards
+    against overmatching first-name-only entries."""
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
+    ]
+    result = detect_potential_duplicate("Jan", "Warszawa", existing)
+    assert result is None
+
+
+def test_detect_potential_duplicate_prefers_same_city_over_name_only():
+    """When multiple same-name rows exist, a same-city match must beat a
+    name-only fallback even if the name-only row is listed first."""
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 2},
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 3},
+    ]
+    result = detect_potential_duplicate("Jan Kowalski", "Warszawa", existing)
+    assert result is not None
+    assert result["_row"] == 3

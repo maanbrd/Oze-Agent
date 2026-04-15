@@ -107,20 +107,39 @@ def find_best_match(query: str, candidates: list[str]) -> str | None:
 def detect_potential_duplicate(
     name: str, city: str, existing_clients: list[dict]
 ) -> dict | None:
-    """Check if a client with a similar name in the same city already exists.
+    """Check if a client with a similar full name already exists.
 
-    Returns the existing client dict if a duplicate is found, else None.
+    Match rule: full name (≥2 tokens) within Levenshtein distance 2.
+    Same/similar city wins over a name-only match; if no same-city match is
+    found, the first name-only match is returned as fallback. Missing city on
+    either side is allowed — the name match still wins.
+
+    MVP limitation: when multiple same-name clients exist in different cities
+    and the new input has no city, we return the first name-only fallback in
+    iteration order. A future slice may turn this into an explicit
+    disambiguation flow.
     """
     name_norm = normalize_polish(name)
-    city_norm = normalize_polish(city)
+    # Guard against overmatching first-name-only inputs like "Jan".
+    if len(name_norm.split()) < 2:
+        return None
+    city_norm = normalize_polish(city or "")
 
+    name_only_fallback: dict | None = None
     for client in existing_clients:
         existing_name = normalize_polish(client.get("Imię i nazwisko", ""))
         existing_city = normalize_polish(
             client.get("Miasto", client.get("Miejscowość", ""))
         )
-        name_dist = levenshtein_distance(name_norm, existing_name)
-        city_dist = levenshtein_distance(city_norm, existing_city)
-        if name_dist <= 2 and city_dist <= 1:
+        if levenshtein_distance(name_norm, existing_name) > 2:
+            continue
+        # Same-city match wins immediately (preserves prior behavior).
+        if (
+            city_norm
+            and existing_city
+            and levenshtein_distance(city_norm, existing_city) <= 1
+        ):
             return client
-    return None
+        if name_only_fallback is None:
+            name_only_fallback = client
+    return name_only_fallback
