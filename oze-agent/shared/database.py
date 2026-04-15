@@ -129,11 +129,12 @@ def get_daily_interaction_count(telegram_id: int, day: date) -> int:
             .select("count, borrowed_from_tomorrow")
             .eq("telegram_id", telegram_id)
             .eq("date", day.isoformat())
-            .single()
+            .limit(1)
             .execute()
         )
         if result.data:
-            return result.data["count"] + result.data["borrowed_from_tomorrow"]
+            row = result.data[0]
+            return row["count"] + row["borrowed_from_tomorrow"]
         return 0
     except Exception as e:
         logger.debug("get_daily_interaction_count(%s, %s): %s", telegram_id, day, e)
@@ -144,16 +145,16 @@ def increment_daily_interaction_count(telegram_id: int, day: date) -> int:
     """Upsert daily count row, increment by 1. Returns new count."""
     try:
         client = get_supabase_client()
-        result = (
+        existing = (
             client.table("daily_interaction_counts")
             .select("count")
             .eq("telegram_id", telegram_id)
             .eq("date", day.isoformat())
-            .single()
+            .limit(1)
             .execute()
         )
-        if result.data:
-            new_count = result.data["count"] + 1
+        if existing.data:
+            new_count = existing.data[0]["count"] + 1
             client.table("daily_interaction_counts").update(
                 {"count": new_count}
             ).eq("telegram_id", telegram_id).eq("date", day.isoformat()).execute()
