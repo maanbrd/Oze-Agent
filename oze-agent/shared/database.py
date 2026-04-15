@@ -4,7 +4,7 @@ All functions use the service key (bypasses RLS). Returns None on failure.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from supabase import Client, create_client
@@ -191,14 +191,27 @@ def save_conversation_message(
         logger.error("save_conversation_message(%s): %s", telegram_id, e)
 
 
-def get_conversation_history(telegram_id: int, limit: int = 10) -> list:
-    """Return the last `limit` messages for this user, oldest first."""
+def get_conversation_history(
+    telegram_id: int,
+    limit: int = 10,
+    since: Optional[timedelta] = None,
+) -> list:
+    """Return the last `limit` messages for this user, oldest first.
+
+    If `since` is provided, only rows newer than `now_utc - since` are returned.
+    """
     try:
-        result = (
+        query = (
             get_supabase_client()
             .table("conversation_history")
             .select("role, content, message_type, created_at")
             .eq("telegram_id", telegram_id)
+        )
+        if since is not None:
+            cutoff = datetime.now(tz=timezone.utc) - since
+            query = query.gte("created_at", cutoff.isoformat())
+        result = (
+            query
             .order("created_at", desc=True)
             .limit(limit)
             .execute()
