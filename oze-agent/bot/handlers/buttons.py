@@ -20,7 +20,6 @@ from shared.database import (
     delete_pending_flow,
     get_pending_flow,
     increment_daily_interaction_count,
-    save_pending_flow,
 )
 from shared.pending import (
     AddClientPayload,
