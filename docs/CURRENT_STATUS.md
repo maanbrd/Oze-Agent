@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 14.04.2026_
+_Last updated: 15.04.2026_
 
 ---
 
@@ -57,22 +57,25 @@ Current voice/photo code (and any batch/multi-meeting fragments) is legacy refer
    - `CLAUDE.md`
    - `SOURCE_OF_TRUTH.md`
 7. Phase 1 Infrastructure Audit — done (see `docs/PHASE1_AUDIT.md`)
-8. Phase 2 Behavior Contract Freeze — **next**
-9. Dopiero potem: przepisywać behavior layer zgodnie z `IMPLEMENTATION_PLAN.md`
+8. Phase 2 Behavior Contract Freeze — done (see `docs/PHASE2_CONTRACT_FREEZE.md`; 9/9 decyzji frozen, commits `65b5661` + `117f9c2`)
+9. Phase 3 — Intent Router Rewrite — **next** (per `docs/IMPLEMENTATION_PLAN.md`)
 
 ---
 
-## Phase 2 Behavior Contract Freeze — next
+## Phase 2 Behavior Contract Freeze — done
 
-Derived from `docs/PHASE1_AUDIT.md`. Top decisions to freeze before `shared/intent/` / `shared/mutations/` / `shared/clients/` work starts:
+9/9 decyzji zamrożonych — pełny kontrakt behavior layer spisany w `docs/PHASE2_CONTRACT_FREEZE.md`.
 
-1. **Sheets date format** — ISO (`YYYY-MM-DD` writes, formatter renders PL) vs direct PL (`DD.MM.YYYY` writes). Blocker before Phase 5.
-2. **Calendar timezone contract** — wrapper assumes naive datetimes are Warsaw (and attaches tzinfo) vs wrapper requires tz-aware datetimes from callers. Also: `get_events_for_date` must use Warsaw-local midnight boundary. Blocker before Phase 5 `add_meeting`.
-3. **Calendar reminders policy** — `reminders: {useDefault: True}` (rely on native Google Calendar default) vs `{useDefault: False, overrides: []}` (explicit suppression) vs no-touch-implicit (documented). Maan's direction: agent does not create reminders.
-4. **`Następny krok` (column K) enum values** — reconcile inline code hints (`Telefon / Spotkanie / Wysłać ofertę`) with canonical enum in `INTENCJE_MVP.md` / `agent_system_prompt.md` (`phone_call / in_person / doc_followup`).
-5. **Voice / photo handler registration scope (`bot/main.py`)** — unregister (fall through to fallback) vs register-to-POST-MVP-stub vs feature flags. Tie to intent router scope tiers from Phase 3.
+- **Package 1** (`65b5661`) — D1 Sheets date format, D2 Calendar timezone contract, D3 Calendar reminders policy, D4 `Następny krok` enum values.
+- **Package 2** (`117f9c2`) — D5 voice/photo/multi-meeting handler scope, D6 `get_conversation_history` 30-min window, D7 Calendar scope narrowing, D8 extendedProperties, D9 user timezone.
 
-Full list of 9 decisions + ~32 housekeeping / security items: `docs/PHASE1_AUDIT.md`.
+Housekeeping / security items z Phase 1 audit (~32) — osobny backlog, obsługiwane w miarę implementacji Phase 3-7.
+
+## Phase 3 — Intent Router Rewrite — next
+
+Per `docs/IMPLEMENTATION_PLAN.md` Phase 3. Klasyfikator 6 MVP intentów + `general_question` z strukturalnym JSON output. Rozróżnia POST-MVP roadmap / vision-only / NIEPLANOWANE z odpowiednio różnymi reply templates.
+
+Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, D6 30-min history window) są wejściem dla Phase 3.
 
 ---
 
@@ -98,3 +101,9 @@ Full list of 9 decisions + ~32 housekeeping / security items: `docs/PHASE1_AUDIT
 - `CLAUDE.md` — unified 3-button dla wszystkich mutacji (usunięty wyjątek change_status 2-button), Read First rozszerzone o ARCHITECTURE/IMPLEMENTATION_PLAN/AGENT_WORKFLOW/TEST_PLAN_CURRENT, rewrite list bez voice/photo (POST-MVP)
 - `SOURCE_OF_TRUTH.md` — czterowarstwowy podział zakresu prac (MVP / POST-MVP roadmap / Product vision only-wymaga decyzji / NIEPLANOWANE); reschedule_meeting, cancel_meeting, free_slots, delete_client eksplicite vision-only; Voice/photo/multi-meeting jako sekcja deferred; sekcja "Najbliższy krok" bez obietnicy "Phase 2"
 - `docs/PHASE1_AUDIT.md` — **stworzony**. Per-wrapper audyt 7 plików infrastruktury (Google Sheets/Calendar/Drive, Supabase, OpenAI/Claude, OAuth, Telegram plumbing). 6 MVP blockerów, 9 Phase 2 decisions, ~32 housekeeping/security items. Zero rewrite'ów — wszystkie wrappery zostają z adjustmentami.
+
+### Sesja 15.04
+
+- `docs/PHASE2_CONTRACT_FREEZE.md` — **stworzony i domknięty**. 9/9 decyzji zamrożonych: D1 Sheets date format (ISO + PL display), D2 Calendar timezone (tz-aware Warsaw, wrapper rejects naive), D3 Calendar reminders (`useDefault: True`, no scheduler pre-meeting), D4 `Następny krok` enum (runtime English ↔ Sheets Polish, K=label never date), D5 voice/photo/multi-meeting → POST-MVP stub, D6 `get_conversation_history` hybrid `since` param (MVP mandate 30 min), D7 Calendar full scope in MVP (narrowing = POST-MVP hardening), D8 minimal `extendedProperties.private.event_type` + Sheets P as primary link, D9 hardcoded `Europe/Warsaw` via single `DEFAULT_TIMEZONE` constant. Commits: `65b5661` (D1-D4), `117f9c2` (D5-D9).
+- `INTENCJE_MVP.md` — docs follow-up: §4.5 K/L semantics per D4 (K=label, L=data, P=event_id), extendedProperties tylko `event_type` per D8 (usunięte `client_sheet_row`/`managed_by`), §7 plan dnia filtruje po dedykowanym OZE calendar zamiast `managed_by` flag, offer_email emoji 📨.
+- `IMPLEMENTATION_PLAN.md` — dopisane POST-MVP roadmap items: `calendar_scope_narrowing` (D7), `multi_timezone_support` (D9).

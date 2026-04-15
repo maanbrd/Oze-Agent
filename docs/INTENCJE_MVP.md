@@ -302,13 +302,15 @@ Typ: rozmowa telefoniczna
 ```
 
 **Efekt w Sheets (po [Tak]):**
-- Kolumna `K=Następny krok`: zaktualizowana do daty wydarzenia w formacie `15.04.2026 (Środa) 14:00`
+- Kolumna `K=Następny krok`: enum label typu spotkania per D4 (`Spotkanie` dla `in_person`, `Telefon` dla `phone_call`, `Wysłać ofertę` dla `offer_email`, `Follow-up dokumentowy` dla `doc_followup`). **K nigdy nie przechowuje daty.**
+- Kolumna `L=Data następnego kroku`: data wydarzenia w ISO (per D1 — `YYYY-MM-DD` albo `YYYY-MM-DDTHH:MM:SS+HH:MM` z offsetem); displayed PL jako `15.04.2026 (Środa) 14:00`.
+- Kolumna `P=ID wydarzenia Kalendarz`: Calendar event `id` zwrócony przez `events.insert` (per D8).
 - Kolumna `J=Data ostatniego kontaktu`: aktualizowana na dziś
 - Jeśli to spotkanie fizyczne i klient jest w statusie `Nowy lead` → **auto-przejście statusu na `Spotkanie umówione`** (bo status lejka powinien odzwierciedlać fakt że spotkanie jest w kalendarzu). Karta pokaże to w polu "Status: Nowy lead → Spotkanie umówione".
 
 **Efekt w Kalendarzu (po `✅ Zapisać`):**
 - Nowe wydarzenie Google Calendar, title: `{imię nazwisko} ({miasto})`, opis: produkt + notatki, lokalizacja: adres klienta (dla in_person) lub telefon (dla phone_call), czas trwania: 1h (in_person), 15 min (phone_call), 0 min (offer_email, doc_followup — tylko termin).
-- Wydarzenie ma metadane `{client_sheet_row: X, event_type: "in_person", managed_by: "oze-agent"}` w `extendedProperties`.
+- Wydarzenie ma metadane `extendedProperties.private.event_type: "in_person"` (per D8 — **tylko** `event_type`, bez `client_sheet_row` / `managed_by` / `client_name`). Link Sheets → Calendar przez kolumnę P (`ID wydarzenia Kalendarz`), nie przez extendedProperties.
 
 **add_meeting dla istniejącego klienta:** agent identyfikuje klienta po imię+nazwisko+miasto (R4). Jeśli match=1 → enrichment z Sheets (adres, telefon, notatki, produkt trafiają do eventu). Jeśli match=0 → event tworzy się bez CRM context (user może dodać klienta osobno później).
 
@@ -526,19 +528,19 @@ Kolumny w arkuszu "OZE Klienci", w kolejności. Ten schemat jest **zgodny 1:1 z 
 
 ## 7. Typy wydarzeń Kalendarza
 
-Wszystkie wydarzenia tworzone przez agenta mają `extendedProperties.private` z:
-- `client_sheet_row: int` — do reverse lookup
-- `event_type: string` — jeden z 4 typów poniżej
-- `managed_by: "oze-agent"` — do filtrowania w query plan dnia
+Wydarzenia tworzone przez agenta niosą **minimalne** `extendedProperties.private` (per D8):
+- `event_type: string` — jeden z 4 typów poniżej (per D4 runtime enum).
+
+Nie zapisujemy `client_sheet_row`, `managed_by`, `client_name` ani żadnych innych custom kluczy. Link Sheets → Calendar realizowany przez kolumnę P (`ID wydarzenia Kalendarz`), nie przez extendedProperties.
 
 | Typ | Title | Duration | Emoji | Opis |
 |---|---|---|---|---|
 | `in_person` | `{imię nazwisko} ({miasto})` | 60 min | 🤝 | Spotkanie fizyczne. Lokalizacja = adres. |
 | `phone_call` | `📞 {imię nazwisko} ({miasto})` | 15 min | 📞 | Rozmowa telefoniczna. Lokalizacja = telefon klienta. |
-| `offer_email` | `✉️ Oferta: {imię nazwisko}` | 0 min | ✉️ | Termin wysłania oferty. All-day lub określona godzina. |
+| `offer_email` | `📨 Oferta: {imię nazwisko}` | 0 min | 📨 | Termin wysłania oferty. All-day lub określona godzina. |
 | `doc_followup` | `📄 Follow-up: {imię nazwisko}` | 0 min | 📄 | Przypomnienie "wrócić do klienta". |
 
-Plan dnia filtruje po `extendedProperties.managed_by == "oze-agent"` — żeby nie pokazywać prywatnych wydarzeń handlowca.
+Plan dnia filtruje po **dedykowanym OZE calendar** (events tworzone tylko w tym kalendarzu przez agenta — per D8). User-added events w OZE calendar są tolerowane: jeśli brak / nieznany `event_type`, render jako generic calendar event bez mutation assumptions.
 
 ---
 

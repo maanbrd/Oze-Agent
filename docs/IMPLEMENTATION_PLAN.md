@@ -209,6 +209,8 @@ Derived from `SOURCE_OF_TRUTH.md` §4. This plan must not silently promote visio
 **POST-MVP roadmap** (scheduled after MVP stabilizes):
 
 - `edit_client`, `multi-meeting`, `voice_input`, `photo_upload`, CSV/Excel import, full dashboard.
+- `calendar_scope_narrowing` (per D7) — migrate from full `calendar` scope to `calendar.events`, with redesigned onboarding (user-created calendar + paste ID, or scope downgrade flow). Security hardening; not MVP blocker.
+- `multi_timezone_support` (per D9) — add `users.timezone` column, read in domain layer via shared helper instead of `DEFAULT_TIMEZONE` constant, UI/command to change timezone, DST coverage cross-country. Scheduled when real non-PL user demand arrives.
 
 **Product vision only / requires separate Maan decision** (described in `poznaj_swojego_agenta_v5_FINAL.md`, but **not approved as roadmap**):
 
