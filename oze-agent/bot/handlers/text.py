@@ -38,6 +38,7 @@ from shared.intent import IntentResult, IntentType, ScopeTier, classify
 from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
+    AddMeetingPayload,
     AddNotePayload,
     ChangeStatusPayload,
     PendingFlow,
@@ -1241,14 +1242,18 @@ async def handle_add_meeting(
         if conflicts:
             conflict_warning = f"\n\n⚠️ Uwaga: masz już spotkanie o tej porze: *{escape_markdown_v2(conflicts[0].get('title', ''))}*"
 
-        save_pending_flow(telegram_id, "add_meeting", {
-            "title": enriched["title"],
-            "start": start_dt.isoformat(),
-            "end": end_dt.isoformat(),
-            "location": enriched["location"],
-            "description": enriched["description"],
-            "client_name": enriched["full_name"],
-        })
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_MEETING,
+            flow_data=payload_to_flow_data(AddMeetingPayload(
+                title=enriched["title"],
+                start=start_dt.isoformat(),
+                end=end_dt.isoformat(),
+                client_name=enriched["full_name"],
+                location=enriched["location"],
+                description=enriched["description"],
+            )),
+        ))
 
         _DAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
         try:
