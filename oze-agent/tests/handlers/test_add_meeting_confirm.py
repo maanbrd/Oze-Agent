@@ -40,7 +40,7 @@ async def test_add_meeting_confirm_offers_add_client_with_carried_client_data():
     ), patch(
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
-    ), patch(
+    ) as mock_create, patch(
         "bot.handlers.text.search_clients",
         new=AsyncMock(return_value=[]),
     ), patch("bot.handlers.text.save_pending") as mock_save, patch(
@@ -56,12 +56,90 @@ async def test_add_meeting_confirm_offers_add_client_with_carried_client_data():
 
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.ADD_CLIENT
+    assert saved_flow.flow_data["client_data"]["Status"] == "Spotkanie umówione"
     assert saved_flow.flow_data["client_data"]["Telefon"] == "746938764"
     assert saved_flow.flow_data["client_data"]["Produkt"] == "Magazyn energii"
     assert saved_flow.flow_data["client_data"]["Notatki"] == "Zużycie 4500kw, magazyn 10kw"
+    create_kwargs = mock_create.await_args.kwargs
+    assert "Telefon: 746938764" in create_kwargs["description"]
+    assert "Produkt: Magazyn energii" in create_kwargs["description"]
+    assert "Notatki: Zużycie 4500kw, magazyn 10kw" in create_kwargs["description"]
     mock_delete.assert_not_called()
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Spotkanie dodane" in response
     assert "Tel. 746 938 764" in response
     assert "Magazyn energii" in response
     assert "Zużycie 4500kw, magazyn 10kw" in response
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_updates_existing_new_lead_status():
+    flow_data = {
+        "title": "Spotkanie - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "Warszawa",
+        "description": "",
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    mock_update.assert_awaited_once_with(
+        1,
+        7,
+        {"Status": "Spotkanie umówione"},
+    )
+    mock_save.assert_not_called()
+    upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
+    flow_data = {
+        "title": "Spotkanie - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "Warszawa",
+        "description": "",
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Oferta wysłana"}
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    mock_update.assert_not_awaited()
+    upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")

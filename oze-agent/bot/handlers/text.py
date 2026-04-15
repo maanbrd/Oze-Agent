@@ -277,6 +277,31 @@ def _client_data_summary(client_data: dict) -> str:
     return "; ".join(parts)
 
 
+def _calendar_description_for_meeting(flow_data: dict) -> str:
+    lines = []
+    if flow_data.get("description"):
+        lines.append(str(flow_data["description"]).strip())
+
+    client_data = flow_data.get("client_data") or {}
+    field_labels = [
+        ("Telefon", "Telefon"),
+        ("Email", "Email"),
+        ("Miasto", "Miejscowość"),
+        ("Miejscowość", "Miejscowość"),
+        ("Adres", "Adres"),
+        ("Produkt", "Produkt"),
+        ("Notatki", "Notatki"),
+    ]
+    details = [f"{label}: {client_data[key]}" for key, label in field_labels if client_data.get(key)]
+    if details:
+        if lines:
+            lines.append("")
+        lines.append("Dane klienta:")
+        lines.extend(details)
+
+    return "\n".join(lines).strip()
+
+
 def _format_add_meeting_flow_card(flow_data: dict) -> str:
     start = datetime.fromisoformat(flow_data["start"])
     end = datetime.fromisoformat(flow_data["end"])
@@ -1857,20 +1882,26 @@ async def handle_confirm(
         elif flow_type == "add_meeting":
             start = datetime.fromisoformat(flow_data["start"])
             end = datetime.fromisoformat(flow_data["end"])
+            event_description = _calendar_description_for_meeting(flow_data)
             event = await create_event(
                 user_id,
                 title=flow_data.get("title", "Spotkanie"),
                 start=start,
                 end=end,
                 location=flow_data.get("location") or None,
-                description=flow_data.get("description") or None,
+                description=event_description or None,
             )
             if event:
                 client_name = flow_data.get("client_name", "")
-                in_sheets = bool(client_name and await search_clients(user_id, client_name))
-                if not in_sheets and client_name:
+                client_matches = await search_clients(user_id, client_name) if client_name else []
+                client = next(
+                    (c for c in client_matches if _first_name_ok(client_name, c)),
+                    client_matches[0] if client_matches else None,
+                )
+                if not client and client_name:
                     draft_client_data = dict(flow_data.get("client_data") or {})
                     draft_client_data.setdefault("Imię i nazwisko", client_name)
+                    draft_client_data.setdefault("Status", "Spotkanie umówione")
                     save_pending(PendingFlow(
                         telegram_id=telegram_id,
                         flow_type=PendingFlowType.ADD_CLIENT,
@@ -1890,6 +1921,25 @@ async def handle_confirm(
                     )
                     skip_delete = True
                 else:
+                    if client:
+                        current_status = (client.get("Status") or "").strip()
+                        row = client.get("_row")
+                        if current_status in {"", "Nowy lead"} and row is not None:
+                            ok = await update_client(
+                                user_id,
+                                row,
+                                {"Status": "Spotkanie umówione"},
+                            )
+                            if not ok:
+                                logger.error(
+                                    "add_meeting confirm: failed to update status row=%s",
+                                    row,
+                                )
+                        elif current_status in {"", "Nowy lead"}:
+                            logger.error(
+                                "add_meeting confirm: client without _row for status update: %s",
+                                client,
+                            )
                     await update.effective_message.reply_text("✅ Spotkanie dodane do kalendarza.")
             else:
                 await update.effective_message.reply_markdown_v2(format_error("calendar_down"))
