@@ -108,3 +108,23 @@ Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, 
 - `INTENCJE_MVP.md` — docs follow-up: §4.5 K/L semantics per D4 (K=label, L=data, P=event_id), extendedProperties tylko `event_type` per D8 (usunięte `client_sheet_row`/`managed_by`), §7 plan dnia filtruje po dedykowanym OZE calendar zamiast `managed_by` flag, offer_email emoji 📨.
 - `IMPLEMENTATION_PLAN.md` — dopisane POST-MVP roadmap items: `calendar_scope_narrowing` (D7), `multi_timezone_support` (D9).
 - Drift reconcile #2 (pre-Phase 3): `INTENCJE_MVP.md` §8.2 split na vision-only + §8.3 NIEPLANOWANE (per 4-tier SSOT model z 14.04; reschedule/cancel/free_slots/delete_client przeklasyfikowane z NIEPLANOWANE → VISION_ONLY; daily interaction limit oznaczony jako policy/business vision, nie router intent); §11 kolumna P poprawiona (populated w MVP dla Calendar-backed next steps, per D8); `agent_behavior_spec_v5.md` §6.3 rename NIEPLANOWANE → VISION-ONLY + §6.4 NIEPLANOWANE (tylko pre-meeting reminders); `PHASE2_CONTRACT_FREEZE.md` D8 wording "POST-MVP flows" → "Vision-only flows"; `TEST_PLAN_CURRENT.md` SDP-5 reclassify POST-MVP → VISION_ONLY.
+
+---
+
+## Phase 4 — Known follow-ups
+
+### duplicate UX: same full name across multiple cities needs disambiguation
+
+**Status:** open follow-up.
+
+When the same full name exists in two or more cities and the user types only the name (no city), `detect_potential_duplicate` (post-`aefa2e5`) returns the first name-only match by iteration order instead of asking the user which row they meant.
+
+Example:
+- Sheets: `Marysia Mastalerz — Warszawa`, `Marysia Mastalerz — Kraków`
+- User: `Marysia Mastalerz`
+- Expected: bot asks which Marysia (or shows both candidates).
+- Current: bot picks one row silently.
+
+Discovered during smoke testing of `aefa2e5`. Documented as MVP limitation in the docstring at `oze-agent/shared/search.py::detect_potential_duplicate`.
+
+Does not block continuing the typed-pending migration. Duplicate UX is not fully complete until a disambiguation flow is added (separate slice — same shape as the existing disambiguation pending flow used by `add_note` / `change_status`).
