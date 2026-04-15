@@ -44,11 +44,15 @@ async def test_add_client_augment_spotkanie_routes_before_client_extraction():
     mock_extract.assert_not_called()
     mock_meeting.assert_awaited_once()
     args, _ = mock_meeting.call_args
+    assert args[3]["source_client_data"] == {
+        "Imię i nazwisko": "Anna Testowa",
+        "Miasto": "Zatory",
+    }
     assert args[4] == "spotkanie w piątek o 14 z Anna Testowa Zatory"
 
 
 @pytest.mark.asyncio
-async def test_add_client_augment_bare_spotkanie_keeps_context_for_meeting_path():
+async def test_add_client_augment_meeting_phone_is_carried_to_meeting_flow():
     upd = _update()
     with patch("bot.handlers.text.extract_client_data", new=AsyncMock()) as mock_extract, \
          patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
@@ -57,13 +61,14 @@ async def test_add_client_augment_bare_spotkanie_keeps_context_for_meeting_path(
             MagicMock(),
             {"id": 1},
             _flow(),
-            "Spotkanie",
+            "Spotkanie w piątek o 14 746938764",
         )
 
     assert consumed is True
     mock_extract.assert_not_called()
     args, _ = mock_meeting.call_args
-    assert args[4] == "Spotkanie z Anna Testowa Zatory"
+    assert args[3]["source_client_data"]["Telefon"] == "746938764"
+    assert args[4] == "Spotkanie w piątek o 14 746938764 z Anna Testowa Zatory"
 
 
 @pytest.mark.asyncio

@@ -18,6 +18,10 @@ def _flow(description: str = "") -> dict:
             "client_name": "Anna Testowa",
             "location": "Zatory",
             "description": description,
+            "client_data": {
+                "Imię i nazwisko": "Anna Testowa",
+                "Miasto": "Zatory",
+            },
         },
     }
 
@@ -31,7 +35,7 @@ def _update(telegram_id: int = 123) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_add_meeting_augment_appends_description_and_keeps_meeting_flow():
+async def test_add_meeting_augment_product_details_go_to_client_data_not_description():
     upd = _update()
     with patch("bot.handlers.text.save_pending") as mock_save:
         consumed = await _route_pending_flow(
@@ -39,16 +43,19 @@ async def test_add_meeting_augment_appends_description_and_keeps_meeting_flow():
             MagicMock(),
             {"id": 1},
             _flow(),
-            "Jest zainteresowany PV i magazynem",
+            "Zużycie 4500kw, magazyn 10kw",
         )
 
     assert consumed is True
     mock_save.assert_called_once()
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
-    assert saved_flow.flow_data["description"] == "Jest zainteresowany PV i magazynem"
+    assert saved_flow.flow_data["description"] == ""
+    assert saved_flow.flow_data["client_data"]["Produkt"] == "Magazyn energii"
+    assert saved_flow.flow_data["client_data"]["Notatki"] == "Zużycie 4500kw, magazyn 10kw"
     upd.effective_message.reply_markdown_v2.assert_awaited_once()
     assert "Anna Testowa" in upd.effective_message.reply_markdown_v2.call_args.args[0]
+    assert "Dane klienta do zapisu" in upd.effective_message.reply_markdown_v2.call_args.args[0]
 
 
 @pytest.mark.asyncio
@@ -60,11 +67,11 @@ async def test_add_meeting_augment_preserves_existing_description():
             MagicMock(),
             {"id": 1},
             _flow("Tel: 123456789"),
-            "Jest zainteresowany magazynem",
+            "parking pod bramą",
         )
 
     assert consumed is True
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_data["description"] == (
-        "Tel: 123456789\nJest zainteresowany magazynem"
+        "Tel: 123456789\nparking pod bramą"
     )

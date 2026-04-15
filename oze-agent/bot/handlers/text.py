@@ -121,6 +121,7 @@ _TIME_RE = re.compile(
 )
 _PHONE_VALUE_RE = re.compile(r"\b(?:tel|telefon|nr|numer)\b[^\n]*(?:\+?\d[\d\s-]{5,})")
 _EMAIL_VALUE_RE = re.compile(r"\b(?:e-?mail|mail)\b[^\n]*\S+@\S+")
+_LOOSE_PHONE_RE = re.compile(r"(?<!\d)(?:\+?48[\s-]?)?(?:\d[\s-]?){9}(?!\d)")
 
 _BANNER_INTENTS = frozenset({
     IntentType.POST_MVP_ROADMAP,
@@ -211,6 +212,71 @@ def _message_with_add_client_context(message_text: str, client_data: dict) -> st
     )
 
 
+def _extract_inline_client_facts(message_text: str) -> dict:
+    """Extract obvious client facts from a meeting/detail reply without LLM.
+
+    Used only while we already have a pending client context. It preserves data
+    like phone/product notes that can appear in the same message as a meeting.
+    """
+    facts: dict[str, str] = {}
+    text = message_text.strip()
+    text_lower = text.lower()
+
+    phone_match = _LOOSE_PHONE_RE.search(text)
+    if phone_match:
+        digits = re.sub(r"\D", "", phone_match.group(0))
+        if len(digits) == 11 and digits.startswith("48"):
+            digits = digits[2:]
+        if len(digits) == 9:
+            facts["Telefon"] = digits
+
+    email_match = re.search(r"\b[\w.+-]+@[\w.-]+\.\w+\b", text)
+    if email_match:
+        facts["Email"] = email_match.group(0)
+
+    product_parts = []
+    has_pv = bool(re.search(r"\bpv\b|fotowolta", text_lower))
+    has_storage = "magazyn" in text_lower
+    if has_pv:
+        product_parts.append("PV")
+    if has_storage:
+        product_parts.append("Magazyn energii")
+    if product_parts:
+        facts["Produkt"] = " + ".join(product_parts)
+
+    if re.search(r"zużycie|zuzycie|\bkw\b|\bkwh\b|zainteresowan|magazyn", text_lower):
+        facts["Notatki"] = text
+
+    address_prefix = re.match(r"\s*(?:adres|ul\.?|ulica)\s+(.+)", text, flags=re.IGNORECASE)
+    if address_prefix:
+        facts["Adres"] = address_prefix.group(1).strip()
+
+    return facts
+
+
+def _merge_client_context_data(base: dict, extra: dict) -> dict:
+    merged = dict(base or {})
+    for key, value in (extra or {}).items():
+        if not value or key in SYSTEM_FIELDS:
+            continue
+        if key in {"Imię i nazwisko", "Miasto", "Miejscowość"} and merged.get(key):
+            continue
+        merged[key] = value
+    return merged
+
+
+def _client_data_summary(client_data: dict) -> str:
+    labels = [
+        ("Telefon", "Tel."),
+        ("Email", "Email"),
+        ("Adres", "Adres"),
+        ("Produkt", "Produkt"),
+        ("Notatki", "Notatki"),
+    ]
+    parts = [f"{label}: {client_data[key]}" for key, label in labels if client_data.get(key)]
+    return "; ".join(parts)
+
+
 def _format_add_meeting_flow_card(flow_data: dict) -> str:
     start = datetime.fromisoformat(flow_data["start"])
     end = datetime.fromisoformat(flow_data["end"])
@@ -225,6 +291,9 @@ def _format_add_meeting_flow_card(flow_data: dict) -> str:
         "Miejsce": flow_data.get("location", ""),
         "Opis": flow_data.get("description", ""),
     }
+    client_summary = _client_data_summary(flow_data.get("client_data") or {})
+    if client_summary:
+        details["Dane klienta do zapisu"] = client_summary
     return format_confirmation("add_meeting", details)
 
 
@@ -371,8 +440,18 @@ async def _route_pending_flow(
         old_client_data = old_flow_data.get("client_data", {})
 
         if _is_client_scoped_action_reply(message_text):
+            source_client_data = _merge_client_context_data(
+                old_client_data,
+                _extract_inline_client_facts(message_text),
+            )
             action_text = _message_with_add_client_context(message_text, old_client_data)
-            await handle_add_meeting(update, context, user, {}, action_text)
+            await handle_add_meeting(
+                update,
+                context,
+                user,
+                {"source_client_data": source_client_data},
+                action_text,
+            )
             return True
 
         headers = await get_sheet_headers(user_id)
@@ -451,12 +530,25 @@ async def _route_pending_flow(
     elif flow_type == "add_meeting":
         flow_data = flow.get("flow_data", {})
         try:
-            existing_description = (flow_data.get("description") or "").strip()
-            description = (
-                f"{existing_description}\n{message_text}".strip()
-                if existing_description
-                else message_text
-            )
+            client_facts = _extract_inline_client_facts(message_text)
+            client_data = flow_data.get("client_data") or {}
+            if flow_data.get("client_name"):
+                client_data = {
+                    "Imię i nazwisko": flow_data.get("client_name", ""),
+                    **client_data,
+                }
+
+            if client_facts:
+                client_data = _merge_client_context_data(client_data, client_facts)
+                description = flow_data.get("description", "")
+            else:
+                existing_description = (flow_data.get("description") or "").strip()
+                description = (
+                    f"{existing_description}\n{message_text}".strip()
+                    if existing_description
+                    else message_text
+                )
+
             save_pending(PendingFlow(
                 telegram_id=update.effective_user.id,
                 flow_type=PendingFlowType.ADD_MEETING,
@@ -467,9 +559,14 @@ async def _route_pending_flow(
                     client_name=flow_data.get("client_name", ""),
                     location=flow_data.get("location", ""),
                     description=description,
+                    client_data=client_data or None,
                 )),
             ))
-            card = _format_add_meeting_flow_card({**flow_data, "description": description})
+            card = _format_add_meeting_flow_card({
+                **flow_data,
+                "description": description,
+                "client_data": client_data,
+            })
             await update.effective_message.reply_markdown_v2(
                 card,
                 reply_markup=build_mutation_buttons("confirm"),
@@ -1351,6 +1448,7 @@ async def handle_add_meeting(
             return
 
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
+        source_client_data = intent_data.get("source_client_data") or None
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
@@ -1367,6 +1465,7 @@ async def handle_add_meeting(
                 client_name=enriched["full_name"],
                 location=enriched["location"],
                 description=enriched["description"],
+                client_data=source_client_data,
             )),
         ))
 
@@ -1384,6 +1483,9 @@ async def handle_add_meeting(
             "Czas trwania": f"{duration} min",
             "Miejsce": enriched["location"],
         }
+        client_summary = _client_data_summary(source_client_data or {})
+        if client_summary:
+            details["Dane klienta do zapisu"] = client_summary
         msg = format_confirmation("add_meeting", details) + conflict_warning
         await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
 
@@ -1767,9 +1869,23 @@ async def handle_confirm(
                 client_name = flow_data.get("client_name", "")
                 in_sheets = bool(client_name and await search_clients(user_id, client_name))
                 if not in_sheets and client_name:
-                    save_pending_flow(telegram_id, "offer_add_client", {"client_name": client_name})
+                    draft_client_data = dict(flow_data.get("client_data") or {})
+                    draft_client_data.setdefault("Imię i nazwisko", client_name)
+                    save_pending(PendingFlow(
+                        telegram_id=telegram_id,
+                        flow_type=PendingFlowType.ADD_CLIENT,
+                        flow_data=payload_to_flow_data(AddClientPayload(
+                            client_data=draft_client_data,
+                        )),
+                    ))
+                    sheet_columns = user.get("sheet_columns") or await get_sheet_headers(user_id)
+                    missing = [
+                        col for col in sheet_columns
+                        if col and not draft_client_data.get(col) and col not in SYSTEM_FIELDS
+                    ]
+                    card = format_add_client_card(draft_client_data, missing)
                     await update.effective_message.reply_text(
-                        f"✅ Spotkanie dodane. Nie mam {client_name} w bazie. Dodać?",
+                        f"✅ Spotkanie dodane.\n{card}",
                         reply_markup=build_mutation_buttons("confirm"),
                     )
                     skip_delete = True

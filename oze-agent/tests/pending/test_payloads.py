@@ -90,6 +90,10 @@ def test_payload_map_class_per_type():
                 "location": "Warszawa",
                 "description": "Omówienie oferty",
                 "client_name": "Jan Kowalski",
+                "client_data": {
+                    "Imię i nazwisko": "Jan Kowalski",
+                    "Telefon": "601234567",
+                },
             },
             AddMeetingPayload,
         ),
@@ -223,6 +227,7 @@ def test_add_meeting_with_only_required_fields_succeeds():
     )
     assert payload.location == ""
     assert payload.description == ""
+    assert payload.client_data is None
 
 
 def test_add_meeting_missing_required_title_raises():

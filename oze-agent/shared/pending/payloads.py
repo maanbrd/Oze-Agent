@@ -62,6 +62,7 @@ class AddMeetingPayload:
     client_name: str
     location: str = ""
     description: str = ""
+    client_data: Optional[dict] = None
 
 
 @dataclass
