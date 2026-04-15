@@ -24,6 +24,7 @@ from shared.database import (
 )
 from shared.pending import (
     AddClientPayload,
+    AddNotePayload,
     PendingFlow,
     PendingFlowType,
     payload_to_flow_data,
@@ -202,13 +203,22 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
             old_notes = client.get("Notatki", "")
             name = client.get("Imię i nazwisko", "")
             c_city = client.get("Miasto", "")
-            save_pending_flow(telegram_id, "add_note", {
-                "row": client.get("_row"),
-                "note_text": note_text,
-                "client_name": name,
-                "city": c_city,
-                "old_notes": old_notes,
-            })
+            row = client.get("_row")
+            if row is None:
+                logger.error("buttons add_note: client without _row: %s", client)
+                await query.edit_message_text("❌ Wystąpił błąd. Spróbuj ponownie.")
+                return
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.ADD_NOTE,
+                flow_data=payload_to_flow_data(AddNotePayload(
+                    row=row,
+                    note_text=note_text,
+                    client_name=name,
+                    city=c_city,
+                    old_notes=old_notes,
+                )),
+            ))
             display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
             city_part = f", {c_city}" if c_city else ""
             await query.edit_message_text(

@@ -38,6 +38,7 @@ from shared.intent import IntentResult, IntentType, ScopeTier, classify
 from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
+    AddNotePayload,
     PendingFlow,
     PendingFlowType,
     payload_to_flow_data,
@@ -388,8 +389,23 @@ async def _route_pending_flow(
         flow_data = flow.get("flow_data", {})
         existing_note = flow_data.get("note_text", "")
         new_note = f"{existing_note} {message_text}".strip() if existing_note else message_text
-        new_flow_data = {**flow_data, "note_text": new_note}
-        save_pending_flow(telegram_id, "add_note", new_flow_data)
+        row = flow_data.get("row")
+        if row is None:
+            logger.error("add_note augment: pending flow_data without row: %s", flow_data)
+            delete_pending_flow(telegram_id)
+            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            return True
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_NOTE,
+            flow_data=payload_to_flow_data(AddNotePayload(
+                row=row,
+                note_text=new_note,
+                client_name=flow_data.get("client_name", ""),
+                city=flow_data.get("city", ""),
+                old_notes=flow_data.get("old_notes", ""),
+            )),
+        ))
 
         display_note = new_note[:80] + ("..." if len(new_note) > 80 else "")
         name = flow_data.get("client_name", "")
@@ -515,13 +531,22 @@ async def handle_add_note(
     name = client.get("Imię i nazwisko", client_name)
     c_city = client.get("Miasto", city)
 
-    save_pending_flow(telegram_id, "add_note", {
-        "row": row,
-        "note_text": note_text,
-        "client_name": name,
-        "city": c_city,
-        "old_notes": old_notes,
-    })
+    if row is None:
+        logger.error("handle_add_note: client without _row: %s", client)
+        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        return
+
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.ADD_NOTE,
+        flow_data=payload_to_flow_data(AddNotePayload(
+            row=row,
+            note_text=note_text,
+            client_name=name,
+            city=c_city,
+            old_notes=old_notes,
+        )),
+    ))
 
     display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
     city_part = f", {c_city}" if c_city else ""
