@@ -211,6 +211,23 @@ def _message_with_add_client_context(message_text: str, client_data: dict) -> st
     )
 
 
+def _format_add_meeting_flow_card(flow_data: dict) -> str:
+    start = datetime.fromisoformat(flow_data["start"])
+    end = datetime.fromisoformat(flow_data["end"])
+    duration = int((end - start).total_seconds() // 60)
+    _days_pl = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
+    date_display = start.strftime("%d.%m.%Y") + f" ({_days_pl[start.weekday()]})"
+    details = {
+        "Klient": flow_data.get("client_name", ""),
+        "Data": date_display,
+        "Godzina": start.strftime("%H:%M"),
+        "Czas trwania": f"{duration} min",
+        "Miejsce": flow_data.get("location", ""),
+        "Opis": flow_data.get("description", ""),
+    }
+    return format_confirmation("add_meeting", details)
+
+
 # ── Guards ─────────────────────────────────────────────────────────────────────
 
 
@@ -430,6 +447,36 @@ async def _route_pending_flow(
         ))
         card = format_add_client_card(merged, missing)
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+        return True
+    elif flow_type == "add_meeting":
+        flow_data = flow.get("flow_data", {})
+        try:
+            existing_description = (flow_data.get("description") or "").strip()
+            description = (
+                f"{existing_description}\n{message_text}".strip()
+                if existing_description
+                else message_text
+            )
+            save_pending(PendingFlow(
+                telegram_id=update.effective_user.id,
+                flow_type=PendingFlowType.ADD_MEETING,
+                flow_data=payload_to_flow_data(AddMeetingPayload(
+                    title=flow_data["title"],
+                    start=flow_data["start"],
+                    end=flow_data["end"],
+                    client_name=flow_data.get("client_name", ""),
+                    location=flow_data.get("location", ""),
+                    description=description,
+                )),
+            ))
+            card = _format_add_meeting_flow_card({**flow_data, "description": description})
+            await update.effective_message.reply_markdown_v2(
+                card,
+                reply_markup=build_mutation_buttons("confirm"),
+            )
+        except Exception as e:
+            logger.error("add_meeting augment failed: %s", e)
+            await update.effective_message.reply_markdown_v2(format_error("timeout"))
         return True
     elif flow_type == "add_note":
         telegram_id = update.effective_user.id
