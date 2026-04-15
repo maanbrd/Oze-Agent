@@ -59,6 +59,33 @@ def test_get_parses_supabase_z_suffix_timestamp():
     assert result.created_at.tzinfo is not None
 
 
+def test_get_accepts_datetime_created_at():
+    created_at = datetime(2026, 4, 15, 10, 0, 0, tzinfo=timezone.utc)
+    row = {
+        "telegram_id": 1,
+        "flow_type": "r7_prompt",
+        "flow_data": {},
+        "created_at": created_at,
+    }
+    with patch("shared.pending.store.get_pending_flow", return_value=row):
+        result = get(1)
+    assert result is not None
+    assert result.created_at == created_at
+
+
+def test_get_handles_invalid_created_at():
+    row = {
+        "telegram_id": 1,
+        "flow_type": "r7_prompt",
+        "flow_data": {},
+        "created_at": "not-a-date",
+    }
+    with patch("shared.pending.store.get_pending_flow", return_value=row):
+        result = get(1)
+    assert result is not None
+    assert result.created_at is None
+
+
 def test_get_returns_none_for_legacy_post_mvp_flow_type():
     row = {
         "telegram_id": 1,

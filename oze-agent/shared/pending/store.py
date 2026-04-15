@@ -20,6 +20,21 @@ from .types import PendingFlow, PendingFlowType
 logger = logging.getLogger(__name__)
 
 
+def _parse_created_at(value: object) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            logger.debug("invalid pending flow created_at: %r", value)
+            return None
+    logger.debug("unsupported pending flow created_at type: %s", type(value).__name__)
+    return None
+
+
 def save(flow: PendingFlow) -> None:
     save_pending_flow(flow.telegram_id, flow.flow_type.value, flow.flow_data)
 
@@ -36,12 +51,7 @@ def get(telegram_id: int) -> Optional[PendingFlow]:
             "get(%s): flow_type %r outside typed contract", telegram_id, raw_type
         )
         return None
-    created_raw = row.get("created_at")
-    created_at = (
-        datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
-        if created_raw
-        else None
-    )
+    created_at = _parse_created_at(row.get("created_at"))
     return PendingFlow(
         telegram_id=row["telegram_id"],
         flow_type=flow_type,
