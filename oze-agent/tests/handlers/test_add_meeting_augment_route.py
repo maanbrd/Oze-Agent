@@ -29,6 +29,20 @@ def _flow(description: str = "", event_type: str | None = None) -> dict:
     }
 
 
+def _empty_meeting_flow(description: str = "") -> dict:
+    return {
+        "flow_type": "add_meeting",
+        "flow_data": {
+            "title": "Spotkanie",
+            "start": "2026-04-17T14:00:00+02:00",
+            "end": "2026-04-17T15:00:00+02:00",
+            "client_name": "",
+            "location": "",
+            "description": description,
+        },
+    }
+
+
 def _update(telegram_id: int = 123) -> MagicMock:
     upd = MagicMock()
     upd.effective_user.id = telegram_id
@@ -95,6 +109,84 @@ async def test_add_meeting_augment_preserves_event_type():
     assert consumed is True
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_data["event_type"] == "in_person"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_augment_empty_meeting_accepts_full_client_data():
+    upd = _update()
+    extracted = {
+        "client_data": {
+            "Imię i nazwisko": "Andrzej Andrzejowski",
+            "Miasto": "Strzeszew",
+            "Adres": "ul. Paderewskiego 14/2",
+            "Telefon": "449558338",
+            "Produkt": "PV + Magazyn energii",
+        }
+    }
+    with patch("bot.handlers.text.get_sheet_headers", new=AsyncMock(return_value=[
+        "Imię i nazwisko", "Miasto", "Adres", "Telefon", "Produkt", "Notatki",
+    ])), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value=extracted),
+    ) as mock_extract, patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Andrzej Andrzejowski",
+            "location": "ul. Paderewskiego 14/2, Strzeszew",
+            "description": "",
+            "full_name": "Andrzej Andrzejowski",
+            "client_found": False,
+        }),
+    ) as mock_enrich, patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _empty_meeting_flow(),
+            "Andrzej Andrzejowski, Strzeszew, ul. Paderewskiego 14/2, telefon 449558338, zainteresowany pv i magazynem",
+        )
+
+    assert consumed is True
+    mock_extract.assert_awaited_once()
+    mock_enrich.assert_awaited_once_with(
+        1,
+        "Andrzej Andrzejowski",
+        "ul. Paderewskiego 14/2, Strzeszew",
+    )
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
+    assert saved_flow.flow_data["title"] == "Spotkanie — Andrzej Andrzejowski"
+    assert saved_flow.flow_data["client_name"] == "Andrzej Andrzejowski"
+    assert saved_flow.flow_data["location"] == "ul. Paderewskiego 14/2, Strzeszew"
+    assert saved_flow.flow_data["description"] == ""
+    assert saved_flow.flow_data["client_data"]["Telefon"] == "449558338"
+    assert saved_flow.flow_data["client_data"]["Produkt"] == "PV + Magazyn energii"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_augment_empty_meeting_plain_description_stays_description():
+    upd = _update()
+    with patch("bot.handlers.text.get_sheet_headers", new=AsyncMock(return_value=[
+        "Imię i nazwisko", "Miasto", "Adres", "Telefon", "Produkt", "Notatki",
+    ])), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={"client_data": {}}),
+    ), patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _empty_meeting_flow(),
+            "parking pod bramą",
+        )
+
+    assert consumed is True
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
+    assert saved_flow.flow_data["title"] == "Spotkanie"
+    assert saved_flow.flow_data["client_name"] == ""
+    assert saved_flow.flow_data["description"] == "parking pod bramą"
+    assert "client_data" not in saved_flow.flow_data
 
 
 @pytest.mark.asyncio

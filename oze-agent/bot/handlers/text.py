@@ -271,6 +271,21 @@ def _extract_inline_client_facts(message_text: str) -> dict:
     return facts
 
 
+_FULL_CLIENT_DATA_FIELDS = {"Telefon", "Email", "Adres", "Miasto", "Miejscowość"}
+
+
+def _looks_like_full_client_data(client_data: dict) -> bool:
+    name = (client_data.get("Imię i nazwisko") or "").strip()
+    if not name:
+        return False
+    return any((client_data.get(field) or "").strip() for field in _FULL_CLIENT_DATA_FIELDS)
+
+
+def _location_hint_from_client_data(client_data: dict) -> str:
+    city = client_data.get("Miasto") or client_data.get("Miejscowość") or ""
+    return ", ".join(part for part in [client_data.get("Adres", ""), city] if part)
+
+
 def _merge_client_context_data(base: dict, extra: dict) -> dict:
     merged = dict(base or {})
     for key, value in (extra or {}).items():
@@ -577,6 +592,51 @@ async def _route_pending_flow(
     elif flow_type == "add_meeting":
         flow_data = flow.get("flow_data", {})
         try:
+            if not flow_data.get("client_name"):
+                headers = await get_sheet_headers(user["id"])
+                result = await extract_client_data(message_text, headers)
+                extracted_client_data = {
+                    k: v
+                    for k, v in _filter_invalid_products(result.get("client_data", {})).items()
+                    if v
+                }
+                if _looks_like_full_client_data(extracted_client_data):
+                    client_data = _merge_client_context_data(
+                        flow_data.get("client_data") or {},
+                        extracted_client_data,
+                    )
+                    client_name = client_data["Imię i nazwisko"]
+                    location_hint = _location_hint_from_client_data(client_data)
+                    enriched = await _enrich_meeting(user["id"], client_name, location_hint)
+                    description = flow_data.get("description") or enriched["description"]
+                    save_pending(PendingFlow(
+                        telegram_id=update.effective_user.id,
+                        flow_type=PendingFlowType.ADD_MEETING,
+                        flow_data=payload_to_flow_data(AddMeetingPayload(
+                            title=enriched["title"],
+                            start=flow_data["start"],
+                            end=flow_data["end"],
+                            client_name=client_name,
+                            location=enriched["location"],
+                            description=description,
+                            client_data=client_data,
+                            event_type=flow_data.get("event_type"),
+                        )),
+                    ))
+                    card = _format_add_meeting_flow_card({
+                        **flow_data,
+                        "title": enriched["title"],
+                        "client_name": client_name,
+                        "location": enriched["location"],
+                        "description": description,
+                        "client_data": client_data,
+                    })
+                    await update.effective_message.reply_markdown_v2(
+                        card,
+                        reply_markup=build_mutation_buttons("confirm"),
+                    )
+                    return True
+
             client_facts = _extract_inline_client_facts(message_text)
             client_data = flow_data.get("client_data") or {}
             if flow_data.get("client_name"):
@@ -1918,24 +1978,28 @@ async def handle_confirm(
         elif flow_type == "add_meeting":
             start = datetime.fromisoformat(flow_data["start"])
             end = datetime.fromisoformat(flow_data["end"])
+            client_data = flow_data.get("client_data") or {}
+            client_name = flow_data.get("client_name") or client_data.get("Imię i nazwisko", "")
+            title = flow_data.get("title", "Spotkanie")
+            if client_name and title.strip().lower() == "spotkanie":
+                title = f"Spotkanie — {client_name}"
             event_description = _calendar_description_for_meeting(flow_data)
             event = await create_event(
                 user_id,
-                title=flow_data.get("title", "Spotkanie"),
+                title=title,
                 start=start,
                 end=end,
                 location=flow_data.get("location") or None,
                 description=event_description or None,
             )
             if event:
-                client_name = flow_data.get("client_name", "")
                 upgrade_allowed = flow_data.get("event_type") == "in_person"
                 status_updated = False
                 status_update_failed = False
                 client_matches = await search_clients(user_id, client_name) if client_name else []
                 client = next((c for c in client_matches if _first_name_ok(client_name, c)), None)
                 if not client and client_name:
-                    draft_client_data = dict(flow_data.get("client_data") or {})
+                    draft_client_data = dict(client_data)
                     draft_client_data.setdefault("Imię i nazwisko", client_name)
                     if upgrade_allowed:
                         draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
