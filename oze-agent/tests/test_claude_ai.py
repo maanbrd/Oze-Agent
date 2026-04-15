@@ -117,44 +117,6 @@ async def test_call_claude_with_tools_force_tool_sets_tool_choice():
     assert result["tool_name"] == "record_general_question"
 
 
-# ── classify_intent ───────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_classify_intent_returns_valid_intent():
-    payload = json.dumps({"intent": "add_client", "entities": {"name": "Jan"}, "confidence": 0.95})
-    client = _mock_client(payload)
-    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
-        from shared.claude_ai import classify_intent
-        result = await classify_intent("dodaj klienta Jana")
-
-    assert result["intent"] == "add_client"
-    assert result["entities"]["name"] == "Jan"
-    assert result["confidence"] == 0.95
-
-
-@pytest.mark.asyncio
-async def test_classify_intent_falls_back_on_invalid_intent():
-    payload = json.dumps({"intent": "INVALID_INTENT", "entities": {}, "confidence": 0.9})
-    client = _mock_client(payload)
-    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
-        from shared.claude_ai import classify_intent
-        result = await classify_intent("coś dziwnego")
-
-    assert result["intent"] == "general_question"
-
-
-@pytest.mark.asyncio
-async def test_classify_intent_falls_back_on_json_error():
-    client = _mock_client("not valid json at all")
-    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
-        from shared.claude_ai import classify_intent
-        result = await classify_intent("test")
-
-    assert result["intent"] == "general_question"
-    assert result["confidence"] == 0.0
-
-
 # ── parse_voice_note ──────────────────────────────────────────────────────────
 
 

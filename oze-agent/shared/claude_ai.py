@@ -10,7 +10,6 @@ All functions return dicts and never raise — errors return empty/default value
 import json
 import logging
 from datetime import date
-from typing import Optional
 
 import anthropic
 
@@ -24,17 +23,6 @@ MODEL_SIMPLE = "claude-haiku-4-5-20251001"
 # Cost per million tokens (USD)
 COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
 COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
-
-VALID_INTENTS = {
-    # MVP (6)
-    "add_client", "show_client", "add_note", "change_status", "add_meeting", "show_day_plan",
-    # POST-MVP (3 — R5 banner when triggered)
-    "edit_client", "filtruj_klientów", "lejek_sprzedazowy",
-    # Utility
-    "assign_photo", "refresh_columns",
-    "general_question", "confirm_yes", "confirm_no", "cancel_flow",
-}
-
 
 # ── Core API call ─────────────────────────────────────────────────────────────
 
@@ -195,101 +183,6 @@ Zasady:
         "tokens_out": result["tokens_out"],
         "cost_usd": result["cost_usd"],
     }
-
-
-# ── Intent classification ─────────────────────────────────────────────────────
-
-
-async def classify_intent(
-    message: str, context: Optional[list[dict]] = None
-) -> dict:
-    """Classify user message intent using the SIMPLE model.
-
-    Returns:
-        {"intent": str, "entities": dict, "confidence": float}
-    """
-    intents_list = ", ".join(sorted(VALID_INTENTS))
-    context_str = ""
-    if context:
-        last = context[-3:]
-        context_str = "\n".join(f"{m['role']}: {m['content']}" for m in last)
-
-    system_prompt = f"""Klasyfikuj zamiar użytkownika. Zwróć TYLKO JSON:
-{{"intent": "<jeden z: {intents_list}>", "entities": {{}}, "confidence": 0.0-1.0}}
-
-Przykłady:
-- "Jan Nowak Piaseczno 601234567 pompa" → add_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
-- "Stefan Jankowski PV 12kW" → add_client, entities: {{"name": "Stefan Jankowski"}}
-- "znajdź Jana Kowalskiego z Warszawy" → show_client, entities: {{"name": "Jan Kowalski", "city": "Warszawa"}}
-- "co mam o Janie Mazurze?" → show_client, entities: {{"name": "Jan Mazur"}}
-- "umów spotkanie na wtorek" → add_meeting, entities: {{"day": "wtorek"}}
-- "spotkanie 22 kwietnia o 17:30 Marki Fiołkowa 24" → add_meeting, entities: {{"date": "22 kwietnia", "time": "17:30", "location": "Marki Fiołkowa 24"}}
-- "jutro o 10 jadę do Jana Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Jan Nowak", "location": "ul. Różana 3 Piaseczno"}}
-- "spotkanie z Janem Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Jan Kowalski", "day": "pojutrze", "time": "15:00"}}
-- WAŻNE: Każda wiadomość zawierająca datę/godzinę + miejsce lub klienta to add_meeting, NIE general_question.
-- "co mam dziś?" / "plan na dziś" / "jakie mam spotkania?" → show_day_plan
-- "ile mam klientów?" / "pokaż lejek" / "ilu klientów mam" → lejek_sprzedazowy
-- "pokaż klientów z Warszawy" → filtruj_klientów, entities: {{"city": "Warszawa"}}
-- "kto czeka na ofertę?" → filtruj_klientów, entities: {{"status": "Oferta wysłana"}}
-- "wrocław" / "kraków" / [sama nazwa miasta, bez imienia, daty ani akcji] → show_client, entities: {{"city": "Wrocław"}}
-- WAŻNE: Sama nazwa miasta (bez klienta, daty, słowa akcji jak "zmień/dodaj/pokaż klientów") → show_client.
-- "klienci z pompą ciepła" → filtruj_klientów, entities: {{"product": "Pompa ciepła"}}
-- "wysłałem ofertę Janowi Nowakowi" → change_status, entities: {{"name": "Jan Nowak", "status": "Oferta wysłana"}}
-- "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
-- "Jan Kowalski podpisał kwit" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
-- "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Rezygnacja z umowy"}}
-- "Jan Nowak rezygnuje" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
-- "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
-- "Jan Nowak odpada" → change_status, entities: {{"name": "Jan Nowak", "status": "Odrzucone"}}
-- "Jan Nowak nieaktywny" → change_status, entities: {{"name": "Jan Nowak", "status": "Nieaktywny"}}
-- "zamontowali u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
-- "gotowe u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
-- "spotkanie z Janem Nowakiem się odbyło" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- "byłem u Jana Nowaka, odbyło się" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- "Jana Nowaka odbyłem" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- "odwiedziłem Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- WAŻNE: "się odbyło" / "odbyłem" / "odbyło się" / "odwiedziłem" + imię klienta → change_status "Spotkanie odbyte", NIE "Zamontowana".
-- "zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "zmień numer Jana Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
-- "zaktualizuj telefon Jana Kowalskiego na 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
-- "popraw metraż dachu Jana Nowaka na 45" → edit_client, entities: {{"name": "Jan Nowak"}}
-- WAŻNE: edit_client TYLKO gdy użytkownik jawnie poprawia istniejące pole kluczowym słowem "zmień", "zaktualizuj", "popraw", "edytuj" + pole + "na" + nowa wartość. BEZ tych słów → NIE edit_client.
-- WAŻNE: "Jan Nowak ma nowy numer 609222333" / "nowy telefon Jana Kowalskiego to 601000222" / "ma numer" + imię → add_client (pójdzie przez R4 merge), NIE edit_client.
-- "kto ma numer 600123456" → show_client, entities: {{"phone": "600123456"}}
-- "pokaż klienta z numerem 501234567" → show_client, entities: {{"phone": "501234567"}}
-- "znajdź klienta po numerze 48601111222" → show_client, entities: {{"phone": "601111222"}}
-- WAŻNE: Wiadomości zawierające "kto ma numer", "znajdź po numerze", "klient z numerem", "pokaż klienta X numerze" → show_client, NIE add_client.
-- "dodaj notatkę do Jana Mazura: zadzwoń po 15" → add_note, entities: {{"name": "Jan Mazur"}}
-- "Jan Mazur interesuje się też magazynem" → add_note, entities: {{"name": "Jan Mazur"}}
-- "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
-- "tak" / "ok" / "zgadza się" → confirm_yes
-- "nie" / "anuluj" → confirm_no lub cancel_flow
-- "asdkjfhaskdjfh" / losowe znaki / niezrozumiały tekst → general_question, confidence: 0.1
-- WAŻNE: "podpisał", "podpisał kwit/papier/umowę", "klient podpisał" → change_status {{"status": "Podpisane"}}.
-- WAŻNE: "wysłałem X", "rezygnuje", "spadł kwit" → change_status, NIE edit_client.
-
-Kontekst poprzednich wiadomości:
-{context_str}"""
-
-    result = await call_claude(system_prompt, message, model_type="simple", max_tokens=256)
-
-    raw = result["text"].strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-
-    try:
-        parsed = json.loads(raw)
-        if parsed.get("intent") not in VALID_INTENTS:
-            parsed["intent"] = "general_question"
-        parsed.setdefault("entities", {})
-        parsed.setdefault("confidence", 0.5)
-        return parsed
-    except Exception:
-        logger.error("classify_intent: JSON parse failed: %s", result["text"][:100])
-        return {"intent": "general_question", "entities": {}, "confidence": 0.0}
 
 
 # ── Client data extraction ────────────────────────────────────────────────────
