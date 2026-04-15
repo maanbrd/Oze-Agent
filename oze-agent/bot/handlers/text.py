@@ -36,6 +36,7 @@ from shared.claude_ai import (
 )
 from shared.intent import IntentResult, IntentType, ScopeTier, classify
 from shared.pending import (
+    AddClientDuplicatePayload,
     AddClientPayload,
     PendingFlow,
     PendingFlowType,
@@ -569,12 +570,21 @@ async def handle_add_client(
         if not has_conflict:
             # Default merge path: show R1 confirmation card (R1 rule — no silent writes)
             new_data = {k: v for k, v in client_data.items() if v and k not in SYSTEM_FIELDS}
-            save_pending_flow(telegram_id, "add_client_duplicate", {
-                "client_data": new_data,
-                "duplicate_row": duplicate.get("_row"),
-                "client_name": duplicate.get("Imię i nazwisko", ""),
-                "city": duplicate.get("Miasto", ""),
-            })
+            duplicate_row = duplicate.get("_row")
+            if duplicate_row is None:
+                logger.error("handle_add_client: duplicate without _row: %s", duplicate)
+                await update.effective_message.reply_markdown_v2(format_error("timeout"))
+                return
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
+                flow_data=payload_to_flow_data(AddClientDuplicatePayload(
+                    client_data=new_data,
+                    duplicate_row=duplicate_row,
+                    client_name=duplicate.get("Imię i nazwisko", ""),
+                    city=duplicate.get("Miasto", ""),
+                )),
+            ))
             updated_fields = ", ".join(new_data.keys())
             city_part = f" ({dup_city})" if dup_city else ""
             await update.effective_message.reply_text(
@@ -583,12 +593,21 @@ async def handle_add_client(
             )
             return
         # Conflict: ask user to choose
-        save_pending_flow(telegram_id, "add_client_duplicate", {
-            "client_data": client_data,
-            "duplicate_row": duplicate.get("_row"),
-            "client_name": duplicate.get("Imię i nazwisko", ""),
-            "city": duplicate.get("Miasto", ""),
-        })
+        duplicate_row = duplicate.get("_row")
+        if duplicate_row is None:
+            logger.error("handle_add_client: duplicate without _row: %s", duplicate)
+            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            return
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
+            flow_data=payload_to_flow_data(AddClientDuplicatePayload(
+                client_data=client_data,
+                duplicate_row=duplicate_row,
+                client_name=duplicate.get("Imię i nazwisko", ""),
+                city=duplicate.get("Miasto", ""),
+            )),
+        ))
         dup_addr = duplicate.get("Adres", "")
         dup_prod = duplicate.get("Produkt", "")
         dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
