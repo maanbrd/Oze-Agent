@@ -232,6 +232,25 @@ async def test_out_of_scope_missing_feature_key_falls_back():
 
 
 @pytest.mark.asyncio
+async def test_out_of_scope_category_feature_key_mismatch_falls_back():
+    p1, p2 = _patches(
+        _tool_result(
+            "record_out_of_scope",
+            {
+                "category": "post_mvp_roadmap",
+                "feature_key": "reschedule_meeting",
+            },
+        )
+    )
+    with p1, p2:
+        from shared.intent.intents import IntentType
+        from shared.intent.router import classify
+        result = await classify("przełóż spotkanie z Kowalskim", 1)
+    assert result.intent == IntentType.GENERAL_QUESTION
+    assert result.confidence == 0.0
+
+
+@pytest.mark.asyncio
 async def test_multi_meeting_rejection_maps_to_rejected_scope():
     p1, p2 = _patches(
         _tool_result("record_multi_meeting_rejection", {"meeting_count": 3})

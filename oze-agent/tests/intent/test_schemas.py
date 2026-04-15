@@ -5,9 +5,13 @@ from shared.intent.schemas import (
     ALL_TOOLS,
     EVENT_TYPE_VALUES,
     FEATURE_KEYS,
+    FEATURE_KEY_TO_CATEGORY,
     OUT_OF_SCOPE_CATEGORIES,
+    POST_MVP_FEATURE_KEYS,
     STATUS_VALUES,
     TOOL_NAME_TO_INTENT,
+    UNPLANNED_FEATURE_KEYS,
+    VISION_ONLY_FEATURE_KEYS,
 )
 
 
@@ -72,6 +76,24 @@ def test_out_of_scope_enums_and_required_fields():
     assert props["category"]["enum"] == OUT_OF_SCOPE_CATEGORIES
     assert props["feature_key"]["enum"] == FEATURE_KEYS
     assert tool["input_schema"]["required"] == ["category", "feature_key"]
+
+
+def test_feature_key_to_category_mapping_is_exhaustive():
+    assert set(FEATURE_KEY_TO_CATEGORY) == set(FEATURE_KEYS)
+    assert set(FEATURE_KEYS) == (
+        set(POST_MVP_FEATURE_KEYS)
+        | set(VISION_ONLY_FEATURE_KEYS)
+        | set(UNPLANNED_FEATURE_KEYS)
+    )
+    assert {
+        FEATURE_KEY_TO_CATEGORY[key] for key in POST_MVP_FEATURE_KEYS
+    } == {"post_mvp_roadmap"}
+    assert {
+        FEATURE_KEY_TO_CATEGORY[key] for key in VISION_ONLY_FEATURE_KEYS
+    } == {"vision_only"}
+    assert {
+        FEATURE_KEY_TO_CATEGORY[key] for key in UNPLANNED_FEATURE_KEYS
+    } == {"unplanned"}
 
 
 def test_show_client_has_anyof_constraint():

@@ -14,7 +14,7 @@ from shared.database import get_conversation_history
 
 from .intents import IntentResult, IntentType, ScopeTier
 from .prompts import build_router_system_prompt
-from .schemas import ALL_TOOLS, TOOL_NAME_TO_INTENT
+from .schemas import ALL_TOOLS, FEATURE_KEY_TO_CATEGORY, TOOL_NAME_TO_INTENT
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,11 @@ def _to_intent_result(result: dict) -> IntentResult:
         feature_key = tool_input.pop("feature_key", None)
         details = tool_input.pop("details", None)
         intent = _CATEGORY_TO_INTENT.get(category) if category else None
-        if intent is None or feature_key is None:
+        if (
+            intent is None
+            or feature_key is None
+            or FEATURE_KEY_TO_CATEGORY.get(feature_key) != category
+        ):
             return _fallback(model)
         return IntentResult(
             intent=intent,

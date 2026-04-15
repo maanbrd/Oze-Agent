@@ -24,7 +24,7 @@ EVENT_TYPE_VALUES = ["in_person", "phone_call", "offer_email", "doc_followup"]
 
 OUT_OF_SCOPE_CATEGORIES = ["post_mvp_roadmap", "vision_only", "unplanned"]
 
-FEATURE_KEYS = [
+POST_MVP_FEATURE_KEYS = [
     "edit_client",
     "filter_clients",
     "pipeline_dashboard",
@@ -33,15 +33,33 @@ FEATURE_KEYS = [
     "photo_upload",
     "csv_import",
     "full_dashboard",
+]
+
+VISION_ONLY_FEATURE_KEYS = [
     "reschedule_meeting",
     "cancel_meeting",
     "free_slots",
     "delete_client",
     "habit_learning",
     "flexible_columns",
+]
+
+UNPLANNED_FEATURE_KEYS = [
     "pre_meeting_reminders",
     "meeting_non_working_day_warning",
 ]
+
+FEATURE_KEYS = (
+    POST_MVP_FEATURE_KEYS
+    + VISION_ONLY_FEATURE_KEYS
+    + UNPLANNED_FEATURE_KEYS
+)
+
+FEATURE_KEY_TO_CATEGORY = {
+    **{key: "post_mvp_roadmap" for key in POST_MVP_FEATURE_KEYS},
+    **{key: "vision_only" for key in VISION_ONLY_FEATURE_KEYS},
+    **{key: "unplanned" for key in UNPLANNED_FEATURE_KEYS},
+}
 
 
 _ADD_CLIENT = {
