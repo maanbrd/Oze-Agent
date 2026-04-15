@@ -420,13 +420,18 @@ async def _route_pending_flow(
         )
         return True
     elif flow_type == "r7_prompt":
-        # R7 next-action response: temporal marker → add_meeting, otherwise close
+        # R7 next-action response. The pending_flows table uses telegram_id as
+        # PK, so any successful downstream save_pending(...) UPSERTs over the
+        # R7 row. Strategy: only delete R7 explicitly on cancel or fully-unclear
+        # replies. For temporal-but-incomplete replies (e.g. bare "Spotkanie"),
+        # leave R7 alive so the next message can still recover client context
+        # from flow_data — pending flow is the source of truth, not history.
         telegram_id = update.effective_user.id
-        delete_pending_flow(telegram_id)
         _cancel_single = {"nie", "anuluj", "stop", "nic", "later"}
         _cancel_phrases = {"nie wiem", "odłóż", "odłożyć"}
         text_words = set(text_lower.split())
         if (text_words & _cancel_single) or any(p in text_lower for p in _cancel_phrases):
+            delete_pending_flow(telegram_id)
             return True
         has_temporal = (
             any(w in text_lower for w in _TEMPORAL_MARKERS)
@@ -437,7 +442,13 @@ async def _route_pending_flow(
                 message_text, flow.get("flow_data", {})
             )
             await handle_add_meeting(update, context, user, {}, meeting_text)
-        # Otherwise: unclear reply → consume silently (don't re-classify as add_client)
+            # If handle_add_meeting succeeded, it already wrote an add_meeting
+            # pending flow over R7 (telegram_id PK upsert). If it failed (no
+            # date/time), no new flow was saved → R7 stays alive so the user's
+            # next reply can re-enter this branch with the same client context.
+            return True
+        # No temporal markers at all — unclear/off-topic reply, drop R7.
+        delete_pending_flow(telegram_id)
         return True
     else:
         # New message arrived during a non-add_client pending flow → auto-cancel, process message normally
