@@ -92,7 +92,7 @@ Te 4 elementy **pozostają w obecnej lokalizacji** w Phase 3.
 ```
 oze-agent/shared/intent/
   __init__.py              # public API: classify() + IntentType + ScopeTier + IntentResult
-  router.py                # classify(message, user_id) -> IntentResult
+  router.py                # classify(message, telegram_id) -> IntentResult
   intents.py               # IntentType enum + ScopeTier enum + IntentResult dataclass
   schemas.py               # anthropic tool-use definitions
   prompts.py               # system prompt builder (no 70-liniowe inline strings)
@@ -352,7 +352,7 @@ Location: `oze-agent/tests/intent/` (new directory).
 | `test_refresh_columns_is_telegram_command.py` | `bot/main.py` rejestruje `CommandHandler("odswiez_kolumny", ...)`. Wywołanie komendy przez Telegram dispatch wywołuje `handle_refresh_columns` (z `bot/handlers/text.py:1722`). |
 | `test_router_classify_multi_meeting_rejection.py` | Message "spotkanie z Kowalskim jutro 10 i z Nowakiem pojutrze 14" → mock `record_multi_meeting_rejection` → `IntentType.MULTI_MEETING`, `scope_tier=REJECTED`. |
 | `test_router_multi_meeting_tool_wins_over_regex.py` | Regex pre-check matches "spotkanie jutro i notatka" (false positive) ale model wybiera `record_add_meeting` (single) → wynik = single add_meeting. Regex nie jest kontraktem. |
-| `test_router_uses_30min_history_window.py` | Mock `get_conversation_history`; assertion że router woła z `since=timedelta(minutes=30)` i passes `user_id` z parametru. |
+| `test_router_uses_30min_history_window.py` | Mock `get_conversation_history`; assertion że router woła z `since=timedelta(minutes=30)` i passes `telegram_id` z parametru. |
 | `test_router_event_type_enum_matches_d4.py` | Schema `record_add_meeting.event_type` enum == `{"in_person", "phone_call", "offer_email", "doc_followup"}`. |
 | `test_router_status_enum_matches_intencje.py` | Schema `record_change_status.status` enum == 9 pipeline statuses (canonical set per INTENCJE §6). |
 | `test_router_text_fallback_returns_general.py` | Model returns text instead of tool call → `IntentResult(intent=GENERAL_QUESTION, confidence=0.0)`. |

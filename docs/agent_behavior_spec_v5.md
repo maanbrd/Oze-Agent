@@ -139,7 +139,7 @@ Którego?
 
 ### R6: Pamięć = 10 wiadomości / 30 min
 
-Rolling window: ostatnie 10 wiadomości LUB 30 minut (cokolwiek nastąpi wcześniej). Stara pamięć wypada. Mechanizm `get_conversation_history(telegram_id, limit=10)` w `shared/database.py`.
+Rolling window: ostatnie 10 wiadomości LUB 30 minut (cokolwiek nastąpi wcześniej). Stara pamięć wypada. Per D6: router i prompt builder **obowiązkowo** wołają `get_conversation_history(telegram_id, limit=10, since=timedelta(minutes=30))` w `shared/database.py`. Parametr `since` jest mandatory dla MVP intent / prompt flow — wrapper ma fallback do raw (limit-only) gdy `since=None`, ale MVP callsite nigdy nie przekazuje `None`.
 
 **Aktywny klient:** z rolling window agent utrzymuje `user_data["active_client"]` — ostatnio wspomnianego klienta z ostatnich 10 wiadomości. Gdy handlowiec mówi "dodaj że ma duży dom" bez wskazania klienta, agent bierze aktywnego z kontekstu zamiast pytać "którego klienta?".
 

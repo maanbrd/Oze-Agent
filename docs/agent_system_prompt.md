@@ -150,7 +150,7 @@ Identify clients always by **first name + last name + city** — never by last n
 
 ### R6: Memory = 10 messages / 30 minutes + active client
 
-Rolling window: last 10 messages OR 30 minutes, whichever comes first. Old context drops out. Use `get_conversation_history(telegram_id, limit=10)` in `shared/database.py`.
+Rolling window: last 10 messages OR 30 minutes, whichever comes first. Old context drops out. Per D6, router and prompt builder **must** call `get_conversation_history(telegram_id, limit=10, since=timedelta(minutes=30))` in `shared/database.py`. The `since` param is mandatory for MVP intent / prompt flow — wrapper falls back to raw (limit-only) behavior when `since=None`, but MVP callsites never pass `None`.
 
 **Active client:** from the rolling window agent maintains `user_data["active_client"]` — the most recently mentioned client. When the user says `"dodaj że ma duży dom"` without naming anyone, agent uses the active client from context instead of asking `"którego klienta?"`. See `INTENCJE_MVP.md` section 3 (R4).
 

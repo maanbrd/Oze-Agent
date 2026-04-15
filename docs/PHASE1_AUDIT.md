@@ -34,7 +34,7 @@ Pure async wrapper over sync Google Sheets API. Returns `None` / `False` / `[]` 
 
 `Imię i nazwisko, Telefon, Email, Miasto, Adres, Status, Produkt, Notatki, Data pierwszego kontaktu, Data ostatniego kontaktu, Następny krok, Data następnego kroku, Źródło pozyskania, Zdjęcia, Link do zdjęć, ID wydarzenia Kalendarz.`
 
-N / O / P are POST-MVP (empty in MVP).
+N / O are POST-MVP (photo flow). **P is populated in MVP** for Calendar-backed next steps per D8 — stores `event_id` returned by `events.insert`; empty only for no-event K values (`Czekać na decyzję klienta`, `Nic — zamknięte`, `Inne`).
 
 **Note — column K (Następny krok):** inline comment suggests an enum `Telefon / Spotkanie / Wysłać ofertę / …`. These values are not cross-referenced with canonical enum in `INTENCJE_MVP.md` / `agent_system_prompt.md` (where `phone_call` / `in_person` / `doc_followup` are used). Semantic gap → Phase 2 Behavior Contract Freeze.
 
