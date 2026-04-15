@@ -85,6 +85,13 @@ def test_vision_only_default_used_for_unmapped_feature_key():
     )
 
 
+def test_unplanned_default_uses_native_alternative_tone():
+    text = banner_for(_result(IntentType.UNPLANNED))
+    assert text == (
+        "Poza zakresem agenta. Skorzystaj z natywnej funkcji Google Calendar."
+    )
+
+
 @pytest.mark.parametrize("feature_key", FEATURE_KEYS)
 def test_no_banner_contains_banned_phrases(feature_key):
     intent = {

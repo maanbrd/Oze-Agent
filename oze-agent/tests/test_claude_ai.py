@@ -12,10 +12,29 @@ def _make_anthropic_response(text: str, tokens_in: int = 50, tokens_out: int = 1
     return response
 
 
+def _make_tool_response(tool_name: str, tool_input: dict):
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.input = tool_input
+    response = MagicMock()
+    response.content = [block]
+    response.usage = MagicMock(input_tokens=50, output_tokens=100)
+    return response
+
+
 def _mock_client(text: str, **kwargs):
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(text, **kwargs)
+    )
+    return mock_client
+
+
+def _mock_tool_client(tool_name: str, tool_input: dict):
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_tool_response(tool_name, tool_input)
     )
     return mock_client
 
@@ -75,6 +94,27 @@ async def test_cost_calculation_complex_more_expensive():
         simple_result = await call_claude("s", "u", model_type="simple")
 
     assert complex_result["cost_usd"] > simple_result["cost_usd"]
+
+
+# ── call_claude_with_tools ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_call_claude_with_tools_force_tool_sets_tool_choice():
+    client = _mock_tool_client("record_general_question", {"reason": "test"})
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude_with_tools
+        result = await call_claude_with_tools(
+            "system",
+            "user",
+            [{"name": "record_general_question", "input_schema": {"type": "object"}}],
+            model_type="simple",
+            force_tool=True,
+        )
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["tool_choice"] == {"type": "any"}
+    assert result["tool_name"] == "record_general_question"
 
 
 # ── classify_intent ───────────────────────────────────────────────────────────

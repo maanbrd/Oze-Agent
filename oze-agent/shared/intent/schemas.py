@@ -66,7 +66,8 @@ _ADD_CLIENT = {
     "name": "record_add_client",
     "description": (
         "Dodaj nowego klienta do CRM. Użyj gdy użytkownik podaje imię i nazwisko "
-        "nowego klienta (opcjonalnie z miastem, telefonem, produktem)."
+        "nowego klienta (opcjonalnie z miastem, telefonem, produktem). Frazy typu "
+        "'dodaj', 'dopisz', 'nowy klient' + osoba/miasto bez treści notatki to add_client."
     ),
     "input_schema": {
         "type": "object",
@@ -85,7 +86,8 @@ _SHOW_CLIENT = {
     "name": "record_show_client",
     "description": (
         "Pokaż informacje o istniejącym kliencie. Wymagane co najmniej jedno "
-        "z pól: name, city, phone."
+        "z pól: name, city, phone. Użyj dla fraz typu 'co mam o X', 'pokaż X', "
+        "'znajdź X'."
     ),
     "input_schema": {
         "type": "object",
@@ -94,11 +96,6 @@ _SHOW_CLIENT = {
             "city": {"type": "string"},
             "phone": {"type": "string"},
         },
-        "anyOf": [
-            {"required": ["name"]},
-            {"required": ["city"]},
-            {"required": ["phone"]},
-        ],
     },
 }
 
@@ -106,7 +103,8 @@ _ADD_NOTE = {
     "name": "record_add_note",
     "description": (
         "Dopisz notatkę do istniejącego klienta. Użyj gdy użytkownik przekazuje "
-        "informację o kliencie bez elementu czasowego / bez zmiany statusu."
+        "konkretną treść notatki o kliencie bez elementu czasowego / bez zmiany statusu. "
+        "Nie używaj jeśli pole note miałoby być puste — wtedy wybierz inne narzędzie."
     ),
     "input_schema": {
         "type": "object",
@@ -141,7 +139,8 @@ _ADD_MEETING = {
     "description": (
         "Zaplanuj pojedyncze spotkanie, rozmowę telefoniczną, wysyłkę oferty "
         "lub follow-up po dokumentach. Dla ≥2 spotkań użyj "
-        "record_multi_meeting_rejection."
+        "record_multi_meeting_rejection. Jeśli użytkownik mówi po prostu 'spotkanie', "
+        "ustaw event_type=in_person."
     ),
     "input_schema": {
         "type": "object",

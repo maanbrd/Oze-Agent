@@ -328,6 +328,7 @@ async def test_classify_uses_30min_history_window_and_all_tools():
 
     assert captured["tools"] is ALL_TOOLS
     assert captured["model_type"] == "simple"
+    assert captured["force_tool"] is True
     sys_prompt = captured["system_prompt"]
     assert "[Nowy]" in sys_prompt
     assert "[Aktualizuj]" in sys_prompt

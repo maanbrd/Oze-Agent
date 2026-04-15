@@ -86,6 +86,7 @@ async def call_claude_with_tools(
     user_message: str,
     tools: list[dict],
     model_type: str = "complex",
+    force_tool: bool = False,
 ) -> dict:
     """Call Claude with tool use enabled.
 
@@ -101,13 +102,16 @@ async def call_claude_with_tools(
     client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
 
     try:
-        response = await client.messages.create(
-            model=model,
-            max_tokens=1024,
-            system=system_prompt,
-            tools=tools,
-            messages=[{"role": "user", "content": user_message}],
-        )
+        request = {
+            "model": model,
+            "max_tokens": 1024,
+            "system": system_prompt,
+            "tools": tools,
+            "messages": [{"role": "user", "content": user_message}],
+        }
+        if force_tool:
+            request["tool_choice"] = {"type": "any"}
+        response = await client.messages.create(**request)
         tokens_in = response.usage.input_tokens
         tokens_out = response.usage.output_tokens
         cost = (

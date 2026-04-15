@@ -96,16 +96,11 @@ def test_feature_key_to_category_mapping_is_exhaustive():
     } == {"unplanned"}
 
 
-def test_show_client_has_anyof_constraint():
+def test_show_client_schema_avoids_unsupported_top_level_anyof():
     tool = _by_name()["record_show_client"]
-    any_of = tool["input_schema"].get("anyOf")
-    assert any_of is not None
-    required_sets = {frozenset(branch["required"]) for branch in any_of}
-    assert required_sets == {
-        frozenset({"name"}),
-        frozenset({"city"}),
-        frozenset({"phone"}),
-    }
+    assert "anyOf" not in tool["input_schema"]
+    assert set(tool["input_schema"]["properties"]) == {"name", "city", "phone"}
+    assert "co najmniej jedno" in tool["description"]
 
 
 def test_multi_meeting_requires_count_min_two():

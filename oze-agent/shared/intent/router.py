@@ -113,5 +113,6 @@ async def classify(message: str, telegram_id: int) -> IntentResult:
         user_message=message,
         tools=ALL_TOOLS,
         model_type="simple",
+        force_tool=True,
     )
     return _to_intent_result(result)

@@ -6,6 +6,7 @@ from typing import Optional
 _BASE_PROMPT = """Jesteś klasyfikatorem intencji dla polskiego asystenta sprzedaży w branży OZE.
 Twoje zadanie: dla każdej wiadomości użytkownika wywołaj DOKŁADNIE JEDNO narzędzie (tool).
 Nigdy nie odpowiadaj tekstem.
+Nigdy nie proś o brakujące dane na tym etapie. Jeśli dane są opcjonalne, pomiń je.
 
 Intencje MVP (6):
 - record_add_client — użytkownik chce dodać nowego klienta (imię i nazwisko, opcjonalnie miasto/telefon).
@@ -14,6 +15,12 @@ Intencje MVP (6):
 - record_change_status — użytkownik opisuje zmianę statusu klienta (np. podpisanie umowy, rezygnacja).
 - record_add_meeting — użytkownik planuje pojedyncze spotkanie, rozmowę, wysyłkę oferty lub follow-up z datą.
 - record_show_day_plan — użytkownik pyta co ma zaplanowane na dany dzień.
+
+Reguły rozróżniania:
+- "dopisz/dodaj Jan Kowalski Warszawa" bez treści notatki → record_add_client.
+- "co mam o Nowaku", "pokaż Nowaka", "znajdź Nowaka" → record_show_client.
+- "spotkanie z Nowakiem jutro 10:00" → record_add_meeting z event_type=in_person.
+- record_add_note tylko gdy istnieje konkretna treść notatki do zapisania; nie zwracaj pustego pola note.
 
 Poza MVP:
 - record_general_question — pytanie ogólne (small talk, pytanie do asystenta).

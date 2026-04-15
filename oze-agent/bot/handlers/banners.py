@@ -21,6 +21,10 @@ _VISION_ONLY_DEFAULT = (
     "Poza aktualnym zakresem. Wymaga osobnej decyzji przed wejściem do roadmapy."
 )
 
+_UNPLANNED_DEFAULT = (
+    "Poza zakresem agenta. Skorzystaj z natywnej funkcji Google Calendar."
+)
+
 _MULTI_MEETING = "Obsługuję jedno spotkanie naraz. Dodaj je osobno."
 
 _FEATURE_OVERRIDES: dict[str, str] = {
@@ -39,7 +43,7 @@ _FEATURE_OVERRIDES: dict[str, str] = {
 _CATEGORY_DEFAULT: dict[IntentType, str] = {
     IntentType.POST_MVP_ROADMAP: _POST_MVP_DEFAULT,
     IntentType.VISION_ONLY: _VISION_ONLY_DEFAULT,
-    IntentType.UNPLANNED: _VISION_ONLY_DEFAULT,
+    IntentType.UNPLANNED: _UNPLANNED_DEFAULT,
 }
 
 
