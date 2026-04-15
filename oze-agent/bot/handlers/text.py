@@ -2,6 +2,7 @@
 
 import logging
 import re
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -28,12 +29,13 @@ from bot.utils.telegram_helpers import (
 )
 from shared.claude_ai import (
     call_claude_with_tools,
-    classify_intent,
     extract_client_data,
     extract_meeting_data,
     extract_note_data,
     generate_bot_response,
 )
+from shared.intent import IntentResult, IntentType, ScopeTier, classify
+from bot.handlers.banners import banner_for_legacy
 from shared.database import (
     delete_pending_flow,
     get_conversation_history,
@@ -106,6 +108,26 @@ _TIME_RE = re.compile(
     r'|\bkwadrans\b'
 )
 
+_BANNER_INTENTS = frozenset({
+    IntentType.POST_MVP_ROADMAP,
+    IntentType.VISION_ONLY,
+    IntentType.UNPLANNED,
+    IntentType.MULTI_MEETING,
+})
+
+
+def _intent_result_to_legacy_dict(result: IntentResult, message_text: str) -> dict:
+    entities = dict(result.entities)
+    if result.intent is IntentType.CHANGE_STATUS and "client_name" in entities:
+        entities["name"] = entities.pop("client_name")
+    return {
+        "intent": result.intent.value,
+        "entities": entities,
+        "confidence": result.confidence,
+        "feature_key": result.feature_key,
+        "reason": result.reason,
+    }
+
 
 # ── Guards ─────────────────────────────────────────────────────────────────────
 
@@ -165,58 +187,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Save message and get history
     save_conversation_message(telegram_id, "user", message_text)
-    history = get_conversation_history(telegram_id, limit=3)
 
-    # Classify intent
-    intent_data = await classify_intent(message_text, history)
-    intent = intent_data.get("intent", "general_question")
+    # Classify intent via the structured router (shared.intent.classify pulls
+    # its own 30-min history window internally).
+    result = await classify(message_text, telegram_id)
 
-    # Low-confidence classification → fall back to general (prevents garbage → add_client)
-    if (
-        intent_data.get("confidence", 1.0) < 0.5
-        and intent not in {"confirm_yes", "confirm_no", "cancel_flow"}
-    ):
-        intent = "general_question"
-
-    # Guard: Claude said add_meeting but message has no date/time markers
-    # → reclassify as add_client (avoids history contamination from past meeting attempts)
-    if intent == "add_meeting":
+    # Defensive temporal guard — schema requires date_iso for add_meeting,
+    # but the LLM can still hallucinate. Demote to add_client without markers.
+    if result.intent is IntentType.ADD_MEETING:
         msg_lower = message_text.lower()
         has_temporal = (
             any(w in msg_lower for w in _TEMPORAL_MARKERS)
             or bool(_TIME_RE.search(msg_lower))
         )
         if not has_temporal:
-            intent = "add_client"
+            result = replace(
+                result,
+                intent=IntentType.ADD_CLIENT,
+                scope_tier=ScopeTier.MVP,
+            )
 
-    # Route by intent
-    handlers = {
-        # 6 MVP intents
-        "add_client":       handle_add_client,
-        "show_client":      handle_search_client,       # renamed from search_client; E.3 will rewrite
-        "add_note":         handle_add_note,             # stub — Sesja D
-        "change_status":    handle_change_status,
-        "add_meeting":      handle_add_meeting,
-        "show_day_plan":    handle_show_day_plan,
-        # POST-MVP — R5 banner
-        "edit_client":      handle_post_mvp_banner,
-        "filtruj_klientów": handle_post_mvp_banner,
-        "lejek_sprzedazowy": handle_post_mvp_banner,
-        # Utility
-        "assign_photo":     handle_general,
-        "refresh_columns":  handle_refresh_columns,
-        # Flow control
-        "confirm_yes":      handle_confirm,
-        "confirm_no":       handle_cancel_flow,
-        "cancel_flow":      handle_cancel_flow,
-        "general_question": handle_general,
-    }
+    intent_data = _intent_result_to_legacy_dict(result, message_text)
 
-    handler = handlers.get(intent, handle_general)
+    handler = _HANDLERS.get(result.intent, handle_general)
     await handler(update, context, user, intent_data, message_text)
 
     await increment_interaction(
-        telegram_id, intent, "claude-haiku-4-5-20251001", 0, 0, 0.0
+        telegram_id, result.intent.value, "claude-haiku-4-5-20251001", 0, 0, 0.0
     )
 
 
@@ -391,17 +388,15 @@ async def _route_pending_flow(
 # ── Sub-handlers ──────────────────────────────────────────────────────────────
 
 
-async def handle_post_mvp_banner(
+async def handle_banner(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     user: dict,
     intent_data: dict,
     message_text: str,
 ) -> None:
-    """R5: inform user this POST-MVP feature is coming soon."""
-    await update.effective_message.reply_text(
-        "Ta funkcja jest w przygotowaniu. Niedługo dostępna."
-    )
+    """R5 / out-of-scope banner — copy resolved from intent + feature_key."""
+    await update.effective_message.reply_text(banner_for_legacy(intent_data))
 
 
 async def handle_add_note(
@@ -1736,6 +1731,25 @@ async def handle_refresh_columns(
         await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
 
+async def handle_refresh_columns_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """CommandHandler adapter for /odswiez_kolumny."""
+    if not await is_private_chat(update):
+        return
+    user = await _run_guards(update)
+    if not user:
+        return
+    telegram_id = update.effective_user.id
+    await handle_refresh_columns(
+        update, context, user, {}, update.effective_message.text or ""
+    )
+    await increment_interaction(
+        telegram_id, "refresh_columns", "none", 0, 0, 0.0
+    )
+
+
 async def handle_general(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1777,3 +1791,20 @@ async def handle_general(
         result.get("tokens_out", 0),
         result.get("cost_usd", 0.0),
     )
+
+
+# IntentType → handler dispatch table. Defined at the bottom of the module
+# so every referenced handler function already exists at import time.
+_HANDLERS = {
+    IntentType.ADD_CLIENT:       handle_add_client,
+    IntentType.SHOW_CLIENT:      handle_search_client,
+    IntentType.ADD_NOTE:         handle_add_note,
+    IntentType.CHANGE_STATUS:    handle_change_status,
+    IntentType.ADD_MEETING:      handle_add_meeting,
+    IntentType.SHOW_DAY_PLAN:    handle_show_day_plan,
+    IntentType.GENERAL_QUESTION: handle_general,
+    IntentType.POST_MVP_ROADMAP: handle_banner,
+    IntentType.VISION_ONLY:      handle_banner,
+    IntentType.UNPLANNED:        handle_banner,
+    IntentType.MULTI_MEETING:    handle_banner,
+}

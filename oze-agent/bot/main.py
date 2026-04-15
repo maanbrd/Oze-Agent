@@ -15,7 +15,7 @@ from bot.handlers.buttons import handle_button
 from bot.handlers.fallback import handle_fallback
 from bot.handlers.photo import handle_photo
 from bot.handlers.start import start_command
-from bot.handlers.text import handle_text
+from bot.handlers.text import handle_refresh_columns_command, handle_text
 from bot.handlers.voice import handle_voice
 
 logging.basicConfig(
@@ -43,6 +43,7 @@ def main():
 
     # Order matters — first match wins
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("odswiez_kolumny", handle_refresh_columns_command))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
