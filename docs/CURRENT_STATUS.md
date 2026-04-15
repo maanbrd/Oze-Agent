@@ -128,3 +128,18 @@ Example:
 Discovered during smoke testing of `aefa2e5`. Documented as MVP limitation in the docstring at `oze-agent/shared/search.py::detect_potential_duplicate`.
 
 Does not block continuing the typed-pending migration. Duplicate UX is not fully complete until a disambiguation flow is added (separate slice — same shape as the existing disambiguation pending flow used by `add_note` / `change_status`).
+
+### add_note future-action follow-up should offer next step
+
+**Status:** open follow-up.
+
+When a saved note contains a future action / date phrase, the bot stores the note in Sheets but does not propose or create a Calendar event / D4 next step.
+
+Example:
+- User: `dodaj notatkę do Marysia Mastalerz: dzwoniła w sprawie awarii pv. Zadzwonić w piątek`
+- Current: note appended to Sheets `Notatki`, no Calendar/next-step prompt.
+- Expected: agent asks whether to create a `phone_call` next step (D4 enum) / Calendar event for the detected future action, or routes to the `add_meeting` / next-step pipeline.
+
+Discovered during smoke testing of `f56000a`. Not a regression — the `add_note` write migration only changed pending-flow serialization. This is a product gap in note→next-step detection.
+
+Does not block the typed-pending migration. Implementation belongs in a separate slice (likely a small extractor over note text + R7-style follow-up prompt, or routing the suffix into the existing `add_meeting` flow).
