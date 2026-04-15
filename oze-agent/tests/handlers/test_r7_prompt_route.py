@@ -41,6 +41,7 @@ async def test_r7_bare_spotkanie_keeps_flow_alive():
     # handle_add_meeting was invoked with the R7-context-enriched message.
     mock_meeting.assert_awaited_once()
     args, _ = mock_meeting.call_args
+    assert args[3]["entities"]["event_type"] == "in_person"
     assert "Karol Łukaszewicz" in args[4]
     assert "Janki" in args[4]
 
@@ -61,6 +62,7 @@ async def test_r7_followup_with_time_keeps_client_context():
     mock_delete.assert_not_called()
     mock_meeting.assert_awaited_once()
     args, _ = mock_meeting.call_args
+    assert args[3]["entities"]["event_type"] == "in_person"
     # _message_with_r7_client_context appended client name + city
     assert "Karol Łukaszewicz" in args[4]
     assert "Janki" in args[4]
@@ -83,6 +85,31 @@ async def test_r7_complete_meeting_phrase_routes_to_add_meeting():
     assert consumed is True
     mock_delete.assert_not_called()
     mock_meeting.assert_awaited_once()
+    args, _ = mock_meeting.call_args
+    assert args[3]["entities"]["event_type"] == "in_person"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message_text, expected_event_type",
+    [
+        ("spotkanie z Kowalskim, zadzwoń wcześniej", "in_person"),
+        ("zadzwonić w piątek o 10", "phone_call"),
+        ("wysłać ofertę w środę", "offer_email"),
+        ("follow-up dokumentowy w poniedziałek", "doc_followup"),
+    ],
+)
+async def test_r7_infers_event_type_for_temporal_replies(message_text, expected_event_type):
+    upd = _update()
+    with patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
+         patch(
+             "bot.handlers.text.handle_add_meeting", new=AsyncMock()
+         ) as mock_meeting:
+        consumed = await _route_pending_flow(upd, MagicMock(), {}, _flow(), message_text)
+    assert consumed is True
+    mock_delete.assert_not_called()
+    args, _ = mock_meeting.call_args
+    assert args[3]["entities"]["event_type"] == expected_event_type
 
 
 @pytest.mark.asyncio

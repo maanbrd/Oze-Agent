@@ -94,6 +94,7 @@ def test_payload_map_class_per_type():
                     "Imię i nazwisko": "Jan Kowalski",
                     "Telefon": "601234567",
                 },
+                "event_type": "in_person",
             },
             AddMeetingPayload,
         ),
@@ -228,6 +229,23 @@ def test_add_meeting_with_only_required_fields_succeeds():
     assert payload.location == ""
     assert payload.description == ""
     assert payload.client_data is None
+    assert payload.event_type is None
+    assert "event_type" not in payload_to_flow_data(payload)
+
+
+def test_add_meeting_event_type_round_trips_when_present():
+    payload = payload_from_flow_data(
+        PendingFlowType.ADD_MEETING,
+        {
+            "title": "x",
+            "start": "y",
+            "end": "z",
+            "client_name": "a",
+            "event_type": "in_person",
+        },
+    )
+    assert payload.event_type == "in_person"
+    assert payload_to_flow_data(payload)["event_type"] == "in_person"
 
 
 def test_add_meeting_missing_required_title_raises():

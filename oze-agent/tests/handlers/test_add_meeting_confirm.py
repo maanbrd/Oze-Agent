@@ -25,6 +25,7 @@ async def test_add_meeting_confirm_offers_add_client_with_carried_client_data():
         "client_name": "Jurek Jurecki",
         "location": "Warszawa",
         "description": "",
+        "event_type": "in_person",
         "client_data": {
             "Imię i nazwisko": "Jurek Jurecki",
             "Telefon": "746938764",
@@ -81,6 +82,7 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
         "client_name": "Jurek Jurecki",
         "location": "Warszawa",
         "description": "",
+        "event_type": "in_person",
     }
     upd = _update()
 
@@ -109,7 +111,9 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
         {"Status": "Spotkanie umówione"},
     )
     mock_save.assert_not_called()
-    upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
+    upd.effective_message.reply_text.assert_awaited_once_with(
+        "✅ Spotkanie dodane do kalendarza. Status klienta: Spotkanie umówione."
+    )
 
 
 @pytest.mark.asyncio
@@ -121,6 +125,7 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
         "client_name": "Jurek Jurecki",
         "location": "Warszawa",
         "description": "",
+        "event_type": "in_person",
     }
     upd = _update()
 
@@ -143,3 +148,160 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
 
     mock_update.assert_not_awaited()
     upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event_type", ["phone_call", "offer_email", "doc_followup"])
+async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(event_type):
+    flow_data = {
+        "title": "Spotkanie - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "Warszawa",
+        "description": "",
+        "event_type": event_type,
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    mock_update.assert_not_awaited()
+    upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_updates_only_first_name_safe_match():
+    flow_data = {
+        "title": "Spotkanie - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "Warszawa",
+        "description": "",
+        "event_type": "in_person",
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 3, "Imię i nazwisko": "Zbigniew Jurecki", "Status": "Nowy lead"},
+            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"},
+            {"_row": 9, "Imię i nazwisko": "Anna Jurecka", "Status": "Nowy lead"},
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    mock_update.assert_awaited_once_with(1, 7, {"Status": "Spotkanie umówione"})
+    mock_save.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_no_first_name_match_creates_add_client_draft():
+    flow_data = {
+        "title": "Spotkanie - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "Warszawa",
+        "description": "",
+        "event_type": "in_person",
+        "client_data": {"Telefon": "746938764"},
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 3, "Imię i nazwisko": "Zbigniew Jurecki", "Status": "Nowy lead"},
+            {"_row": 9, "Imię i nazwisko": "Anna Jurecka", "Status": "Nowy lead"},
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ) as mock_delete:
+        await handle_confirm(
+            upd,
+            MagicMock(),
+            {"id": 1, "sheet_columns": ["Imię i nazwisko", "Telefon", "Status"]},
+            {},
+            "",
+        )
+
+    mock_update.assert_not_awaited()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_CLIENT
+    assert saved_flow.flow_data["client_data"]["Imię i nazwisko"] == "Jurek Jurecki"
+    assert saved_flow.flow_data["client_data"]["Telefon"] == "746938764"
+    assert saved_flow.flow_data["client_data"]["Status"] == "Spotkanie umówione"
+    mock_delete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_update_client_fails_reports_failure():
+    flow_data = {
+        "title": "Spotkanie - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "Warszawa",
+        "description": "",
+        "event_type": "in_person",
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=False),
+    ), patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    upd.effective_message.reply_text.assert_awaited_once_with(
+        "✅ Spotkanie dodane do kalendarza. Nie udało się zmienić statusu klienta."
+    )

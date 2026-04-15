@@ -48,6 +48,7 @@ async def test_add_client_augment_spotkanie_routes_before_client_extraction():
         "Imię i nazwisko": "Anna Testowa",
         "Miasto": "Zatory",
     }
+    assert args[3]["entities"]["event_type"] == "in_person"
     assert args[4] == "spotkanie w piątek o 14 z Anna Testowa Zatory"
 
 
@@ -67,8 +68,39 @@ async def test_add_client_augment_meeting_phone_is_carried_to_meeting_flow():
     assert consumed is True
     mock_extract.assert_not_called()
     args, _ = mock_meeting.call_args
+    assert args[3]["entities"]["event_type"] == "in_person"
     assert args[3]["source_client_data"]["Telefon"] == "746938764"
     assert args[4] == "Spotkanie w piątek o 14 746938764 z Anna Testowa Zatory"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message_text, expected_event_type",
+    [
+        ("spotkanie, zadzwoń wcześniej", "in_person"),
+        ("zadzwonić w piątek o 10", "phone_call"),
+        ("wysłać ofertę w środę", "offer_email"),
+        ("follow-up dokumentowy w poniedziałek", "doc_followup"),
+    ],
+)
+async def test_add_client_augment_infers_event_type_for_action_replies(
+    message_text, expected_event_type
+):
+    upd = _update()
+    with patch("bot.handlers.text.extract_client_data", new=AsyncMock()) as mock_extract, \
+         patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _flow(),
+            message_text,
+        )
+
+    assert consumed is True
+    mock_extract.assert_not_called()
+    args, _ = mock_meeting.call_args
+    assert args[3]["entities"]["event_type"] == expected_event_type
 
 
 @pytest.mark.asyncio

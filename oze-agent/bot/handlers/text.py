@@ -88,10 +88,14 @@ SYSTEM_FIELDS = {
     "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz", "Data następnego kroku",
 }
 
+_STATUS_NEW_LEAD = "Nowy lead"
+_STATUS_MEETING_BOOKED = "Spotkanie umówione"
+_STATUS_MEETING_AUTO_UPGRADE_FROM = {"", _STATUS_NEW_LEAD}
+
 # Canonical 9-status pipeline per INTENCJE_MVP.md (frozen)
 _VALID_STATUSES = [
-    "Nowy lead",
-    "Spotkanie umówione",
+    _STATUS_NEW_LEAD,
+    _STATUS_MEETING_BOOKED,
     "Spotkanie odbyte",
     "Oferta wysłana",
     "Podpisane",
@@ -200,6 +204,19 @@ def _is_client_scoped_action_reply(message_text: str) -> bool:
         return True
 
     return _has_temporal_or_time(text_lower)
+
+
+def _infer_meeting_event_type(message_text: str) -> str:
+    text_lower = message_text.lower()
+    if "spotkanie" in text_lower:
+        return "in_person"
+    if any(marker in text_lower for marker in ("telefon", "zadzw", "zadzwo", "call")):
+        return "phone_call"
+    if any(marker in text_lower for marker in ("mail", "email", "ofert")):
+        return "offer_email"
+    if any(marker in text_lower for marker in ("dokument", "docs", "papier")):
+        return "doc_followup"
+    return "in_person"
 
 
 def _message_with_add_client_context(message_text: str, client_data: dict) -> str:
@@ -474,7 +491,12 @@ async def _route_pending_flow(
                 update,
                 context,
                 user,
-                {"source_client_data": source_client_data},
+                {
+                    "source_client_data": source_client_data,
+                    "entities": {
+                        "event_type": _infer_meeting_event_type(message_text),
+                    },
+                },
                 action_text,
             )
             return True
@@ -585,6 +607,7 @@ async def _route_pending_flow(
                     location=flow_data.get("location", ""),
                     description=description,
                     client_data=client_data or None,
+                    event_type=flow_data.get("event_type"),
                 )),
             ))
             card = _format_add_meeting_flow_card({
@@ -666,7 +689,17 @@ async def _route_pending_flow(
             meeting_text = _message_with_r7_client_context(
                 message_text, flow.get("flow_data", {})
             )
-            await handle_add_meeting(update, context, user, {}, meeting_text)
+            await handle_add_meeting(
+                update,
+                context,
+                user,
+                {
+                    "entities": {
+                        "event_type": _infer_meeting_event_type(message_text),
+                    },
+                },
+                meeting_text,
+            )
             # If handle_add_meeting succeeded, it already wrote an add_meeting
             # pending flow over R7 (telegram_id PK upsert). If it failed (no
             # date/time), no new flow was saved → R7 stays alive so the user's
@@ -1474,6 +1507,8 @@ async def handle_add_meeting(
 
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
         source_client_data = intent_data.get("source_client_data") or None
+        entities = intent_data.get("entities") or {}
+        event_type = entities.get("event_type") or m.get("event_type")
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
@@ -1491,6 +1526,7 @@ async def handle_add_meeting(
                 location=enriched["location"],
                 description=enriched["description"],
                 client_data=source_client_data,
+                event_type=event_type,
             )),
         ))
 
@@ -1893,15 +1929,16 @@ async def handle_confirm(
             )
             if event:
                 client_name = flow_data.get("client_name", "")
+                upgrade_allowed = flow_data.get("event_type") == "in_person"
+                status_updated = False
+                status_update_failed = False
                 client_matches = await search_clients(user_id, client_name) if client_name else []
-                client = next(
-                    (c for c in client_matches if _first_name_ok(client_name, c)),
-                    client_matches[0] if client_matches else None,
-                )
+                client = next((c for c in client_matches if _first_name_ok(client_name, c)), None)
                 if not client and client_name:
                     draft_client_data = dict(flow_data.get("client_data") or {})
                     draft_client_data.setdefault("Imię i nazwisko", client_name)
-                    draft_client_data.setdefault("Status", "Spotkanie umówione")
+                    if upgrade_allowed:
+                        draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
                     save_pending(PendingFlow(
                         telegram_id=telegram_id,
                         flow_type=PendingFlowType.ADD_CLIENT,
@@ -1921,26 +1958,36 @@ async def handle_confirm(
                     )
                     skip_delete = True
                 else:
-                    if client:
+                    if client and upgrade_allowed:
                         current_status = (client.get("Status") or "").strip()
                         row = client.get("_row")
-                        if current_status in {"", "Nowy lead"} and row is not None:
+                        if current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM and row is not None:
                             ok = await update_client(
                                 user_id,
                                 row,
-                                {"Status": "Spotkanie umówione"},
+                                {"Status": _STATUS_MEETING_BOOKED},
                             )
-                            if not ok:
+                            if ok:
+                                status_updated = True
+                            else:
+                                status_update_failed = True
                                 logger.error(
                                     "add_meeting confirm: failed to update status row=%s",
                                     row,
                                 )
-                        elif current_status in {"", "Nowy lead"}:
+                        elif current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM:
+                            status_update_failed = True
                             logger.error(
                                 "add_meeting confirm: client without _row for status update: %s",
                                 client,
                             )
-                    await update.effective_message.reply_text("✅ Spotkanie dodane do kalendarza.")
+                    if status_updated:
+                        reply = "✅ Spotkanie dodane do kalendarza. Status klienta: Spotkanie umówione."
+                    elif status_update_failed:
+                        reply = "✅ Spotkanie dodane do kalendarza. Nie udało się zmienić statusu klienta."
+                    else:
+                        reply = "✅ Spotkanie dodane do kalendarza."
+                    await update.effective_message.reply_text(reply)
             else:
                 await update.effective_message.reply_markdown_v2(format_error("calendar_down"))
 
