@@ -338,7 +338,7 @@ extendedProperties={
 **Reverse lookup (Calendar event → Sheets row):**
 
 - Not MVP flow. Primary MVP direction is Sheets → Calendar via P column.
-- POST-MVP flows (e.g. `reschedule_meeting`, `cancel_meeting`) may scan Sheets P column for matching event_id. Out of Phase 2 scope.
+- Vision-only flows (if separately approved — e.g. `reschedule_meeting`, `cancel_meeting`) may scan Sheets P column for matching event_id. Out of Phase 2 scope.
 
 **Why minimal:**
 

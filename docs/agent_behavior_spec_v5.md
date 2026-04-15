@@ -119,7 +119,7 @@ Zapis zostanie wykonany mimo kolizji.
 
 [✅ Zapisać] [➕ Dopisać] [❌ Anulować]
 \`\`\`
-Reschedule istniejącego spotkania (`reschedule_meeting`) jest wycięty — patrz `INTENCJE_MVP.md` sekcja 8.2. Realny flow: handlowiec kasuje stare wydarzenie ręcznie w Kalendarzu i tworzy nowe komendą `add_meeting`.
+Reschedule istniejącego spotkania (`reschedule_meeting`) jest **vision-only** — patrz `INTENCJE_MVP.md` §8.2; wymaga osobnej decyzji Maana przed wejściem do roadmap. W MVP realny flow: handlowiec kasuje stare wydarzenie ręcznie w Kalendarzu i tworzy nowe komendą `add_meeting`.
 
 Wielu pasujących → lista z pełnym imieniem i nazwiskiem + miasto:
 \`\`\`
@@ -219,7 +219,7 @@ Gdy `add_meeting` commituje → aktualizuj w Sheets:
 - `Data następnego kroku` (L) = data spotkania
 - `Następny krok` (K) = typ spotkania
 
-`reschedule_meeting` jest wycięte (`INTENCJE_MVP.md` sekcja 8.2). Ręczne zmiany wydarzeń w Google Calendar **nie są obserwowane przez bota** i nie wywołują automatycznej aktualizacji Sheets — sync jest one-way, tylko przy mutacjach wykonanych przez agenta.
+`reschedule_meeting` jest **vision-only** (`INTENCJE_MVP.md` §8.2; wymaga osobnej decyzji Maana). Ręczne zmiany wydarzeń w Google Calendar **nie są obserwowane przez bota** i nie wywołują automatycznej aktualizacji Sheets — sync jest one-way, tylko przy mutacjach wykonanych przez agenta.
 
 ### Polityka przycisków
 
@@ -317,29 +317,37 @@ Te intencje nie są w MVP, ale klasyfikator musi je rozpoznać, żeby agent odpo
 | Intent | Sygnały | Przykłady | Powód odłożenia |
 |--------|---------|-----------|-----------------|
 | `edit_client` | 'zmień', 'zaktualizuj', 'popraw' + pole | zmień telefon Jana Nowaka na 609222333 | Pokrycie przez kombinację `add_note` + `change_status` wystarczy na MVP |
-| `delete_client` | 'usuń klienta', 'skasuj z bazy' | usuń z bazy Krzysztofa Nowaka | Nie obsługujemy kasowania przez bota — handlowiec kasuje ręcznie w Sheets |
 | `lejek_sprzedazowy` | 'ilu klientów', 'lejek', 'ile mam w' | ilu mam klientów? | Funkcja dashboardowa, czeka na dashboard |
 | `filtruj_klientów` | 'klienci z', 'pokaż wszystkich z' + kryterium | pokaż klientów z Warszawy | Dashboard, nie bot — handlowiec nie filtruje w locie |
 | `multi-meeting` | kilka spotkań w jednej wiadomości | jutro o 10 do Kowalskiego, o 14 do Nowaka | MVP obsługuje tylko single meeting |
 | `voice input` | Whisper transcription polskich wiadomości głosowych | (voice message) | Wymaga Whisper API + post-processing polskich nazw własnych |
 | `Drive photos` | zdjęcia dachu/instalacji → folder Drive klienta | (photo attachment) | Wymaga Google Drive integracji; kolumny N i O w Sheets puste w MVP |
 
-Dla `edit_client` / `delete_client` / `lejek_sprzedazowy` / `filtruj_klientów` agent odpowiada: _"To feature post-MVP. Zrobisz to w Google Sheets / dashboardzie, który wejdzie w kolejnej fazie."_ — krótko, bez przeprosin, bez udawania że robi.
+Dla `edit_client` / `lejek_sprzedazowy` / `filtruj_klientów` agent odpowiada: _"To feature post-MVP. Zrobisz to w Google Sheets / dashboardzie, który wejdzie w kolejnej fazie."_ — krótko, bez przeprosin, bez udawania że robi.
 
-Dla `multi-meeting` / `voice input` / `Drive photos` — w MVP te ścieżki nie są w ogóle aktywne w runtime (agent obsługuje tylko tekst i pojedyncze spotkanie).
+Dla `multi-meeting` / `voice input` / `Drive photos` — w MVP te ścieżki nie są w ogóle aktywne w runtime (agent obsługuje tylko tekst i pojedyncze spotkanie). Voice/photo/image-document — stub per D5 w `bot/main.py`. Multi-meeting — rejection przez router (`IntentType.MULTI_MEETING`) z prośbą o jedno spotkanie naraz.
 
-### 6.3. Intencje NIEPLANOWANE (wycięte na stałe)
+### 6.3. Intencje VISION-ONLY (wymaga osobnej decyzji Maana)
 
-Te intencje **nigdy nie wejdą do produktu** (patrz `INTENCJE_MVP.md` sekcja 8.2).
+Te pozycje są opisane w Product Vision (`poznaj_swojego_agenta_v5_FINAL.md`) i `SOURCE_OF_TRUTH.md` §4, ale **nie są zatwierdzone jako roadmap i nie są trwale wycięte**. Router klasyfikuje jako `VISION_ONLY` z odpowiednim `feature_key`. Reply template w tonie: "poza aktualnym zakresem; wymaga osobnej decyzji", nie "wycięte na stałe".
 
 | Intent | Przykład | Co robi agent zamiast tego |
 |--------|----------|----------------------------|
-| `reschedule_meeting` | "przełóż Jana Kowalskiego na piątek" | Nie parsuje. Odpowiada: _"Reschedule nie jest obsługiwany. Skasuj stare spotkanie w Kalendarzu i dodaj nowe komendą."_ |
-| `free_slots` | "wolne okna w czwartek" | Nie parsuje. Odpowiada: _"Wolne okna nie są obsługiwane. Sprawdź plan dnia komendą 'co mam w czwartek'."_ |
-| `cancel_meeting` | "odwołaj Jana jutro" | Nie parsuje. Odpowiada: _"Usuwanie spotkań nie jest obsługiwane. Skasuj wydarzenie w Kalendarzu bezpośrednio."_ |
-| `meeting_non_working_day_warning` | (automatyczny warning przy `add_meeting` w sobotę) | Nie istnieje. `add_meeting` w sobotę/niedzielę działa tak samo jak w dzień roboczy. |
+| `reschedule_meeting` | "przełóż Jana Kowalskiego na piątek" | Nie parsuje mutacji. Odpowiada: _"Reschedule jest poza aktualnym MVP scope (vision-only). Tymczasem: skasuj stare spotkanie w Kalendarzu ręcznie i dodaj nowe komendą `add_meeting`."_ |
+| `free_slots` | "wolne okna w czwartek" | Nie parsuje. Odpowiada: _"Wolne okna są poza aktualnym MVP scope (vision-only). Sprawdź plan dnia komendą 'co mam w czwartek'."_ |
+| `cancel_meeting` | "odwołaj Jana jutro" | Nie parsuje. Odpowiada: _"Usuwanie spotkań jest poza aktualnym MVP scope (vision-only). Skasuj wydarzenie w Kalendarzu bezpośrednio."_ |
+| `delete_client` | "usuń Jana Nowaka z bazy" | Nie parsuje. Odpowiada: _"Kasowanie klientów jest poza aktualnym MVP scope (vision-only). Usuń ręcznie w Google Sheets."_ |
 
-Klasyfikator rozpoznaje tylko po to, żeby uniknąć błędnej klasyfikacji jako `add_meeting` czy `show_day_plan`. Po rozpoznaniu odpowiada jedną linią z listy powyżej i zamyka flow.
+Klasyfikator rozpoznaje tylko po to, żeby uniknąć błędnej klasyfikacji jako `add_meeting` / `show_day_plan` / `add_client`. Po rozpoznaniu router zwraca `IntentType.VISION_ONLY` z właściwym `feature_key`; handler wysyła jedną linię z listy powyżej i zamyka flow.
+
+### 6.4. Intencje NIEPLANOWANE (trwale poza zakresem)
+
+Te przypadki **nigdy nie wejdą do produktu** — rationale trwałe, niezależne od decyzji produktowej. Router klasyfikuje jako `IntentType.UNPLANNED` z pointer do native alternative.
+
+| Intent / Przypadek | Przykład | Co robi agent zamiast tego |
+|--------|----------|----------------------------|
+| `pre-meeting reminders` (po stronie agenta) | "ustaw przypomnienie 30 min przed spotkaniem" | Odpowiada: _"Przypomnienia przed spotkaniem ustawia Google Calendar w swoich ustawieniach."_ |
+| `meeting_non_working_day_warning` | (automatyczny warning przy `add_meeting` w sobotę) | Nie istnieje. `add_meeting` w sobotę/niedzielę działa tak samo jak w dzień roboczy. |
 
 ---
 
@@ -463,8 +471,8 @@ OUT: Plan z godzinami, adresami, telefonami, produktami, datami w formacie DD.MM
 | 26 | w weekend do Jana Kowalskiego | add_meeting | Najbliższa sobota, 3-button karta |
 | 27 | wpół do ósmej u Jana Mazura | add_meeting | 07:30, 3-button karta |
 | 27b | jutro o 10 spotkanie z Janem Kowalskim Warszawa (klient już w arkuszu) | add_meeting + duplicate resolution | **Duplicate detected:** agent pokazuje "Ten klient już jest w arkuszu: Jan Kowalski, Warszawa. Czy zapisać go w nowym wierszu czy zaktualizować?" + `[Nowy] [Aktualizuj]`. Po `[Aktualizuj]` → karta `add_meeting` 3-button (`[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`) z enrichmentem z istniejącego wiersza (adres, telefon, notatki). Po `[Nowy]` → karta `add_meeting` bez enrichmentu (dla osobnego rekordu). |
-| 28 | przełóż Jana Kowalskiego na piątek o 10 | reschedule_meeting (NIEPLANOWANE) | **Wycięte na stałe** (patrz `INTENCJE_MVP.md` 8.2). Agent odpowiada: "Reschedule nie jest obsługiwany. Skasuj stare spotkanie w Kalendarzu i dodaj nowe komendą." — jedna linia, bez flow mutacji. |
-| 29 | wolne okna w czwartek? | free_slots (NIEPLANOWANE) | **Wycięte na stałe** (patrz `INTENCJE_MVP.md` 8.2). Agent odpowiada: "Wolne okna nie są obsługiwane. Sprawdź plan dnia komendą 'co mam w czwartek'." — jedna linia. |
+| 28 | przełóż Jana Kowalskiego na piątek o 10 | reschedule_meeting (VISION_ONLY) | **Poza aktualnym MVP scope — vision-only** (patrz `INTENCJE_MVP.md` §8.2; wymaga osobnej decyzji Maana). Agent odpowiada: "Reschedule jest poza aktualnym MVP scope (vision-only). Tymczasem: skasuj stare spotkanie w Kalendarzu ręcznie i dodaj nowe komendą `add_meeting`." — jedna linia, bez flow mutacji. |
+| 29 | wolne okna w czwartek? | free_slots (VISION_ONLY) | **Poza aktualnym MVP scope — vision-only** (patrz `INTENCJE_MVP.md` §8.2). Agent odpowiada: "Wolne okna są poza aktualnym MVP scope (vision-only). Sprawdź plan dnia komendą 'co mam w czwartek'." — jedna linia. |
 
 ### Reguły komunikacji (30-36)
 
@@ -536,6 +544,8 @@ Anulowanie jest **one-click**. Przycisk `❌ Anulować` natychmiast zamyka pendi
 | `edit_client` routing | POST-MVP — w MVP agent odpowiada "to feature post-MVP" |
 | `filtruj_klientów` | POST-MVP — jak wyżej |
 | `lejek_sprzedazowy` | POST-MVP — dashboardowe, nie botowe |
-| `reschedule_meeting` | **NIEPLANOWANE** (patrz `INTENCJE_MVP.md` 8.2) — realny flow: skasuj stare w Kalendarzu, dodaj nowe komendą `add_meeting` |
-| `free_slots` | **NIEPLANOWANE** (patrz `INTENCJE_MVP.md` 8.2) — handlowiec używa `show_day_plan` |
-| `cancel_meeting` | **NIEPLANOWANE** (patrz `INTENCJE_MVP.md` 8.2) — irreversible delete tylko ręcznie w Kalendarzu |
+| `reschedule_meeting` | **VISION_ONLY** (patrz `INTENCJE_MVP.md` §8.2) — poza aktualnym MVP scope; tymczasem: skasuj stare w Kalendarzu, dodaj nowe komendą `add_meeting` |
+| `free_slots` | **VISION_ONLY** (patrz `INTENCJE_MVP.md` §8.2) — handlowiec używa `show_day_plan` |
+| `cancel_meeting` | **VISION_ONLY** (patrz `INTENCJE_MVP.md` §8.2) — skasuj wydarzenie w Kalendarzu bezpośrednio |
+| `delete_client` | **VISION_ONLY** (patrz `INTENCJE_MVP.md` §8.2) — usuń ręcznie w Google Sheets |
+| `pre-meeting reminders` | **NIEPLANOWANE** — przypomnienia ustawia Google Calendar natywnie |

@@ -102,7 +102,7 @@ Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę
 
 **Efekt w Sheets (po `✅ Zapisać`):**
 - Nowy wiersz w arkuszu
-- Kolumny: `A=Imię nazwisko`, `B=Telefon`, `C=Email`, `D=Miasto`, `E=Adres`, `F=Status="Nowy lead"`, `G=Produkt` (tylko typ), `H=Notatki` (wszystko inne, w tym moc/metraż/dach), `I=Data pierwszego kontaktu=dziś`, `J=Data ostatniego kontaktu=dziś`, `K=Następny krok` (z dropdowna, pusty chyba że user podał), `L=Data następnego kroku` (pusta chyba że user podał), `M=Źródło pozyskania` (jeśli parser wyciągnął), `N/O` (puste — POST-MVP photo flow), `P=ID wydarzenia Kalendarz` (puste — POST-MVP)
+- Kolumny: `A=Imię nazwisko`, `B=Telefon`, `C=Email`, `D=Miasto`, `E=Adres`, `F=Status="Nowy lead"`, `G=Produkt` (tylko typ), `H=Notatki` (wszystko inne, w tym moc/metraż/dach), `I=Data pierwszego kontaktu=dziś`, `J=Data ostatniego kontaktu=dziś`, `K=Następny krok` (z dropdowna, pusty chyba że user podał), `L=Data następnego kroku` (pusta chyba że user podał), `M=Źródło pozyskania` (jeśli parser wyciągnął), `N/O` (puste — POST-MVP photo flow), `P=ID wydarzenia Kalendarz` (per D8: event_id jeśli `add_client` utworzył Calendar event przez podany follow-up; pusty gdy add_client bez follow-upu lub gdy follow-up to no-event K value)
 
 **Efekt w Kalendarzu (po `✅ Zapisać`):**
 - Jeśli user podał datę follow-upu ("zadzwonię jutro", "wyślę ofertę za tydzień") → wydarzenie typu `phone_call`/`doc_followup`/`in_person` zależnie od słów kluczowych.
@@ -401,7 +401,7 @@ Gdy `add_meeting` commituje:
 - `Data następnego kroku` (kolumna L) = data spotkania
 - `Następny krok` (kolumna K) = typ spotkania
 
-**Uwaga:** `reschedule_meeting` jako intencja jest wycięta (sekcja 8.2). Jeśli handlowiec ręcznie zmienia event w Google Calendar, agent tego nie widzi — sync jest one-way przy mutacjach agentowych. Stan Sheets może się rozjechać z Calendar, jeśli user edytuje Calendar poza botem.
+**Uwaga:** `reschedule_meeting` jest **poza aktualnym MVP scope** — vision-only (sekcja 8.2); wymaga osobnej decyzji Maana przed wejściem do roadmap. W MVP: jeśli handlowiec ręcznie zmienia event w Google Calendar, agent tego nie widzi — sync jest one-way przy mutacjach agentowych. Stan Sheets może się rozjechać z Calendar, jeśli user edytuje Calendar poza botem.
 
 ### 5.5. Wyświetlanie danych klienta (decyzja 13.04.2026)
 
@@ -518,7 +518,7 @@ Kolumny w arkuszu "OZE Klienci", w kolejności. Ten schemat jest **zgodny 1:1 z 
 | M | Źródło pozyskania | string | — | Np. "Facebook", "polecenie", "targi", "strona www". Opcjonalne. |
 | N | Zdjęcia | int / string | — | **POST-MVP (photo flow)**. W MVP pole puste. |
 | O | Link do zdjęć | url | — | **POST-MVP (photo flow)**. W MVP pole puste. |
-| P | ID wydarzenia Kalendarz | string | — | **POST-MVP**. Miało służyć reverse-lookup dla reschedule/cancel, ale te intencje są wycięte (sekcja 8.2). W MVP pole puste. |
+| P | ID wydarzenia Kalendarz | string | — | **W MVP populated** dla Calendar-backed next steps (per D8) — zapisujemy `event_id` zwrócony przez `events.insert`. Pole puste tylko dla no-event K values (`Czekać na decyzję klienta`, `Nic — zamknięte`, `Inne`). Reverse-lookup Calendar → Sheets to przyszły flow (vision-only), jeśli zostanie zatwierdzony. |
 
 **Wiersz 1 (nagłówki) jest chroniony** (Protected range `A1:P1`) — handlowiec ani agent nie mogą go przepisywać, bo mapowanie kolumn przez `get_sheet_headers()` zależy od tego, żeby `H` zawsze zawierało dokładnie `"Notatki"`.
 
@@ -552,27 +552,43 @@ Plan dnia filtruje po **dedykowanym OZE calendar** (events tworzone tylko w tym 
 |---|---|
 | `filtruj_klientów` | Handlowiec rzadko filtruje w locie. Dla beta wystarczy `show_client` z nazwiskiem. Później może w dashboardzie. |
 | `edit_client` | Pokrycie przez `add_note` + `change_status` wystarczy na MVP. Pełna edycja pola wymaga dodatkowego parsera i walidacji. |
-| `delete_client` | Nieplanowane w MVP. Poznaj-agenta opisuje jako wizję, ale w pierwszej wersji bota nie obsługujemy kasowania klientów. Handlowiec usuwa ręcznie w Sheets. |
 | `lejek_sprzedazowy` | Funkcja dashboardowa, czeka na dashboard Next.js. W bocie zostaje jako referencja. |
 | `multi-meeting` | Batch kilku spotkań w jednej wiadomości. MVP obsługuje single meeting tylko. |
 | `voice input` | Whisper API + polski. Duża infra + post-processing dla polskich nazw własnych. |
 | `Drive photos` | Zdjęcia z terenu → Drive folder klienta. Kolumny N i O w Sheets zostają puste w MVP. |
 | `proactive morning brief` | Scheduler-driven, wymaga APScheduler + dedupy. |
 
-### 8.2. NIEPLANOWANE — wycięte na stałe (decyzja 11.04.2026 popołudnie)
+### 8.2. Product vision only — wymaga osobnej decyzji Maana
 
-Te intencje **nigdy nie wejdą do produktu**. Były wcześniej oznaczone jako POST-MVP, ale po namyśle zostały wyrzucone — `SOURCE_OF_TRUTH.md` sekcja 4, 11.04.2026 popołudnie.
+Zgodnie z `SOURCE_OF_TRUTH.md` §4 (4-tier scope model, 14.04.2026): te pozycje są opisane w Product Vision, ale **nie są zatwierdzone jako roadmap i nie są trwale wycięte**. Każda wymaga osobnej decyzji przed wejściem do implementacji. **Router klasyfikuje je jako `VISION_ONLY`** → reply w tonie "poza aktualnym zakresem; wymaga osobnej decyzji", nie "wycięte na stałe".
 
-| Funkcja | Dlaczego na stałe wycięte | Co robi handlowiec zamiast |
+**Intent-level vision** (router rozpoznaje jako `VISION_ONLY` z odpowiednim `feature_key`):
+
+| Funkcja | Dlaczego nie w MVP | Co robi handlowiec zamiast |
 |---|---|---|
 | `reschedule_meeting` | Dwa flow (edycja wydarzenia + wyszukiwanie którego wydarzenia dotyczy) dla marginalnej wartości. Jedno spójne flow jest prostsze: skasuj stare, dodaj nowe. | Kasuje stare wydarzenie w Kalendarzu ręcznie i pisze `add_meeting` komendą |
 | `cancel_meeting` | Irreversible delete na podstawie interpretacji tekstu to ryzyko, którego agent nie bierze na siebie. | Kasuje wydarzenie w Kalendarzu bezpośrednio |
 | `free_slots` | Handlowiec widzi luki z `show_day_plan`. Osobna intencja liczenia wolnych slotów to overhead bez realnej wartości. | Patrzy na plan dnia komendą `co mam w X` |
-| `meeting_non_working_day_warning` | Handlowcy OZE pracują w soboty, niedziele, święta. Warning byłby fałszywym założeniem z innego segmentu. | Nic — `add_meeting` w weekend działa identycznie jak w dzień roboczy |
-| `pre-meeting reminders` | Agent nie wysyła przypomnień godzinę/30 min przed spotkaniem. Handlowiec ma Google Calendar na telefonie — native reminders działają. Duplikacja z poziomu bota to szum. | Używa natywnych przypomnień Google Calendar |
-| `daily interaction limit (100/day)` | Mechanizm limitu + pożyczania interakcji z następnego dnia. Opisany w product vision jako wizja, ale nie w MVP — nie komplikujemy pricing/quota na starcie. | — (MVP bez limitu) |
+| `delete_client` | Ryzykowna mutacja — wymaga dodatkowej ostrożności i confirmation flow. Opisane w Product Vision, ale bez zatwierdzonej mechaniki undo. | Usuwa ręcznie w Google Sheets |
 
-Klasyfikator intencji musi rozpoznać wyrażenia "przełóż / zmień spotkanie / przesuń", "wolne okna / kiedy mam wolne", "odwołaj / skasuj spotkanie" — ale tylko po to, żeby odpowiedzieć jedną linią tłumaczącą co handlowiec ma zrobić zamiast. Nie ma karty, nie ma flow mutacji.
+**Policy/business vision** (NIE jest intencją routera — żadnego `feature_key=daily_interaction_limit`):
+
+| Mechanizm | Dlaczego nie w MVP |
+|---|---|
+| `daily interaction limit (100/day)` | Product/business vision only — wymaga osobnej decyzji pricing/product przed wejściem do roadmapy. To policy/quota mechanic, nie intencja użytkownika; router tego nie klasyfikuje. Opisany w Product Vision ale bez zatwierdzonej liczby i mechaniki pożyczania. |
+
+Klasyfikator intencji rozpoznaje wyrażenia "przełóż / zmień spotkanie / przesuń", "wolne okna / kiedy mam wolne", "odwołaj / skasuj spotkanie", "usuń klienta / skasuj z bazy" — ale tylko po to, żeby zwrócić `VISION_ONLY` + właściwy `feature_key`, a reply template odpowiada jedną linią w tonie "poza aktualnym zakresem; wymaga osobnej decyzji". Nie ma karty, nie ma flow mutacji.
+
+### 8.3. NIEPLANOWANE — trwale poza zakresem
+
+Te funkcje **nigdy nie wejdą do produktu** — rationale jest trwały, nie zależy od decyzji produktowej.
+
+| Funkcja | Dlaczego trwale wycięte | Co robi handlowiec zamiast |
+|---|---|---|
+| `pre-meeting reminders` (po stronie agenta) | Agent nie wysyła przypomnień godzinę/30 min przed spotkaniem. Handlowiec ma Google Calendar na telefonie — native reminders działają. Duplikacja z poziomu bota to szum. | Używa natywnych przypomnień Google Calendar |
+| `meeting_non_working_day_warning` | Handlowcy OZE pracują w soboty, niedziele, święta. Warning byłby fałszywym założeniem z innego segmentu. | Nic — `add_meeting` w weekend działa identycznie jak w dzień roboczy |
+
+Router klasyfikuje te przypadki jako `UNPLANNED` z pointer do native alternative (np. "przypomnienia ustawia Google Calendar w swoich ustawieniach").
 
 ---
 

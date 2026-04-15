@@ -104,7 +104,7 @@ Tests are manual Telegram tests unless stated otherwise.
 | SDP-2 | "co mam w tym tygodniu?" | Grouped by day, each day with `DD.MM.YYYY (Dzień)` header |
 | SDP-3 | Dates in output | All dates in `DD.MM.YYYY (Dzień tygodnia)` format, never ISO/Excel serial |
 | SDP-4 | No meetings today | "Na dziś nic nie masz w kalendarzu." |
-| SDP-5 | "jakie mam wolne okna w czwartek?" — free slots | POST-MVP (agent odpowiada że to feature post-MVP, bez halucynacji) |
+| SDP-5 | "jakie mam wolne okna w czwartek?" — free slots | VISION_ONLY (poza aktualnym MVP scope, wymaga osobnej decyzji Maana). Agent odpowiada że to vision-only i wskazuje `show_day_plan` jako alternatywę, bez halucynacji. |
 
 ---
 
