@@ -28,6 +28,7 @@ from shared.pending import (
     ChangeStatusPayload,
     PendingFlow,
     PendingFlowType,
+    R7PromptPayload,
     payload_to_flow_data,
     save as save_pending,
 )
@@ -291,7 +292,14 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
         client_name = flow_data.get("client_name", "")
         city = flow_data.get("city", "")
         name_city = f"{client_name} ({city})" if city else (client_name or "klient")
-        save_pending_flow(telegram_id, "r7_prompt", {"client_name": client_name, "city": city})
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.R7_PROMPT,
+            flow_data=payload_to_flow_data(R7PromptPayload(
+                client_name=client_name,
+                city=city,
+            )),
+        ))
         await query.edit_message_text("✅ Dane zaktualizowane.")
         await query.message.reply_text(
             f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",

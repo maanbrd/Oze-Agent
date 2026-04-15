@@ -43,6 +43,7 @@ from shared.pending import (
     ChangeStatusPayload,
     PendingFlow,
     PendingFlowType,
+    R7PromptPayload,
     payload_to_flow_data,
     save as save_pending,
 )
@@ -1823,7 +1824,14 @@ async def send_next_action_prompt(
     _route_pending_flow: temporal → add_meeting, otherwise → close silently.
     """
     name_city = f"{client_name} ({city})" if city else client_name
-    save_pending_flow(telegram_id, "r7_prompt", {"client_name": client_name, "city": city})
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.R7_PROMPT,
+        flow_data=payload_to_flow_data(R7PromptPayload(
+            client_name=client_name,
+            city=city,
+        )),
+    ))
     await update.effective_message.reply_text(
         f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
         reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
