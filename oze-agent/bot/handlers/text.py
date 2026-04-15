@@ -119,6 +119,8 @@ _TIME_RE = re.compile(
     r'|\bwpół\b'
     r'|\bkwadrans\b'
 )
+_PHONE_VALUE_RE = re.compile(r"\b(?:tel|telefon|nr|numer)\b[^\n]*(?:\+?\d[\d\s-]{5,})")
+_EMAIL_VALUE_RE = re.compile(r"\b(?:e-?mail|mail)\b[^\n]*\S+@\S+")
 
 _BANNER_INTENTS = frozenset({
     IntentType.POST_MVP_ROADMAP,
@@ -158,6 +160,55 @@ def _message_with_r7_client_context(message_text: str, flow_data: dict) -> str:
     if city and city.lower() not in text_lower:
         context = f"{context} {city}"
     return f"{message_text} z {context}"
+
+
+def _has_temporal_or_time(text_lower: str) -> bool:
+    return (
+        any(w in text_lower for w in _TEMPORAL_MARKERS)
+        or bool(_TIME_RE.search(text_lower))
+    )
+
+
+def _is_client_data_reply(text_lower: str) -> bool:
+    if _PHONE_VALUE_RE.search(text_lower) or _EMAIL_VALUE_RE.search(text_lower):
+        return True
+    return text_lower.startswith((
+        "adres", "ul.", "ulica", "email", "e-mail", "mail", "produkt", "moc",
+        "miasto", "miejscowość", "miejscowosc", "notatka", "notatki",
+        "źródło", "zrodlo", "data następnego kroku", "data nastepnego kroku",
+    ))
+
+
+def _is_client_scoped_action_reply(message_text: str) -> bool:
+    """Detect obvious next-step actions while preserving client-data updates.
+
+    This runs only inside an active add_client pending flow. It is deliberately
+    conservative: "telefon 123" stays client data, but "zadzwonić w środę" or
+    "spotkanie w piątek o 14" are routed with the pending client's context.
+    """
+    text_lower = message_text.lower().strip()
+    if not text_lower or _is_client_data_reply(text_lower):
+        return False
+
+    action_markers = (
+        "spotkanie", "umów", "umow", "zadzwoni", "zadzwoń", "zadzwon",
+        "dzwonić", "dzwonic", "telefon", "rozmowa", "ofert", "wyślij",
+        "wyslij", "przygotuj", "follow-up", "followup", "dokument",
+    )
+    if any(marker in text_lower for marker in action_markers):
+        return True
+
+    return _has_temporal_or_time(text_lower)
+
+
+def _message_with_add_client_context(message_text: str, client_data: dict) -> str:
+    return _message_with_r7_client_context(
+        message_text,
+        {
+            "client_name": client_data.get("Imię i nazwisko", ""),
+            "city": client_data.get("Miasto", client_data.get("Miejscowość", "")),
+        },
+    )
 
 
 # ── Guards ─────────────────────────────────────────────────────────────────────
@@ -301,6 +352,11 @@ async def _route_pending_flow(
         user_id = user["id"]
         old_flow_data = flow.get("flow_data", {})
         old_client_data = old_flow_data.get("client_data", {})
+
+        if _is_client_scoped_action_reply(message_text):
+            action_text = _message_with_add_client_context(message_text, old_client_data)
+            await handle_add_meeting(update, context, user, {}, action_text)
+            return True
 
         headers = await get_sheet_headers(user_id)
         result = await extract_client_data(message_text, headers)

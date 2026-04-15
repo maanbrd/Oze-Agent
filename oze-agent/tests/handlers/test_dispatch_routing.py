@@ -4,6 +4,8 @@ from bot.handlers.text import (
     _BANNER_INTENTS,
     _HANDLERS,
     _intent_result_to_legacy_dict,
+    _is_client_scoped_action_reply,
+    _message_with_add_client_context,
     _message_with_r7_client_context,
     handle_banner,
     handle_general,
@@ -130,3 +132,27 @@ def test_r7_context_not_injected_when_reply_has_explicit_with_phrase():
         {"client_name": "Jan Kowalski", "city": "Warszawa"},
     )
     assert text == "Spotkanie z Nowakiem 18 kwietnia o 14"
+
+
+def test_client_data_replies_do_not_route_as_actions():
+    assert not _is_client_scoped_action_reply("telefon 123456789")
+    assert not _is_client_scoped_action_reply("tel 123 456 789")
+    assert not _is_client_scoped_action_reply("adres Krótka 5")
+    assert not _is_client_scoped_action_reply("email test@example.com")
+    assert not _is_client_scoped_action_reply("produkt PV")
+
+
+def test_client_action_replies_route_with_pending_context():
+    assert _is_client_scoped_action_reply("Spotkanie")
+    assert _is_client_scoped_action_reply("spotkanie w piątek o 14")
+    assert _is_client_scoped_action_reply("zadzwonić w środę o 14")
+    assert _is_client_scoped_action_reply("przygotuj ofertę na środę")
+    assert _is_client_scoped_action_reply("w piątek o 14")
+
+
+def test_add_client_context_injected_for_action_reply():
+    text = _message_with_add_client_context(
+        "spotkanie w piątek o 14",
+        {"Imię i nazwisko": "Anna Testowa", "Miasto": "Zatory"},
+    )
+    assert text == "spotkanie w piątek o 14 z Anna Testowa Zatory"
