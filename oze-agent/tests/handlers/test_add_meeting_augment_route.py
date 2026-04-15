@@ -190,6 +190,62 @@ async def test_add_meeting_augment_empty_meeting_plain_description_stays_descrip
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_augment_empty_meeting_name_only_stays_description():
+    upd = _update()
+    with patch("bot.handlers.text.get_sheet_headers", new=AsyncMock(return_value=[
+        "Imię i nazwisko", "Miasto", "Adres", "Telefon", "Produkt", "Notatki",
+    ])), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={"client_data": {"Imię i nazwisko": "Jan Kowalski"}}),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(side_effect=AssertionError("_enrich_meeting must not be called for name-only input")),
+    ), patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _empty_meeting_flow(),
+            "Jan Kowalski",
+        )
+
+    assert consumed is True
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
+    assert saved_flow.flow_data["title"] == "Spotkanie"
+    assert saved_flow.flow_data["client_name"] == ""
+    assert (saved_flow.flow_data.get("client_data") or {}).get("Imię i nazwisko", "") != "Jan Kowalski"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_augment_empty_meeting_product_only_stays_description():
+    upd = _update()
+    with patch("bot.handlers.text.get_sheet_headers", new=AsyncMock(return_value=[
+        "Imię i nazwisko", "Miasto", "Adres", "Telefon", "Produkt", "Notatki",
+    ])), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={"client_data": {"Produkt": "PV", "Notatki": "zainteresowany"}}),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(side_effect=AssertionError("_enrich_meeting must not be called for product-only input")),
+    ), patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _empty_meeting_flow(),
+            "zainteresowany PV",
+        )
+
+    assert consumed is True
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
+    assert saved_flow.flow_data["title"] == "Spotkanie"
+    assert saved_flow.flow_data["client_name"] == ""
+    assert "Imię i nazwisko" not in saved_flow.flow_data.get("client_data", {})
+
+
+@pytest.mark.asyncio
 async def test_handle_add_meeting_preserves_router_event_type():
     upd = _update()
     with patch(

@@ -143,3 +143,25 @@ Example:
 Discovered during smoke testing of `f56000a`. Not a regression — the `add_note` write migration only changed pending-flow serialization. This is a product gap in note→next-step detection.
 
 Does not block the typed-pending migration. Implementation belongs in a separate slice (likely a small extractor over note text + R7-style follow-up prompt, or routing the suffix into the existing `add_meeting` flow).
+
+### full-client-data augment: `client_found=True` path can create duplicates
+
+**Status:** open follow-up.
+
+In the Slice 1 ("empty add_meeting + full client data") branch, `_enrich_meeting` may match an existing client in Sheets (`client_found=True`) and return that client's title/location. The handler still pre-seeds an `ADD_CLIENT` draft from the newly-extracted `client_data` at confirm time, bypassing duplicate detection.
+
+Example:
+- Sheets row: `Jan Kowalski — Warszawa, tel 111111111, ul. Stara 1`
+- Meeting card is empty → user types `Jan Kowalski, Warszawa, ul. Nowa 5, tel 222222222, PV`
+- Expected: bot routes through `detect_potential_duplicate` → `[Nowy]` / `[Aktualizuj]` card.
+- Current: bot adds Calendar event with Sheets-derived title, then pre-seeds a second `ADD_CLIENT` draft with user's new address/phone, risking a duplicate row if the user taps `Zapisać`.
+
+Discovered during review of Slice 1 (not a regression — pre-existing gap exposed by the new branch). Fix likely: when `_enrich_meeting` returns `client_found=True` and the extracted data differs from the matched row, route through the existing duplicate-detection flow instead of the new-client draft.
+
+### DRY: `extract_client_data` call pattern repeated across augment branches
+
+**Status:** open follow-up.
+
+The pattern `get_sheet_headers + extract_client_data + _filter_invalid_products + filter empty` is now duplicated in the `add_client` augment branch and the new `add_meeting` empty-card branch. A small helper (e.g. `_extract_filtered_client_data(user_id, message_text) -> dict`) would remove the repetition and keep a single point of change for future LLM schema tweaks.
+
+Low priority — no behavior impact.
