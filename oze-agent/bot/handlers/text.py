@@ -35,6 +35,13 @@ from shared.claude_ai import (
     generate_bot_response,
 )
 from shared.intent import IntentResult, IntentType, ScopeTier, classify
+from shared.pending import (
+    AddClientPayload,
+    PendingFlow,
+    PendingFlowType,
+    payload_to_flow_data,
+    save as save_pending,
+)
 from bot.handlers.banners import banner_for_legacy
 from shared.database import (
     delete_pending_flow,
@@ -290,7 +297,11 @@ async def _route_pending_flow(
         if old_name and new_name and old_name.lower() != new_name.lower():
             sheet_columns = user.get("sheet_columns") or headers
             missing = [col for col in sheet_columns if col and not new_data.get(col) and col not in SYSTEM_FIELDS]
-            save_pending_flow(telegram_id, "add_client", {"client_data": new_data})
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.ADD_CLIENT,
+                flow_data=payload_to_flow_data(AddClientPayload(client_data=new_data)),
+            ))
             card = format_add_client_card(new_data, missing)
             await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
             return True
@@ -310,10 +321,14 @@ async def _route_pending_flow(
                 if offer_remaining:
                     next_client = offer_remaining[0]
                     new_remaining = offer_remaining[1:]
-                    save_pending_flow(telegram_id, "add_client", {
-                        "client_data": {"Imię i nazwisko": next_client},
-                        "_offer_remaining": new_remaining,
-                    })
+                    save_pending(PendingFlow(
+                        telegram_id=telegram_id,
+                        flow_type=PendingFlowType.ADD_CLIENT,
+                        flow_data=payload_to_flow_data(AddClientPayload(
+                            client_data={"Imię i nazwisko": next_client},
+                            _offer_remaining=new_remaining,
+                        )),
+                    ))
                     await update.effective_message.reply_text(
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
@@ -324,10 +339,15 @@ async def _route_pending_flow(
             return True
 
         # User is correcting/adding data (possibly after tapping [Nie]) — clear cancel flag, re-show card
-        new_flow_data: dict = {"client_data": merged}
-        if old_flow_data.get("_offer_remaining"):
-            new_flow_data["_offer_remaining"] = old_flow_data["_offer_remaining"]
-        save_pending_flow(telegram_id, "add_client", new_flow_data)
+        offer_remaining = old_flow_data.get("_offer_remaining") or None
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT,
+            flow_data=payload_to_flow_data(AddClientPayload(
+                client_data=merged,
+                _offer_remaining=offer_remaining,
+            )),
+        ))
         card = format_add_client_card(merged, missing)
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
         return True
@@ -560,7 +580,11 @@ async def handle_add_client(
     sheet_columns = user.get("sheet_columns") or headers
     missing = [col for col in sheet_columns if col and not client_data.get(col) and col not in SYSTEM_FIELDS]
 
-    save_pending_flow(telegram_id, "add_client", {"client_data": client_data})
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.ADD_CLIENT,
+        flow_data=payload_to_flow_data(AddClientPayload(client_data=client_data)),
+    ))
 
     card = format_add_client_card(client_data, missing)
     await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
@@ -1470,10 +1494,14 @@ async def handle_confirm(
                 if remaining:
                     next_client = remaining[0]
                     new_remaining = remaining[1:]
-                    save_pending_flow(telegram_id, "add_client", {
-                        "client_data": {"Imię i nazwisko": next_client},
-                        "_offer_remaining": new_remaining,
-                    })
+                    save_pending(PendingFlow(
+                        telegram_id=telegram_id,
+                        flow_type=PendingFlowType.ADD_CLIENT,
+                        flow_data=payload_to_flow_data(AddClientPayload(
+                            client_data={"Imię i nazwisko": next_client},
+                            _offer_remaining=new_remaining,
+                        )),
+                    ))
                     await update.effective_message.reply_text(
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
@@ -1597,9 +1625,13 @@ async def handle_confirm(
         elif flow_type == "offer_add_client":
             client_name = flow_data.get("client_name", "")
             if client_name:
-                save_pending_flow(telegram_id, "add_client", {
-                    "client_data": {"Imię i nazwisko": client_name},
-                })
+                save_pending(PendingFlow(
+                    telegram_id=telegram_id,
+                    flow_type=PendingFlowType.ADD_CLIENT,
+                    flow_data=payload_to_flow_data(AddClientPayload(
+                        client_data={"Imię i nazwisko": client_name},
+                    )),
+                ))
                 await update.effective_message.reply_text(
                     f"Podaj dane {client_name} — adres, telefon, produkt."
                 )
@@ -1612,10 +1644,14 @@ async def handle_confirm(
             if names:
                 first = names[0]
                 new_remaining = names[1:]
-                save_pending_flow(telegram_id, "add_client", {
-                    "client_data": {"Imię i nazwisko": first},
-                    "_offer_remaining": new_remaining,
-                })
+                save_pending(PendingFlow(
+                    telegram_id=telegram_id,
+                    flow_type=PendingFlowType.ADD_CLIENT,
+                    flow_data=payload_to_flow_data(AddClientPayload(
+                        client_data={"Imię i nazwisko": first},
+                        _offer_remaining=new_remaining,
+                    )),
+                ))
                 await update.effective_message.reply_text(
                     f"Podaj dane {first} — adres, telefon, produkt."
                 )

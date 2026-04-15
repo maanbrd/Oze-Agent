@@ -22,6 +22,13 @@ from shared.database import (
     increment_daily_interaction_count,
     save_pending_flow,
 )
+from shared.pending import (
+    AddClientPayload,
+    PendingFlow,
+    PendingFlowType,
+    payload_to_flow_data,
+    save as save_pending,
+)
 from shared.formatting import escape_markdown_v2, format_client_card, format_edit_comparison
 from shared.google_sheets import get_all_clients, update_client
 
@@ -76,9 +83,13 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # R4: create new client record despite detected duplicate
         flow = get_pending_flow(telegram_id)
         if flow and flow.get("flow_type") == "add_client_duplicate":
-            save_pending_flow(telegram_id, "add_client", {
-                "client_data": flow["flow_data"]["client_data"]
-            })
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.ADD_CLIENT,
+                flow_data=payload_to_flow_data(AddClientPayload(
+                    client_data=flow["flow_data"]["client_data"],
+                )),
+            ))
         await handle_confirm(update, context, user, {}, "")
 
     elif action == "confirm":
