@@ -116,4 +116,4 @@ def payload_from_flow_data(
 
 
 def payload_to_flow_data(payload: PendingFlowPayload) -> dict:
-    return dataclasses.asdict(payload)
+    return {k: v for k, v in dataclasses.asdict(payload).items() if v is not None}

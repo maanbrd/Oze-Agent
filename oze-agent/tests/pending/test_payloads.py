@@ -137,6 +137,8 @@ def test_add_client_without_offer_remaining_defaults_to_none():
         PendingFlowType.ADD_CLIENT, {"client_data": {"Imię i nazwisko": "Jan"}}
     )
     assert payload._offer_remaining is None
+    serialized = payload_to_flow_data(payload)
+    assert serialized == {"client_data": {"Imię i nazwisko": "Jan"}}
 
 
 def test_disambiguation_add_note_variant():
@@ -148,6 +150,8 @@ def test_disambiguation_add_note_variant():
     assert payload.intent == "add_note"
     assert payload.note_text == "test"
     assert payload.new_status is None
+    serialized = payload_to_flow_data(payload)
+    assert serialized == {"intent": "add_note", "note_text": "test"}
 
 
 def test_disambiguation_change_status_variant():
@@ -159,6 +163,8 @@ def test_disambiguation_change_status_variant():
     assert payload.intent == "change_status"
     assert payload.new_status == "Podpisane"
     assert payload.note_text is None
+    serialized = payload_to_flow_data(payload)
+    assert serialized == {"intent": "change_status", "new_status": "Podpisane"}
 
 
 def test_change_status_field_defaults_to_status_literal():
