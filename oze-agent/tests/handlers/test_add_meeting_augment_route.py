@@ -438,6 +438,46 @@ async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event
 
 
 @pytest.mark.asyncio
+async def test_add_meetings_batch_falls_back_to_router_event_type():
+    """When parser doesn't return event_type per meeting, batch should fall back
+    to router intent_data.entities.event_type so D4 defaults still apply."""
+    upd = _update()
+    meetings = [
+        {"date": "2026-04-20", "time": "10:00", "client_name": "Jan Kowalski", "location": ""},
+        {"date": "2026-04-20", "time": "11:00", "client_name": "Anna Testowa", "location": ""},
+    ]
+
+    def enrich_side_effect(_user_id: int, client_name: str, location: str) -> dict:
+        return {
+            "title": f"Spotkanie — {client_name}",
+            "location": location,
+            "description": "",
+            "full_name": client_name,
+            "client_found": True,
+        }
+
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={"meetings": meetings}),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(side_effect=enrich_side_effect),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending_flow") as mock_save_flow:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "phone_call"}},
+            "zadzwoń do obu jutro",
+        )
+
+    flow_meetings = mock_save_flow.call_args.args[2]["meetings"]
+    assert [_duration_minutes(item) for item in flow_meetings] == [15, 15]
+    assert [item["event_type"] for item in flow_meetings] == ["phone_call", "phone_call"]
+
+
+@pytest.mark.asyncio
 async def test_handle_add_meeting_auto_status_preview_for_new_lead():
     upd = _update()
     with patch(

@@ -1765,11 +1765,12 @@ async def handle_add_meeting(
         # Multiple meetings — build all, check conflicts, confirm as a batch
         flow_meetings = []
         conflict_warnings = []
+        router_event_type = (intent_data.get("entities") or {}).get("event_type")
 
         for m in meetings:
             if not m.get("date") or not m.get("time"):
                 continue
-            event_type = m.get("event_type")
+            event_type = m.get("event_type") or router_event_type
             try:
                 start_dt = _parse_warsaw(m["date"], m["time"])
                 explicit_duration = m.get("duration_minutes")
