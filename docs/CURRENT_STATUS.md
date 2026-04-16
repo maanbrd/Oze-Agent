@@ -144,6 +144,19 @@ Discovered during smoke testing of `f56000a`. Not a regression — the `add_note
 
 Does not block the typed-pending migration. Implementation belongs in a separate slice (likely a small extractor over note text + R7-style follow-up prompt, or routing the suffix into the existing `add_meeting` flow).
 
+### F7: explicit duration parsing for natural-language meetings
+
+**Status:** open follow-up.
+
+The D4 duration defaults are event-type aware (`in_person=60`, `phone_call=15`, `offer_email=15`, `doc_followup=15`), but natural-language explicit durations like `na 30 minut` are not yet reliable in the production Telegram flow.
+
+Example:
+- User: `Zadzwoń do Tomasza Nowickiego jutro o 13 na 30 minut`
+- Expected: `phone_call` event with explicit 30-minute duration.
+- Current scope: this fix deliberately keeps the event-type defaults and does not harden explicit duration extraction.
+
+Does not block the current event-type resolver fix. Treat as a separate extractor/parser hardening slice.
+
 ### full-client-data augment: `client_found=True` path can create duplicates
 
 **Status:** open follow-up.

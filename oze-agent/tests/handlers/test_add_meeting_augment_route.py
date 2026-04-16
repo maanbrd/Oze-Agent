@@ -164,6 +164,52 @@ async def test_add_meeting_augment_preserves_event_type():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message_text",
+    [
+        "Zadzwoń do Tomasza Nowickiego jutro o 12",
+        "dodaj notatkę do Jana Kowalskiego: oddzwonił",
+        "pokaż plan na jutro",
+    ],
+)
+async def test_add_meeting_pending_intent_switch_auto_cancels(message_text):
+    upd = _update()
+    with patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _flow(),
+            message_text,
+        )
+
+    assert consumed is False
+    mock_delete.assert_called_once_with(123)
+    mock_save.assert_not_called()
+    upd.effective_message.reply_text.assert_awaited_once_with("⚠️ Anulowane.")
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_pending_phone_fact_stays_augment():
+    upd = _update()
+    with patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            _flow(),
+            "tel 600123456",
+        )
+
+    assert consumed is True
+    mock_delete.assert_not_called()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_data["client_data"]["Telefon"] == "600123456"
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_augment_empty_meeting_accepts_full_client_data():
     upd = _update()
     extracted = {

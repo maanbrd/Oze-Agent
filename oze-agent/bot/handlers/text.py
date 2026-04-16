@@ -224,6 +224,25 @@ def _is_client_scoped_action_reply(message_text: str) -> bool:
     return _has_temporal_or_time(text_lower)
 
 
+def _looks_like_intent_switch_reply(message_text: str) -> bool:
+    text_lower = message_text.lower().strip()
+    if not text_lower or _is_client_data_reply(text_lower):
+        return False
+
+    switch_prefixes = (
+        "dodaj klienta", "dodaj nowego", "dopisz klienta",
+        "dodaj notatkę", "dodaj notatke", "notatka dla",
+        "dopisz notatkę", "dopisz notatke",
+        "zmień status", "zmien status", "status ",
+        "pokaż", "pokaz", "znajdź", "znajdz", "szukaj",
+        "pokaż plan", "pokaz plan", "plan na", "co mam",
+        "dodaj spotkanie", "umów", "umow", "spotkanie z",
+        "zadzwoń", "zadzwo", "zadzwon", "wyślij ofert", "wyslij ofert",
+        "przypomnij", "follow-up", "followup",
+    )
+    return any(text_lower.startswith(prefix) for prefix in switch_prefixes)
+
+
 def _infer_meeting_event_type(
     message_text: str,
     default: Optional[str] = "in_person",
@@ -631,6 +650,12 @@ async def _route_pending_flow(
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
         return True
     elif flow_type == "add_meeting":
+        if _looks_like_intent_switch_reply(message_text):
+            telegram_id = update.effective_user.id
+            delete_pending_flow(telegram_id)
+            await update.effective_message.reply_text("⚠️ Anulowane.")
+            return False
+
         flow_data = flow.get("flow_data", {})
         try:
             if not flow_data.get("client_name"):
