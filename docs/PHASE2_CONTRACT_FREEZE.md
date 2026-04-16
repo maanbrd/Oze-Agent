@@ -140,8 +140,10 @@ Literal["in_person", "phone_call", "offer_email", "doc_followup"]
 |---|---|---|---|---|
 | `in_person` | `Spotkanie` | 🤝 | 60 min | ✓ |
 | `phone_call` | `Telefon` | 📞 | 15 min | ✓ |
-| `offer_email` | `Wysłać ofertę` | 📨 | 0 min (timestamp only) | ✓ |
-| `doc_followup` | `Follow-up dokumentowy` | 📄 | 0 min | ✓ |
+| `offer_email` | `Wysłać ofertę` | 📨 | 15 min | ✓ |
+| `doc_followup` | `Follow-up dokumentowy` | 📄 | 15 min | ✓ |
+
+Amendment 16.04.2026: offer_email / doc_followup duration zmienione z 0 min na 15 min — wszystkie 4 event_types mają teraz domyślny blok Calendar.
 
 **No-event K values (3):** `Czekać na decyzję klienta`, `Nic — zamknięte`, `Inne`. Zapisywane tylko w Sheets, bez Calendar eventu.
 
@@ -156,8 +158,8 @@ Literal["in_person", "phone_call", "offer_email", "doc_followup"]
 |---|---|---|---|
 | "spotkanie jutro o 10 z Kowalskim" | `Spotkanie` | `2026-04-15T10:00:00+02:00` | ✓ `in_person` 60 min |
 | "zadzwonić do Nowaka w piątek" | `Telefon` | `2026-04-18T10:00:00+02:00` (domyślna) | ✓ `phone_call` 15 min |
-| "wysłać ofertę do środy" | `Wysłać ofertę` | `2026-04-16` | ✓ `offer_email` 0 min |
-| "follow-up za tydzień" | `Follow-up dokumentowy` | `2026-04-22` | ✓ `doc_followup` 0 min |
+| "wysłać ofertę do środy" | `Wysłać ofertę` | `2026-04-16` | ✓ `offer_email` 15 min |
+| "follow-up za tydzień" | `Follow-up dokumentowy` | `2026-04-22` | ✓ `doc_followup` 15 min |
 | "czekam na decyzję do piątku" | `Czekać na decyzję klienta` | `2026-04-18` | ✗ bez eventu |
 | "niestandardowy krok" (szczegóły w Notatki) | `Inne` | opcjonalnie | ✗ bez eventu |
 | "zamknięte" | `Nic — zamknięte` | puste | ✗ bez eventu |

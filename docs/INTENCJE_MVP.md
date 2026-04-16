@@ -309,7 +309,7 @@ Typ: rozmowa telefoniczna
 - Jeśli to spotkanie fizyczne i klient jest w statusie `Nowy lead` → **auto-przejście statusu na `Spotkanie umówione`** (bo status lejka powinien odzwierciedlać fakt że spotkanie jest w kalendarzu). Karta pokaże to w polu "Status: Nowy lead → Spotkanie umówione".
 
 **Efekt w Kalendarzu (po `✅ Zapisać`):**
-- Nowe wydarzenie Google Calendar, title: `{imię nazwisko} ({miasto})`, opis: produkt + notatki, lokalizacja: adres klienta (dla in_person) lub telefon (dla phone_call), czas trwania: 1h (in_person), 15 min (phone_call), 0 min (offer_email, doc_followup — tylko termin).
+- Nowe wydarzenie Google Calendar, title: `{imię nazwisko} ({miasto})`, opis: produkt + notatki, lokalizacja: adres klienta (dla in_person) lub telefon (dla phone_call), czas trwania: 1h (in_person), 15 min (phone_call), 15 min (offer_email, doc_followup).
 - Wydarzenie ma metadane `extendedProperties.private.event_type: "in_person"` (per D8 — **tylko** `event_type`, bez `client_sheet_row` / `managed_by` / `client_name`). Link Sheets → Calendar przez kolumnę P (`ID wydarzenia Kalendarz`), nie przez extendedProperties.
 
 **add_meeting dla istniejącego klienta:** agent identyfikuje klienta po imię+nazwisko+miasto (R4). Jeśli match=1 → enrichment z Sheets (adres, telefon, notatki, produkt trafiają do eventu). Jeśli match=0 → event tworzy się bez CRM context (user może dodać klienta osobno później).
@@ -537,8 +537,8 @@ Nie zapisujemy `client_sheet_row`, `managed_by`, `client_name` ani żadnych inny
 |---|---|---|---|---|
 | `in_person` | `{imię nazwisko} ({miasto})` | 60 min | 🤝 | Spotkanie fizyczne. Lokalizacja = adres. |
 | `phone_call` | `📞 {imię nazwisko} ({miasto})` | 15 min | 📞 | Rozmowa telefoniczna. Lokalizacja = telefon klienta. |
-| `offer_email` | `📨 Oferta: {imię nazwisko}` | 0 min | 📨 | Termin wysłania oferty. All-day lub określona godzina. |
-| `doc_followup` | `📄 Follow-up: {imię nazwisko}` | 0 min | 📄 | Przypomnienie "wrócić do klienta". |
+| `offer_email` | `📨 Oferta: {imię nazwisko}` | 15 min | 📨 | 15-min blok na wysłanie oferty / timestamp. |
+| `doc_followup` | `📄 Follow-up: {imię nazwisko}` | 15 min | 📄 | 15-min blok na follow-up dokumentowy. |
 
 Plan dnia filtruje po **dedykowanym OZE calendar** (events tworzone tylko w tym kalendarzu przez agenta — per D8). User-added events w OZE calendar są tolerowane: jeśli brak / nieznany `event_type`, render jako generic calendar event bez mutation assumptions.
 

@@ -96,6 +96,19 @@ _EVENT_TYPE_TO_NEXT_STEP_LABEL = {
     "offer_email": "Wysłać ofertę",
     "doc_followup": "Follow-up dokumentowy",
 }
+_EVENT_TYPE_DEFAULT_DURATION = {
+    "in_person": 60,
+    "phone_call": 15,
+    "offer_email": 15,
+    "doc_followup": 15,
+}
+
+
+def _default_duration_for_event_type(event_type: Optional[str], user_default: int) -> int:
+    if event_type in _EVENT_TYPE_DEFAULT_DURATION:
+        return _EVENT_TYPE_DEFAULT_DURATION[event_type]
+    return user_default
+
 
 # Canonical 9-status pipeline per INTENCJE_MVP.md (frozen)
 _VALID_STATUSES = [
@@ -1673,9 +1686,15 @@ async def handle_add_meeting(
                 "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
             )
             return
+        entities = intent_data.get("entities") or {}
+        event_type = entities.get("event_type") or m.get("event_type")
         try:
             start_dt = _parse_warsaw(m["date"], m["time"])
-            duration = m.get("duration_minutes") or default_duration
+            explicit_duration = m.get("duration_minutes")
+            duration = (
+                explicit_duration if explicit_duration is not None
+                else _default_duration_for_event_type(event_type, default_duration)
+            )
             end_dt = start_dt + timedelta(minutes=duration)
         except Exception:
             await update.effective_message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
@@ -1693,8 +1712,6 @@ async def handle_add_meeting(
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
         source_client_data = intent_data.get("source_client_data") or None
         status_update = intent_data.get("status_update") or None
-        entities = intent_data.get("entities") or {}
-        event_type = entities.get("event_type") or m.get("event_type")
         if status_update is None:
             status_update = _auto_status_update_from_enriched(enriched, event_type)
 
@@ -1752,9 +1769,14 @@ async def handle_add_meeting(
         for m in meetings:
             if not m.get("date") or not m.get("time"):
                 continue
+            event_type = m.get("event_type")
             try:
                 start_dt = _parse_warsaw(m["date"], m["time"])
-                duration = m.get("duration_minutes") or default_duration
+                explicit_duration = m.get("duration_minutes")
+                duration = (
+                    explicit_duration if explicit_duration is not None
+                    else _default_duration_for_event_type(event_type, default_duration)
+                )
                 end_dt = start_dt + timedelta(minutes=duration)
             except Exception:
                 continue
@@ -1772,6 +1794,7 @@ async def handle_add_meeting(
                 "location": enriched["location"],
                 "description": enriched["description"],
                 "client_name": enriched["full_name"],
+                "event_type": event_type,
             })
 
         if not flow_meetings:
