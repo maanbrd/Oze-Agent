@@ -1796,7 +1796,8 @@ async def handle_change_status(
     user_id = user["id"]
     telegram_id = update.effective_user.id
     entities = intent_data.get("entities", {})
-    query = entities.get("name") or message_text
+    name_query = (entities.get("name") or "").strip()
+    search_query = name_query or message_text
     new_status = entities.get("status", "")
 
     _STATUS_MAPPING = {
@@ -1814,17 +1815,16 @@ async def handle_change_status(
     if new_status:
         new_status = _STATUS_MAPPING.get(new_status.lower(), new_status)
 
-    results = await search_clients(user_id, query)
+    results = await search_clients(user_id, search_query)
     if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{search_query}'")
         return
 
     if len(results) > 1:
         # Exact full-name match short-circuits disambiguation (bug-F2-2)
-        name_hint = entities.get("name") or ""
-        client = _find_exact_name_match(name_hint or query, results)
-        if not client:
-            client = next((r for r in results if _first_name_ok(query, r)), None)
+        client = _find_exact_name_match(name_query, results) if name_query else None
+        if name_query and not client:
+            client = next((r for r in results if _first_name_ok(name_query, r)), None)
         if not client:
             lines = [f"Mam {len(results)} klientów:"]
             options = []
@@ -1846,10 +1846,14 @@ async def handle_change_status(
             )
             return
     else:
-        client = next((r for r in results if _first_name_ok(query, r)), None)
+        if name_query:
+            client = next((r for r in results if _first_name_ok(name_query, r)), None)
+        else:
+            # Safe under R1: a single fuzzy result still only opens a confirmation card.
+            client = results[0]
         if not client:
             await update.effective_message.reply_text(
-                f"Nie znalazłem '{query}' w bazie."
+                f"Nie znalazłem '{search_query}' w bazie."
             )
             return
 
