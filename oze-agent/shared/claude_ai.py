@@ -269,11 +269,11 @@ Rozumiej polskie wyrażenia dat i czasu:
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
-Ustaw event_type dla KAŻDEGO obiektu:
-- "spotkanie", "wizyta", "jadę do" → "in_person"
-- "zadzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna" → "phone_call"
+Ustaw event_type dla KAŻDEGO obiektu (gdy markery się nakładają, wygrywa priorytet: phone_call > offer_email > doc_followup > in_person):
+- "zadzwoń", "zadzwonić", "oddzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna", "call" → "phone_call"
 - "wyślij ofertę", "oferta", "wycena", "mail", "email" → "offer_email"
-- "follow-up", "dokument", "dokumenty", "papier" → "doc_followup"
+- "follow-up", "followup", "dokument", "dokumenty", "papier", "docs" → "doc_followup"
+- "spotkanie", "wizyta", "jadę do", "jade do" → "in_person"
 WAŻNE: client_name ZAWSZE w mianowniku (kto? co?): "Jan Nowak" NIE "Janem Nowakiem", "Anna Kowalska" NIE "Anny Kowalskiej", "Mazur" NIE "Mazurem", "Grabowski" NIE "Grabowskim". Dotyczy KAŻDEGO spotkania w liście — sprawdź wszystkie client_name przed zwróceniem.
 Przykłady wielu spotkań z odmienionymi formami:
 - "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00", "event_type": "in_person"}}, {{"client_name": "Anna Kowalska", "time": "15:00", "event_type": "in_person"}}]
