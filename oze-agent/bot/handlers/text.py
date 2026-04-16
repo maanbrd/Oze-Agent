@@ -1449,23 +1449,45 @@ def _find_exact_name_match(name_query: str, results: list) -> dict | None:
 
 
 def _first_name_ok(query: str, client: dict) -> bool:
-    """Return True if the found client's first name matches the query's first name.
+    """Return True if the found client's name safely matches the query.
 
-    For single-word queries: always True (no first-name check possible).
-    For multi-word queries: first word of query must be within edit-distance 2
-    of first word of the client's stored name.
+    For single-word queries: always True (disambiguation handles ambiguity).
+    For multi-word queries: every meaningful query token must match a distinct
+    token in the stored client name. This prevents "Krzysztof X" from matching
+    "Krzysztof Y" just because the first name is shared.
     """
     from shared.search import levenshtein_distance, normalize_polish
-    q_words = query.strip().split()
+    q_words = [
+        normalize_polish(word)
+        for word in query.strip().split()
+        if len(normalize_polish(word)) > 2
+    ]
     if len(q_words) < 2:
         return True  # single word — no first-name check
-    q_first = normalize_polish(q_words[0])
+
     stored_name = client.get("Imię i nazwisko", "")
-    c_words = stored_name.strip().split()
+    c_words = [
+        normalize_polish(word)
+        for word in stored_name.strip().split()
+        if len(normalize_polish(word)) > 2
+    ]
     if not c_words:
         return True
-    c_first = normalize_polish(c_words[0])
-    return levenshtein_distance(q_first, c_first) <= 2
+
+    unused = list(c_words)
+    for q_word in q_words:
+        match_index = next(
+            (
+                index
+                for index, c_word in enumerate(unused)
+                if levenshtein_distance(q_word, c_word) <= 2
+            ),
+            None,
+        )
+        if match_index is None:
+            return False
+        unused.pop(match_index)
+    return True
 
 
 def _parse_warsaw(date_str: str, time_str: str) -> datetime:

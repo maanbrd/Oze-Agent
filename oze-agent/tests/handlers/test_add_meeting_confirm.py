@@ -324,6 +324,59 @@ async def test_add_meeting_confirm_no_first_name_match_creates_add_client_draft(
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_confirm_rejects_first_name_collision():
+    flow_data = {
+        "title": "Spotkanie - Krzysztof Krzysztofiński",
+        "start": "2026-04-17T08:00:00+02:00",
+        "end": "2026-04-17T09:00:00+02:00",
+        "client_name": "Krzysztof Krzysztofiński",
+        "location": "Marki",
+        "description": "weź jego fakturę",
+        "event_type": "in_person",
+        "client_data": {
+            "Imię i nazwisko": "Krzysztof Krzysztofiński",
+            "Miasto": "Marki",
+            "Adres": "ul. Duża 5",
+            "Produkt": "Magazyn energii",
+        },
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 33, "Imię i nazwisko": "Krzysztof Wojcik", "Status": "Nowy lead"}
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ) as mock_delete:
+        await handle_confirm(
+            upd,
+            MagicMock(),
+            {"id": 1, "sheet_columns": ["Imię i nazwisko", "Miasto", "Adres", "Produkt", "Status"]},
+            {},
+            "",
+        )
+
+    mock_update.assert_not_awaited()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_CLIENT
+    assert saved_flow.flow_data["client_data"]["Imię i nazwisko"] == "Krzysztof Krzysztofiński"
+    assert saved_flow.flow_data["client_data"]["Miasto"] == "Marki"
+    assert saved_flow.flow_data["client_data"]["Status"] == "Spotkanie umówione"
+    mock_delete.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_confirm_update_client_fails_reports_failure():
     flow_data = {
         "title": "Spotkanie - Jurek Jurecki",
