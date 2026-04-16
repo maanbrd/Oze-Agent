@@ -224,16 +224,33 @@ def _is_client_scoped_action_reply(message_text: str) -> bool:
     return _has_temporal_or_time(text_lower)
 
 
-def _infer_meeting_event_type(message_text: str) -> str:
+def _infer_meeting_event_type(
+    message_text: str,
+    default: Optional[str] = "in_person",
+) -> Optional[str]:
     text_lower = message_text.lower()
-    if "spotkanie" in text_lower:
-        return "in_person"
-    if any(marker in text_lower for marker in ("telefon", "zadzw", "zadzwo", "call")):
+    if any(marker in text_lower for marker in (
+        "zadzwoń", "zadzwo", "zadzwon", "zadzwonić", "zadzwonic",
+        "oddzwoń", "oddzwo", "oddzwon", "telefon", "telefonicz",
+        "rozmowa telefoniczna", "call",
+    )):
         return "phone_call"
-    if any(marker in text_lower for marker in ("mail", "email", "ofert")):
+    if any(marker in text_lower for marker in ("ofert", "wycena", "wycen", "mail", "email")):
         return "offer_email"
-    if any(marker in text_lower for marker in ("dokument", "docs", "papier")):
+    if any(marker in text_lower for marker in ("dokument", "follow-up", "followup", "papier", "docs")):
         return "doc_followup"
+    if any(marker in text_lower for marker in ("spotkanie", "wizyta", "jadę do", "jade do")):
+        return "in_person"
+    return default
+
+
+def _resolve_meeting_event_type(message_text: str, *fallbacks: Optional[str]) -> str:
+    inferred = _infer_meeting_event_type(message_text, default=None)
+    if inferred:
+        return inferred
+    for fallback in fallbacks:
+        if fallback:
+            return fallback
     return "in_person"
 
 
@@ -1687,7 +1704,11 @@ async def handle_add_meeting(
             )
             return
         entities = intent_data.get("entities") or {}
-        event_type = entities.get("event_type") or m.get("event_type")
+        event_type = _resolve_meeting_event_type(
+            message_text,
+            m.get("event_type"),
+            entities.get("event_type"),
+        )
         try:
             start_dt = _parse_warsaw(m["date"], m["time"])
             explicit_duration = m.get("duration_minutes")
@@ -1766,11 +1787,15 @@ async def handle_add_meeting(
         flow_meetings = []
         conflict_warnings = []
         router_event_type = (intent_data.get("entities") or {}).get("event_type")
+        # Prefer parser-provided per-item event_type. The raw-message fallback
+        # applies to the whole batch and can flatten mixed messages, so it is
+        # intentionally only a fallback.
+        batch_fallback_event_type = _resolve_meeting_event_type(message_text, router_event_type)
 
         for m in meetings:
             if not m.get("date") or not m.get("time"):
                 continue
-            event_type = m.get("event_type") or router_event_type
+            event_type = m.get("event_type") or batch_fallback_event_type
             try:
                 start_dt = _parse_warsaw(m["date"], m["time"])
                 explicit_duration = m.get("duration_minutes")

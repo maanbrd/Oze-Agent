@@ -97,7 +97,7 @@ async def _single_meeting_flow_for_duration(
             MagicMock(),
             {"id": 1, "default_meeting_duration": 60},
             {"entities": {"event_type": event_type}},
-            "spotkanie z Kowalskim w poniedziałek o 14",
+            "w poniedziałek o 14 z Kowalskim",
         )
 
     return mock_save.call_args.args[0].flow_data
@@ -377,6 +377,82 @@ async def test_add_meeting_explicit_zero_duration_preserved():
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_text_event_type_overrides_wrong_router_in_person_for_phone_call():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2026-04-20",
+                "time": "12:00",
+                "client_name": "Tomasz Nowicki",
+                "location": "telefonicznie",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Tomasz Nowicki",
+            "location": "telefonicznie",
+            "description": "",
+            "full_name": "Tomasz Nowicki",
+            "client_found": True,
+            "current_status": "Oferta wysłana",
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "in_person"}},
+            "Zadzwoń do Tomasza Nowickiego w sobotę o 12",
+        )
+
+    flow_data = mock_save.call_args.args[0].flow_data
+    assert flow_data["event_type"] == "phone_call"
+    assert _duration_minutes(flow_data) == 15
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_text_event_type_overrides_wrong_router_in_person_for_offer_email():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2026-04-20",
+                "time": "23:00",
+                "client_name": "Jan Kowalski",
+                "location": "",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Jan Kowalski",
+            "location": "",
+            "description": "",
+            "full_name": "Jan Kowalski",
+            "client_found": True,
+            "current_status": "Oferta wysłana",
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "in_person"}},
+            "Wyślij ofertę Janowi Kowalskiemu dzisiaj o godzinie 23",
+        )
+
+    flow_data = mock_save.call_args.args[0].flow_data
+    assert flow_data["event_type"] == "offer_email"
+    assert _duration_minutes(flow_data) == 15
+
+
+@pytest.mark.asyncio
 async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event_types():
     upd = _update()
     meetings = [
@@ -438,9 +514,9 @@ async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event
 
 
 @pytest.mark.asyncio
-async def test_add_meetings_batch_falls_back_to_router_event_type():
-    """When parser doesn't return event_type per meeting, batch should fall back
-    to router intent_data.entities.event_type so D4 defaults still apply."""
+async def test_add_meetings_batch_falls_back_to_text_event_type():
+    """Parser event_type is per item. Without it, batch uses raw-message
+    fallback, which can intentionally flatten a same-action batch."""
     upd = _update()
     meetings = [
         {"date": "2026-04-20", "time": "10:00", "client_name": "Jan Kowalski", "location": ""},
@@ -468,7 +544,7 @@ async def test_add_meetings_batch_falls_back_to_router_event_type():
             upd,
             MagicMock(),
             {"id": 1, "default_meeting_duration": 60},
-            {"entities": {"event_type": "phone_call"}},
+            {"entities": {"event_type": "in_person"}},
             "zadzwoń do obu jutro",
         )
 

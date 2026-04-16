@@ -256,22 +256,29 @@ async def extract_meeting_data(message: str, today: str) -> dict:
 
     Returns:
         {"meetings": [{"client_name": str, "date": str, "time": str,
-                       "duration_minutes": int, "location": str}],
+                       "duration_minutes": int, "location": str,
+                       "event_type": str}],
          "tokens_in": int, "tokens_out": int, "cost_usd": float}
     """
     system_prompt = f"""Wyciągnij dane spotkań z wiadomości. Dzisiaj: {today}.
 Zwróć TYLKO JSON z listą spotkań (nawet jeśli jedno):
-{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "duration_minutes": 60, "location": ""}}]}}
+{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "duration_minutes": 60, "location": "", "event_type": "in_person"}}]}}
 Rozumiej polskie wyrażenia dat i czasu:
 - "jutro", "w środę", "za tydzień", "pojutrze", "w przyszłą środę"
 - "o 14", "na 14:30", "o czternastej", "na szesnastą"
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
+Ustaw event_type dla KAŻDEGO obiektu:
+- "spotkanie", "wizyta", "jadę do" → "in_person"
+- "zadzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna" → "phone_call"
+- "wyślij ofertę", "oferta", "wycena", "mail", "email" → "offer_email"
+- "follow-up", "dokument", "dokumenty", "papier" → "doc_followup"
 WAŻNE: client_name ZAWSZE w mianowniku (kto? co?): "Jan Nowak" NIE "Janem Nowakiem", "Anna Kowalska" NIE "Anny Kowalskiej", "Mazur" NIE "Mazurem", "Grabowski" NIE "Grabowskim". Dotyczy KAŻDEGO spotkania w liście — sprawdź wszystkie client_name przed zwróceniem.
 Przykłady wielu spotkań z odmienionymi formami:
-- "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00"}}, {{"client_name": "Anna Kowalska", "time": "15:00"}}]
-- "Spotkanie z Markiem Zielińskim jutro o 9 i z Barbarą Wiśniewską o 14" → meetings: [{{"client_name": "Marek Zieliński", "time": "09:00"}}, {{"client_name": "Barbara Wiśniewska", "time": "14:00"}}]
+- "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00", "event_type": "in_person"}}, {{"client_name": "Anna Kowalska", "time": "15:00", "event_type": "in_person"}}]
+- "Spotkanie z Markiem Zielińskim jutro o 9 i z Barbarą Wiśniewską o 14" → meetings: [{{"client_name": "Marek Zieliński", "time": "09:00", "event_type": "in_person"}}, {{"client_name": "Barbara Wiśniewska", "time": "14:00", "event_type": "in_person"}}]
+- "Dodaj spotkanie z Janem Kowalskim jutro o 9, zadzwoń do Tomasza Nowickiego jutro o 12 i wyślij ofertę do Wojtka Testowego jutro o 15" → meetings: [{{"client_name": "Jan Kowalski", "time": "09:00", "event_type": "in_person"}}, {{"client_name": "Tomasz Nowicki", "time": "12:00", "event_type": "phone_call"}}, {{"client_name": "Wojtek Testowy", "time": "15:00", "event_type": "offer_email"}}]
 WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" / "przez telefon" / "rozmowa telefoniczna" → location: "telefonicznie". Gdy brak innego adresu a spotkanie jest telefoniczne — ustaw location na "telefonicznie", nie na miasto klienta."""
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)

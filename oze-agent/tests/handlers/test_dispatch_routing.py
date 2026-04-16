@@ -3,6 +3,7 @@
 from bot.handlers.text import (
     _BANNER_INTENTS,
     _HANDLERS,
+    _infer_meeting_event_type,
     _intent_result_to_legacy_dict,
     _is_client_scoped_action_reply,
     _message_with_add_client_context,
@@ -148,6 +149,14 @@ def test_client_action_replies_route_with_pending_context():
     assert _is_client_scoped_action_reply("zadzwonić w środę o 14")
     assert _is_client_scoped_action_reply("przygotuj ofertę na środę")
     assert _is_client_scoped_action_reply("w piątek o 14")
+
+
+def test_infer_meeting_event_type_uses_d4_priority_order():
+    assert _infer_meeting_event_type("Zadzwoń do Tomasza Nowickiego w sobotę o 12") == "phone_call"
+    assert _infer_meeting_event_type("Wyślij ofertę Janowi Kowalskiemu dzisiaj o godzinie 23") == "offer_email"
+    assert _infer_meeting_event_type("Przypomnij Wojtkowi Testowemu o dokumentach jutro o 15") == "doc_followup"
+    assert _infer_meeting_event_type("Spotkanie telefoniczne z Janem jutro o 10") == "phone_call"
+    assert _infer_meeting_event_type("Spotkanie z Janem jutro o 10") == "in_person"
 
 
 def test_add_client_context_injected_for_action_reply():

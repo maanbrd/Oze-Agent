@@ -77,7 +77,7 @@ async def test_add_client_augment_meeting_phone_is_carried_to_meeting_flow():
 @pytest.mark.parametrize(
     "message_text, expected_event_type",
     [
-        ("spotkanie, zadzwoń wcześniej", "in_person"),
+        ("spotkanie, zadzwoń wcześniej", "phone_call"),
         ("zadzwonić w piątek o 10", "phone_call"),
         ("wysłać ofertę w środę", "offer_email"),
         ("follow-up dokumentowy w poniedziałek", "doc_followup"),

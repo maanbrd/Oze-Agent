@@ -93,7 +93,7 @@ async def test_r7_complete_meeting_phrase_routes_to_add_meeting():
 @pytest.mark.parametrize(
     "message_text, expected_event_type",
     [
-        ("spotkanie z Kowalskim, zadzwoń wcześniej", "in_person"),
+        ("spotkanie z Kowalskim, zadzwoń wcześniej", "phone_call"),
         ("zadzwonić w piątek o 10", "phone_call"),
         ("wysłać ofertę w środę", "offer_email"),
         ("follow-up dokumentowy w poniedziałek", "doc_followup"),
