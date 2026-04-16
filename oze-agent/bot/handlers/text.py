@@ -620,6 +620,11 @@ async def _route_pending_flow(
                     location_hint = _location_hint_from_client_data(client_data)
                     enriched = await _enrich_meeting(user["id"], client_name, location_hint)
                     description = flow_data.get("description") or enriched["description"]
+                    status_update = flow_data.get("status_update")
+                    if status_update is None:
+                        status_update = _auto_status_update_from_enriched(
+                            enriched, flow_data.get("event_type")
+                        )
                     save_pending(PendingFlow(
                         telegram_id=update.effective_user.id,
                         flow_type=PendingFlowType.ADD_MEETING,
@@ -632,7 +637,7 @@ async def _route_pending_flow(
                             description=description,
                             client_data=client_data,
                             event_type=flow_data.get("event_type"),
-                            status_update=flow_data.get("status_update"),
+                            status_update=status_update,
                         )),
                     ))
                     card = _format_add_meeting_flow_card({
@@ -642,6 +647,7 @@ async def _route_pending_flow(
                         "location": enriched["location"],
                         "description": description,
                         "client_data": client_data,
+                        "status_update": status_update,
                     })
                     await update.effective_message.reply_markdown_v2(
                         card,
@@ -749,7 +755,7 @@ async def _route_pending_flow(
             or any(
                 marker in text_lower
                 for marker in (
-                    "spotkanie", "telefon", "zadzw", "zadzwo", "rozmowa",
+                    "spotkanie", "telefon", "zadzw", "rozmowa",
                     "mail", "email", "ofert", "follow", "dokument",
                 )
             )
@@ -1566,6 +1572,9 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
     location = location_hint
     description = ""
     client_found = False
+    client_row: Optional[int] = None
+    current_status = ""
+    client_city = ""
 
     if client_name:
         results = await search_clients(user_id, client_name)
@@ -1575,11 +1584,13 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
         if client:
             client_found = True
             full_name = client.get("Imię i nazwisko", client_name)
+            client_row = client.get("_row")
+            current_status = (client.get("Status") or "").strip()
+            client_city = client.get("Miasto", client.get("Miejscowość", "")) or ""
 
             addr = client.get("Adres", "")
-            city = client.get("Miasto", client.get("Miejscowość", ""))
             if not location:
-                location = ", ".join(p for p in [addr, city] if p)
+                location = ", ".join(p for p in [addr, client_city] if p)
 
             parts = []
             if client.get("Telefon"):
@@ -1595,7 +1606,40 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
             description = "\n".join(parts)
 
     title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
-    return {"title": title, "location": location, "description": description, "full_name": full_name, "client_found": client_found}
+    return {
+        "title": title,
+        "location": location,
+        "description": description,
+        "full_name": full_name,
+        "client_found": client_found,
+        "client_row": client_row,
+        "current_status": current_status,
+        "client_city": client_city,
+    }
+
+
+def _auto_status_update_from_enriched(
+    enriched: dict,
+    event_type: Optional[str],
+) -> Optional[dict]:
+    """Pre-compute status_update for in_person meetings with existing Nowy-lead clients.
+
+    Lets the card show 'Status: Nowy lead → Spotkanie umówione' before Zapisać
+    (per TEST_PLAN_CURRENT AM-7 + agent_behavior_spec_v5 §Auto-przejście).
+    """
+    if event_type != "in_person" or not enriched.get("client_found"):
+        return None
+    current = (enriched.get("current_status") or "").strip()
+    if current not in _STATUS_MEETING_AUTO_UPGRADE_FROM:
+        return None
+    return {
+        "row": enriched.get("client_row"),
+        "field": "Status",
+        "old_value": current,
+        "new_value": _STATUS_MEETING_BOOKED,
+        "client_name": enriched.get("full_name", ""),
+        "city": enriched.get("client_city", ""),
+    }
 
 
 async def handle_add_meeting(
@@ -1651,6 +1695,8 @@ async def handle_add_meeting(
         status_update = intent_data.get("status_update") or None
         entities = intent_data.get("entities") or {}
         event_type = entities.get("event_type") or m.get("event_type")
+        if status_update is None:
+            status_update = _auto_status_update_from_enriched(enriched, event_type)
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""

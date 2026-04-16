@@ -280,3 +280,126 @@ async def test_handle_add_meeting_preserves_router_event_type():
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
     assert saved_flow.flow_data["event_type"] == "in_person"
+
+
+@pytest.mark.asyncio
+async def test_handle_add_meeting_auto_status_preview_for_new_lead():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2026-04-20",
+                "time": "14:00",
+                "client_name": "Jan Kowalski",
+                "location": "Warszawa",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Jan Kowalski",
+            "location": "ul. Prosta 1, Warszawa",
+            "description": "",
+            "full_name": "Jan Kowalski",
+            "client_found": True,
+            "client_row": 5,
+            "current_status": "Nowy lead",
+            "client_city": "Warszawa",
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "in_person"}},
+            "spotkanie z Kowalskim w poniedziałek o 14",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    status_update = saved_flow.flow_data.get("status_update") or {}
+    assert status_update.get("old_value") == "Nowy lead"
+    assert status_update.get("new_value") == "Spotkanie umówione"
+    assert status_update.get("row") == 5
+    card_text = upd.effective_message.reply_markdown_v2.call_args.args[0]
+    assert "Nowy lead" in card_text
+    assert "Spotkanie umówione" in card_text
+
+
+@pytest.mark.asyncio
+async def test_handle_add_meeting_no_auto_status_for_phone_call():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2026-04-20",
+                "time": "14:00",
+                "client_name": "Jan Kowalski",
+                "location": "",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Jan Kowalski",
+            "location": "",
+            "description": "",
+            "full_name": "Jan Kowalski",
+            "client_found": True,
+            "client_row": 5,
+            "current_status": "Nowy lead",
+            "client_city": "Warszawa",
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "phone_call"}},
+            "zadzwonić do Kowalskiego w poniedziałek o 14",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_data.get("status_update") in (None, {})
+
+
+@pytest.mark.asyncio
+async def test_handle_add_meeting_no_auto_status_for_advanced_status():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2026-04-20",
+                "time": "14:00",
+                "client_name": "Jan Kowalski",
+                "location": "Warszawa",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Jan Kowalski",
+            "location": "Warszawa",
+            "description": "",
+            "full_name": "Jan Kowalski",
+            "client_found": True,
+            "client_row": 5,
+            "current_status": "Oferta wysłana",
+            "client_city": "Warszawa",
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "in_person"}},
+            "spotkanie z Kowalskim w poniedziałek o 14",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_data.get("status_update") in (None, {})

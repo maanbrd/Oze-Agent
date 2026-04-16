@@ -165,3 +165,15 @@ Discovered during review of Slice 1 (not a regression — pre-existing gap expos
 The pattern `get_sheet_headers + extract_client_data + _filter_invalid_products + filter empty` is now duplicated in the `add_client` augment branch and the new `add_meeting` empty-card branch. A small helper (e.g. `_extract_filtered_client_data(user_id, message_text) -> dict`) would remove the repetition and keep a single point of change for future LLM schema tweaks.
 
 Low priority — no behavior impact.
+
+### change_status Dopisać narrows to next-action only
+
+**Status:** open follow-up.
+
+The `change_status` pending flow's `➕ Dopisać` branch (introduced in `a1ec65c`) only accepts next-action phrasing ("telefon jutro o 14", "spotkanie w piątek"). Non-action replies like `tel 123456789` show the error message `"Dopisz następny krok, np. 'telefon jutro o 14'..."` instead of updating the client's phone number.
+
+This is a deliberate narrow scope — compound fusion per `agent_behavior_spec_v5.md §80` covers `change_status + add_meeting`, not `change_status + edit_client`. If users want to edit client data during a status change, they must cancel and use `add_client` augment.
+
+Product decision needed before implementation: should `➕ Dopisać` in `change_status` route non-action replies through a client-edit flow (analogous to `add_client` augment but on an existing row), and if so, under what confirmation pattern? Likely needs R1 confirmation card for any Sheets write.
+
+Low-to-medium priority — current UX is slightly inconvenient but not broken.
