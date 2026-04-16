@@ -2026,6 +2026,7 @@ async def handle_confirm(
                 end=end,
                 location=flow_data.get("location") or None,
                 description=event_description or None,
+                event_type=event_type,
             )
             if event:
                 upgrade_allowed = event_type == "in_person"
@@ -2110,6 +2111,7 @@ async def handle_confirm(
                     start=start, end=end,
                     location=fm.get("location") or None,
                     description=fm.get("description") or None,
+                    event_type=fm.get("event_type"),
                 )
                 if event:
                     created.append(fm)

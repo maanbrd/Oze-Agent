@@ -65,6 +65,7 @@ async def test_add_meeting_confirm_offers_add_client_with_carried_client_data():
     assert "Telefon: 746938764" in create_kwargs["description"]
     assert "Produkt: Magazyn energii" in create_kwargs["description"]
     assert "Notatki: Zużycie 4500kw, magazyn 10kw" in create_kwargs["description"]
+    assert create_kwargs["event_type"] == "in_person"
     mock_delete.assert_not_called()
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Spotkanie dodane" in response
@@ -115,6 +116,7 @@ async def test_add_meeting_confirm_recovers_client_name_from_client_data():
 
     create_kwargs = mock_create.await_args.kwargs
     assert create_kwargs["title"] == "Spotkanie — Andrzej Andrzejowski"
+    assert create_kwargs["event_type"] == "in_person"
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.ADD_CLIENT
     assert saved_flow.flow_data["client_data"]["Imię i nazwisko"] == "Andrzej Andrzejowski"
@@ -236,7 +238,7 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
     ), patch(
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
-    ), patch(
+    ) as mock_create, patch(
         "bot.handlers.text.search_clients",
         new=AsyncMock(return_value=[
             {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
@@ -252,6 +254,7 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
         "offer_email": "Wysłać ofertę",
         "doc_followup": "Follow-up dokumentowy",
     }[event_type]
+    assert mock_create.await_args.kwargs["event_type"] == event_type
     mock_update.assert_awaited_once_with(
         1,
         7,
@@ -448,3 +451,40 @@ async def test_add_meeting_confirm_update_client_fails_reports_failure():
     upd.effective_message.reply_text.assert_awaited_once_with(
         "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
     )
+
+
+@pytest.mark.asyncio
+async def test_add_meetings_confirm_passes_event_type_to_calendar():
+    flow_data = {
+        "meetings": [
+            {
+                "title": "Telefon — Anna Nowak",
+                "start": "2026-04-17T11:00:00+02:00",
+                "end": "2026-04-17T11:30:00+02:00",
+                "client_name": "Anna Nowak",
+                "event_type": "phone_call",
+            },
+            {
+                "title": "Spotkanie — Jan Kowalski",
+                "start": "2026-04-18T12:00:00+02:00",
+                "end": "2026-04-18T13:00:00+02:00",
+                "client_name": "Jan Kowalski",
+            },
+        ]
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meetings", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(side_effect=[{"id": "event-1"}, {"id": "event-2"}]),
+    ) as mock_create, patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[{"_row": 7, "Imię i nazwisko": "Anna Nowak"}]),
+    ), patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    assert mock_create.await_args_list[0].kwargs["event_type"] == "phone_call"
+    assert mock_create.await_args_list[1].kwargs["event_type"] is None

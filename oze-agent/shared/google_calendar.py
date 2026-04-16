@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 WORKING_HOURS_START = 9   # 09:00
 WORKING_HOURS_END = 18    # 18:00
+EVENT_TYPE_VALUES = {"in_person", "phone_call", "offer_email", "doc_followup"}
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ def _event_to_dict(event: dict) -> dict:
     """Normalize a Google Calendar event to a clean dict."""
     start = event.get("start", {})
     end = event.get("end", {})
+    private = event.get("extendedProperties", {}).get("private", {})
     return {
         "id": event.get("id"),
         "title": event.get("summary", ""),
@@ -50,7 +52,31 @@ def _event_to_dict(event: dict) -> dict:
         "start": start.get("dateTime") or start.get("date"),
         "end": end.get("dateTime") or end.get("date"),
         "status": event.get("status", "confirmed"),
+        "event_type": private.get("event_type", ""),
     }
+
+
+def _add_event_type_metadata(body: dict, event_type: Optional[str]) -> None:
+    if event_type is None:
+        return
+    if event_type not in EVENT_TYPE_VALUES:
+        logger.warning("Ignoring unknown Calendar event_type: %s", event_type)
+        return
+    body["extendedProperties"] = {"private": {"event_type": event_type}}
+
+
+def _update_event_type_metadata(event: dict, event_type: Optional[str]) -> None:
+    if event_type in (None, ""):
+        private = event.get("extendedProperties", {}).get("private")
+        if isinstance(private, dict):
+            private.pop("event_type", None)
+        return
+    if event_type not in EVENT_TYPE_VALUES:
+        logger.warning("Ignoring unknown Calendar event_type: %s", event_type)
+        return
+    extended = event.setdefault("extendedProperties", {})
+    private = extended.setdefault("private", {})
+    private["event_type"] = event_type
 
 
 # ── Public async API ──────────────────────────────────────────────────────────
@@ -152,6 +178,7 @@ async def create_event(
     end: datetime,
     location: Optional[str] = None,
     description: Optional[str] = None,
+    event_type: Optional[str] = None,
 ) -> Optional[dict]:
     """Create a calendar event. Returns event dict with ID or None."""
     try:
@@ -169,6 +196,7 @@ async def create_event(
             body["location"] = location
         if description:
             body["description"] = description
+        _add_event_type_metadata(body, event_type)
 
         def _create():
             service = _get_calendar_service_sync(user_id)
@@ -219,6 +247,8 @@ async def update_event(
                 event["location"] = updates["location"]
             if "description" in updates:
                 event["description"] = updates["description"]
+            if "event_type" in updates:
+                _update_event_type_metadata(event, updates["event_type"])
 
             updated = service.events().update(
                 calendarId=calendar_id, eventId=event_id, body=event
