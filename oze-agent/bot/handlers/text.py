@@ -1823,7 +1823,8 @@ async def handle_change_status(
     if len(results) > 1:
         # Exact full-name match short-circuits disambiguation (bug-F2-2)
         client = _find_exact_name_match(name_query, results) if name_query else None
-        if name_query and not client:
+        name_tokens = [token for token in name_query.split() if len(token) > 2]
+        if len(name_tokens) >= 2 and not client:
             client = next((r for r in results if _first_name_ok(name_query, r)), None)
         if not client:
             lines = [f"Mam {len(results)} klientów:"]

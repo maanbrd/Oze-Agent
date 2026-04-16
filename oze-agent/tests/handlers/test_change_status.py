@@ -107,3 +107,34 @@ async def test_change_status_without_entities_name_disambiguates_many_results():
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Mam 2 klientów:" in response
     assert "Którego?" in response
+
+
+@pytest.mark.asyncio
+async def test_change_status_single_name_token_disambiguates_many_results():
+    upd = _update()
+    search = AsyncMock(return_value=[
+        {"_row": 8, "Imię i nazwisko": "Jan Mazur", "Miasto": "Kraków", "Status": ""},
+        {"_row": 9, "Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "Status": ""},
+    ])
+
+    with patch("bot.handlers.text.search_clients", new=search), patch(
+        "bot.handlers.text.save_pending_flow"
+    ) as mock_save_flow, patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_change_status(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {"name": "Jan", "status": "Podpisane"}},
+            "Jan podpisał",
+        )
+
+    search.assert_awaited_once_with(1, "Jan")
+    mock_save.assert_not_called()
+    mock_save_flow.assert_called_once_with(
+        123,
+        "disambiguation",
+        {"intent": "change_status", "new_status": "Podpisane"},
+    )
+    response = upd.effective_message.reply_text.call_args.args[0]
+    assert "Jan Mazur" in response
+    assert "Jan Kowalski" in response
