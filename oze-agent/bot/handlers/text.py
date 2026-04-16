@@ -91,6 +91,12 @@ SYSTEM_FIELDS = {
 _STATUS_NEW_LEAD = "Nowy lead"
 _STATUS_MEETING_BOOKED = "Spotkanie umówione"
 _STATUS_MEETING_AUTO_UPGRADE_FROM = {"", _STATUS_NEW_LEAD}
+_EVENT_TYPE_TO_NEXT_STEP_LABEL = {
+    "in_person": "Spotkanie",
+    "phone_call": "Telefon",
+    "offer_email": "Wysłać ofertę",
+    "doc_followup": "Follow-up dokumentowy",
+}
 
 # Canonical 9-status pipeline per INTENCJE_MVP.md (frozen)
 _VALID_STATUSES = [
@@ -1466,9 +1472,11 @@ def _first_name_ok(query: str, client: dict) -> bool:
         return True  # single word — no first-name check
 
     stored_name = client.get("Imię i nazwisko", "")
+    stored_city = client.get("Miasto", client.get("Miejscowość", ""))
+    stored_identity = " ".join(p for p in [stored_name, stored_city] if p)
     c_words = [
         normalize_polish(word)
-        for word in stored_name.strip().split()
+        for word in stored_identity.strip().split()
         if len(normalize_polish(word)) > 2
     ]
     if not c_words:
@@ -2005,6 +2013,7 @@ async def handle_confirm(
             title = flow_data.get("title", "Spotkanie")
             if client_name and title.strip().lower() == "spotkanie":
                 title = f"Spotkanie — {client_name}"
+            event_type = flow_data.get("event_type") or "in_person"
             event_description = _calendar_description_for_meeting(flow_data)
             event = await create_event(
                 user_id,
@@ -2015,9 +2024,9 @@ async def handle_confirm(
                 description=event_description or None,
             )
             if event:
-                upgrade_allowed = flow_data.get("event_type") == "in_person"
+                upgrade_allowed = event_type == "in_person"
                 status_updated = False
-                status_update_failed = False
+                sheet_update_failed = False
                 client_matches = await search_clients(user_id, client_name) if client_name else []
                 client = next((c for c in client_matches if _first_name_ok(client_name, c)), None)
                 if not client and client_name:
@@ -2044,33 +2053,41 @@ async def handle_confirm(
                     )
                     skip_delete = True
                 else:
-                    if client and upgrade_allowed:
-                        current_status = (client.get("Status") or "").strip()
+                    if client:
                         row = client.get("_row")
-                        if current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM and row is not None:
-                            ok = await update_client(
-                                user_id,
-                                row,
-                                {"Status": _STATUS_MEETING_BOOKED},
-                            )
-                            if ok:
+                        sheet_updates = {
+                            "Następny krok": _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
+                            "Data następnego kroku": start.isoformat(),
+                            "Data ostatniego kontaktu": datetime.now(WARSAW).date().isoformat(),
+                        }
+                        event_id = event.get("id")
+                        if event_id:
+                            sheet_updates["ID wydarzenia Kalendarz"] = event_id
+                        if upgrade_allowed:
+                            current_status = (client.get("Status") or "").strip()
+                            if current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM:
+                                sheet_updates["Status"] = _STATUS_MEETING_BOOKED
                                 status_updated = True
-                            else:
-                                status_update_failed = True
-                                logger.error(
-                                    "add_meeting confirm: failed to update status row=%s",
-                                    row,
-                                )
-                        elif current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM:
-                            status_update_failed = True
+                        if row is None:
+                            sheet_update_failed = True
+                            status_updated = False
                             logger.error(
-                                "add_meeting confirm: client without _row for status update: %s",
+                                "add_meeting confirm: client without _row for sheet sync: %s",
                                 client,
                             )
+                        else:
+                            ok = await update_client(user_id, row, sheet_updates)
+                            if not ok:
+                                sheet_update_failed = True
+                                status_updated = False
+                                logger.error(
+                                    "add_meeting confirm: failed to sync Sheets row=%s",
+                                    row,
+                                )
                     if status_updated:
                         reply = "✅ Spotkanie dodane do kalendarza. Status klienta: Spotkanie umówione."
-                    elif status_update_failed:
-                        reply = "✅ Spotkanie dodane do kalendarza. Nie udało się zmienić statusu klienta."
+                    elif sheet_update_failed:
+                        reply = "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
                     else:
                         reply = "✅ Spotkanie dodane do kalendarza."
                     await update.effective_message.reply_text(reply)

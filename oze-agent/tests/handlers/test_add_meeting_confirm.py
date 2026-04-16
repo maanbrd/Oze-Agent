@@ -1,6 +1,6 @@
 """Confirmation tests for add_meeting with carried client data."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -159,7 +159,13 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
     mock_update.assert_awaited_once_with(
         1,
         7,
-        {"Status": "Spotkanie umówione"},
+        {
+            "Następny krok": "Spotkanie",
+            "Data następnego kroku": "2026-04-17T11:00:00+02:00",
+            "Data ostatniego kontaktu": ANY,
+            "ID wydarzenia Kalendarz": "event-1",
+            "Status": "Spotkanie umówione",
+        },
     )
     mock_save.assert_not_called()
     upd.effective_message.reply_text.assert_awaited_once_with(
@@ -197,7 +203,16 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
 
-    mock_update.assert_not_awaited()
+    mock_update.assert_awaited_once_with(
+        1,
+        7,
+        {
+            "Następny krok": "Spotkanie",
+            "Data następnego kroku": "2026-04-17T11:00:00+02:00",
+            "Data ostatniego kontaktu": ANY,
+            "ID wydarzenia Kalendarz": "event-1",
+        },
+    )
     upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
 
 
@@ -232,7 +247,21 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
 
-    mock_update.assert_not_awaited()
+    expected_label = {
+        "phone_call": "Telefon",
+        "offer_email": "Wysłać ofertę",
+        "doc_followup": "Follow-up dokumentowy",
+    }[event_type]
+    mock_update.assert_awaited_once_with(
+        1,
+        7,
+        {
+            "Następny krok": expected_label,
+            "Data następnego kroku": "2026-04-17T11:00:00+02:00",
+            "Data ostatniego kontaktu": ANY,
+            "ID wydarzenia Kalendarz": "event-1",
+        },
+    )
     upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
 
 
@@ -270,7 +299,17 @@ async def test_add_meeting_confirm_updates_only_first_name_safe_match():
     ):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
 
-    mock_update.assert_awaited_once_with(1, 7, {"Status": "Spotkanie umówione"})
+    mock_update.assert_awaited_once_with(
+        1,
+        7,
+        {
+            "Następny krok": "Spotkanie",
+            "Data następnego kroku": "2026-04-17T11:00:00+02:00",
+            "Data ostatniego kontaktu": ANY,
+            "ID wydarzenia Kalendarz": "event-1",
+            "Status": "Spotkanie umówione",
+        },
+    )
     mock_save.assert_not_called()
 
 
@@ -407,5 +446,5 @@ async def test_add_meeting_confirm_update_client_fails_reports_failure():
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
 
     upd.effective_message.reply_text.assert_awaited_once_with(
-        "✅ Spotkanie dodane do kalendarza. Nie udało się zmienić statusu klienta."
+        "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
     )

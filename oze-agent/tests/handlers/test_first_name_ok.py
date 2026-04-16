@@ -23,6 +23,13 @@ def test_multi_word_typo_tolerated():
     assert _first_name_ok("Jan Kowalsky", {"Imię i nazwisko": "Jan Kowalski"})
 
 
+def test_multi_word_with_city_matches_identity():
+    assert _first_name_ok(
+        "Jan Kowalski Warszawa",
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa"},
+    )
+
+
 def test_reverse_order_ok():
     assert _first_name_ok("Kowalski Jan", {"Imię i nazwisko": "Jan Kowalski"})
 

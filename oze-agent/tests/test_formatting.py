@@ -108,7 +108,8 @@ def test_format_error_unknown_returns_generic_polish():
 def test_format_confirmation_contains_details():
     result = format_confirmation("add_client", {"Imię i nazwisko": "Jan", "Miasto": "Gdańsk"})
     assert "Jan" in result
-    assert "tak" in result.lower()
+    assert "Dodać klienta?" in result
+    assert "tak" not in result.lower()
 
 
 # ── format_edit_comparison ────────────────────────────────────────────────────
