@@ -113,6 +113,8 @@ Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, 
 
 ## Phase 4 — Known follow-ups
 
+**Next concrete slice (16.04.2026):** typed-pending **disambiguation / duplicate UX** (see first follow-up below). After F7b parking, this is the next active work per `docs/IMPLEMENTATION_PLAN.md` Phase 4, not more auto-cancel / card-rendering polish (those are largely covered by `a1ec65c`, `cd4a648`, earlier commits). Do not start a new slice until disambiguation typed-pending is completed.
+
 ### duplicate UX: same full name across multiple cities needs disambiguation
 
 **Status:** open follow-up.
@@ -144,7 +146,7 @@ Discovered during smoke testing of `f56000a`. Not a regression — the `add_note
 
 Does not block the typed-pending migration. Implementation belongs in a separate slice (likely a small extractor over note text + R7-style follow-up prompt, or routing the suffix into the existing `add_meeting` flow).
 
-### F7: explicit duration parsing for natural-language meetings
+### F7a: explicit duration parsing for natural-language meetings
 
 **Status:** open follow-up.
 
@@ -153,9 +155,37 @@ The D4 duration defaults are event-type aware (`in_person=60`, `phone_call=15`, 
 Example:
 - User: `Zadzwoń do Tomasza Nowickiego jutro o 13 na 30 minut`
 - Expected: `phone_call` event with explicit 30-minute duration.
-- Current scope: this fix deliberately keeps the event-type defaults and does not harden explicit duration extraction.
+- Current scope: deliberately keeps the event-type defaults and does not harden explicit duration extraction.
 
-Does not block the current event-type resolver fix. Treat as a separate extractor/parser hardening slice.
+Does not block other fixes. Treat as a separate extractor/parser hardening slice over `extract_meeting_data`.
+
+### F7b: production add_meeting duration still shows 60 min for phone/offer flows
+
+**Status:** unresolved, parked (16.04.2026).
+
+After landing the deterministic event_type resolver (`fcad12c`), pending intent-switch guard (`cd4a648`), and LLM prompt alignment (`86f5d27`), manual Telegram smoke still shows meetings created with `60 min` for phone/offer/doc_followup event types.
+
+Smoke observation:
+- User typed: `Zadzwoń do Tomasza Nowickiego w sobotę o 12`
+- Expected: `phone_call`, `15 min`, location `telefonicznie`.
+- Actual: Telegram card displays `Czas trwania: 60 min`.
+- Bot was declaratively restarted before the test.
+
+**Decision 16.04.2026:** park the bug, do not hotfix further right now. Resume the main Phase 4 track. Return to this as a dedicated diagnostic slice, not bundled into unrelated work.
+
+**Diagnostic hypotheses to verify on the next attempt:**
+1. Is the deterministic resolver (`_resolve_meeting_event_type` / `_infer_meeting_event_type`) actually reached in the production path, or does the dispatcher route into a different code path than `handle_add_meeting` single?
+2. Is duration calculated **after** the final `event_type` is resolved, or is there a real path (single or batch) where the old `default_duration` is still applied first?
+3. Is the confirmation card rendered from the freshly saved pending flow (post `save_pending`), or from an earlier/cached payload that still carried the 60-min fallback?
+4. Is the Telegram bot actually running the current code after the restart? Verify the process, `.venv`, and checkout match the latest commits — a stale process or wrong venv silently reproduces the old behaviour.
+
+**Instrumentation strategy for the next diagnostic pass:**
+- Log on entry to `handle_add_meeting` with raw `message_text` and `intent_data.entities`.
+- Log the full `meetings` list returned from `extract_meeting_data`.
+- Log just before `save_pending` with final `event_type`, `start`, `end`, and computed `duration`.
+- Before rerunning the manual smoke, confirm the bot process in use actually comes from the current checkout and venv (kill/restart explicitly; avoid assumptions).
+
+Does not block the main Phase 4 track. Do not revert `fcad12c`, `cd4a648`, or `86f5d27` while diagnosing.
 
 ### full-client-data augment: `client_found=True` path can create duplicates
 
