@@ -14,7 +14,6 @@ from telegram.ext import ContextTypes
 
 from bot.utils.telegram_helpers import (
     build_mutation_buttons,
-    build_confirm_cancel_buttons,
     build_duplicate_buttons,
     build_choice_buttons,
     check_interaction_limit,
@@ -357,6 +356,12 @@ def _format_add_meeting_flow_card(flow_data: dict) -> str:
     client_summary = _client_data_summary(flow_data.get("client_data") or {})
     if client_summary:
         details["Dane klienta do zapisu"] = client_summary
+    status_update = flow_data.get("status_update") or {}
+    if status_update:
+        details["Status"] = (
+            f"{status_update.get('old_value', '')} → "
+            f"{status_update.get('new_value', '')}"
+        )
     return format_confirmation("add_meeting", details)
 
 
@@ -627,6 +632,7 @@ async def _route_pending_flow(
                             description=description,
                             client_data=client_data,
                             event_type=flow_data.get("event_type"),
+                            status_update=flow_data.get("status_update"),
                         )),
                     ))
                     card = _format_add_meeting_flow_card({
@@ -674,6 +680,7 @@ async def _route_pending_flow(
                     description=description,
                     client_data=client_data or None,
                     event_type=flow_data.get("event_type"),
+                    status_update=flow_data.get("status_update"),
                 )),
             ))
             card = _format_add_meeting_flow_card({
@@ -731,6 +738,50 @@ async def _route_pending_flow(
         await update.effective_message.reply_text(
             f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
             reply_markup=build_mutation_buttons("confirm"),
+        )
+        return True
+    elif flow_type == "change_status":
+        flow_data = flow.get("flow_data", {})
+        client_name = flow_data.get("client_name", "")
+        city = flow_data.get("city", "")
+        text_has_action = (
+            _has_temporal_or_time(text_lower)
+            or any(
+                marker in text_lower
+                for marker in (
+                    "spotkanie", "telefon", "zadzw", "zadzwo", "rozmowa",
+                    "mail", "email", "ofert", "follow", "dokument",
+                )
+            )
+        )
+        if not text_has_action:
+            await update.effective_message.reply_text(
+                "Dopisz następny krok, np. 'telefon jutro o 14' albo 'spotkanie w piątek o 10'."
+            )
+            return True
+
+        meeting_text = _message_with_r7_client_context(
+            message_text,
+            {"client_name": client_name, "city": city},
+        )
+        await handle_add_meeting(
+            update,
+            context,
+            user,
+            {
+                "entities": {
+                    "event_type": _infer_meeting_event_type(message_text),
+                },
+                "status_update": {
+                    "row": flow_data.get("row"),
+                    "field": flow_data.get("field", "Status"),
+                    "old_value": flow_data.get("old_value", ""),
+                    "new_value": flow_data.get("new_value", ""),
+                    "client_name": client_name,
+                    "city": city,
+                },
+            },
+            meeting_text,
         )
         return True
     elif flow_type == "r7_prompt":
@@ -1597,6 +1648,7 @@ async def handle_add_meeting(
 
         enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
         source_client_data = intent_data.get("source_client_data") or None
+        status_update = intent_data.get("status_update") or None
         entities = intent_data.get("entities") or {}
         event_type = entities.get("event_type") or m.get("event_type")
 
@@ -1617,6 +1669,7 @@ async def handle_add_meeting(
                 description=enriched["description"],
                 client_data=source_client_data,
                 event_type=event_type,
+                status_update=status_update,
             )),
         ))
 
@@ -1637,6 +1690,11 @@ async def handle_add_meeting(
         client_summary = _client_data_summary(source_client_data or {})
         if client_summary:
             details["Dane klienta do zapisu"] = client_summary
+        if status_update:
+            details["Status"] = (
+                f"{status_update.get('old_value', '')} → "
+                f"{status_update.get('new_value', '')}"
+            )
         msg = format_confirmation("add_meeting", details) + conflict_warning
         await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
 
@@ -1908,7 +1966,7 @@ async def handle_change_status(
     await update.effective_message.reply_markdown_v2(
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
         + format_edit_comparison("Status", old_status, new_status),
-        reply_markup=build_confirm_cancel_buttons("confirm"),
+        reply_markup=build_mutation_buttons("confirm"),
     )
 
 
@@ -2019,6 +2077,8 @@ async def handle_confirm(
             if client_name and title.strip().lower() == "spotkanie":
                 title = f"Spotkanie — {client_name}"
             event_type = flow_data.get("event_type") or "in_person"
+            status_update = flow_data.get("status_update") or {}
+            status_updated_value = None
             event_description = _calendar_description_for_meeting(flow_data)
             event = await create_event(
                 user_id,
@@ -2069,11 +2129,19 @@ async def handle_confirm(
                         event_id = event.get("id")
                         if event_id:
                             sheet_updates["ID wydarzenia Kalendarz"] = event_id
-                        if upgrade_allowed:
+                        if status_update:
+                            if str(row) == str(status_update.get("row")):
+                                new_value = status_update.get("new_value")
+                                if new_value:
+                                    sheet_updates[status_update.get("field", "Status")] = new_value
+                                    status_updated = True
+                                    status_updated_value = new_value
+                        elif upgrade_allowed:
                             current_status = (client.get("Status") or "").strip()
                             if current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM:
                                 sheet_updates["Status"] = _STATUS_MEETING_BOOKED
                                 status_updated = True
+                                status_updated_value = _STATUS_MEETING_BOOKED
                         if row is None:
                             sheet_update_failed = True
                             status_updated = False
@@ -2091,7 +2159,7 @@ async def handle_confirm(
                                     row,
                                 )
                     if status_updated:
-                        reply = "✅ Spotkanie dodane do kalendarza. Status klienta: Spotkanie umówione."
+                        reply = f"✅ Spotkanie dodane do kalendarza. Status klienta: {status_updated_value}."
                     elif sheet_update_failed:
                         reply = "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
                     else:

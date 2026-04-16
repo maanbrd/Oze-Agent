@@ -269,6 +269,60 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_confirm_applies_compound_status_update():
+    flow_data = {
+        "title": "Telefon - Jurek Jurecki",
+        "start": "2026-04-17T11:00:00+02:00",
+        "end": "2026-04-17T12:00:00+02:00",
+        "client_name": "Jurek Jurecki",
+        "location": "telefonicznie",
+        "description": "",
+        "event_type": "phone_call",
+        "status_update": {
+            "row": 7,
+            "field": "Status",
+            "old_value": "Oferta wysłana",
+            "new_value": "Podpisane",
+            "client_name": "Jurek Jurecki",
+            "city": "Warszawa",
+        },
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch(
+        "bot.handlers.text.search_clients",
+        new=AsyncMock(return_value=[
+            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Oferta wysłana"}
+        ]),
+    ), patch(
+        "bot.handlers.text.update_client",
+        new=AsyncMock(return_value=True),
+    ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    mock_update.assert_awaited_once_with(
+        1,
+        7,
+        {
+            "Następny krok": "Telefon",
+            "Data następnego kroku": "2026-04-17T11:00:00+02:00",
+            "Data ostatniego kontaktu": ANY,
+            "ID wydarzenia Kalendarz": "event-1",
+            "Status": "Podpisane",
+        },
+    )
+    upd.effective_message.reply_text.assert_awaited_once_with(
+        "✅ Spotkanie dodane do kalendarza. Status klienta: Podpisane."
+    )
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_confirm_updates_only_first_name_safe_match():
     flow_data = {
         "title": "Spotkanie - Jurek Jurecki",

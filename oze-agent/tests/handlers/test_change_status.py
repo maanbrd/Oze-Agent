@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.handlers.text import handle_change_status
+from bot.handlers.text import _route_pending_flow, handle_change_status
 from shared.pending import PendingFlowType
 
 
@@ -14,6 +14,10 @@ def _update(telegram_id: int = 123) -> MagicMock:
     upd.effective_message.reply_text = AsyncMock()
     upd.effective_message.reply_markdown_v2 = AsyncMock()
     return upd
+
+
+def _button_labels(reply_markup) -> list[str]:
+    return [button.text for row in reply_markup.inline_keyboard for button in row]
 
 
 @pytest.mark.asyncio
@@ -44,6 +48,8 @@ async def test_change_status_uses_entities_name_for_matching_not_whole_message()
     assert saved_flow.flow_type is PendingFlowType.CHANGE_STATUS
     assert saved_flow.flow_data["row"] == 7
     assert saved_flow.flow_data["new_value"] == "Podpisane"
+    labels = _button_labels(upd.effective_message.reply_markdown_v2.await_args.kwargs["reply_markup"])
+    assert labels == ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"]
     upd.effective_message.reply_markdown_v2.assert_awaited_once()
 
 
@@ -138,3 +144,104 @@ async def test_change_status_single_name_token_disambiguates_many_results():
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Jan Mazur" in response
     assert "Jan Kowalski" in response
+
+
+@pytest.mark.asyncio
+async def test_change_status_append_routes_next_action_with_status_context():
+    upd = _update()
+    flow = {
+        "flow_type": "change_status",
+        "flow_data": {
+            "row": 7,
+            "field": "Status",
+            "old_value": "Oferta wysłana",
+            "new_value": "Podpisane",
+            "client_name": "Jan Kowalski",
+            "city": "Warszawa",
+        },
+    }
+
+    with patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            flow,
+            "telefon jutro o 14",
+        )
+
+    assert consumed is True
+    mock_meeting.assert_awaited_once()
+    _, _, _, intent_data, routed_text = mock_meeting.await_args.args
+    assert intent_data["entities"]["event_type"] == "phone_call"
+    assert intent_data["status_update"] == {
+        "row": 7,
+        "field": "Status",
+        "old_value": "Oferta wysłana",
+        "new_value": "Podpisane",
+        "client_name": "Jan Kowalski",
+        "city": "Warszawa",
+    }
+    assert "Jan Kowalski" in routed_text
+    assert "Warszawa" in routed_text
+
+
+@pytest.mark.asyncio
+async def test_change_status_append_without_action_keeps_status_pending():
+    upd = _update()
+    flow = {
+        "flow_type": "change_status",
+        "flow_data": {
+            "row": 7,
+            "old_value": "Oferta wysłana",
+            "new_value": "Podpisane",
+            "client_name": "Jan Kowalski",
+        },
+    }
+
+    with patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            flow,
+            "dopisz coś tam",
+        )
+
+    assert consumed is True
+    mock_meeting.assert_not_awaited()
+    response = upd.effective_message.reply_text.call_args.args[0]
+    assert "Dopisz następny krok" in response
+
+
+@pytest.mark.asyncio
+async def test_change_status_after_disambiguation_uses_three_mutation_buttons():
+    from bot.handlers.buttons import _handle_select_client
+
+    query = MagicMock()
+    query.from_user.id = 123
+    query.edit_message_text = AsyncMock()
+
+    with patch(
+        "bot.handlers.buttons.get_all_clients",
+        new=AsyncMock(return_value=[
+            {
+                "_row": 7,
+                "Imię i nazwisko": "Jan Kowalski",
+                "Miasto": "Warszawa",
+                "Status": "Oferta wysłana",
+            }
+        ]),
+    ), patch(
+        "bot.handlers.buttons.get_pending_flow",
+        return_value={
+            "flow_type": "disambiguation",
+            "flow_data": {"intent": "change_status", "new_status": "Podpisane"},
+        },
+    ), patch("bot.handlers.buttons.delete_pending_flow"), patch(
+        "bot.handlers.buttons.save_pending"
+    ):
+        await _handle_select_client(query, MagicMock(), {"id": 1}, "7")
+
+    labels = _button_labels(query.edit_message_text.await_args.kwargs["reply_markup"])
+    assert labels == ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"]

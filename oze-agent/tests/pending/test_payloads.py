@@ -95,6 +95,12 @@ def test_payload_map_class_per_type():
                     "Telefon": "601234567",
                 },
                 "event_type": "in_person",
+                "status_update": {
+                    "row": 5,
+                    "field": "Status",
+                    "old_value": "Oferta wysłana",
+                    "new_value": "Podpisane",
+                },
             },
             AddMeetingPayload,
         ),

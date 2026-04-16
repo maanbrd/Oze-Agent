@@ -12,7 +12,6 @@ from bot.handlers.text import (
 )
 from bot.utils.telegram_helpers import (
     build_choice_buttons,
-    build_confirm_cancel_buttons,
     build_mutation_buttons,
     is_private_chat,
 )
@@ -203,7 +202,7 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                 f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
                 + format_edit_comparison("Status", old_status, new_status),
                 parse_mode="MarkdownV2",
-                reply_markup=build_confirm_cancel_buttons("confirm"),
+                reply_markup=build_mutation_buttons("confirm"),
             )
             return
 

@@ -64,6 +64,7 @@ class AddMeetingPayload:
     description: str = ""
     client_data: Optional[dict] = None
     event_type: Optional[str] = None
+    status_update: Optional[dict] = None
 
 
 @dataclass
