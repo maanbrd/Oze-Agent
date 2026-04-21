@@ -12,7 +12,12 @@ for the full rule table.
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-from shared.google_sheets import _is_phone_query, search_clients
+from shared.google_sheets import (
+    _digits_only,
+    _is_phone_query,
+    get_all_clients,
+    search_clients,
+)
 from shared.matching import first_name_ok
 from shared.search import levenshtein_distance, normalize_polish
 
@@ -29,6 +34,24 @@ class ClientLookupResult:
 class FuzzySuggestion:
     candidate: dict
     distance: int
+
+
+def _phone_variants(value: str) -> set[str]:
+    """Return exact phone representations considered equivalent.
+
+    Polish numbers may be stored with or without the +48 prefix. This keeps
+    that equivalence without allowing arbitrary substring matches.
+    """
+    digits = _digits_only(value)
+    if not digits:
+        return set()
+
+    variants = {digits}
+    if digits.startswith("48") and len(digits) == 11:
+        variants.add(digits[2:])
+    elif len(digits) == 9:
+        variants.add(f"48{digits}")
+    return variants
 
 
 def _meaningful_tokens(query: str) -> list[str]:
@@ -56,6 +79,52 @@ def _is_literal_single_token_match(q_tokens: list[str], row: dict) -> bool:
     return q_tokens[0] in _stored_name_tokens(row)
 
 
+async def _lookup_phone_clients(user_id: str, query: str) -> list[dict]:
+    query_variants = _phone_variants(query)
+    if not query_variants:
+        return []
+
+    matches: list[dict] = []
+    for client in await get_all_clients(user_id):
+        stored_variants = _phone_variants(client.get("Telefon", ""))
+        if query_variants & stored_variants:
+            matches.append(client)
+    return matches
+
+
+def _best_name_fuzzy_distance(query: str, stored_name: str) -> Optional[int]:
+    """Return fuzzy distance only when the stored name itself matches query."""
+    query_norm = normalize_polish(query)
+    stored_norm = normalize_polish(stored_name)
+    if not query_norm or not stored_norm:
+        return None
+
+    q_tokens = _meaningful_tokens(query)
+    stored_tokens = stored_norm.split()
+    if not q_tokens or not stored_tokens:
+        return None
+
+    if len(q_tokens) == 1:
+        best_token_distance = min(
+            levenshtein_distance(q_tokens[0], token) for token in stored_tokens
+        )
+        if best_token_distance <= 2:
+            return best_token_distance
+        return None
+
+    token_distances = [
+        min(levenshtein_distance(q_token, token) for token in stored_tokens)
+        for q_token in q_tokens
+    ]
+    if all(distance <= 2 for distance in token_distances):
+        return sum(token_distances)
+
+    full_distance = levenshtein_distance(query_norm, stored_norm)
+    if full_distance <= 2:
+        return full_distance
+    return None
+
+
 async def lookup_client(
     user_id: str,
     query: str,
@@ -64,8 +133,8 @@ async def lookup_client(
     """Resolve a client query to unique / multi / not_found.
 
     Rules (Phase 5 plan, Slice 5.1a):
-      * Phone query (≥7 digits, ≤4 non-digit chars) → exact digit match via
-        `search_clients` phone path. No fuzzy ever for phones.
+      * Phone query (≥7 digits, ≤4 non-digit chars) → exact digit match,
+        accepting only explicit +48/no-prefix equivalence. No fuzzy ever for phones.
       * Name query ≥2 meaningful tokens → accept exact OR first_name_ok matches.
       * Name query 1 token + city given → accept first_name_ok matches whose
         city matches. City mismatch keeps candidates (cross-city warning
@@ -75,25 +144,25 @@ async def lookup_client(
         fuzzy-only hits fall to `not_found`.
       * Multi-client hits → status=multi regardless of whether city narrows.
     """
-    raw = await search_clients(user_id, query)
     normalized = normalize_polish(query)
     is_phone = _is_phone_query(query)
 
     if is_phone:
-        # search_clients phone path is already exact (digits compare)
-        if not raw:
+        clients = await _lookup_phone_clients(user_id, query)
+        if not clients:
             status = "not_found"
-        elif len(raw) == 1:
+        elif len(clients) == 1:
             status = "unique"
         else:
             status = "multi"
         return ClientLookupResult(
             status=status,
-            clients=raw,
+            clients=clients,
             normalized_query=normalized,
             is_phone_query=True,
         )
 
+    raw = await search_clients(user_id, query)
     q_tokens = _meaningful_tokens(query)
     city_norm = normalize_polish(city)
 
@@ -151,16 +220,17 @@ async def suggest_fuzzy_client(
     if not raw:
         return None
 
-    query_norm = normalize_polish(name_query)
     best_row: Optional[dict] = None
     best_distance = 10**6
     for row in raw:
-        stored_norm = normalize_polish(row.get("Imię i nazwisko", ""))
-        if not stored_norm:
+        distance = _best_name_fuzzy_distance(
+            name_query,
+            row.get("Imię i nazwisko", ""),
+        )
+        if distance is None:
             continue
-        dist = levenshtein_distance(query_norm, stored_norm)
-        if dist < best_distance:
-            best_distance = dist
+        if distance < best_distance:
+            best_distance = distance
             best_row = row
 
     if best_row is None:
