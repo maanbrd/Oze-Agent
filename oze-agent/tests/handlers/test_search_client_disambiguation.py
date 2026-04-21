@@ -233,3 +233,62 @@ async def test_search_client_multi_50_plus_sends_sheets_link():
     assert "Otwórz arkusz" in text
     assert "docs.google.com/spreadsheets/d/abc123" in text
     assert "reply_markup" not in reply.kwargs or reply.kwargs.get("reply_markup") is None
+
+
+@pytest.mark.asyncio
+async def test_search_client_city_only_uses_city_lookup_and_disambiguates():
+    """entities.city without name/phone → lookup by city, preserving city search UX."""
+    upd = _update()
+    clients = [
+        {"_row": 3, "Imię i nazwisko": "Anna Nowak", "Miasto": "Kraków"},
+        {"_row": 4, "Imię i nazwisko": "Piotr Wiśniewski", "Miasto": "Kraków"},
+    ]
+    result = ClientLookupResult(status="multi", clients=clients, normalized_query="krakow")
+
+    with (
+        _patched_lookup(result) as mock_lookup,
+        _patched_suggest_fuzzy(None) as mock_suggest,
+    ):
+        await handle_search_client(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {"city": "Kraków"}},
+            "Pokaż klientów z Krakowa",
+        )
+
+    mock_lookup.assert_awaited_once_with(1, "Kraków", city="Kraków")
+    mock_suggest.assert_not_called()
+    reply = upd.effective_message.reply_text.call_args
+    text = reply.args[0]
+    assert "Mam 2 klientów:" in text
+    assert "Anna Nowak — Kraków" in text
+    assert "Piotr Wiśniewski — Kraków" in text
+    assert _button_callbacks(reply.kwargs["reply_markup"]) == [
+        "select_client:3",
+        "select_client:4",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_client_city_only_not_found_skips_fuzzy_suggestion():
+    """City-only miss should not ask 'Chodziło o...' for a client name."""
+    upd = _update()
+    result = ClientLookupResult(status="not_found", clients=[], normalized_query="krakow")
+
+    with (
+        _patched_lookup(result) as mock_lookup,
+        _patched_suggest_fuzzy(None) as mock_suggest,
+    ):
+        await handle_search_client(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {"city": "Kraków"}},
+            "Pokaż klientów z Krakowa",
+        )
+
+    mock_lookup.assert_awaited_once_with(1, "Kraków", city="Kraków")
+    mock_suggest.assert_not_called()
+    reply = upd.effective_message.reply_text.call_args
+    assert "Nie mam \"Kraków\" w bazie." in reply.args[0]

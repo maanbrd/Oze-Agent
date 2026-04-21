@@ -148,6 +148,27 @@ async def test_city_no_match_preserves_cross_city_multi():
     assert result.status == "multi"
 
 
+@pytest.mark.asyncio
+async def test_city_only_query_returns_exact_city_matches():
+    rows = [
+        _row("Anna Nowak", "Kraków", row_num=3),
+        _row("Piotr Wiśniewski", "Kraków", row_num=4),
+    ]
+    with _patched_search_clients(rows):
+        result = await lookup_client("u1", "Kraków", city="Kraków")
+    assert result.status == "multi"
+    assert [row["_row"] for row in result.clients] == [3, 4]
+
+
+@pytest.mark.asyncio
+async def test_city_only_query_does_not_fall_back_to_name_match():
+    rows = [_row("Kraków Solar", "Warszawa", row_num=8)]
+    with _patched_search_clients(rows):
+        result = await lookup_client("u1", "Kraków", city="Kraków")
+    assert result.status == "not_found"
+    assert result.clients == []
+
+
 # ── phone lookup ─────────────────────────────────────────────────────────────
 
 

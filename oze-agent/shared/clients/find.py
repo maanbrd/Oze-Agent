@@ -66,6 +66,10 @@ def _stored_city_norm(row: dict) -> str:
     return normalize_polish(row.get("Miasto", row.get("Miejscowość", "")))
 
 
+def _is_exact_city_match(city_norm: str, row: dict) -> bool:
+    return bool(city_norm) and _stored_city_norm(row) == city_norm
+
+
 def _is_exact_name_match(query_norm: str, row: dict) -> bool:
     return normalize_polish(row.get("Imię i nazwisko", "")) == query_norm
 
@@ -139,6 +143,7 @@ async def lookup_client(
       * Name query 1 token + city given → accept first_name_ok matches whose
         city matches. City mismatch keeps candidates (cross-city warning
         contract preserved) but does not widen the acceptance rule.
+      * City-only query → accept exact city matches returned by search_clients.
       * Name query 1 token without city → require the token to appear as a
         full stored-name token (literal substring on tokenized name). Pure
         fuzzy-only hits fall to `not_found`.
@@ -166,18 +171,24 @@ async def lookup_client(
     q_tokens = _meaningful_tokens(query)
     city_norm = normalize_polish(city)
 
+    is_city_only_lookup = bool(city_norm and normalized == city_norm)
+    if is_city_only_lookup:
+        candidates = [row for row in raw if _is_exact_city_match(city_norm, row)]
+    else:
+        candidates = []
+
     # Filter fuzzy-only hits out of `raw`.
-    candidates: list[dict] = []
-    for row in raw:
-        if _is_exact_name_match(normalized, row):
-            candidates.append(row)
-            continue
-        if len(q_tokens) >= 2 and first_name_ok(query, row):
-            candidates.append(row)
-            continue
-        if _is_literal_single_token_match(q_tokens, row):
-            candidates.append(row)
-            continue
+    if not candidates and not is_city_only_lookup:
+        for row in raw:
+            if _is_exact_name_match(normalized, row):
+                candidates.append(row)
+                continue
+            if len(q_tokens) >= 2 and first_name_ok(query, row):
+                candidates.append(row)
+                continue
+            if _is_literal_single_token_match(q_tokens, row):
+                candidates.append(row)
+                continue
 
     # City narrowing: preserve cross-city warning when narrowing empties.
     if city_norm and candidates:

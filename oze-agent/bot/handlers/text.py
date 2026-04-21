@@ -1150,13 +1150,17 @@ async def handle_search_client(
     telegram_id = update.effective_user.id
     user_id = user["id"]
     entities = intent_data.get("entities", {})
-    query = entities.get("name") or entities.get("phone") or message_text
+    name = entities.get("name")
+    phone = entities.get("phone")
+    city = entities.get("city") or ""
+    query = name or phone or city or message_text
+    is_city_only_query = bool(city and not name and not phone)
 
     await send_typing(context, telegram_id)
-    result = await lookup_client(user_id, query)
+    result = await lookup_client(user_id, query, city=city)
 
     if result.status == "not_found":
-        if not result.is_phone_query:
+        if not result.is_phone_query and not is_city_only_query:
             suggestion = await suggest_fuzzy_client(user_id, query)
             if suggestion is not None:
                 candidate = suggestion.candidate
