@@ -7,8 +7,11 @@ the result flags. No user-facing strings in this module.
 """
 
 from .add_note import AddNoteResult, commit_add_note
+from .change_status import ChangeStatusResult, commit_change_status
 
 __all__ = [
     "AddNoteResult",
+    "ChangeStatusResult",
     "commit_add_note",
+    "commit_change_status",
 ]

@@ -34,7 +34,7 @@ from shared.claude_ai import (
     generate_bot_response,
 )
 from shared.intent import IntentResult, IntentType, ScopeTier, classify
-from shared.mutations import commit_add_note
+from shared.mutations import commit_add_note, commit_change_status
 from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
@@ -2528,19 +2528,32 @@ async def handle_confirm(
                 await update.effective_message.reply_text("Brak klientów do dodania.")
 
         elif flow_type == "change_status":
-            ok = await update_client(user_id, flow_data["row"], {flow_data["field"]: flow_data["new_value"]})
-            if ok:
-                await update.effective_message.reply_text(f"✅ Status zmieniony na: {flow_data['new_value']}")
-                skip_delete = True
-                await send_next_action_prompt(
-                    update, telegram_id,
-                    flow_data.get("client_name", "klient"),
-                    flow_data.get("city", ""),
-                    client_row=flow_data.get("row"),
-                    current_status=flow_data.get("new_value") or "",
-                )
-            else:
+            result = await commit_change_status(
+                user_id,
+                flow_data["row"],
+                flow_data["new_value"],
+                date.today(),
+            )
+            if not result.success:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
+            else:
+                await update.effective_message.reply_text(
+                    f"✅ Status zmieniony na: {flow_data['new_value']}"
+                )
+                skip_delete = True
+                # R7 fires for every plain change_status (INTENCJE_MVP §4.4).
+                # A future compound change_status + add_meeting flow can
+                # suppress it by setting flow_data["compound_add_meeting"];
+                # that path does not reach this branch today, but the guard
+                # documents the contract.
+                if not flow_data.get("compound_add_meeting"):
+                    await send_next_action_prompt(
+                        update, telegram_id,
+                        flow_data.get("client_name", "klient"),
+                        flow_data.get("city", ""),
+                        client_row=flow_data.get("row"),
+                        current_status=flow_data.get("new_value") or "",
+                    )
 
         elif flow_type == "add_note":
             result = await commit_add_note(
