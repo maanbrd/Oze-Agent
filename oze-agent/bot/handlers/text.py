@@ -34,6 +34,7 @@ from shared.claude_ai import (
     generate_bot_response,
 )
 from shared.intent import IntentResult, IntentType, ScopeTier, classify
+from shared.mutations import commit_add_note
 from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
@@ -2542,15 +2543,14 @@ async def handle_confirm(
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
         elif flow_type == "add_note":
-            today_str = date.today().strftime("%d.%m.%Y")
-            old_notes = flow_data.get("old_notes", "")
-            new_entry = f"[{today_str}]: {flow_data['note_text']}"
-            final_notes = f"{old_notes}; {new_entry}" if old_notes else new_entry
-            ok = await update_client(user_id, flow_data["row"], {
-                "Notatki": final_notes,
-                "Data ostatniego kontaktu": date.today().strftime("%Y-%m-%d"),
-            })
-            if ok:
+            result = await commit_add_note(
+                user_id,
+                flow_data["row"],
+                flow_data["note_text"],
+                flow_data.get("old_notes", ""),
+                date.today(),
+            )
+            if result.success:
                 await update.effective_message.reply_text("✅ Notatka dodana.")
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
