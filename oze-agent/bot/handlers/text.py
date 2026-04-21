@@ -135,6 +135,17 @@ _TEMPORAL_MARKERS = {
     "tydzień", "następny", "przyszły", "spotkanie",
     "wpół", "kwadrans",  # Polish quarter-hour time expressions
 }
+# Event-type words the R7 prompt advertises ("Spotkanie, telefon, mail...").
+# R7-only: we widen the meeting-intent check in the r7_prompt branch so a bare
+# "telefon" reply routes into handle_add_meeting (which then asks for time via
+# its own "Nie rozpoznałem daty lub godziny" path). NOT added to _TEMPORAL_MARKERS
+# because the classifier demotion guard at handle_text uses that set and
+# "telefon"/"mail" in a client-data message would then falsely stay as add_meeting.
+_R7_EVENT_TYPE_MARKERS = {
+    "telefon", "telefonicznie", "zadzwonić", "zadzwonic", "dzwonić", "dzwonic",
+    "mail", "email", "e-mail", "wysłać", "wyslac",
+    "oferta", "ofertę", "oferte",
+}
 # HH:MM or "o <hour>" / "na <hour>" — require explicit time preposition
 # Also matches "wpół" ("wpół do ósmej") and "kwadrans" ("za kwadrans dziesiąta")
 _TIME_RE = re.compile(
@@ -868,11 +879,15 @@ async def _route_pending_flow(
         if (text_words & _cancel_single) or any(p in text_lower for p in _cancel_phrases):
             delete_pending_flow(telegram_id)
             return True
-        has_temporal = (
+        # Slice 5.1d.2: accept bare event-type words ("telefon", "mail", "oferta")
+        # as meeting intent. handle_add_meeting will ask for time via its own
+        # path if one isn't in the message.
+        has_meeting_intent = (
             any(w in text_lower for w in _TEMPORAL_MARKERS)
             or bool(_TIME_RE.search(text_lower))
+            or any(w in text_lower for w in _R7_EVENT_TYPE_MARKERS)
         )
-        if has_temporal:
+        if has_meeting_intent:
             r7_data = flow.get("flow_data", {})
             meeting_text = _message_with_r7_client_context(message_text, r7_data)
             entities = {"event_type": _infer_meeting_event_type(message_text)}
@@ -890,8 +905,13 @@ async def _route_pending_flow(
             # date/time), no new flow was saved → R7 stays alive so the user's
             # next reply can re-enter this branch with the same client context.
             return True
-        # No temporal markers at all — unclear/off-topic reply, drop R7.
+        # Slice 5.1d.2: no markers at all — tell the user instead of silently
+        # dropping the flow so they know the reply wasn't understood.
         delete_pending_flow(telegram_id)
+        await update.effective_message.reply_text(
+            "Nie rozumiem. Podaj np. 'spotkanie jutro o 14', 'telefon', "
+            "albo napisz 'nic' żeby zakończyć."
+        )
         return True
     else:
         # New message arrived during a non-add_client pending flow → auto-cancel, process message normally

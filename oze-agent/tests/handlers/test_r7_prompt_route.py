@@ -194,8 +194,13 @@ async def test_r7_global_cancel_phrase_routes_through_cancel_flow(text):
 
 
 @pytest.mark.asyncio
-async def test_r7_unclear_reply_deletes_flow():
-    """No temporal markers at all → drop R7 (consume silently)."""
+async def test_r7_unclear_reply_deletes_flow_and_sends_feedback():
+    """No markers at all → drop R7, but tell the user what we expected.
+
+    Slice 5.1d.2: the previous contract silently consumed off-topic replies,
+    which produced a typing-indicator-then-nothing UX on Telegram. Now the
+    handler replies with an example of valid follow-ups before dropping R7.
+    """
     upd = _update()
     with patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
          patch(
@@ -207,3 +212,30 @@ async def test_r7_unclear_reply_deletes_flow():
     assert consumed is True
     mock_delete.assert_called_once_with(123)
     mock_meeting.assert_not_called()
+    upd.effective_message.reply_text.assert_awaited_once()
+    feedback = upd.effective_message.reply_text.await_args.args[0]
+    assert "Nie rozumiem" in feedback
+    assert "spotkanie" in feedback.lower()
+    assert "nic" in feedback.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["telefon", "mail", "oferta", "e-mail", "zadzwonić"])
+async def test_r7_bare_event_type_word_routes_to_add_meeting(text):
+    """Slice 5.1d.2: a bare event-type word from the R7 prompt options must
+    route to handle_add_meeting (which then asks for time), not silent-delete.
+
+    The R7 prompt advertises "Spotkanie, telefon, mail, odłożyć na później?",
+    so users answering with just "telefon" were being silently dropped before
+    this fix because _TEMPORAL_MARKERS did not include event-type words.
+    """
+    upd = _update()
+    with patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
+         patch(
+             "bot.handlers.text.handle_add_meeting", new=AsyncMock()
+         ) as mock_meeting:
+        consumed = await _route_pending_flow(upd, MagicMock(), {}, _flow(), text)
+    assert consumed is True
+    mock_delete.assert_not_called()
+    mock_meeting.assert_awaited_once()
+    upd.effective_message.reply_text.assert_not_called()
