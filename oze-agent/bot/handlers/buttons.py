@@ -296,6 +296,8 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
             flow_data=payload_to_flow_data(R7PromptPayload(
                 client_name=client_name,
                 city=city,
+                client_row=duplicate_row,
+                current_status=new_data.get("Status") or "",
             )),
         ))
         await query.edit_message_text("✅ Dane zaktualizowane.")

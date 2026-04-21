@@ -873,20 +873,18 @@ async def _route_pending_flow(
             or bool(_TIME_RE.search(text_lower))
         )
         if has_temporal:
-            meeting_text = _message_with_r7_client_context(
-                message_text, flow.get("flow_data", {})
-            )
-            await handle_add_meeting(
-                update,
-                context,
-                user,
-                {
-                    "entities": {
-                        "event_type": _infer_meeting_event_type(message_text),
-                    },
-                },
-                meeting_text,
-            )
+            r7_data = flow.get("flow_data", {})
+            meeting_text = _message_with_r7_client_context(message_text, r7_data)
+            entities = {"event_type": _infer_meeting_event_type(message_text)}
+            intent_data_r7: dict = {"entities": entities}
+            # Slice 5.1d.1: carry the row resolved by the preceding mutation
+            # so handle_add_meeting can skip _enrich_meeting's lookup.
+            if r7_data.get("client_row") is not None:
+                intent_data_r7["r7_client_row"] = r7_data.get("client_row")
+                intent_data_r7["r7_current_status"] = r7_data.get("current_status") or ""
+                intent_data_r7["r7_client_name"] = r7_data.get("client_name") or ""
+                intent_data_r7["r7_city"] = r7_data.get("city") or ""
+            await handle_add_meeting(update, context, user, intent_data_r7, meeting_text)
             # If handle_add_meeting succeeded, it already wrote an add_meeting
             # pending flow over R7 (telegram_id PK upsert). If it failed (no
             # date/time), no new flow was saved → R7 stays alive so the user's
@@ -1548,7 +1546,56 @@ def _parse_warsaw(date_str: str, time_str: str) -> datetime:
     return naive.replace(tzinfo=WARSAW)
 
 
-async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) -> dict:
+def _build_enriched_from_client(
+    client: dict,
+    client_name_fallback: str,
+    location_hint: str,
+) -> dict:
+    """Shared formatter — given a resolved Sheets row dict, build the enriched
+    result used by handle_add_meeting for the confirmation card and payload."""
+    full_name = client.get("Imię i nazwisko") or client_name_fallback
+    client_row = client.get("_row")
+    current_status = (client.get("Status") or "").strip()
+    client_city = client.get("Miasto", client.get("Miejscowość", "")) or ""
+
+    location = location_hint
+    addr = client.get("Adres", "")
+    if not location:
+        location = ", ".join(p for p in [addr, client_city] if p)
+
+    parts = []
+    if client.get("Telefon"):
+        parts.append(f"Tel: {client['Telefon']}")
+    prod = client.get("Produkt", "")
+    power = client.get("Moc (kW)", client.get("Moc", ""))
+    if prod:
+        parts.append(f"Produkt: {prod}" + (f" {power} kW" if power else ""))
+    if client.get("Notatki"):
+        parts.append(f"Notatki: {client['Notatki']}")
+    if client.get("Następny krok"):
+        parts.append(f"Następny krok: {client['Następny krok']}")
+    description = "\n".join(parts)
+
+    title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
+    return {
+        "title": title,
+        "location": location,
+        "description": description,
+        "full_name": full_name,
+        "client_found": True,
+        "client_row": client_row,
+        "current_status": current_status,
+        "client_city": client_city,
+        "ambiguous_client": False,
+    }
+
+
+async def _enrich_meeting(
+    user_id: str,
+    client_name: str,
+    location_hint: str,
+    known_client_row: Optional[int] = None,
+) -> dict:
     """Look up client in Sheets and return enriched title/location/description.
 
     Returns dict with 'client_found' (bool) and 'ambiguous_client' (bool).
@@ -1556,7 +1603,22 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
     handle_confirm then creates the Calendar event but skips Sheets sync.
     location_hint is NOT passed as city to lookup_client: it represents the
     meeting venue ("telefonicznie", an address), not the client's city.
+
+    When known_client_row is supplied (Slice 5.1d.1 — R7 context carried from
+    a prior mutation confirm), we skip lookup_client entirely and fetch only
+    that specific row from get_all_clients. Guarantees we hit the exact row
+    the user already identified in change_status/add_note/add_client_duplicate.
     """
+    if known_client_row is not None:
+        all_clients = await get_all_clients(user_id)
+        match = next(
+            (c for c in all_clients if c.get("_row") == known_client_row),
+            None,
+        )
+        if match is not None:
+            return _build_enriched_from_client(match, client_name, location_hint)
+        # Row vanished (deleted between confirms) — fall through to name lookup.
+
     full_name = client_name
     location = location_hint
     description = ""
@@ -1569,29 +1631,7 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
     if client_name:
         result = await lookup_client(user_id, client_name)
         if result.status == "unique":
-            client = result.clients[0]
-            client_found = True
-            full_name = client.get("Imię i nazwisko", client_name)
-            client_row = client.get("_row")
-            current_status = (client.get("Status") or "").strip()
-            client_city = client.get("Miasto", client.get("Miejscowość", "")) or ""
-
-            addr = client.get("Adres", "")
-            if not location:
-                location = ", ".join(p for p in [addr, client_city] if p)
-
-            parts = []
-            if client.get("Telefon"):
-                parts.append(f"Tel: {client['Telefon']}")
-            prod = client.get("Produkt", "")
-            power = client.get("Moc (kW)", client.get("Moc", ""))
-            if prod:
-                parts.append(f"Produkt: {prod}" + (f" {power} kW" if power else ""))
-            if client.get("Notatki"):
-                parts.append(f"Notatki: {client['Notatki']}")
-            if client.get("Następny krok"):
-                parts.append(f"Następny krok: {client['Następny krok']}")
-            description = "\n".join(parts)
+            return _build_enriched_from_client(result.clients[0], client_name, location_hint)
         elif result.status == "multi":
             ambiguous_client = True
 
@@ -1693,7 +1733,19 @@ async def handle_add_meeting(
             )
             return
 
-        enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
+        # Slice 5.1d.1: when arriving from R7 follow-up, the prior mutation
+        # already resolved the client — carry that row through instead of
+        # re-running lookup_client (which would flip to ambiguous for same-name
+        # pairs in different cities).
+        r7_client_row = intent_data.get("r7_client_row")
+        r7_client_name = intent_data.get("r7_client_name") or ""
+        enriched_client_name = m.get("client_name") or r7_client_name
+        enriched = await _enrich_meeting(
+            user_id,
+            enriched_client_name,
+            m.get("location", ""),
+            known_client_row=r7_client_row,
+        )
         source_client_data = intent_data.get("source_client_data") or None
         status_update = intent_data.get("status_update") or None
         if status_update is None:
@@ -2114,7 +2166,11 @@ async def handle_confirm(
                 else:
                     await update.effective_message.reply_text("✅ Zapisane.")
                     skip_delete = True  # r7_prompt flow created below
-                    await send_next_action_prompt(update, telegram_id, name, city)
+                    await send_next_action_prompt(
+                        update, telegram_id, name, city,
+                        client_row=row,
+                        current_status=flow_data["client_data"].get("Status") or "",
+                    )
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
 
@@ -2127,7 +2183,11 @@ async def handle_confirm(
                     city = flow_data.get("city", "")
                     await update.effective_message.reply_text("✅ Dane zaktualizowane.")
                     skip_delete = True
-                    await send_next_action_prompt(update, telegram_id, name, city)
+                    await send_next_action_prompt(
+                        update, telegram_id, name, city,
+                        client_row=duplicate_row,
+                        current_status=flow_data["client_data"].get("Status") or "",
+                    )
                 else:
                     await update.effective_message.reply_markdown_v2(format_error("google_down"))
             else:
@@ -2387,6 +2447,8 @@ async def handle_confirm(
                     update, telegram_id,
                     flow_data.get("client_name", "klient"),
                     flow_data.get("city", ""),
+                    client_row=flow_data.get("row"),
+                    current_status=flow_data.get("new_value") or "",
                 )
             else:
                 await update.effective_message.reply_markdown_v2(format_error("google_down"))
@@ -2455,11 +2517,17 @@ async def send_next_action_prompt(
     telegram_id: int,
     client_name: str,
     city: str,
+    client_row: Optional[int] = None,
+    current_status: Optional[str] = None,
 ) -> None:
     """R7: send open-ended next-action prompt after a committed mutation.
 
     Saves an r7_prompt pending flow. The user's reply is handled in
     _route_pending_flow: temporal → add_meeting, otherwise → close silently.
+
+    client_row / current_status carry the row resolved by the preceding mutation
+    so the R7 follow-up can sync directly without re-entering lookup_client
+    (Slice 5.1d.1).
     """
     name_city = f"{client_name} ({city})" if city else client_name
     save_pending(PendingFlow(
@@ -2468,6 +2536,8 @@ async def send_next_action_prompt(
         flow_data=payload_to_flow_data(R7PromptPayload(
             client_name=client_name,
             city=city,
+            client_row=client_row,
+            current_status=current_status,
         )),
     ))
     await update.effective_message.reply_text(

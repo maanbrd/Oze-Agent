@@ -84,6 +84,12 @@ class DisambiguationPayload:
 class R7PromptPayload:
     client_name: str
     city: str = ""
+    # Slice 5.1d.1: resolved client context carried from the preceding
+    # mutation confirm. Lets the R7 follow-up skip _enrich_meeting's lookup
+    # and sync the add_meeting straight to the known row — Gate A no longer
+    # flips to ambiguous when change_status/add_note already identified it.
+    client_row: Optional[int] = None
+    current_status: Optional[str] = None
 
 
 PendingFlowPayload = Union[

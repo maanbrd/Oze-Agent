@@ -12,7 +12,12 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.handlers.text import _auto_status_update_from_enriched, _enrich_meeting, handle_confirm
+from bot.handlers.text import (
+    _auto_status_update_from_enriched,
+    _enrich_meeting,
+    handle_add_meeting,
+    handle_confirm,
+)
 from shared.clients import ClientLookupResult
 from shared.pending import PendingFlowType
 
@@ -333,3 +338,115 @@ async def test_handle_confirm_add_meeting_branch_does_not_call_search_clients(sc
         )
 
     mock_search.assert_not_called()
+
+
+# ── Slice 5.1d.1: R7 context propagation ─────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_enrich_meeting_with_known_client_row_skips_lookup_client():
+    """known_client_row (carried from R7) must fetch that specific row from
+    get_all_clients without ever calling lookup_client — prevents ambiguous
+    flip when same-name rows exist in different cities."""
+    all_rows = [
+        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": "Nowy lead"},
+        {
+            "_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin",
+            "Status": "Podpisane", "Telefon": "600111222", "Produkt": "PV",
+        },
+    ]
+
+    with patch(
+        "bot.handlers.text.get_all_clients",
+        new=AsyncMock(return_value=all_rows),
+    ), patch(
+        "bot.handlers.text.lookup_client",
+        new=AsyncMock(side_effect=AssertionError("lookup_client must NOT be called when row is known")),
+    ):
+        enriched = await _enrich_meeting(
+            "u1", "Mariusz Krzywinski", "", known_client_row=11
+        )
+
+    assert enriched["ambiguous_client"] is False
+    assert enriched["client_found"] is True
+    assert enriched["client_row"] == 11
+    assert enriched["client_city"] == "Wołomin"
+    assert enriched["current_status"] == "Podpisane"
+    assert "Tel: 600111222" in enriched["description"]
+    assert "Produkt: PV" in enriched["description"]
+
+
+@pytest.mark.asyncio
+async def test_enrich_meeting_known_row_deleted_falls_back_to_lookup():
+    """If the row vanishes between confirms (deleted client), we fall back to
+    the normal lookup path rather than crashing."""
+    lookup_result = ClientLookupResult(status="not_found", clients=[], normalized_query="x")
+    with patch(
+        "bot.handlers.text.get_all_clients",
+        new=AsyncMock(return_value=[]),
+    ), patch(
+        "bot.handlers.text.lookup_client",
+        new=AsyncMock(return_value=lookup_result),
+    ) as mock_lookup:
+        enriched = await _enrich_meeting("u1", "Ghost Client", "", known_client_row=999)
+
+    mock_lookup.assert_awaited_once()
+    assert enriched["client_found"] is False
+    assert enriched["ambiguous_client"] is False
+
+
+@pytest.mark.asyncio
+async def test_handle_add_meeting_with_r7_context_skips_ambiguous_for_same_name_pair():
+    """End-to-end: 2× 'Mariusz Krzywinski' in the sheet, R7 context carries
+    row=11 (Wołomin). handle_add_meeting must resolve directly to row 11 and
+    save AddMeetingPayload with ambiguous_client=False + client_row=11."""
+    upd = _update()
+
+    rows = [
+        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": "Nowy lead"},
+        {
+            "_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin",
+            "Status": "Podpisane", "Telefon": "600111222",
+        },
+    ]
+
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2027-04-22",
+                "time": "12:00",
+                "client_name": "Mariusz Krzywinski",
+                "location": "",
+                "event_type": "phone_call",
+            }],
+        }),
+    ), patch(
+        "bot.handlers.text.get_all_clients",
+        new=AsyncMock(return_value=rows),
+    ), patch(
+        "bot.handlers.text.lookup_client",
+        new=AsyncMock(side_effect=AssertionError("lookup_client must NOT be called when R7 row known")),
+    ), patch(
+        "bot.handlers.text.check_conflicts",
+        new=AsyncMock(return_value=[]),
+    ), patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {
+                "entities": {"event_type": "phone_call"},
+                "r7_client_row": 11,
+                "r7_client_name": "Mariusz Krzywinski",
+                "r7_city": "Wołomin",
+                "r7_current_status": "Podpisane",
+            },
+            "telefon jutro o 12 z Mariusz Krzywinski Wołomin",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
+    assert saved_flow.flow_data["ambiguous_client"] is False
+    assert saved_flow.flow_data["client_row"] == 11
+    assert saved_flow.flow_data["current_status"] == "Podpisane"

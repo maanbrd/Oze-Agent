@@ -113,6 +113,54 @@ async def test_r7_infers_event_type_for_temporal_replies(message_text, expected_
 
 
 @pytest.mark.asyncio
+async def test_r7_forwards_resolved_client_row_to_add_meeting():
+    """Slice 5.1d.1: R7 flow_data carries client_row + current_status from the
+    prior mutation confirm. _route_pending_flow must pass them through to
+    handle_add_meeting via intent_data so _enrich_meeting can skip lookup_client."""
+    upd = _update()
+    flow = {
+        "flow_type": "r7_prompt",
+        "flow_data": {
+            "client_name": "Mariusz Krzywinski",
+            "city": "Wołomin",
+            "client_row": 11,
+            "current_status": "Podpisane",
+        },
+    }
+    with patch("bot.handlers.text.delete_pending_flow"), \
+         patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd, MagicMock(), {}, flow, "telefon jutro o 12"
+        )
+
+    assert consumed is True
+    mock_meeting.assert_awaited_once()
+    args, _ = mock_meeting.call_args
+    intent_data = args[3]
+    assert intent_data["r7_client_row"] == 11
+    assert intent_data["r7_current_status"] == "Podpisane"
+    assert intent_data["r7_client_name"] == "Mariusz Krzywinski"
+    assert intent_data["r7_city"] == "Wołomin"
+    assert intent_data["entities"]["event_type"] == "phone_call"
+
+
+@pytest.mark.asyncio
+async def test_r7_without_resolved_row_omits_propagation_keys():
+    """Legacy R7 pending without client_row must not leak missing keys —
+    handle_add_meeting keeps its original lookup behavior."""
+    upd = _update()
+    with patch("bot.handlers.text.delete_pending_flow"), \
+         patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        await _route_pending_flow(upd, MagicMock(), {}, _flow(), "telefon jutro o 12")
+
+    args, _ = mock_meeting.call_args
+    intent_data = args[3]
+    assert "r7_client_row" not in intent_data
+    assert "r7_current_status" not in intent_data
+    assert "r7_client_name" not in intent_data
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["nic", "later", "nie wiem", "odłóż", "odłożyć"])
 async def test_r7_specific_cancel_phrase_deletes_flow(text):
     """R7-branch-specific cancel phrases (not caught by the global is_no
