@@ -78,6 +78,7 @@ from shared.google_sheets import (
     search_clients,
     update_client,
 )
+from shared.matching import first_name_ok as _first_name_ok
 from shared.search import detect_potential_duplicate
 
 logger = logging.getLogger(__name__)
@@ -1592,50 +1593,6 @@ def _filter_invalid_products(client_data: dict) -> dict:
         client_data["Notatki"] = f"{existing_notes} {standard_note}".strip() if existing_notes else standard_note
 
     return client_data
-
-
-def _first_name_ok(query: str, client: dict) -> bool:
-    """Return True if the found client's name safely matches the query.
-
-    For single-word queries: always True (disambiguation handles ambiguity).
-    For multi-word queries: every meaningful query token must match a distinct
-    token in the stored client name. This prevents "Krzysztof X" from matching
-    "Krzysztof Y" just because the first name is shared.
-    """
-    from shared.search import levenshtein_distance, normalize_polish
-    q_words = [
-        normalize_polish(word)
-        for word in query.strip().split()
-        if len(normalize_polish(word)) > 2
-    ]
-    if len(q_words) < 2:
-        return True  # single word — no first-name check
-
-    stored_name = client.get("Imię i nazwisko", "")
-    stored_city = client.get("Miasto", client.get("Miejscowość", ""))
-    stored_identity = " ".join(p for p in [stored_name, stored_city] if p)
-    c_words = [
-        normalize_polish(word)
-        for word in stored_identity.strip().split()
-        if len(normalize_polish(word)) > 2
-    ]
-    if not c_words:
-        return True
-
-    unused = list(c_words)
-    for q_word in q_words:
-        match_index = next(
-            (
-                index
-                for index, c_word in enumerate(unused)
-                if levenshtein_distance(q_word, c_word) <= 2
-            ),
-            None,
-        )
-        if match_index is None:
-            return False
-        unused.pop(match_index)
-    return True
 
 
 def _parse_warsaw(date_str: str, time_str: str) -> datetime:
