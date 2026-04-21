@@ -128,6 +128,7 @@ async def test_add_meeting_confirm_recovers_client_name_from_client_data():
 
 @pytest.mark.asyncio
 async def test_add_meeting_confirm_updates_existing_new_lead_status():
+    # Slice 5.1d: pre-resolved by _enrich_meeting, propagated via payload.
     flow_data = {
         "title": "Spotkanie - Jurek Jurecki",
         "start": "2026-04-17T11:00:00+02:00",
@@ -136,6 +137,9 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
         "location": "Warszawa",
         "description": "",
         "event_type": "in_person",
+        "client_row": 7,
+        "current_status": "Nowy lead",
+        "ambiguous_client": False,
     }
     upd = _update()
 
@@ -145,11 +149,6 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
     ), patch(
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
-    ), patch(
-        "bot.handlers.text.search_clients",
-        new=AsyncMock(return_value=[
-            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
-        ]),
     ), patch(
         "bot.handlers.text.update_client",
         new=AsyncMock(return_value=True),
@@ -185,6 +184,9 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
         "location": "Warszawa",
         "description": "",
         "event_type": "in_person",
+        "client_row": 7,
+        "current_status": "Oferta wysłana",
+        "ambiguous_client": False,
     }
     upd = _update()
 
@@ -194,11 +196,6 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
     ), patch(
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
-    ), patch(
-        "bot.handlers.text.search_clients",
-        new=AsyncMock(return_value=[
-            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Oferta wysłana"}
-        ]),
     ), patch(
         "bot.handlers.text.update_client",
         new=AsyncMock(return_value=True),
@@ -229,6 +226,9 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
         "location": "Warszawa",
         "description": "",
         "event_type": event_type,
+        "client_row": 7,
+        "current_status": "Nowy lead",
+        "ambiguous_client": False,
     }
     upd = _update()
 
@@ -239,11 +239,6 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ) as mock_create, patch(
-        "bot.handlers.text.search_clients",
-        new=AsyncMock(return_value=[
-            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
-        ]),
-    ), patch(
         "bot.handlers.text.update_client",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
@@ -323,7 +318,10 @@ async def test_add_meeting_confirm_applies_compound_status_update():
 
 
 @pytest.mark.asyncio
-async def test_add_meeting_confirm_updates_only_first_name_safe_match():
+async def test_add_meeting_confirm_syncs_to_enriched_client_row():
+    """Slice 5.1d: handle_confirm uses pre-resolved client_row from flow_data
+    (no second search_clients lookup). Row/current_status are propagated by
+    _enrich_meeting at the preview stage."""
     flow_data = {
         "title": "Spotkanie - Jurek Jurecki",
         "start": "2026-04-17T11:00:00+02:00",
@@ -332,6 +330,9 @@ async def test_add_meeting_confirm_updates_only_first_name_safe_match():
         "location": "Warszawa",
         "description": "",
         "event_type": "in_person",
+        "client_row": 7,
+        "current_status": "Nowy lead",
+        "ambiguous_client": False,
     }
     upd = _update()
 
@@ -341,13 +342,6 @@ async def test_add_meeting_confirm_updates_only_first_name_safe_match():
     ), patch(
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
-    ), patch(
-        "bot.handlers.text.search_clients",
-        new=AsyncMock(return_value=[
-            {"_row": 3, "Imię i nazwisko": "Zbigniew Jurecki", "Status": "Nowy lead"},
-            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"},
-            {"_row": 9, "Imię i nazwisko": "Anna Jurecka", "Status": "Nowy lead"},
-        ]),
     ), patch(
         "bot.handlers.text.update_client",
         new=AsyncMock(return_value=True),
@@ -482,6 +476,9 @@ async def test_add_meeting_confirm_update_client_fails_reports_failure():
         "location": "Warszawa",
         "description": "",
         "event_type": "in_person",
+        "client_row": 7,
+        "current_status": "Nowy lead",
+        "ambiguous_client": False,
     }
     upd = _update()
 
@@ -491,11 +488,6 @@ async def test_add_meeting_confirm_update_client_fails_reports_failure():
     ), patch(
         "bot.handlers.text.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
-    ), patch(
-        "bot.handlers.text.search_clients",
-        new=AsyncMock(return_value=[
-            {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Nowy lead"}
-        ]),
     ), patch(
         "bot.handlers.text.update_client",
         new=AsyncMock(return_value=False),

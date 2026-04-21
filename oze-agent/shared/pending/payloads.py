@@ -65,6 +65,12 @@ class AddMeetingPayload:
     client_data: Optional[dict] = None
     event_type: Optional[str] = None
     status_update: Optional[dict] = None
+    # Resolved by _enrich_meeting so handle_confirm can Sheets-sync without a
+    # second lookup (Slice 5.1d). Legacy pendings missing these fall to the
+    # safe not_found path; we never re-enter search_clients.
+    client_row: Optional[int] = None
+    current_status: Optional[str] = None
+    ambiguous_client: bool = False
 
 
 @dataclass

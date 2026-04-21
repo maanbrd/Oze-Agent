@@ -696,6 +696,9 @@ async def _route_pending_flow(
                             client_data=client_data,
                             event_type=flow_data.get("event_type"),
                             status_update=status_update,
+                            client_row=enriched.get("client_row"),
+                            current_status=enriched.get("current_status") or "",
+                            ambiguous_client=enriched.get("ambiguous_client", False),
                         )),
                     ))
                     card = _format_add_meeting_flow_card({
@@ -745,6 +748,9 @@ async def _route_pending_flow(
                     client_data=client_data or None,
                     event_type=flow_data.get("event_type"),
                     status_update=flow_data.get("status_update"),
+                    client_row=flow_data.get("client_row"),
+                    current_status=flow_data.get("current_status") or "",
+                    ambiguous_client=flow_data.get("ambiguous_client", False),
                 )),
             ))
             card = _format_add_meeting_flow_card({
@@ -1545,9 +1551,11 @@ def _parse_warsaw(date_str: str, time_str: str) -> datetime:
 async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) -> dict:
     """Look up client in Sheets and return enriched title/location/description.
 
-    Returns dict with extra key 'client_found' (bool) indicating if the client
-    was identified in Sheets. When client_name is provided but not found,
-    the caller should warn the user (per INTENCJE_MVP.md R4).
+    Returns dict with 'client_found' (bool) and 'ambiguous_client' (bool).
+    multi-match sets ambiguous_client=True without silent-picking any row —
+    handle_confirm then creates the Calendar event but skips Sheets sync.
+    location_hint is NOT passed as city to lookup_client: it represents the
+    meeting venue ("telefonicznie", an address), not the client's city.
     """
     full_name = client_name
     location = location_hint
@@ -1556,13 +1564,12 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
     client_row: Optional[int] = None
     current_status = ""
     client_city = ""
+    ambiguous_client = False
 
     if client_name:
-        results = await search_clients(user_id, client_name)
-        # If first name doesn't match, client stays None — meeting is created with
-        # the original typed name and no Sheets enrichment (better than wrong client).
-        client = next((r for r in results if _first_name_ok(client_name, r)), None)
-        if client:
+        result = await lookup_client(user_id, client_name)
+        if result.status == "unique":
+            client = result.clients[0]
             client_found = True
             full_name = client.get("Imię i nazwisko", client_name)
             client_row = client.get("_row")
@@ -1585,6 +1592,8 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
             if client.get("Następny krok"):
                 parts.append(f"Następny krok: {client['Następny krok']}")
             description = "\n".join(parts)
+        elif result.status == "multi":
+            ambiguous_client = True
 
     title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
     return {
@@ -1596,6 +1605,7 @@ async def _enrich_meeting(user_id: str, client_name: str, location_hint: str) ->
         "client_row": client_row,
         "current_status": current_status,
         "client_city": client_city,
+        "ambiguous_client": ambiguous_client,
     }
 
 
@@ -1609,6 +1619,8 @@ def _auto_status_update_from_enriched(
     (per TEST_PLAN_CURRENT AM-7 + agent_behavior_spec_v5 §Auto-przejście).
     """
     if event_type != "in_person" or not enriched.get("client_found"):
+        return None
+    if enriched.get("ambiguous_client"):
         return None
     current = (enriched.get("current_status") or "").strip()
     if current not in _STATUS_MEETING_AUTO_UPGRADE_FROM:
@@ -1705,6 +1717,9 @@ async def handle_add_meeting(
                 client_data=source_client_data,
                 event_type=event_type,
                 status_update=status_update,
+                client_row=enriched.get("client_row"),
+                current_status=enriched.get("current_status") or "",
+                ambiguous_client=enriched.get("ambiguous_client", False),
             )),
         ))
 
@@ -2172,9 +2187,89 @@ async def handle_confirm(
                 upgrade_allowed = event_type == "in_person"
                 status_updated = False
                 sheet_update_failed = False
-                client_matches = await search_clients(user_id, client_name) if client_name else []
-                client = next((c for c in client_matches if _first_name_ok(client_name, c)), None)
-                if not client and client_name:
+                # Slice 5.1d: resolved in _enrich_meeting, propagated via payload.
+                # No second search_clients here — that was the second silent-pick site.
+                has_new_fields = "ambiguous_client" in flow_data
+                ambiguous_client = flow_data.get("ambiguous_client", False)
+                enriched_client_row = flow_data.get("client_row")
+                current_status_hint = (flow_data.get("current_status") or "").strip()
+
+                # Compound change_status + add_meeting: status_update.row is the
+                # source of truth (explicit row from the prior change_status
+                # confirm). Full K/L/P+F sync on that row, ignore enrichment.
+                if status_update and status_update.get("row"):
+                    sync_row = status_update["row"]
+                    sheet_updates = {
+                        "Następny krok": _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
+                        "Data następnego kroku": start.isoformat(),
+                        "Data ostatniego kontaktu": datetime.now(WARSAW).date().isoformat(),
+                    }
+                    event_id = event.get("id")
+                    if event_id:
+                        sheet_updates["ID wydarzenia Kalendarz"] = event_id
+                    new_value = status_update.get("new_value")
+                    if new_value:
+                        sheet_updates[status_update.get("field", "Status")] = new_value
+                        status_updated = True
+                        status_updated_value = new_value
+                    ok = await update_client(user_id, sync_row, sheet_updates)
+                    if not ok:
+                        sheet_update_failed = True
+                        status_updated = False
+                        logger.error(
+                            "add_meeting confirm: failed to sync Sheets (compound) row=%s",
+                            sync_row,
+                        )
+                    reply = (
+                        f"✅ Spotkanie dodane do kalendarza. Status klienta: {status_updated_value}."
+                        if status_updated
+                        else (
+                            "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
+                            if sheet_update_failed
+                            else "✅ Spotkanie dodane do kalendarza."
+                        )
+                    )
+                elif ambiguous_client:
+                    reply = (
+                        f"✅ Spotkanie dodane do kalendarza. Klient '{client_name}' ma "
+                        f"≥2 wpisy w arkuszu — nie synchronizuję, uściślij przy add_note/change_status."
+                    )
+                elif enriched_client_row:
+                    row = enriched_client_row
+                    sheet_updates = {
+                        "Następny krok": _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
+                        "Data następnego kroku": start.isoformat(),
+                        "Data ostatniego kontaktu": datetime.now(WARSAW).date().isoformat(),
+                    }
+                    event_id = event.get("id")
+                    if event_id:
+                        sheet_updates["ID wydarzenia Kalendarz"] = event_id
+                    if upgrade_allowed and current_status_hint in _STATUS_MEETING_AUTO_UPGRADE_FROM:
+                        sheet_updates["Status"] = _STATUS_MEETING_BOOKED
+                        status_updated = True
+                        status_updated_value = _STATUS_MEETING_BOOKED
+                    ok = await update_client(user_id, row, sheet_updates)
+                    if not ok:
+                        sheet_update_failed = True
+                        status_updated = False
+                        logger.error(
+                            "add_meeting confirm: failed to sync Sheets row=%s",
+                            row,
+                        )
+                    reply = (
+                        f"✅ Spotkanie dodane do kalendarza. Status klienta: {status_updated_value}."
+                        if status_updated
+                        else (
+                            "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
+                            if sheet_update_failed
+                            else "✅ Spotkanie dodane do kalendarza."
+                        )
+                    )
+                elif client_name:
+                    # Not-found path: either explicit (new flow_data with
+                    # ambiguous_client=False, client_row=None) or legacy pending
+                    # without the new fields — in both cases we pre-seed
+                    # ADD_CLIENT without a second search_clients lookup.
                     draft_client_data = dict(client_data)
                     draft_client_data.setdefault("Imię i nazwisko", client_name)
                     if upgrade_allowed:
@@ -2197,52 +2292,11 @@ async def handle_confirm(
                         reply_markup=build_mutation_buttons("confirm"),
                     )
                     skip_delete = True
+                    reply = None
                 else:
-                    if client:
-                        row = client.get("_row")
-                        sheet_updates = {
-                            "Następny krok": _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
-                            "Data następnego kroku": start.isoformat(),
-                            "Data ostatniego kontaktu": datetime.now(WARSAW).date().isoformat(),
-                        }
-                        event_id = event.get("id")
-                        if event_id:
-                            sheet_updates["ID wydarzenia Kalendarz"] = event_id
-                        if status_update:
-                            if str(row) == str(status_update.get("row")):
-                                new_value = status_update.get("new_value")
-                                if new_value:
-                                    sheet_updates[status_update.get("field", "Status")] = new_value
-                                    status_updated = True
-                                    status_updated_value = new_value
-                        elif upgrade_allowed:
-                            current_status = (client.get("Status") or "").strip()
-                            if current_status in _STATUS_MEETING_AUTO_UPGRADE_FROM:
-                                sheet_updates["Status"] = _STATUS_MEETING_BOOKED
-                                status_updated = True
-                                status_updated_value = _STATUS_MEETING_BOOKED
-                        if row is None:
-                            sheet_update_failed = True
-                            status_updated = False
-                            logger.error(
-                                "add_meeting confirm: client without _row for sheet sync: %s",
-                                client,
-                            )
-                        else:
-                            ok = await update_client(user_id, row, sheet_updates)
-                            if not ok:
-                                sheet_update_failed = True
-                                status_updated = False
-                                logger.error(
-                                    "add_meeting confirm: failed to sync Sheets row=%s",
-                                    row,
-                                )
-                    if status_updated:
-                        reply = f"✅ Spotkanie dodane do kalendarza. Status klienta: {status_updated_value}."
-                    elif sheet_update_failed:
-                        reply = "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
-                    else:
-                        reply = "✅ Spotkanie dodane do kalendarza."
+                    reply = "✅ Spotkanie dodane do kalendarza."
+
+                if reply is not None:
                     await update.effective_message.reply_text(reply)
             else:
                 await update.effective_message.reply_markdown_v2(format_error("calendar_down"))
