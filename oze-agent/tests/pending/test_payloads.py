@@ -6,6 +6,7 @@ from shared.pending import (
     PAYLOAD_BY_FLOW_TYPE,
     AddClientDuplicatePayload,
     AddClientPayload,
+    AddMeetingDisambiguationPayload,
     AddMeetingPayload,
     AddNotePayload,
     ChangeStatusPayload,
@@ -31,6 +32,7 @@ def test_payload_map_class_per_type():
         PendingFlowType.ADD_NOTE: AddNotePayload,
         PendingFlowType.CHANGE_STATUS: ChangeStatusPayload,
         PendingFlowType.ADD_MEETING: AddMeetingPayload,
+        PendingFlowType.ADD_MEETING_DISAMBIGUATION: AddMeetingDisambiguationPayload,
         PendingFlowType.DISAMBIGUATION: DisambiguationPayload,
         PendingFlowType.R7_PROMPT: R7PromptPayload,
     }

@@ -12,6 +12,7 @@ class PendingFlowType(str, Enum):
     ADD_NOTE = "add_note"
     CHANGE_STATUS = "change_status"
     ADD_MEETING = "add_meeting"
+    ADD_MEETING_DISAMBIGUATION = "add_meeting_disambiguation"
     DISAMBIGUATION = "disambiguation"
     R7_PROMPT = "r7_prompt"
 

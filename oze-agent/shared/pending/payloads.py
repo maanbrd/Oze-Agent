@@ -92,12 +92,33 @@ class R7PromptPayload:
     current_status: Optional[str] = None
 
 
+@dataclass
+class AddMeetingDisambiguationPayload:
+    # Slice 5.1d.3: carries the full meeting spec when lookup_client returns
+    # multi, so the user can pick a candidate before we show the confirm card.
+    # On resume the selected candidate populates an AddMeetingPayload (upsert
+    # by telegram_id PK) and standard confirm flow resumes. "Żaden z nich"
+    # forwards the meeting with client_row=None so confirm goes not_found path.
+    title: str
+    start: str                                   # ISO datetime
+    end: str                                     # ISO datetime
+    client_name: str                             # original query (from intent / R7)
+    location: str = ""                           # location_hint from the message
+    description: str = ""                        # placeholder — rebuilt from selected client on resume
+    event_type: Optional[str] = None
+    status_update: Optional[dict] = None         # explicit compound (if any)
+    source_client_data: Optional[dict] = None    # ADD_CLIENT pre-seed preserved for "Żaden z nich"
+    # Minimal per-candidate dict: {"row": int, "full_name": str, "city": str, "current_status": str}
+    candidates: list = field(default_factory=list)
+
+
 PendingFlowPayload = Union[
     AddClientPayload,
     AddClientDuplicatePayload,
     AddNotePayload,
     ChangeStatusPayload,
     AddMeetingPayload,
+    AddMeetingDisambiguationPayload,
     DisambiguationPayload,
     R7PromptPayload,
 ]
@@ -109,6 +130,7 @@ PAYLOAD_BY_FLOW_TYPE: dict[PendingFlowType, type] = {
     PendingFlowType.ADD_NOTE: AddNotePayload,
     PendingFlowType.CHANGE_STATUS: ChangeStatusPayload,
     PendingFlowType.ADD_MEETING: AddMeetingPayload,
+    PendingFlowType.ADD_MEETING_DISAMBIGUATION: AddMeetingDisambiguationPayload,
     PendingFlowType.DISAMBIGUATION: DisambiguationPayload,
     PendingFlowType.R7_PROMPT: R7PromptPayload,
 }

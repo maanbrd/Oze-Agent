@@ -37,6 +37,7 @@ from shared.intent import IntentResult, IntentType, ScopeTier, classify
 from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
+    AddMeetingDisambiguationPayload,
     AddMeetingPayload,
     AddNotePayload,
     ChangeStatusPayload,
@@ -146,6 +147,11 @@ _R7_EVENT_TYPE_MARKERS = {
     "mail", "email", "e-mail", "wysłać", "wyslac",
     "oferta", "ofertę", "oferte",
 }
+# Slice 5.1d.3: disambiguation caps for ambiguous add_meeting. Above the cap
+# we decline to build a giant button list and ask the user for more context
+# instead — Telegram UX degrades past ~8-10 inline buttons, and phone queries
+# always narrow to unique via lookup_client's phone path.
+_AMBIGUOUS_CANDIDATE_CAP = 10
 # HH:MM or "o <hour>" / "na <hour>" — require explicit time preposition
 # Also matches "wpół" ("wpół do ósmej") and "kwadrans" ("za kwadrans dziesiąta")
 _TIME_RE = re.compile(
@@ -1607,6 +1613,8 @@ def _build_enriched_from_client(
         "current_status": current_status,
         "client_city": client_city,
         "ambiguous_client": False,
+        # Slice 5.1d.3: unique path — no disambiguation needed.
+        "ambiguous_candidates": [],
     }
 
 
@@ -1647,6 +1655,7 @@ async def _enrich_meeting(
     current_status = ""
     client_city = ""
     ambiguous_client = False
+    ambiguous_candidates: list[dict] = []
 
     if client_name:
         result = await lookup_client(user_id, client_name)
@@ -1654,6 +1663,19 @@ async def _enrich_meeting(
             return _build_enriched_from_client(result.clients[0], client_name, location_hint)
         elif result.status == "multi":
             ambiguous_client = True
+            # Slice 5.1d.3: carry the candidate set so handle_add_meeting can
+            # show a disambiguation prompt before any confirm card. Empty
+            # list on not_found keeps the caller logic uniform.
+            ambiguous_candidates = [
+                {
+                    "row": c.get("_row"),
+                    "full_name": c.get("Imię i nazwisko", ""),
+                    "city": c.get("Miasto", c.get("Miejscowość", "")) or "",
+                    "current_status": (c.get("Status") or "").strip(),
+                }
+                for c in result.clients
+                if c.get("_row") is not None
+            ]
 
     title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
     return {
@@ -1666,6 +1688,7 @@ async def _enrich_meeting(
         "current_status": current_status,
         "client_city": client_city,
         "ambiguous_client": ambiguous_client,
+        "ambiguous_candidates": ambiguous_candidates,
     }
 
 
@@ -1775,6 +1798,51 @@ async def handle_add_meeting(
         conflict_warning = ""
         if conflicts:
             conflict_warning = f"\n\n⚠️ Uwaga: masz już spotkanie o tej porze: *{escape_markdown_v2(conflicts[0].get('title', ''))}*"
+
+        # Slice 5.1d.3: ambiguous client → resolve BEFORE showing the confirm
+        # card. Previous behaviour (Gate A) let the user click Zapisać and
+        # then skipped Sheets sync; we now surface the candidates upfront.
+        # Gate A fallback in handle_confirm stays as a safety net for legacy
+        # pendings (flow_data with ambiguous_client=True arriving directly).
+        ambiguous_candidates = enriched.get("ambiguous_candidates") or []
+        if enriched.get("ambiguous_client") and ambiguous_candidates:
+            if len(ambiguous_candidates) > _AMBIGUOUS_CANDIDATE_CAP:
+                # No pending saved — user must supply more context and retry.
+                await update.effective_message.reply_text(
+                    f"Znalazłem {len(ambiguous_candidates)} klientów o tym nazwisku. "
+                    "Dopisz więcej danych klienta, np. miasto albo telefon."
+                )
+                return
+
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.ADD_MEETING_DISAMBIGUATION,
+                flow_data=payload_to_flow_data(AddMeetingDisambiguationPayload(
+                    title=enriched["title"],
+                    start=start_dt.isoformat(),
+                    end=end_dt.isoformat(),
+                    client_name=enriched_client_name,
+                    location=enriched["location"],
+                    description=enriched["description"],
+                    event_type=event_type,
+                    status_update=status_update,
+                    source_client_data=source_client_data,
+                    candidates=ambiguous_candidates,
+                )),
+            ))
+            options = [
+                (
+                    f"{c['full_name']} — {c['city']}" if c.get("city") else c["full_name"],
+                    f"select_client:{c['row']}",
+                )
+                for c in ambiguous_candidates
+            ]
+            options.append(("Żaden z nich", "select_client:none"))
+            await update.effective_message.reply_text(
+                f"Mam {len(ambiguous_candidates)} klientów o tym nazwisku. Którego użyć do spotkania?",
+                reply_markup=build_choice_buttons(options),
+            )
+            return
 
         save_pending(PendingFlow(
             telegram_id=telegram_id,

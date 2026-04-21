@@ -9,6 +9,7 @@ from .payloads import (
     PAYLOAD_BY_FLOW_TYPE,
     AddClientDuplicatePayload,
     AddClientPayload,
+    AddMeetingDisambiguationPayload,
     AddMeetingPayload,
     AddNotePayload,
     ChangeStatusPayload,
@@ -24,6 +25,7 @@ from .types import PendingFlow, PendingFlowType
 __all__ = [
     "AddClientDuplicatePayload",
     "AddClientPayload",
+    "AddMeetingDisambiguationPayload",
     "AddMeetingPayload",
     "AddNotePayload",
     "ChangeStatusPayload",

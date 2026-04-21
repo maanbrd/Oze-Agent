@@ -9,6 +9,7 @@ _EXPECTED_VALUES = {
     PendingFlowType.ADD_NOTE: "add_note",
     PendingFlowType.CHANGE_STATUS: "change_status",
     PendingFlowType.ADD_MEETING: "add_meeting",
+    PendingFlowType.ADD_MEETING_DISAMBIGUATION: "add_meeting_disambiguation",
     PendingFlowType.DISAMBIGUATION: "disambiguation",
     PendingFlowType.R7_PROMPT: "r7_prompt",
 }
@@ -19,7 +20,7 @@ def test_every_member_value_matches_legacy_string():
         assert member.value == expected
 
 
-def test_enum_covers_exactly_the_seven_mvp_types():
+def test_enum_covers_exactly_the_mvp_types():
     assert {m.value for m in PendingFlowType} == set(_EXPECTED_VALUES.values())
 
 
