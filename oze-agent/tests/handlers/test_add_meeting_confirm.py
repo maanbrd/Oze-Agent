@@ -39,7 +39,7 @@ async def test_add_meeting_confirm_offers_add_client_with_carried_client_data():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ) as mock_create, patch(
         "bot.handlers.text.search_clients",
@@ -98,7 +98,7 @@ async def test_add_meeting_confirm_recovers_client_name_from_client_data():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ) as mock_create, patch(
         "bot.handlers.text.search_clients",
@@ -147,10 +147,10 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.delete_pending_flow"
@@ -163,7 +163,6 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
         {
             "Następny krok": "Spotkanie",
             "Data następnego kroku": "2026-04-17T11:00:00+02:00",
-            "Data ostatniego kontaktu": ANY,
             "ID wydarzenia Kalendarz": "event-1",
             "Status": "Spotkanie umówione",
         },
@@ -194,10 +193,10 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
@@ -208,7 +207,6 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
         {
             "Następny krok": "Spotkanie",
             "Data następnego kroku": "2026-04-17T11:00:00+02:00",
-            "Data ostatniego kontaktu": ANY,
             "ID wydarzenia Kalendarz": "event-1",
         },
     )
@@ -236,10 +234,10 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ) as mock_create, patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
@@ -256,7 +254,6 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
         {
             "Następny krok": expected_label,
             "Data następnego kroku": "2026-04-17T11:00:00+02:00",
-            "Data ostatniego kontaktu": ANY,
             "ID wydarzenia Kalendarz": "event-1",
         },
     )
@@ -288,7 +285,7 @@ async def test_add_meeting_confirm_applies_compound_status_update():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
         "bot.handlers.text.search_clients",
@@ -296,7 +293,7 @@ async def test_add_meeting_confirm_applies_compound_status_update():
             {"_row": 7, "Imię i nazwisko": "Jurek Jurecki", "Status": "Oferta wysłana"}
         ]),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
@@ -307,7 +304,6 @@ async def test_add_meeting_confirm_applies_compound_status_update():
         {
             "Następny krok": "Telefon",
             "Data następnego kroku": "2026-04-17T11:00:00+02:00",
-            "Data ostatniego kontaktu": ANY,
             "ID wydarzenia Kalendarz": "event-1",
             "Status": "Podpisane",
         },
@@ -340,10 +336,10 @@ async def test_add_meeting_confirm_syncs_to_enriched_client_row():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.delete_pending_flow"
@@ -356,7 +352,6 @@ async def test_add_meeting_confirm_syncs_to_enriched_client_row():
         {
             "Następny krok": "Spotkanie",
             "Data następnego kroku": "2026-04-17T11:00:00+02:00",
-            "Data ostatniego kontaktu": ANY,
             "ID wydarzenia Kalendarz": "event-1",
             "Status": "Spotkanie umówione",
         },
@@ -382,7 +377,7 @@ async def test_add_meeting_confirm_no_first_name_match_creates_add_client_draft(
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
         "bot.handlers.text.search_clients",
@@ -391,7 +386,7 @@ async def test_add_meeting_confirm_no_first_name_match_creates_add_client_draft(
             {"_row": 9, "Imię i nazwisko": "Anna Jurecka", "Status": "Nowy lead"},
         ]),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.delete_pending_flow"
@@ -436,7 +431,7 @@ async def test_add_meeting_confirm_rejects_first_name_collision():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
         "bot.handlers.text.search_clients",
@@ -444,7 +439,7 @@ async def test_add_meeting_confirm_rejects_first_name_collision():
             {"_row": 33, "Imię i nazwisko": "Krzysztof Wojcik", "Status": "Nowy lead"}
         ]),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.delete_pending_flow"
@@ -486,10 +481,10 @@ async def test_add_meeting_confirm_update_client_fails_reports_failure():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=False),
     ), patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
@@ -497,6 +492,90 @@ async def test_add_meeting_confirm_update_client_fails_reports_failure():
     upd.effective_message.reply_text.assert_awaited_once_with(
         "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
     )
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_calendar_fail_uses_calendar_down_error_key():
+    """Slice 5.4: Calendar create failure → format_error("calendar_down"),
+    NO Sheets write attempted."""
+    flow_data = {
+        "title": "Spotkanie - Jurek",
+        "start": "2027-04-17T11:00:00+02:00",
+        "end": "2027-04-17T12:00:00+02:00",
+        "client_name": "Jurek",
+        "location": "",
+        "description": "",
+        "event_type": "in_person",
+        "client_row": 7,
+        "current_status": "Nowy lead",
+        "ambiguous_client": False,
+    }
+    upd = _update()
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "shared.mutations.add_meeting.create_event",
+        new=AsyncMock(return_value=None),
+    ), patch(
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
+        new=AsyncMock(return_value=True),
+    ) as mock_sheets, patch(
+        "bot.handlers.text.format_error",
+        return_value="ESCAPED_CALENDAR_DOWN",
+    ) as mock_err, patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
+
+    mock_err.assert_called_once_with("calendar_down")
+    upd.effective_message.reply_markdown_v2.assert_awaited_once_with("ESCAPED_CALENDAR_DOWN")
+    upd.effective_message.reply_text.assert_not_called()
+    mock_sheets.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_forwards_flow_data_to_pipeline():
+    """Regression guard: handler passes flow_data fields to commit_add_meeting
+    including today as a keyword arg + the compound status_update dict."""
+    from datetime import date, datetime
+    flow_data = {
+        "title": "Spotkanie - X",
+        "start": "2027-05-10T14:00:00+02:00",
+        "end": "2027-05-10T15:00:00+02:00",
+        "client_name": "X",
+        "location": "ul. Testowa 1",
+        "description": "desc",
+        "event_type": "phone_call",
+        "client_row": 11,
+        "current_status": "Oferta wysłana",
+        "ambiguous_client": False,
+    }
+    upd = _update()
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.commit_add_meeting",
+        new=AsyncMock(return_value=MagicMock(
+            success=True, error_message=None, calendar_event_id="ev-1",
+            sheets_attempted=True, sheets_synced=True, sheets_error=None,
+            status_updated=False, status_new_value=None,
+        )),
+    ) as mock_pipeline, patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": "u1"}, {}, "")
+
+    mock_pipeline.assert_awaited_once()
+    args = mock_pipeline.await_args.args
+    kwargs = mock_pipeline.await_args.kwargs
+    assert args[0] == "u1"                                    # user_id
+    assert kwargs["title"] == "Spotkanie - X"
+    assert isinstance(kwargs["start"], datetime)
+    assert kwargs["start"].isoformat() == "2027-05-10T14:00:00+02:00"
+    assert kwargs["event_type"] == "phone_call"
+    assert kwargs["location"] == "ul. Testowa 1"
+    assert kwargs["client_row"] == 11
+    assert kwargs["today"] == date.today()
+    assert kwargs["client_current_status"] == "Oferta wysłana"
+    assert kwargs["status_update"] is None
 
 
 @pytest.mark.asyncio

@@ -129,10 +129,10 @@ async def test_handle_confirm_ambiguous_skips_sheets_sync():
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ) as mock_create, patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.delete_pending_flow"
@@ -178,10 +178,10 @@ async def test_handle_confirm_ambiguous_with_compound_status_update_syncs_on_exp
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-2"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch("bot.handlers.text.delete_pending_flow"):
         await handle_confirm(upd, MagicMock(), {"id": 1}, {}, "")
@@ -192,7 +192,6 @@ async def test_handle_confirm_ambiguous_with_compound_status_update_syncs_on_exp
         {
             "Następny krok": "Telefon",
             "Data następnego kroku": "2027-04-17T11:00:00+02:00",
-            "Data ostatniego kontaktu": ANY,
             "ID wydarzenia Kalendarz": "event-2",
             "Status": "Podpisane",
         },
@@ -223,10 +222,10 @@ async def test_handle_confirm_legacy_pending_without_new_fields_goes_not_found_p
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ) as mock_update, patch(
         "bot.handlers.text.search_clients",
@@ -318,10 +317,10 @@ async def test_handle_confirm_add_meeting_branch_does_not_call_search_clients(sc
         "bot.handlers.text.get_pending_flow",
         return_value={"flow_type": "add_meeting", "flow_data": scenario_flow_data},
     ), patch(
-        "bot.handlers.text.create_event",
+        "shared.mutations.add_meeting.create_event",
         new=AsyncMock(return_value={"id": "event-1"}),
     ), patch(
-        "bot.handlers.text.update_client",
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
         new=AsyncMock(return_value=True),
     ), patch(
         "bot.handlers.text.search_clients",

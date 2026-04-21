@@ -34,7 +34,7 @@ from shared.claude_ai import (
     generate_bot_response,
 )
 from shared.intent import IntentResult, IntentType, ScopeTier, classify
-from shared.mutations import commit_add_note, commit_change_status
+from shared.mutations import commit_add_meeting, commit_add_note, commit_change_status
 from shared.pending import (
     AddClientDuplicatePayload,
     AddClientPayload,
@@ -92,15 +92,15 @@ SYSTEM_FIELDS = {
     "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz", "Data następnego kroku",
 }
 
-_STATUS_NEW_LEAD = "Nowy lead"
-_STATUS_MEETING_BOOKED = "Spotkanie umówione"
-_STATUS_MEETING_AUTO_UPGRADE_FROM = {"", _STATUS_NEW_LEAD}
-_EVENT_TYPE_TO_NEXT_STEP_LABEL = {
-    "in_person": "Spotkanie",
-    "phone_call": "Telefon",
-    "offer_email": "Wysłać ofertę",
-    "doc_followup": "Follow-up dokumentowy",
-}
+# Slice 5.4: constants moved to shared.mutations.add_meeting so the pipeline
+# can use them without importing from the handler layer. Aliased back to the
+# underscored names for existing call-sites in this module.
+from shared.mutations import (
+    EVENT_TYPE_TO_NEXT_STEP_LABEL as _EVENT_TYPE_TO_NEXT_STEP_LABEL,
+    STATUS_MEETING_AUTO_UPGRADE_FROM as _STATUS_MEETING_AUTO_UPGRADE_FROM,
+    STATUS_MEETING_BOOKED as _STATUS_MEETING_BOOKED,
+    STATUS_NEW_LEAD as _STATUS_NEW_LEAD,
+)
 _EVENT_TYPE_DEFAULT_DURATION = {
     "in_person": 60,
     "phone_call": 15,
@@ -2320,135 +2320,76 @@ async def handle_confirm(
             if client_name and title.strip().lower() == "spotkanie":
                 title = f"Spotkanie — {client_name}"
             event_type = flow_data.get("event_type") or "in_person"
-            status_update = flow_data.get("status_update") or {}
-            status_updated_value = None
+            status_update = flow_data.get("status_update") or None
+            ambiguous_client = flow_data.get("ambiguous_client", False)
+            enriched_client_row = flow_data.get("client_row")
+            current_status_hint = (flow_data.get("current_status") or "").strip()
             event_description = _calendar_description_for_meeting(flow_data)
-            event = await create_event(
+
+            result = await commit_add_meeting(
                 user_id,
                 title=title,
                 start=start,
                 end=end,
-                location=flow_data.get("location") or None,
-                description=event_description or None,
                 event_type=event_type,
+                location=flow_data.get("location") or "",
+                description=event_description or "",
+                client_row=enriched_client_row,
+                today=date.today(),
+                client_current_status=current_status_hint,
+                status_update=status_update,
             )
-            if event:
-                upgrade_allowed = event_type == "in_person"
-                status_updated = False
-                sheet_update_failed = False
-                # Slice 5.1d: resolved in _enrich_meeting, propagated via payload.
-                # No second search_clients here — that was the second silent-pick site.
-                has_new_fields = "ambiguous_client" in flow_data
-                ambiguous_client = flow_data.get("ambiguous_client", False)
-                enriched_client_row = flow_data.get("client_row")
-                current_status_hint = (flow_data.get("current_status") or "").strip()
 
-                # Compound change_status + add_meeting: status_update.row is the
-                # source of truth (explicit row from the prior change_status
-                # confirm). Full K/L/P+F sync on that row, ignore enrichment.
-                if status_update and status_update.get("row"):
-                    sync_row = status_update["row"]
-                    sheet_updates = {
-                        "Następny krok": _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
-                        "Data następnego kroku": start.isoformat(),
-                        "Data ostatniego kontaktu": datetime.now(WARSAW).date().isoformat(),
-                    }
-                    event_id = event.get("id")
-                    if event_id:
-                        sheet_updates["ID wydarzenia Kalendarz"] = event_id
-                    new_value = status_update.get("new_value")
-                    if new_value:
-                        sheet_updates[status_update.get("field", "Status")] = new_value
-                        status_updated = True
-                        status_updated_value = new_value
-                    ok = await update_client(user_id, sync_row, sheet_updates)
-                    if not ok:
-                        sheet_update_failed = True
-                        status_updated = False
-                        logger.error(
-                            "add_meeting confirm: failed to sync Sheets (compound) row=%s",
-                            sync_row,
-                        )
-                    reply = (
-                        f"✅ Spotkanie dodane do kalendarza. Status klienta: {status_updated_value}."
-                        if status_updated
-                        else (
-                            "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
-                            if sheet_update_failed
-                            else "✅ Spotkanie dodane do kalendarza."
-                        )
-                    )
-                elif ambiguous_client:
-                    reply = (
-                        f"✅ Spotkanie dodane do kalendarza. Klient '{client_name}' ma "
-                        f"≥2 wpisy w arkuszu — nie synchronizuję, uściślij przy add_note/change_status."
-                    )
-                elif enriched_client_row:
-                    row = enriched_client_row
-                    sheet_updates = {
-                        "Następny krok": _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
-                        "Data następnego kroku": start.isoformat(),
-                        "Data ostatniego kontaktu": datetime.now(WARSAW).date().isoformat(),
-                    }
-                    event_id = event.get("id")
-                    if event_id:
-                        sheet_updates["ID wydarzenia Kalendarz"] = event_id
-                    if upgrade_allowed and current_status_hint in _STATUS_MEETING_AUTO_UPGRADE_FROM:
-                        sheet_updates["Status"] = _STATUS_MEETING_BOOKED
-                        status_updated = True
-                        status_updated_value = _STATUS_MEETING_BOOKED
-                    ok = await update_client(user_id, row, sheet_updates)
-                    if not ok:
-                        sheet_update_failed = True
-                        status_updated = False
-                        logger.error(
-                            "add_meeting confirm: failed to sync Sheets row=%s",
-                            row,
-                        )
-                    reply = (
-                        f"✅ Spotkanie dodane do kalendarza. Status klienta: {status_updated_value}."
-                        if status_updated
-                        else (
-                            "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
-                            if sheet_update_failed
-                            else "✅ Spotkanie dodane do kalendarza."
-                        )
-                    )
-                elif client_name:
-                    # Not-found path: either explicit (new flow_data with
-                    # ambiguous_client=False, client_row=None) or legacy pending
-                    # without the new fields — in both cases we pre-seed
-                    # ADD_CLIENT without a second search_clients lookup.
-                    draft_client_data = dict(client_data)
-                    draft_client_data.setdefault("Imię i nazwisko", client_name)
-                    if upgrade_allowed:
-                        draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
-                    save_pending(PendingFlow(
-                        telegram_id=telegram_id,
-                        flow_type=PendingFlowType.ADD_CLIENT,
-                        flow_data=payload_to_flow_data(AddClientPayload(
-                            client_data=draft_client_data,
-                        )),
-                    ))
-                    sheet_columns = user.get("sheet_columns") or await get_sheet_headers(user_id)
-                    missing = [
-                        col for col in sheet_columns
-                        if col and not draft_client_data.get(col) and col not in SYSTEM_FIELDS
-                    ]
-                    card = format_add_client_card(draft_client_data, missing)
-                    await update.effective_message.reply_text(
-                        f"✅ Spotkanie dodane.\n{card}",
-                        reply_markup=build_mutation_buttons("confirm"),
-                    )
-                    skip_delete = True
-                    reply = None
-                else:
-                    reply = "✅ Spotkanie dodane do kalendarza."
-
-                if reply is not None:
-                    await update.effective_message.reply_text(reply)
+            if not result.success:
+                # Calendar failure — pipeline made no Sheets writes.
+                await update.effective_message.reply_markdown_v2(
+                    format_error(result.error_message or "calendar_down")
+                )
+            elif not result.sheets_attempted and ambiguous_client:
+                # Gate A fallback — stays in handler because the pipeline
+                # doesn't know about the disambiguation UX.
+                await update.effective_message.reply_text(
+                    f"✅ Spotkanie dodane do kalendarza. Klient '{client_name}' ma "
+                    f"≥2 wpisy w arkuszu — nie synchronizuję, uściślij przy add_note/change_status."
+                )
+            elif not result.sheets_attempted and client_name:
+                # Not-found: pre-seed ADD_CLIENT draft from the meeting context.
+                # Covers new flow_data (ambiguous_client=False, client_row=None)
+                # AND legacy pendings without the new fields — no second
+                # search_clients lookup (silent-pick regression guard).
+                draft_client_data = dict(client_data)
+                draft_client_data.setdefault("Imię i nazwisko", client_name)
+                if event_type == "in_person":
+                    draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
+                save_pending(PendingFlow(
+                    telegram_id=telegram_id,
+                    flow_type=PendingFlowType.ADD_CLIENT,
+                    flow_data=payload_to_flow_data(AddClientPayload(
+                        client_data=draft_client_data,
+                    )),
+                ))
+                sheet_columns = user.get("sheet_columns") or await get_sheet_headers(user_id)
+                missing = [
+                    col for col in sheet_columns
+                    if col and not draft_client_data.get(col) and col not in SYSTEM_FIELDS
+                ]
+                card = format_add_client_card(draft_client_data, missing)
+                await update.effective_message.reply_text(
+                    f"✅ Spotkanie dodane.\n{card}",
+                    reply_markup=build_mutation_buttons("confirm"),
+                )
+                skip_delete = True
+            elif result.sheets_attempted and not result.sheets_synced:
+                # Partial: Calendar event created, Sheets sync failed.
+                await update.effective_message.reply_text(
+                    "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
+                )
+            elif result.status_updated:
+                await update.effective_message.reply_text(
+                    f"✅ Spotkanie dodane do kalendarza. Status klienta: {result.status_new_value}."
+                )
             else:
-                await update.effective_message.reply_markdown_v2(format_error("calendar_down"))
+                await update.effective_message.reply_text("✅ Spotkanie dodane do kalendarza.")
 
         elif flow_type == "add_meetings":
             created = []
