@@ -51,7 +51,7 @@ async def test_change_status_uses_entities_name_for_matching_not_whole_message()
             "Jan Kowalski podpisał umowę, zmień status na Podpisane",
         )
 
-    lookup.assert_awaited_once_with(1, "Jan Kowalski")
+    lookup.assert_awaited_once_with(1, "Jan Kowalski", "")
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.CHANGE_STATUS
     assert saved_flow.flow_data["row"] == 7
@@ -144,7 +144,7 @@ async def test_change_status_single_name_token_disambiguates_many_results():
             "Jan podpisał",
         )
 
-    lookup.assert_awaited_once_with(1, "Jan")
+    lookup.assert_awaited_once_with(1, "Jan", "")
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
     assert saved_flow.flow_data == {
@@ -260,30 +260,29 @@ async def test_change_status_multi_exact_match_asks_which_one():
 
 @pytest.mark.asyncio
 async def test_change_status_entities_name_with_city_narrows_by_city():
-    """Contract test: when entities.name carries "name + city", lookup_client
-    filters 2+ same-name rows to 1 via first_name_ok (stored identity includes
-    city). Handler receives unique → auto-pick, no disambiguation.
-
-    Note: we test handler contract, not router behavior. In production the LLM
-    may extract entities.name="Mariusz Krzywinski" (without city) — that case
-    is covered by test_change_status_multi_exact_match_asks_which_one.
-    """
+    """entities.city is passed to lookup_client so same-name rows can narrow."""
     upd = _update()
     client = {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": ""}
     result = ClientLookupResult(status="unique", clients=[client], normalized_query="mariusz krzywinski marki")
+    lookup = AsyncMock(return_value=result)
 
-    with _patched_lookup(result), patch(
+    with patch("bot.handlers.text.lookup_client", new=lookup), patch(
         "bot.handlers.text.save_pending_flow"
     ) as mock_save_flow, patch("bot.handlers.text.save_pending") as mock_save:
         await handle_change_status(
             upd,
             MagicMock(),
             {"id": 1},
-            {"entities": {"name": "Mariusz Krzywinski Marki", "status": "Podpisane"}},
+            {"entities": {
+                "name": "Mariusz Krzywinski",
+                "city": "Marki",
+                "status": "Podpisane",
+            }},
             "Mariusz Krzywinski Marki podpisał",
         )
 
     # lookup_client narrowed to single row → auto-pick, no disambiguation
+    lookup.assert_awaited_once_with(1, "Mariusz Krzywinski", "Marki")
     mock_save_flow.assert_not_called()
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.CHANGE_STATUS

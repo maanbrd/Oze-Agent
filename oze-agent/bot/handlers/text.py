@@ -1901,6 +1901,7 @@ async def handle_change_status(
     telegram_id = update.effective_user.id
     entities = intent_data.get("entities", {})
     name_query = (entities.get("name") or "").strip()
+    city = (entities.get("city") or "").strip()
     search_query = name_query or message_text
     new_status = entities.get("status", "")
 
@@ -1921,7 +1922,7 @@ async def handle_change_status(
 
     client = None
     if name_query:
-        result = await lookup_client(user_id, name_query)
+        result = await lookup_client(user_id, name_query, city)
 
         if result.status == "not_found":
             await update.effective_message.reply_text(
