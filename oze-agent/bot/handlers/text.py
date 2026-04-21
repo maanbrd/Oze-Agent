@@ -936,67 +936,41 @@ async def handle_add_note(
         )
         return
 
-    query = f"{client_name} {city}".strip()
-    results = await search_clients(user_id, query)
-    if not results:
+    result = await lookup_client(user_id, client_name, city)
+
+    if result.status == "not_found":
         city_part = f" ({city})" if city else ""
         await update.effective_message.reply_text(
             f"Nie znalazłem klienta: '{client_name}{city_part}'"
         )
         return
 
-    if len(results) > 1:
-        # Auto-pick only when the match is UNIQUE. Multi-row same-name (e.g. two
-        # "Mariusz Krzywinski" in different cities) must fall into disambiguation.
-        # Use `else:` not `elif len == 0` so a city in `query` can still narrow
-        # via _first_name_ok even when exact_matches has 2+ rows.
-        from shared.search import normalize_polish as _normalize
-        client_name_norm = _normalize(client_name.strip())
-        exact_matches = [
-            r for r in results
-            if _normalize(r.get("Imię i nazwisko", "").strip()) == client_name_norm
-        ] if client_name_norm else []
+    if result.status == "multi":
+        lines = [f"Mam {len(result.clients)} klientów:"]
+        options = []
+        for i, c in enumerate(result.clients[:10], start=1):
+            c_name = c.get("Imię i nazwisko", "?")
+            c_city = c.get("Miasto", "")
+            c_row = c.get("_row", 0)
+            label = f"{i}. {c_name}" + (f" — {c_city}" if c_city else "")
+            lines.append(label)
+            options.append((label, f"select_client:{c_row}"))
+        lines.append("Którego?")
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.DISAMBIGUATION,
+            flow_data=payload_to_flow_data(DisambiguationPayload(
+                intent="add_note",
+                note_text=note_text,
+            )),
+        ))
+        await update.effective_message.reply_text(
+            "\n".join(lines),
+            reply_markup=build_choice_buttons(options),
+        )
+        return
 
-        client = None
-        if len(exact_matches) == 1:
-            client = exact_matches[0]
-        else:
-            fn_matches = [r for r in results if _first_name_ok(query, r)]
-            if len(fn_matches) == 1:
-                client = fn_matches[0]
-
-        if not client:
-            lines = [f"Mam {len(results)} klientów:"]
-            options = []
-            for i, c in enumerate(results[:10], start=1):
-                c_name = c.get("Imię i nazwisko", "?")
-                c_city = c.get("Miasto", "")
-                c_row = c.get("_row", 0)
-                label = f"{i}. {c_name}" + (f" — {c_city}" if c_city else "")
-                lines.append(label)
-                options.append((label, f"select_client:{c_row}"))
-            lines.append("Którego?")
-            save_pending(PendingFlow(
-                telegram_id=telegram_id,
-                flow_type=PendingFlowType.DISAMBIGUATION,
-                flow_data=payload_to_flow_data(DisambiguationPayload(
-                    intent="add_note",
-                    note_text=note_text,
-                )),
-            ))
-            await update.effective_message.reply_text(
-                "\n".join(lines),
-                reply_markup=build_choice_buttons(options),
-            )
-            return
-    else:
-        client = next((r for r in results if _first_name_ok(query, r)), None)
-        if not client:
-            city_part = f" ({city})" if city else ""
-            await update.effective_message.reply_text(
-                f"Nie znalazłem '{client_name}{city_part}' w bazie."
-            )
-            return
+    client = result.clients[0]
 
     row = client.get("_row")
     old_notes = client.get("Notatki", "")
@@ -1945,31 +1919,55 @@ async def handle_change_status(
     if new_status:
         new_status = _STATUS_MAPPING.get(new_status.lower(), new_status)
 
-    results = await search_clients(user_id, search_query)
-    if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{search_query}'")
-        return
+    client = None
+    if name_query:
+        result = await lookup_client(user_id, name_query)
 
-    if len(results) > 1:
-        # Auto-pick only when the match is UNIQUE. Symmetric with handle_add_note:
-        # `else:` fallback (not `elif len == 0`) so city in name_query can still
-        # narrow via _first_name_ok when exact_matches has 2+ rows.
-        from shared.search import normalize_polish as _normalize
-        name_query_norm = _normalize(name_query.strip()) if name_query else ""
-        exact_matches = [
-            r for r in results
-            if _normalize(r.get("Imię i nazwisko", "").strip()) == name_query_norm
-        ] if name_query_norm else []
+        if result.status == "not_found":
+            await update.effective_message.reply_text(
+                f"Nie znalazłem klienta: '{name_query}'"
+            )
+            return
 
-        client = None
-        if len(exact_matches) == 1:
-            client = exact_matches[0]
-        else:
-            fn_matches = [r for r in results if _first_name_ok(name_query, r)] if name_query else []
-            if len(fn_matches) == 1:
-                client = fn_matches[0]
+        if result.status == "multi":
+            lines = [f"Mam {len(result.clients)} klientów:"]
+            options = []
+            for i, c in enumerate(result.clients[:10], start=1):
+                c_name = c.get("Imię i nazwisko", "?")
+                c_city = c.get("Miasto", "")
+                c_row = c.get("_row", 0)
+                label = f"{i}. {c_name}" + (f" — {c_city}" if c_city else "")
+                lines.append(label)
+                options.append((label, f"select_client:{c_row}"))
+            lines.append("Którego?")
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.DISAMBIGUATION,
+                flow_data=payload_to_flow_data(DisambiguationPayload(
+                    intent="change_status",
+                    new_status=new_status,
+                )),
+            ))
+            await update.effective_message.reply_text(
+                "\n".join(lines),
+                reply_markup=build_choice_buttons(options),
+            )
+            return
 
-        if not client:
+        client = result.clients[0]
+    else:
+        # Legacy R1-safe fallback when the LLM did not extract an entity name.
+        # We still rely on search_clients for multi disambiguation / single
+        # confirmation card (no lookup_client here — its strict filter would
+        # reject whole-message queries that routinely matched fuzzily before).
+        results = await search_clients(user_id, search_query)
+        if not results:
+            await update.effective_message.reply_text(
+                f"Nie znalazłem klienta: '{search_query}'"
+            )
+            return
+
+        if len(results) > 1:
             lines = [f"Mam {len(results)} klientów:"]
             options = []
             for i, c in enumerate(results[:10], start=1):
@@ -1993,17 +1991,8 @@ async def handle_change_status(
                 reply_markup=build_choice_buttons(options),
             )
             return
-    else:
-        if name_query:
-            client = next((r for r in results if _first_name_ok(name_query, r)), None)
-        else:
-            # Safe under R1: a single fuzzy result still only opens a confirmation card.
-            client = results[0]
-        if not client:
-            await update.effective_message.reply_text(
-                f"Nie znalazłem '{search_query}' w bazie."
-            )
-            return
+
+        client = results[0]
 
     old_status = client.get("Status", "")
 

@@ -5,7 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from bot.handlers.text import _route_pending_flow, handle_change_status
+from shared.clients import ClientLookupResult
 from shared.pending import PendingFlowType
+
+
+def _patched_lookup(result: ClientLookupResult):
+    return patch(
+        "bot.handlers.text.lookup_client",
+        new=AsyncMock(return_value=result),
+    )
 
 
 def _update(telegram_id: int = 123) -> MagicMock:
@@ -23,16 +31,16 @@ def _button_labels(reply_markup) -> list[str]:
 @pytest.mark.asyncio
 async def test_change_status_uses_entities_name_for_matching_not_whole_message():
     upd = _update()
-    search = AsyncMock(return_value=[
-        {
-            "_row": 7,
-            "Imię i nazwisko": "Jan Kowalski",
-            "Miasto": "Warszawa",
-            "Status": "Nowy lead",
-        }
-    ])
+    client = {
+        "_row": 7,
+        "Imię i nazwisko": "Jan Kowalski",
+        "Miasto": "Warszawa",
+        "Status": "Nowy lead",
+    }
+    result = ClientLookupResult(status="unique", clients=[client], normalized_query="jan kowalski")
+    lookup = AsyncMock(return_value=result)
 
-    with patch("bot.handlers.text.search_clients", new=search), patch(
+    with patch("bot.handlers.text.lookup_client", new=lookup), patch(
         "bot.handlers.text.save_pending"
     ) as mock_save:
         await handle_change_status(
@@ -43,7 +51,7 @@ async def test_change_status_uses_entities_name_for_matching_not_whole_message()
             "Jan Kowalski podpisał umowę, zmień status na Podpisane",
         )
 
-    search.assert_awaited_once_with(1, "Jan Kowalski")
+    lookup.assert_awaited_once_with(1, "Jan Kowalski")
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.CHANGE_STATUS
     assert saved_flow.flow_data["row"] == 7
@@ -118,12 +126,14 @@ async def test_change_status_without_entities_name_disambiguates_many_results():
 @pytest.mark.asyncio
 async def test_change_status_single_name_token_disambiguates_many_results():
     upd = _update()
-    search = AsyncMock(return_value=[
+    clients = [
         {"_row": 8, "Imię i nazwisko": "Jan Mazur", "Miasto": "Kraków", "Status": ""},
         {"_row": 9, "Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "Status": ""},
-    ])
+    ]
+    result = ClientLookupResult(status="multi", clients=clients, normalized_query="jan")
+    lookup = AsyncMock(return_value=result)
 
-    with patch("bot.handlers.text.search_clients", new=search), patch(
+    with patch("bot.handlers.text.lookup_client", new=lookup), patch(
         "bot.handlers.text.save_pending"
     ) as mock_save:
         await handle_change_status(
@@ -134,7 +144,7 @@ async def test_change_status_single_name_token_disambiguates_many_results():
             "Jan podpisał",
         )
 
-    search.assert_awaited_once_with(1, "Jan")
+    lookup.assert_awaited_once_with(1, "Jan")
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
     assert saved_flow.flow_data == {
@@ -216,14 +226,15 @@ async def test_change_status_append_without_action_keeps_status_pending():
 
 @pytest.mark.asyncio
 async def test_change_status_multi_exact_match_asks_which_one():
-    """2+ rows with identical full name → disambiguation, NOT silent pick."""
+    """lookup_client=multi → disambiguation, NOT silent pick."""
     upd = _update()
-    search = AsyncMock(return_value=[
+    clients = [
         {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": ""},
         {"_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin", "Status": ""},
-    ])
+    ]
+    result = ClientLookupResult(status="multi", clients=clients, normalized_query="mariusz krzywinski")
 
-    with patch("bot.handlers.text.search_clients", new=search), patch(
+    with _patched_lookup(result), patch(
         "bot.handlers.text.save_pending"
     ) as mock_save:
         await handle_change_status(
@@ -249,21 +260,19 @@ async def test_change_status_multi_exact_match_asks_which_one():
 
 @pytest.mark.asyncio
 async def test_change_status_entities_name_with_city_narrows_by_city():
-    """Contract test: when entities.name carries "name + city", 2+ same-name
-    rows are narrowed to 1 via _first_name_ok (city is included in stored
-    identity used for matching).
+    """Contract test: when entities.name carries "name + city", lookup_client
+    filters 2+ same-name rows to 1 via first_name_ok (stored identity includes
+    city). Handler receives unique → auto-pick, no disambiguation.
 
     Note: we test handler contract, not router behavior. In production the LLM
     may extract entities.name="Mariusz Krzywinski" (without city) — that case
     is covered by test_change_status_multi_exact_match_asks_which_one.
     """
     upd = _update()
-    search = AsyncMock(return_value=[
-        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": ""},
-        {"_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin", "Status": ""},
-    ])
+    client = {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": ""}
+    result = ClientLookupResult(status="unique", clients=[client], normalized_query="mariusz krzywinski marki")
 
-    with patch("bot.handlers.text.search_clients", new=search), patch(
+    with _patched_lookup(result), patch(
         "bot.handlers.text.save_pending_flow"
     ) as mock_save_flow, patch("bot.handlers.text.save_pending") as mock_save:
         await handle_change_status(
@@ -274,7 +283,7 @@ async def test_change_status_entities_name_with_city_narrows_by_city():
             "Mariusz Krzywinski Marki podpisał",
         )
 
-    # City in entities.name → narrowing via _first_name_ok → auto-pick, no disambiguation
+    # lookup_client narrowed to single row → auto-pick, no disambiguation
     mock_save_flow.assert_not_called()
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.CHANGE_STATUS
