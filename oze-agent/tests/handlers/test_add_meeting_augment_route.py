@@ -15,8 +15,8 @@ _MISSING = object()
 def _flow(description: str = "", event_type: str | None = None) -> dict:
     flow_data = {
         "title": "Spotkanie — Anna Testowa",
-        "start": "2026-04-17T14:00:00+02:00",
-        "end": "2026-04-17T15:00:00+02:00",
+        "start": "2027-04-17T14:00:00+02:00",
+        "end": "2027-04-17T15:00:00+02:00",
         "client_name": "Anna Testowa",
         "location": "Zatory",
         "description": description,
@@ -38,8 +38,8 @@ def _empty_meeting_flow(description: str = "") -> dict:
         "flow_type": "add_meeting",
         "flow_data": {
             "title": "Spotkanie",
-            "start": "2026-04-17T14:00:00+02:00",
-            "end": "2026-04-17T15:00:00+02:00",
+            "start": "2027-04-17T14:00:00+02:00",
+            "end": "2027-04-17T15:00:00+02:00",
             "client_name": "",
             "location": "",
             "description": description,
@@ -67,7 +67,7 @@ async def _single_meeting_flow_for_duration(
 ) -> dict:
     upd = _update()
     meeting = {
-        "date": "2026-04-20",
+        "date": "2027-04-20",
         "time": "14:00",
         "client_name": "Jan Kowalski",
         "location": "",
@@ -350,7 +350,7 @@ async def test_handle_add_meeting_preserves_router_event_type():
         "bot.handlers.text.extract_meeting_data",
         new=AsyncMock(return_value={
             "meetings": [{
-                "date": "2026-04-20",
+                "date": "2027-04-20",
                 "time": "14:00",
                 "client_name": "Anna Testowa",
                 "location": "Zatory",
@@ -429,7 +429,7 @@ async def test_add_meeting_text_event_type_overrides_wrong_router_in_person_for_
         "bot.handlers.text.extract_meeting_data",
         new=AsyncMock(return_value={
             "meetings": [{
-                "date": "2026-04-20",
+                "date": "2027-04-20",
                 "time": "12:00",
                 "client_name": "Tomasz Nowicki",
                 "location": "telefonicznie",
@@ -467,7 +467,7 @@ async def test_add_meeting_text_event_type_overrides_wrong_router_in_person_for_
         "bot.handlers.text.extract_meeting_data",
         new=AsyncMock(return_value={
             "meetings": [{
-                "date": "2026-04-20",
+                "date": "2027-04-20",
                 "time": "23:00",
                 "client_name": "Jan Kowalski",
                 "location": "",
@@ -503,21 +503,21 @@ async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event
     upd = _update()
     meetings = [
         {
-            "date": "2026-04-20",
+            "date": "2027-04-20",
             "time": "10:00",
             "client_name": "Jan Kowalski",
             "location": "Warszawa",
             "event_type": "in_person",
         },
         {
-            "date": "2026-04-20",
+            "date": "2027-04-20",
             "time": "12:00",
             "client_name": "Anna Testowa",
             "location": "",
             "event_type": "phone_call",
         },
         {
-            "date": "2026-04-20",
+            "date": "2027-04-20",
             "time": "15:00",
             "client_name": "Adam Ofertowy",
             "location": "",
@@ -565,8 +565,8 @@ async def test_add_meetings_batch_falls_back_to_text_event_type():
     fallback, which can intentionally flatten a same-action batch."""
     upd = _update()
     meetings = [
-        {"date": "2026-04-20", "time": "10:00", "client_name": "Jan Kowalski", "location": ""},
-        {"date": "2026-04-20", "time": "11:00", "client_name": "Anna Testowa", "location": ""},
+        {"date": "2027-04-20", "time": "10:00", "client_name": "Jan Kowalski", "location": ""},
+        {"date": "2027-04-20", "time": "11:00", "client_name": "Anna Testowa", "location": ""},
     ]
 
     def enrich_side_effect(_user_id: int, client_name: str, location: str) -> dict:
@@ -606,7 +606,7 @@ async def test_handle_add_meeting_auto_status_preview_for_new_lead():
         "bot.handlers.text.extract_meeting_data",
         new=AsyncMock(return_value={
             "meetings": [{
-                "date": "2026-04-20",
+                "date": "2027-04-20",
                 "time": "14:00",
                 "client_name": "Jan Kowalski",
                 "location": "Warszawa",
@@ -651,7 +651,7 @@ async def test_handle_add_meeting_no_auto_status_for_phone_call():
         "bot.handlers.text.extract_meeting_data",
         new=AsyncMock(return_value={
             "meetings": [{
-                "date": "2026-04-20",
+                "date": "2027-04-20",
                 "time": "14:00",
                 "client_name": "Jan Kowalski",
                 "location": "",
@@ -690,7 +690,7 @@ async def test_handle_add_meeting_no_auto_status_for_advanced_status():
         "bot.handlers.text.extract_meeting_data",
         new=AsyncMock(return_value={
             "meetings": [{
-                "date": "2026-04-20",
+                "date": "2027-04-20",
                 "time": "14:00",
                 "client_name": "Jan Kowalski",
                 "location": "Warszawa",
