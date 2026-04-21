@@ -78,6 +78,7 @@ from shared.google_sheets import (
     search_clients,
     update_client,
 )
+from shared.clients import lookup_client, suggest_fuzzy_client
 from shared.matching import first_name_ok as _first_name_ok
 from shared.search import detect_potential_duplicate
 
@@ -1152,37 +1153,37 @@ async def handle_search_client(
     query = entities.get("name") or entities.get("phone") or message_text
 
     await send_typing(context, telegram_id)
-    results = await search_clients(user_id, query)
+    result = await lookup_client(user_id, query)
 
-    if not results:
+    if result.status == "not_found":
+        if not result.is_phone_query:
+            suggestion = await suggest_fuzzy_client(user_id, query)
+            if suggestion is not None:
+                candidate = suggestion.candidate
+                candidate_name = candidate.get("Imię i nazwisko", "")
+                candidate_city = candidate.get("Miasto", "")
+                suggestion_text = candidate_name + (f" z {candidate_city}" if candidate_city else "")
+                save_pending_flow(telegram_id, "confirm_search", {"row": candidate.get("_row")})
+                await update.effective_message.reply_text(
+                    f"Nie mam \"{query}\". Chodziło o {suggestion_text}?",
+                    reply_markup=build_choice_buttons([
+                        ("✅ Tak, pokaż", "confirm:yes"),
+                        ("❌ Nie", "cancel:search"),
+                    ]),
+                )
+                return
         await update.effective_message.reply_text(f"Nie mam \"{query}\" w bazie.")
         return
 
-    if len(results) == 1:
-        client = results[0]
-        client_name = client.get("Imię i nazwisko", "")
-        query_lower = query.lower().strip()
-        name_lower = client_name.lower().strip()
+    if result.status == "multi" and len(result.clients) >= 50:
+        sheets_url = f"https://docs.google.com/spreadsheets/d/{user.get('google_sheets_id', '')}"
+        await update.effective_message.reply_text(
+            f"Znalazłem {len(result.clients)} klientów. Otwórz arkusz:\n{sheets_url}"
+        )
+        return
 
-        # If the query is not literally present in the name (or vice versa), it's a typo match.
-        # Ask the user to confirm instead of silently showing the wrong person's data.
-        # Exception: phone-number queries are inherently exact matches (matched on digits).
-        _query_digits = re.sub(r"\D", "", query)
-        _is_phone = len(_query_digits) >= 7 and len(query.strip()) <= len(_query_digits) + 4
-        is_exact = query_lower in name_lower or name_lower in query_lower or _is_phone
-        if not is_exact:
-            city = client.get("Miasto", "")
-            suggestion = client_name + (f" z {city}" if city else "")
-            save_pending_flow(telegram_id, "confirm_search", {"row": client.get("_row")})
-            await update.effective_message.reply_text(
-                f"Nie mam \"{query}\". Chodziło o {suggestion}?",
-                reply_markup=build_choice_buttons([
-                    ("✅ Tak, pokaż", "confirm:yes"),
-                    ("❌ Nie", "cancel:search"),
-                ]),
-            )
-            return
-
+    if result.status == "unique":
+        client = result.clients[0]
         try:
             card = format_client_card(client)
             await update.effective_message.reply_markdown_v2(card)
@@ -1195,47 +1196,9 @@ async def handle_search_client(
             )
         return
 
-    if len(results) >= 50:
-        sheets_url = f"https://docs.google.com/spreadsheets/d/{user.get('google_sheets_id', '')}"
-        await update.effective_message.reply_text(
-            f"Znalazłem {len(results)} klientów. Otwórz arkusz:\n{sheets_url}"
-        )
-        return
-
-    # 2–49 results: auto-pick only when the match is UNIQUE — otherwise disambiguate.
-    # Multi-row same-name (e.g. two "Mariusz Krzywinski" in different cities) must
-    # drop into the "Mam N klientów: ... Którego?" fallback, not silent first-pick.
-    from shared.search import normalize_polish as _normalize
-    q_norm = _normalize(query.strip())
-    exact_matches = [
-        r for r in results
-        if _normalize(r.get("Imię i nazwisko", "").strip()) == q_norm
-    ]
-
-    client = None
-    if len(exact_matches) == 1:
-        client = exact_matches[0]
-    elif len(exact_matches) == 0 and len(query.strip().split()) >= 2:
-        fn_matches = [r for r in results if _first_name_ok(query, r)]
-        if len(fn_matches) == 1:
-            client = fn_matches[0]
-
-    if client:
-        try:
-            card = format_client_card(client)
-            await update.effective_message.reply_markdown_v2(card)
-        except Exception as e:
-            logger.error("format_client_card failed: %s", e)
-            cname = client.get("Imię i nazwisko", "?")
-            ccity = client.get("Miasto", "")
-            await update.effective_message.reply_text(
-                f"Błąd formatowania karty dla {cname}{' (' + ccity + ')' if ccity else ''}. Sprawdź logi."
-            )
-        return
-
-    lines = [f"Mam {len(results)} klientów:"]
+    lines = [f"Mam {len(result.clients)} klientów:"]
     options = []
-    for i, c in enumerate(results[:10], start=1):
+    for i, c in enumerate(result.clients[:10], start=1):
         name = c.get("Imię i nazwisko", "?")
         city = c.get("Miasto", c.get("Miejscowość", ""))
         row = c.get("_row", 0)
