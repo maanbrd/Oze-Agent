@@ -6,6 +6,7 @@ from shared.search import (
     fuzzy_match,
     search_clients,
     find_best_match,
+    detect_duplicate_candidates,
     detect_potential_duplicate,
 )
 
@@ -198,3 +199,66 @@ def test_detect_potential_duplicate_prefers_same_city_over_name_only():
     result = detect_potential_duplicate("Jan Kowalski", "Warszawa", existing)
     assert result is not None
     assert result["_row"] == 3
+
+
+# ── detect_duplicate_candidates ───────────────────────────────────────────────
+
+
+def test_detect_duplicate_candidates_empty_when_no_match():
+    existing = [{"Imię i nazwisko": "Anna Nowak", "Miasto": "Kraków", "_row": 2}]
+    assert detect_duplicate_candidates("Piotr Wiśniewski", "Gdańsk", existing) == []
+
+
+def test_detect_duplicate_candidates_first_name_only_returns_empty():
+    existing = [{"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2}]
+    assert detect_duplicate_candidates("Jan", "Warszawa", existing) == []
+
+
+def test_detect_duplicate_candidates_single_same_city():
+    existing = [{"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2}]
+    result = detect_duplicate_candidates("Jan Kowalski", "Warszawa", existing)
+    assert len(result) == 1
+    assert result[0]["_row"] == 2
+
+
+def test_detect_duplicate_candidates_multi_same_name_no_city():
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 3},
+    ]
+    result = detect_duplicate_candidates("Jan Kowalski", "", existing)
+    assert len(result) == 2
+    assert {c["_row"] for c in result} == {2, 3}
+
+
+def test_detect_duplicate_candidates_city_narrows_to_same_city():
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 3},
+    ]
+    result = detect_duplicate_candidates("Jan Kowalski", "Warszawa", existing)
+    assert len(result) == 1
+    assert result[0]["_row"] == 2
+
+
+def test_detect_duplicate_candidates_city_without_match_returns_cross_city():
+    """City provided but no same-city candidate — fall back to all name-only
+    matches so the cross-city duplicate warning is still raised."""
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 3},
+    ]
+    result = detect_duplicate_candidates("Jan Kowalski", "Gdańsk", existing)
+    assert len(result) == 2
+    assert {c["_row"] for c in result} == {2, 3}
+
+
+def test_detect_duplicate_candidates_miejscowosc_fallback():
+    """Rows using legacy `Miejscowość` column participate in same-city filter."""
+    existing = [
+        {"Imię i nazwisko": "Jan Kowalski", "Miejscowość": "Warszawa", "_row": 2},
+        {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 3},
+    ]
+    result = detect_duplicate_candidates("Jan Kowalski", "Warszawa", existing)
+    assert len(result) == 1
+    assert result[0]["_row"] == 2

@@ -94,8 +94,8 @@ async def test_change_status_without_entities_name_disambiguates_many_results():
     ])
 
     with patch("bot.handlers.text.search_clients", new=search), patch(
-        "bot.handlers.text.save_pending_flow"
-    ) as mock_save_flow, patch("bot.handlers.text.save_pending") as mock_save:
+        "bot.handlers.text.save_pending"
+    ) as mock_save:
         await handle_change_status(
             upd,
             MagicMock(),
@@ -104,12 +104,12 @@ async def test_change_status_without_entities_name_disambiguates_many_results():
             "Anna zmień status na Podpisane",
         )
 
-    mock_save.assert_not_called()
-    mock_save_flow.assert_called_once_with(
-        123,
-        "disambiguation",
-        {"intent": "change_status", "new_status": "Podpisane"},
-    )
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
+    assert saved_flow.flow_data == {
+        "intent": "change_status",
+        "new_status": "Podpisane",
+    }
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Mam 2 klientów:" in response
     assert "Którego?" in response
@@ -124,8 +124,8 @@ async def test_change_status_single_name_token_disambiguates_many_results():
     ])
 
     with patch("bot.handlers.text.search_clients", new=search), patch(
-        "bot.handlers.text.save_pending_flow"
-    ) as mock_save_flow, patch("bot.handlers.text.save_pending") as mock_save:
+        "bot.handlers.text.save_pending"
+    ) as mock_save:
         await handle_change_status(
             upd,
             MagicMock(),
@@ -135,12 +135,12 @@ async def test_change_status_single_name_token_disambiguates_many_results():
         )
 
     search.assert_awaited_once_with(1, "Jan")
-    mock_save.assert_not_called()
-    mock_save_flow.assert_called_once_with(
-        123,
-        "disambiguation",
-        {"intent": "change_status", "new_status": "Podpisane"},
-    )
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
+    assert saved_flow.flow_data == {
+        "intent": "change_status",
+        "new_status": "Podpisane",
+    }
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Jan Mazur" in response
     assert "Jan Kowalski" in response
@@ -212,6 +212,74 @@ async def test_change_status_append_without_action_keeps_status_pending():
     mock_meeting.assert_not_awaited()
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Dopisz następny krok" in response
+
+
+@pytest.mark.asyncio
+async def test_change_status_multi_exact_match_asks_which_one():
+    """2+ rows with identical full name → disambiguation, NOT silent pick."""
+    upd = _update()
+    search = AsyncMock(return_value=[
+        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": ""},
+        {"_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin", "Status": ""},
+    ])
+
+    with patch("bot.handlers.text.search_clients", new=search), patch(
+        "bot.handlers.text.save_pending"
+    ) as mock_save:
+        await handle_change_status(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {"name": "Mariusz Krzywinski", "status": "Podpisane"}},
+            "Mariusz Krzywinski podpisał",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
+    assert saved_flow.flow_data == {
+        "intent": "change_status",
+        "new_status": "Podpisane",
+    }
+    response = upd.effective_message.reply_text.call_args.args[0]
+    assert "Mam 2 klientów:" in response
+    assert "Mariusz Krzywinski — Marki" in response
+    assert "Mariusz Krzywinski — Wołomin" in response
+    assert "Którego?" in response
+
+
+@pytest.mark.asyncio
+async def test_change_status_entities_name_with_city_narrows_by_city():
+    """Contract test: when entities.name carries "name + city", 2+ same-name
+    rows are narrowed to 1 via _first_name_ok (city is included in stored
+    identity used for matching).
+
+    Note: we test handler contract, not router behavior. In production the LLM
+    may extract entities.name="Mariusz Krzywinski" (without city) — that case
+    is covered by test_change_status_multi_exact_match_asks_which_one.
+    """
+    upd = _update()
+    search = AsyncMock(return_value=[
+        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki", "Status": ""},
+        {"_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin", "Status": ""},
+    ])
+
+    with patch("bot.handlers.text.search_clients", new=search), patch(
+        "bot.handlers.text.save_pending_flow"
+    ) as mock_save_flow, patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_change_status(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {"name": "Mariusz Krzywinski Marki", "status": "Podpisane"}},
+            "Mariusz Krzywinski Marki podpisał",
+        )
+
+    # City in entities.name → narrowing via _first_name_ok → auto-pick, no disambiguation
+    mock_save_flow.assert_not_called()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.CHANGE_STATUS
+    assert saved_flow.flow_data["row"] == 7
+    assert saved_flow.flow_data["new_value"] == "Podpisane"
 
 
 @pytest.mark.asyncio

@@ -256,13 +256,17 @@ async def extract_meeting_data(message: str, today: str) -> dict:
 
     Returns:
         {"meetings": [{"client_name": str, "date": str, "time": str,
-                       "duration_minutes": int, "location": str,
-                       "event_type": str}],
+                       "location": str, "event_type": str,
+                       "duration_minutes": Optional[int]}],
          "tokens_in": int, "tokens_out": int, "cost_usd": float}
+
+    `duration_minutes` is included only when the user explicitly mentions a
+    duration (e.g. "na 30 minut", "przez godzinę"); otherwise the caller
+    applies the event-type default via `_default_duration_for_event_type`.
     """
     system_prompt = f"""Wyciągnij dane spotkań z wiadomości. Dzisiaj: {today}.
 Zwróć TYLKO JSON z listą spotkań (nawet jeśli jedno):
-{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "duration_minutes": 60, "location": "", "event_type": "in_person"}}]}}
+{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "location": "", "event_type": "in_person"}}]}}
 Rozumiej polskie wyrażenia dat i czasu:
 - "jutro", "w środę", "za tydzień", "pojutrze", "w przyszłą środę"
 - "o 14", "na 14:30", "o czternastej", "na szesnastą"
@@ -274,6 +278,11 @@ Ustaw event_type dla KAŻDEGO obiektu (gdy markery się nakładają, wygrywa pri
 - "wyślij ofertę", "oferta", "wycena", "mail", "email" → "offer_email"
 - "follow-up", "followup", "dokument", "dokumenty", "papier", "docs" → "doc_followup"
 - "spotkanie", "wizyta", "jadę do", "jade do" → "in_person"
+`duration_minutes` (int, OPCJONALNE): Dodaj to pole TYLKO gdy user jawnie podał czas trwania (np. "na 30 minut", "przez godzinę"=60, "45 min", "na pół godziny"=30, "1h"=60). W przeciwnym razie NIE dodawaj tego pola — system ustawi domyślny czas na podstawie event_type (phone_call/offer_email/doc_followup=15 min, in_person=60 min).
+Przykłady duration_minutes:
+- "Zadzwoń do Tomasza jutro o 12" → bez duration_minutes (domyślne 15 dla phone_call)
+- "Zadzwoń do Tomasza jutro o 12 na 30 minut" → "duration_minutes": 30
+- "Spotkanie z Janem jutro o 14" → bez duration_minutes (domyślne 60 dla in_person)
 WAŻNE: client_name ZAWSZE w mianowniku (kto? co?): "Jan Nowak" NIE "Janem Nowakiem", "Anna Kowalska" NIE "Anny Kowalskiej", "Mazur" NIE "Mazurem", "Grabowski" NIE "Grabowskim". Dotyczy KAŻDEGO spotkania w liście — sprawdź wszystkie client_name przed zwróceniem.
 Przykłady wielu spotkań z odmienionymi formami:
 - "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00", "event_type": "in_person"}}, {{"client_name": "Anna Kowalska", "time": "15:00", "event_type": "in_person"}}]

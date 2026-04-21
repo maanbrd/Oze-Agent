@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 
-from telegram import Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from bot.utils.telegram_helpers import (
@@ -40,6 +40,7 @@ from shared.pending import (
     AddMeetingPayload,
     AddNotePayload,
     ChangeStatusPayload,
+    DisambiguationPayload,
     PendingFlow,
     PendingFlowType,
     R7PromptPayload,
@@ -943,10 +944,25 @@ async def handle_add_note(
         return
 
     if len(results) > 1:
-        # Exact full-name match short-circuits disambiguation (bug-F2-2)
-        client = _find_exact_name_match(client_name, results)
-        if not client:
-            client = next((r for r in results if _first_name_ok(query, r)), None)
+        # Auto-pick only when the match is UNIQUE. Multi-row same-name (e.g. two
+        # "Mariusz Krzywinski" in different cities) must fall into disambiguation.
+        # Use `else:` not `elif len == 0` so a city in `query` can still narrow
+        # via _first_name_ok even when exact_matches has 2+ rows.
+        from shared.search import normalize_polish as _normalize
+        client_name_norm = _normalize(client_name.strip())
+        exact_matches = [
+            r for r in results
+            if _normalize(r.get("Imię i nazwisko", "").strip()) == client_name_norm
+        ] if client_name_norm else []
+
+        client = None
+        if len(exact_matches) == 1:
+            client = exact_matches[0]
+        else:
+            fn_matches = [r for r in results if _first_name_ok(query, r)]
+            if len(fn_matches) == 1:
+                client = fn_matches[0]
+
         if not client:
             lines = [f"Mam {len(results)} klientów:"]
             options = []
@@ -958,10 +974,14 @@ async def handle_add_note(
                 lines.append(label)
                 options.append((label, f"select_client:{c_row}"))
             lines.append("Którego?")
-            save_pending_flow(telegram_id, "disambiguation", {
-                "intent": "add_note",
-                "note_text": note_text,
-            })
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.DISAMBIGUATION,
+                flow_data=payload_to_flow_data(DisambiguationPayload(
+                    intent="add_note",
+                    note_text=note_text,
+                )),
+            ))
             await update.effective_message.reply_text(
                 "\n".join(lines),
                 reply_markup=build_choice_buttons(options),
@@ -1006,6 +1026,65 @@ async def handle_add_note(
     )
 
 
+def _build_add_client_duplicate_card(
+    telegram_id: int,
+    client_data: dict,
+    duplicate: dict,
+) -> Optional[tuple[PendingFlow, str, InlineKeyboardMarkup]]:
+    """Build pending flow + card text + markup for ADD_CLIENT_DUPLICATE.
+
+    Copies the merge/conflict logic used when a single duplicate row is
+    identified — callers (single-match in handle_add_client, post-disambiguation
+    in _handle_select_client) share one renderer. Returns None when the
+    duplicate row lacks `_row` so the caller can reply with a timeout error.
+    """
+    dup_name = duplicate.get("Imię i nazwisko", "")
+    dup_city = duplicate.get("Miasto", "")
+    duplicate_row = duplicate.get("_row")
+    if duplicate_row is None:
+        logger.error("_build_add_client_duplicate_card: duplicate without _row: %s", duplicate)
+        return None
+
+    has_conflict = any(
+        v and duplicate.get(k) and duplicate.get(k) != v
+        for k, v in client_data.items()
+        if k not in SYSTEM_FIELDS and k != "Imię i nazwisko"
+    )
+
+    if not has_conflict:
+        new_data = {k: v for k, v in client_data.items() if v and k not in SYSTEM_FIELDS}
+        flow = PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
+            flow_data=payload_to_flow_data(AddClientDuplicatePayload(
+                client_data=new_data,
+                duplicate_row=duplicate_row,
+                client_name=duplicate.get("Imię i nazwisko", ""),
+                city=duplicate.get("Miasto", ""),
+            )),
+        )
+        updated_fields = ", ".join(new_data.keys())
+        city_part = f" ({dup_city})" if dup_city else ""
+        text = f"Mam już {dup_name}{city_part}.\nZaktualizować o: {updated_fields}?"
+        return flow, text, build_mutation_buttons("confirm")
+
+    flow = PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
+        flow_data=payload_to_flow_data(AddClientDuplicatePayload(
+            client_data=client_data,
+            duplicate_row=duplicate_row,
+            client_name=duplicate.get("Imię i nazwisko", ""),
+            city=duplicate.get("Miasto", ""),
+        )),
+    )
+    dup_addr = duplicate.get("Adres", "")
+    dup_prod = duplicate.get("Produkt", "")
+    dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
+    text = f"⚠️ Masz już {dup_name} ({dup_info}).\nDodać nowego czy dopisać do istniejącego?"
+    return flow, text, build_duplicate_buttons("confirm")
+
+
 async def handle_add_client(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1034,64 +1113,16 @@ async def handle_add_client(
     duplicate = detect_potential_duplicate(name, city, all_clients) if name else None
 
     if duplicate:
-        dup_name = duplicate.get("Imię i nazwisko", "")
-        dup_city = duplicate.get("Miasto", "")
-        # Detect field conflicts: new data has a different non-empty value than existing
-        has_conflict = any(
-            v and duplicate.get(k) and duplicate.get(k) != v
-            for k, v in client_data.items()
-            if k not in SYSTEM_FIELDS and k != "Imię i nazwisko"
-        )
-        if not has_conflict:
-            # Default merge path: show R1 confirmation card (R1 rule — no silent writes)
-            new_data = {k: v for k, v in client_data.items() if v and k not in SYSTEM_FIELDS}
-            duplicate_row = duplicate.get("_row")
-            if duplicate_row is None:
-                logger.error("handle_add_client: duplicate without _row: %s", duplicate)
-                await update.effective_message.reply_markdown_v2(format_error("timeout"))
-                return
-            save_pending(PendingFlow(
-                telegram_id=telegram_id,
-                flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
-                flow_data=payload_to_flow_data(AddClientDuplicatePayload(
-                    client_data=new_data,
-                    duplicate_row=duplicate_row,
-                    client_name=duplicate.get("Imię i nazwisko", ""),
-                    city=duplicate.get("Miasto", ""),
-                )),
-            ))
-            updated_fields = ", ".join(new_data.keys())
-            city_part = f" ({dup_city})" if dup_city else ""
-            await update.effective_message.reply_text(
-                f"Mam już {dup_name}{city_part}.\nZaktualizować o: {updated_fields}?",
-                reply_markup=build_mutation_buttons("confirm"),
-            )
-            return
-        # Conflict: ask user to choose
-        duplicate_row = duplicate.get("_row")
-        if duplicate_row is None:
-            logger.error("handle_add_client: duplicate without _row: %s", duplicate)
+        built = _build_add_client_duplicate_card(telegram_id, client_data, duplicate)
+        if built is None:
             await update.effective_message.reply_markdown_v2(format_error("timeout"))
             return
-        save_pending(PendingFlow(
-            telegram_id=telegram_id,
-            flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
-            flow_data=payload_to_flow_data(AddClientDuplicatePayload(
-                client_data=client_data,
-                duplicate_row=duplicate_row,
-                client_name=duplicate.get("Imię i nazwisko", ""),
-                city=duplicate.get("Miasto", ""),
-            )),
-        ))
-        dup_addr = duplicate.get("Adres", "")
-        dup_prod = duplicate.get("Produkt", "")
-        dup_info = ", ".join(p for p in [dup_addr, dup_city, dup_prod] if p)
-        await update.effective_message.reply_text(
-            f"⚠️ Masz już {dup_name} ({dup_info}).\nDodać nowego czy dopisać do istniejącego?",
-            reply_markup=build_duplicate_buttons("confirm"),
-        )
+        flow, text, markup = built
+        save_pending(flow)
+        await update.effective_message.reply_text(text, reply_markup=markup)
         return
 
+    # No duplicate → new-client flow
     # Always compute missing from actual sheet column names (never trust Claude's guesses)
     sheet_columns = user.get("sheet_columns") or headers
     missing = [col for col in sheet_columns if col and not client_data.get(col) and col not in SYSTEM_FIELDS]
@@ -1170,12 +1201,24 @@ async def handle_search_client(
         )
         return
 
-    # 2–49 results: try exact/first-name match before disambiguation
-    # Only use first-name guard when query has 2+ words (i.e., includes a first name).
-    # Single-word queries like "Kowalski" must go to disambiguation.
-    client = _find_exact_name_match(query, results)
-    if not client and len(query.strip().split()) >= 2:
-        client = next((r for r in results if _first_name_ok(query, r)), None)
+    # 2–49 results: auto-pick only when the match is UNIQUE — otherwise disambiguate.
+    # Multi-row same-name (e.g. two "Mariusz Krzywinski" in different cities) must
+    # drop into the "Mam N klientów: ... Którego?" fallback, not silent first-pick.
+    from shared.search import normalize_polish as _normalize
+    q_norm = _normalize(query.strip())
+    exact_matches = [
+        r for r in results
+        if _normalize(r.get("Imię i nazwisko", "").strip()) == q_norm
+    ]
+
+    client = None
+    if len(exact_matches) == 1:
+        client = exact_matches[0]
+    elif len(exact_matches) == 0 and len(query.strip().split()) >= 2:
+        fn_matches = [r for r in results if _first_name_ok(query, r)]
+        if len(fn_matches) == 1:
+            client = fn_matches[0]
+
     if client:
         try:
             card = format_client_card(client)
@@ -1549,21 +1592,6 @@ def _filter_invalid_products(client_data: dict) -> dict:
         client_data["Notatki"] = f"{existing_notes} {standard_note}".strip() if existing_notes else standard_note
 
     return client_data
-
-
-def _find_exact_name_match(name_query: str, results: list) -> dict | None:
-    """Return the first result whose stored full name exactly matches name_query.
-
-    Comparison is normalized (lowercase, no diacritics). Returns None when no
-    exact match exists — caller should fall back to disambiguation.
-    """
-    from shared.search import normalize_polish
-    q_norm = normalize_polish(name_query.strip())
-    for r in results:
-        stored_norm = normalize_polish(r.get("Imię i nazwisko", "").strip())
-        if stored_norm == q_norm:
-            return r
-    return None
 
 
 def _first_name_ok(query: str, client: dict) -> bool:
@@ -1999,11 +2027,24 @@ async def handle_change_status(
         return
 
     if len(results) > 1:
-        # Exact full-name match short-circuits disambiguation (bug-F2-2)
-        client = _find_exact_name_match(name_query, results) if name_query else None
-        name_tokens = [token for token in name_query.split() if len(token) > 2]
-        if len(name_tokens) >= 2 and not client:
-            client = next((r for r in results if _first_name_ok(name_query, r)), None)
+        # Auto-pick only when the match is UNIQUE. Symmetric with handle_add_note:
+        # `else:` fallback (not `elif len == 0`) so city in name_query can still
+        # narrow via _first_name_ok when exact_matches has 2+ rows.
+        from shared.search import normalize_polish as _normalize
+        name_query_norm = _normalize(name_query.strip()) if name_query else ""
+        exact_matches = [
+            r for r in results
+            if _normalize(r.get("Imię i nazwisko", "").strip()) == name_query_norm
+        ] if name_query_norm else []
+
+        client = None
+        if len(exact_matches) == 1:
+            client = exact_matches[0]
+        else:
+            fn_matches = [r for r in results if _first_name_ok(name_query, r)] if name_query else []
+            if len(fn_matches) == 1:
+                client = fn_matches[0]
+
         if not client:
             lines = [f"Mam {len(results)} klientów:"]
             options = []
@@ -2015,10 +2056,14 @@ async def handle_change_status(
                 lines.append(label)
                 options.append((label, f"select_client:{c_row}"))
             lines.append("Którego?")
-            save_pending_flow(telegram_id, "disambiguation", {
-                "intent": "change_status",
-                "new_status": new_status,
-            })
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.DISAMBIGUATION,
+                flow_data=payload_to_flow_data(DisambiguationPayload(
+                    intent="change_status",
+                    new_status=new_status,
+                )),
+            ))
             await update.effective_message.reply_text(
                 "\n".join(lines),
                 reply_markup=build_choice_buttons(options),
