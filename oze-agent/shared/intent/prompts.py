@@ -22,6 +22,15 @@ Reguły rozróżniania:
 - "spotkanie z Nowakiem jutro 10:00" → record_add_meeting z event_type=in_person.
 - record_add_note tylko gdy istnieje konkretna treść notatki do zapisania; nie zwracaj pustego pola note.
 
+Compound status + meeting (Slice 5.4.3):
+Gdy wiadomość zawiera JEDNOCZEŚNIE zmianę statusu klienta I planowane spotkanie/telefon/ofertę, użyj record_add_meeting z dodatkowym polem status_update (obiekt {"field": "Status", "new_value": "<jeden z 9 kanonicznych statusów>"}). To pozwala zapisać obie zmiany naraz bez pytania "Co dalej?".
+- "Wojtek podpisał, spotkanie jutro o 14" → record_add_meeting(client_name="Wojtek", event_type="in_person", status_update={"field":"Status","new_value":"Podpisane"})
+- "Marysia rezygnuje z umowy, telefon jutro o 10" → record_add_meeting(client_name="Marysia", event_type="phone_call", status_update={"field":"Status","new_value":"Rezygnacja z umowy"})
+- "Jurek zamontowany, wyślij ofertę serwisu jutro" → record_add_meeting(client_name="Jurek", event_type="offer_email", status_update={"field":"Status","new_value":"Zamontowana"})
+- "Wojtek podpisał" (bez spotkania) → record_change_status, NIE record_add_meeting.
+- "spotkanie z Wojtkiem jutro o 14" (bez zmiany statusu) → record_add_meeting BEZ status_update.
+- Jeśli zmiana statusu nie pasuje do kanonicznych 9 wartości (np. "przełożone"), POMIŃ status_update i zwróć samo record_add_meeting — status zostanie ustawiony automatycznie lub przez osobną wiadomość.
+
 Poza MVP:
 - record_general_question — pytanie ogólne (small talk, pytanie do asystenta).
 - record_out_of_scope — użytkownik prosi o funkcję poza MVP. Wymagane pola: category (post_mvp_roadmap / vision_only / unplanned) oraz feature_key.

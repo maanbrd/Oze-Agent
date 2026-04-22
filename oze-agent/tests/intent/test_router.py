@@ -145,6 +145,35 @@ async def test_add_meeting_tool():
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_tool_compound_status_update_lives_in_entities():
+    """Slice 5.4.3: when classifier emits record_add_meeting with the new
+    compound status_update field, the router keeps it inside entities.
+    Hoisting to top-level intent_data happens in _intent_result_to_legacy_dict
+    (handler-side), not here."""
+    p1, p2 = _patches(
+        _tool_result(
+            "record_add_meeting",
+            {
+                "client_name": "Wojtek",
+                "date_iso": "2026-04-23",
+                "time": "14:00",
+                "event_type": "in_person",
+                "status_update": {"field": "Status", "new_value": "Podpisane"},
+            },
+        )
+    )
+    with p1, p2:
+        from shared.intent.intents import IntentType
+        from shared.intent.router import classify
+        result = await classify("Wojtek podpisał, spotkanie jutro o 14", 1)
+    assert result.intent == IntentType.ADD_MEETING
+    assert result.entities["status_update"] == {
+        "field": "Status",
+        "new_value": "Podpisane",
+    }
+
+
+@pytest.mark.asyncio
 async def test_show_day_plan_tool():
     p1, p2 = _patches(
         _tool_result("record_show_day_plan", {"date_iso": "2026-04-16"})

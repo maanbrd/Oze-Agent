@@ -186,13 +186,22 @@ def _intent_result_to_legacy_dict(result: IntentResult, message_text: str) -> di
     entities = dict(result.entities)
     if result.intent is IntentType.CHANGE_STATUS and "client_name" in entities:
         entities["name"] = entities.pop("client_name")
-    return {
+    legacy = {
         "intent": result.intent.value,
         "entities": entities,
         "confidence": result.confidence,
         "feature_key": result.feature_key,
         "reason": result.reason,
     }
+    # Slice 5.4.3: hoist compound status_update from entities to top-level so
+    # handle_add_meeting (which reads intent_data.get("status_update")) picks it
+    # up without having to reach into entities. Only for ADD_MEETING — other
+    # intents never carry status_update.
+    if result.intent is IntentType.ADD_MEETING:
+        status_update = entities.get("status_update")
+        if status_update:
+            legacy["status_update"] = status_update
+    return legacy
 
 
 def _message_with_r7_client_context(message_text: str, flow_data: dict) -> str:
@@ -1733,6 +1742,46 @@ async def _enrich_meeting(
     }
 
 
+def _normalize_compound_status_update(
+    status_update: Optional[dict],
+    enriched: dict,
+) -> Optional[dict]:
+    """Slice 5.4.3 — fill compound status_update gaps from enriched client dict.
+
+    Classifier emits only {"field": "Status", "new_value": "..."}. The pipeline
+    and confirm card need the full shape (row, old_value, client_name, city).
+    This helper fills those gaps post-enrichment. Three drop cases:
+      1) input is None → nothing to do.
+      2) new_value missing → malformed classifier output, drop rather than
+         carry a half-baked status update.
+      3) no resolvable row (no input.row, no enriched.client_row) → not_found
+         scenario; the pipeline cannot write status without a row, and we
+         don't want the confirm card to promise a change we can't deliver.
+
+    Callers in the ambiguous-client branch must NOT invoke this — raw
+    status_update has to survive intact in the disambiguation payload and be
+    normalized only after the user picks a candidate (which provides a row).
+    """
+    if not status_update:
+        return None
+    if not status_update.get("new_value"):
+        return None
+    resolvable_row = status_update.get("row") or enriched.get("client_row")
+    if not resolvable_row:
+        return None
+    filled = dict(status_update)
+    filled.setdefault("field", "Status")
+    if not filled.get("row"):
+        filled["row"] = enriched["client_row"]
+    if not filled.get("old_value"):
+        filled["old_value"] = enriched.get("current_status") or ""
+    if not filled.get("client_name"):
+        filled["client_name"] = enriched.get("full_name") or ""
+    if not filled.get("city"):
+        filled["city"] = enriched.get("client_city") or ""
+    return filled
+
+
 def _auto_status_update_from_enriched(
     enriched: dict,
     event_type: Optional[str],
@@ -1832,8 +1881,18 @@ async def handle_add_meeting(
             event_type=event_type,
         )
         source_client_data = intent_data.get("source_client_data") or None
-        status_update = intent_data.get("status_update") or None
-        if status_update is None:
+        raw_status_update = intent_data.get("status_update") or None
+        # Slice 5.4.3: 3-branch status_update resolution.
+        #   1) Ambiguous client → preserve raw compound in disambiguation payload;
+        #      normalize only after user picks a candidate (row becomes known).
+        #   2) Unique / not_found with compound → normalize now; drop if no row.
+        #   3) No compound → existing 5.4 auto-upgrade path (in_person + Nowy lead).
+        ambiguous_candidates_preview = enriched.get("ambiguous_candidates") or []
+        if enriched.get("ambiguous_client") and ambiguous_candidates_preview:
+            status_update = raw_status_update
+        elif raw_status_update:
+            status_update = _normalize_compound_status_update(raw_status_update, enriched)
+        else:
             status_update = _auto_status_update_from_enriched(enriched, event_type)
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)

@@ -143,7 +143,8 @@ _ADD_MEETING = {
         "Zaplanuj pojedyncze spotkanie, rozmowę telefoniczną, wysyłkę oferty "
         "lub follow-up po dokumentach. Dla ≥2 spotkań użyj "
         "record_multi_meeting_rejection. Jeśli użytkownik mówi po prostu 'spotkanie', "
-        "ustaw event_type=in_person."
+        "ustaw event_type=in_person. Gdy wiadomość łączy zmianę statusu i spotkanie "
+        "(np. 'Wojtek podpisał, spotkanie jutro o 14'), dodaj status_update."
     ),
     "input_schema": {
         "type": "object",
@@ -160,6 +161,23 @@ _ADD_MEETING = {
             },
             "duration_minutes": {"type": "integer"},
             "location": {"type": "string"},
+            # Slice 5.4.3: compound status change in the same message as the meeting
+            # (e.g. "Wojtek podpisał, spotkanie jutro o 14"). Optional; when set,
+            # handler skips R7 "Co dalej?" and applies both changes atomically.
+            "status_update": {
+                "type": "object",
+                "description": (
+                    "Opcjonalny compound status change. Dodaj tylko gdy wiadomość "
+                    "zawiera zarówno zmianę statusu klienta jak i planowane spotkanie. "
+                    "Nie wymyślaj statusu — używaj wyłącznie wartości z enum."
+                ),
+                "properties": {
+                    "field": {"type": "string", "enum": ["Status"]},
+                    "new_value": {"type": "string", "enum": STATUS_VALUES},
+                },
+                "required": ["field", "new_value"],
+                "additionalProperties": False,
+            },
         },
         "required": ["client_name", "date_iso", "event_type"],
     },

@@ -11,6 +11,7 @@ from bot.handlers.text import (
     _auto_status_update_from_enriched,
     _build_enriched_from_client,
     _client_data_summary,
+    _normalize_compound_status_update,
     handle_cancel_flow,
     handle_confirm,
     _run_guards,
@@ -426,24 +427,21 @@ def _resolve_status_update_on_disambiguation(
     flow_status_update: dict | None,
     selected_row: int,
 ) -> dict | None:
-    """Slice 5.1d.3: 3-way contract for status_update when the user picks a
+    """Slice 5.1d.3 + 5.4.3: resolve status_update after the user picks a
     candidate during add_meeting disambiguation.
 
     - flow_status_update is None → recompute auto-upgrade from the chosen
       client (same rule as the unique path in handle_add_meeting).
-    - flow_status_update has a truthy row → preserve as-is. Row-mismatch is
-      guarded separately upstream (_resume_add_meeting_disambiguation), so
-      if we reach here the row equals selected_row or is filled below.
-    - flow_status_update exists but row is empty/None → fill row from
-      selection; keep new_value / old_value / client_name / city.
+    - flow_status_update present → delegate to _normalize_compound_status_update
+      so row / old_value / client_name / city get filled from the chosen
+      candidate's enriched dict. Normalizer also drops malformed compound
+      (missing new_value) or unresolvable row, keeping the confirm card
+      coherent with what pipeline can write. Row-mismatch between compound
+      and selected_row is guarded separately upstream.
     """
     if flow_status_update is None:
         return _auto_status_update_from_enriched(enriched, event_type)
-    if flow_status_update.get("row"):
-        return flow_status_update
-    filled = dict(flow_status_update)
-    filled["row"] = selected_row
-    return filled
+    return _normalize_compound_status_update(flow_status_update, enriched)
 
 
 async def _resume_add_meeting_disambiguation(

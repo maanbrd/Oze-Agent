@@ -73,6 +73,56 @@ def test_add_meeting_entities_pass_through_unchanged():
         "date_iso": "2026-04-20",
         "event_type": "in_person",
     }
+    assert "status_update" not in legacy          # no compound → no top-level hoist
+
+
+def test_add_meeting_hoists_compound_status_update_to_top_level():
+    """Slice 5.4.3: classifier puts status_update inside entities; adapter
+    promotes it to top-level so handle_add_meeting's
+    intent_data.get("status_update") picks it up without reaching into
+    entities."""
+    result = IntentResult(
+        intent=IntentType.ADD_MEETING,
+        scope_tier=ScopeTier.MVP,
+        entities={
+            "client_name": "Wojtek",
+            "date_iso": "2026-04-23",
+            "event_type": "in_person",
+            "status_update": {"field": "Status", "new_value": "Podpisane"},
+        },
+        confidence=1.0,
+    )
+    legacy = _intent_result_to_legacy_dict(result, "Wojtek podpisał, spotkanie jutro o 14")
+    assert legacy["status_update"] == {"field": "Status", "new_value": "Podpisane"}
+    # status_update stays in entities as well (no destructive pop) so the raw
+    # tool-call shape is preserved for debugging / future plumbing.
+    assert legacy["entities"]["status_update"] == {"field": "Status", "new_value": "Podpisane"}
+
+
+def test_add_meeting_no_status_update_leaves_legacy_top_level_unchanged():
+    """Regression: non-compound add_meeting stays as before — no stray
+    status_update key leaks onto intent_data top-level."""
+    result = IntentResult(
+        intent=IntentType.ADD_MEETING,
+        scope_tier=ScopeTier.MVP,
+        entities={"client_name": "Nowak", "date_iso": "2026-04-20", "event_type": "in_person"},
+        confidence=1.0,
+    )
+    legacy = _intent_result_to_legacy_dict(result, "spotkanie z Nowakiem 20.04")
+    assert "status_update" not in legacy
+
+
+def test_change_status_does_not_hoist_status_update():
+    """Only ADD_MEETING intent triggers the hoist — CHANGE_STATUS carries its
+    own status field, no compound propagation."""
+    result = IntentResult(
+        intent=IntentType.CHANGE_STATUS,
+        scope_tier=ScopeTier.MVP,
+        entities={"client_name": "Kowalski", "status": "Podpisane"},
+        confidence=1.0,
+    )
+    legacy = _intent_result_to_legacy_dict(result, "Kowalski podpisał")
+    assert "status_update" not in legacy
 
 
 def test_show_client_entities_pass_through_unchanged():

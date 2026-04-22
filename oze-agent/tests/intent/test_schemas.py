@@ -70,6 +70,44 @@ def test_add_meeting_event_type_enum_and_required_fields():
     ]
 
 
+# ── Slice 5.4.3 — compound status_update property ──────────────────────────
+
+
+def test_add_meeting_schema_has_optional_status_update_property():
+    """Slice 5.4.3 — router tool exposes a compound status_update field so
+    classifier can emit both add_meeting and change_status in a single
+    tool call (e.g. "Wojtek podpisał, spotkanie jutro o 14")."""
+    tool = _by_name()["record_add_meeting"]
+    props = tool["input_schema"]["properties"]
+    assert "status_update" in props
+    su = props["status_update"]
+    assert su["type"] == "object"
+    assert set(su["properties"]) == {"field", "new_value"}
+    assert su["required"] == ["field", "new_value"]
+    assert su.get("additionalProperties") is False
+    assert "status_update" not in tool["input_schema"]["required"]
+
+
+def test_add_meeting_status_update_field_is_const_status():
+    tool = _by_name()["record_add_meeting"]
+    field_enum = tool["input_schema"]["properties"]["status_update"]["properties"]["field"]["enum"]
+    assert field_enum == ["Status"]
+
+
+def test_add_meeting_status_update_new_value_matches_canonical_status_values():
+    """Enum trzyma classifier w kanonie 9 statusów. Żadnych 'Przełożone'
+    ani innych LLM-wymyślonych wartości."""
+    tool = _by_name()["record_add_meeting"]
+    nv_enum = tool["input_schema"]["properties"]["status_update"]["properties"]["new_value"]["enum"]
+    assert nv_enum == STATUS_VALUES          # equality — schema may copy the list
+    assert "Podpisane" in nv_enum
+    assert "Rezygnacja z umowy" in nv_enum   # not "Rezygnacja"
+    assert "Zamontowana" in nv_enum
+    assert "Nowy lead" in nv_enum
+    assert "Przełożone" not in nv_enum
+    assert len(nv_enum) == 9
+
+
 def test_add_meeting_event_type_enum_excludes_doc_followup():
     """Slice 5.4.2 — router tool-call schema must not offer doc_followup.
     Real user speech for document reminders maps to phone_call or add_note.
