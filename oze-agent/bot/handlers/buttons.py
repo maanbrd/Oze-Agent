@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.text import (
+    _EVENT_TYPE_TO_NEXT_STEP_LABEL,
     _auto_status_update_from_enriched,
     _build_enriched_from_client,
     _client_data_summary,
@@ -486,6 +487,7 @@ async def _resume_add_meeting_disambiguation(
         client,
         flow_data.get("client_name", ""),
         flow_data.get("location", ""),
+        event_type=flow_data.get("event_type"),
     )
     status_update = _resolve_status_update_on_disambiguation(
         enriched,
@@ -536,8 +538,10 @@ async def _resume_add_meeting_skip_client(
     (plus any source_client_data the user already provided).
     """
     client_name = flow_data.get("client_name", "")
+    event_type = flow_data.get("event_type")
+    label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
     enriched_no_client = {
-        "title": flow_data.get("title") or (f"Spotkanie — {client_name}" if client_name else "Spotkanie"),
+        "title": flow_data.get("title") or (f"{label} — {client_name}" if client_name else label),
         "location": flow_data.get("location", ""),
         "description": "",
         "full_name": client_name,

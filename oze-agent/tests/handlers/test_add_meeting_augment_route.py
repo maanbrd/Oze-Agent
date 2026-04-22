@@ -250,6 +250,7 @@ async def test_add_meeting_augment_empty_meeting_accepts_full_client_data():
         1,
         "Andrzej Andrzejowski",
         "ul. Paderewskiego 14/2, Strzeszew",
+        event_type=None,
     )
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_type is PendingFlowType.ADD_MEETING
@@ -525,9 +526,17 @@ async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event
         },
     ]
 
-    def enrich_side_effect(_user_id: int, client_name: str, location: str) -> dict:
+    _EVENT_TYPE_LABEL = {
+        "in_person": "Spotkanie",
+        "phone_call": "Telefon",
+        "offer_email": "Wysłać ofertę",
+        "doc_followup": "Follow-up dokumentowy",
+    }
+
+    def enrich_side_effect(_user_id: int, client_name: str, location: str, *, event_type=None) -> dict:
+        label = _EVENT_TYPE_LABEL.get(event_type, "Spotkanie")
         return {
-            "title": f"Spotkanie — {client_name}",
+            "title": f"{label} — {client_name}",
             "location": location,
             "description": "",
             "full_name": client_name,
@@ -540,8 +549,9 @@ async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event
     ), patch(
         "bot.handlers.text._enrich_meeting",
         new=AsyncMock(side_effect=enrich_side_effect),
-    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
-         patch("bot.handlers.text.save_pending_flow") as mock_save_flow:
+    ) as mock_enrich, patch(
+        "bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[]),
+    ), patch("bot.handlers.text.save_pending_flow") as mock_save_flow:
         await handle_add_meeting(
             upd,
             MagicMock(),
@@ -557,6 +567,18 @@ async def test_add_meetings_batch_mixed_event_types_preserve_durations_and_event
         "phone_call",
         "offer_email",
     ]
+    # Slice 5.4.1: per-meeting event_type is plumbed into _enrich_meeting so
+    # Calendar titles are built with the correct label per event type.
+    assert [call.kwargs.get("event_type") for call in mock_enrich.await_args_list] == [
+        "in_person",
+        "phone_call",
+        "offer_email",
+    ]
+    assert [item["title"] for item in flow_meetings] == [
+        "Spotkanie — Jan Kowalski",
+        "Telefon — Anna Testowa",
+        "Wysłać ofertę — Adam Ofertowy",
+    ]
 
 
 @pytest.mark.asyncio
@@ -569,7 +591,7 @@ async def test_add_meetings_batch_falls_back_to_text_event_type():
         {"date": "2027-04-20", "time": "11:00", "client_name": "Anna Testowa", "location": ""},
     ]
 
-    def enrich_side_effect(_user_id: int, client_name: str, location: str) -> dict:
+    def enrich_side_effect(_user_id: int, client_name: str, location: str, *, event_type=None) -> dict:
         return {
             "title": f"Spotkanie — {client_name}",
             "location": location,

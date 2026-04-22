@@ -613,3 +613,96 @@ async def test_add_meetings_confirm_passes_event_type_to_calendar():
 
     assert mock_create.await_args_list[0].kwargs["event_type"] == "phone_call"
     assert mock_create.await_args_list[1].kwargs["event_type"] is None
+
+
+# ── Slice 5.4.1 — Calendar title per event_type ──────────────────────────────
+
+
+def _title_override_flow(*, title: str, event_type: str, client_name: str) -> dict:
+    return {
+        "title": title,
+        "start": "2027-05-10T14:00:00+02:00",
+        "end": "2027-05-10T15:00:00+02:00",
+        "client_name": client_name,
+        "location": "",
+        "description": "",
+        "event_type": event_type,
+        "client_row": 11,
+        "current_status": "Oferta wysłana",
+        "ambiguous_client": False,
+    }
+
+
+def _mock_pipeline_ok() -> AsyncMock:
+    return AsyncMock(return_value=MagicMock(
+        success=True, error_message=None, calendar_event_id="ev-1",
+        sheets_attempted=True, sheets_synced=True, sheets_error=None,
+        status_updated=False, status_new_value=None,
+    ))
+
+
+async def _confirm_and_return_title(flow_data: dict) -> str:
+    upd = _update()
+    pipeline = _mock_pipeline_ok()
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "bot.handlers.text.commit_add_meeting",
+        new=pipeline,
+    ), patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": "u1"}, {}, "")
+    return pipeline.await_args.kwargs["title"]
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_passes_event_type_aware_title_unchanged():
+    """New pendings (post-5.4.1) already carry an event_type-aware title;
+    override is a no-op because `Telefon — X` is a valid generic+name shape
+    and matches correct_label for phone_call."""
+    title = await _confirm_and_return_title(
+        _title_override_flow(title="Telefon — Zbigniew Nowak", event_type="phone_call", client_name="Zbigniew Nowak")
+    )
+    assert title == "Telefon — Zbigniew Nowak"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_legacy_bare_label_override():
+    """Legacy pending with bare title="Spotkanie" + event_type=phone_call
+    → override to "Telefon — X"."""
+    title = await _confirm_and_return_title(
+        _title_override_flow(title="Spotkanie", event_type="phone_call", client_name="Zbigniew Nowak")
+    )
+    assert title == "Telefon — Zbigniew Nowak"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_legacy_label_with_name_override():
+    """Legacy pending with title="Spotkanie — Jan" + event_type=phone_call
+    → override to "Telefon — Jan" (pattern match on stale generic prefix)."""
+    title = await _confirm_and_return_title(
+        _title_override_flow(title="Spotkanie — Jan", event_type="phone_call", client_name="Jan")
+    )
+    assert title == "Telefon — Jan"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_custom_title_not_overridden():
+    """A user-supplied custom title is preserved verbatim even when it starts
+    with a generic label — the full string is not one of the overridable shapes."""
+    custom = "Spotkanie podpisujące umowę z architektem Markowskim"
+    title = await _confirm_and_return_title(
+        _title_override_flow(title=custom, event_type="in_person", client_name="Markowski")
+    )
+    assert title == custom
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_wrong_label_with_name_override():
+    """Legacy pending with title="Telefon — Anna" but event_type flipped to
+    in_person (stale title from a previous extraction) → override to
+    "Spotkanie — Anna" on the basis of the current event_type."""
+    title = await _confirm_and_return_title(
+        _title_override_flow(title="Telefon — Anna", event_type="in_person", client_name="Anna")
+    )
+    assert title == "Spotkanie — Anna"

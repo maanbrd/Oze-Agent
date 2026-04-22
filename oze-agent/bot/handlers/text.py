@@ -108,6 +108,14 @@ _EVENT_TYPE_DEFAULT_DURATION = {
     "doc_followup": 15,
 }
 
+# Slice 5.4.1b — first line of Calendar event description when event_type has
+# a non-obvious action. in_person skipped: the meeting itself IS the action.
+_EVENT_TYPE_DESCRIPTION_PREFIX = {
+    "offer_email": "📧 Wyślij ofertę klientowi.",
+    "phone_call": "📞 Zadzwoń do klienta.",
+    "doc_followup": "📋 Follow-up dokumentowy.",
+}
+
 
 def _default_duration_for_event_type(event_type: Optional[str], user_default: int) -> int:
     if event_type in _EVENT_TYPE_DEFAULT_DURATION:
@@ -694,7 +702,12 @@ async def _route_pending_flow(
                     )
                     client_name = client_data["Imię i nazwisko"]
                     location_hint = _location_hint_from_client_data(client_data)
-                    enriched = await _enrich_meeting(user["id"], client_name, location_hint)
+                    enriched = await _enrich_meeting(
+                        user["id"],
+                        client_name,
+                        location_hint,
+                        event_type=flow_data.get("event_type"),
+                    )
                     description = flow_data.get("description") or enriched["description"]
                     status_update = flow_data.get("status_update")
                     if status_update is None:
@@ -1577,6 +1590,7 @@ def _build_enriched_from_client(
     client: dict,
     client_name_fallback: str,
     location_hint: str,
+    event_type: Optional[str] = None,
 ) -> dict:
     """Shared formatter — given a resolved Sheets row dict, build the enriched
     result used by handle_add_meeting for the confirmation card and payload."""
@@ -1591,6 +1605,9 @@ def _build_enriched_from_client(
         location = ", ".join(p for p in [addr, client_city] if p)
 
     parts = []
+    prefix = _EVENT_TYPE_DESCRIPTION_PREFIX.get(event_type)
+    if prefix:
+        parts.append(prefix)
     if client.get("Telefon"):
         parts.append(f"Tel: {client['Telefon']}")
     prod = client.get("Produkt", "")
@@ -1603,7 +1620,8 @@ def _build_enriched_from_client(
         parts.append(f"Następny krok: {client['Następny krok']}")
     description = "\n".join(parts)
 
-    title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
+    label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
+    title = f"{label} — {full_name}" if full_name else label
     return {
         "title": title,
         "location": location,
@@ -1624,6 +1642,7 @@ async def _enrich_meeting(
     client_name: str,
     location_hint: str,
     known_client_row: Optional[int] = None,
+    event_type: Optional[str] = None,
 ) -> dict:
     """Look up client in Sheets and return enriched title/location/description.
 
@@ -1645,7 +1664,7 @@ async def _enrich_meeting(
             None,
         )
         if match is not None:
-            return _build_enriched_from_client(match, client_name, location_hint)
+            return _build_enriched_from_client(match, client_name, location_hint, event_type=event_type)
         # Row vanished (deleted between confirms) — fall through to name lookup.
 
     full_name = client_name
@@ -1661,7 +1680,7 @@ async def _enrich_meeting(
     if client_name:
         result = await lookup_client(user_id, client_name)
         if result.status == "unique":
-            return _build_enriched_from_client(result.clients[0], client_name, location_hint)
+            return _build_enriched_from_client(result.clients[0], client_name, location_hint, event_type=event_type)
         elif result.status == "multi":
             ambiguous_client = True
             # Slice 5.1d.3: carry the candidate set so handle_add_meeting can
@@ -1678,7 +1697,8 @@ async def _enrich_meeting(
                 if c.get("_row") is not None
             ]
 
-    title = f"Spotkanie — {full_name}" if full_name else "Spotkanie"
+    label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
+    title = f"{label} — {full_name}" if full_name else label
     return {
         "title": title,
         "location": location,
@@ -1789,6 +1809,7 @@ async def handle_add_meeting(
             enriched_client_name,
             m.get("location", ""),
             known_client_row=r7_client_row,
+            event_type=event_type,
         )
         source_client_data = intent_data.get("source_client_data") or None
         status_update = intent_data.get("status_update") or None
@@ -1914,7 +1935,12 @@ async def handle_add_meeting(
             except Exception:
                 continue
 
-            enriched = await _enrich_meeting(user_id, m.get("client_name", ""), m.get("location", ""))
+            enriched = await _enrich_meeting(
+                user_id,
+                m.get("client_name", ""),
+                m.get("location", ""),
+                event_type=event_type,
+            )
 
             conflicts = await check_conflicts(user_id, start_dt, end_dt)
             if conflicts:
@@ -2316,10 +2342,21 @@ async def handle_confirm(
             end = datetime.fromisoformat(flow_data["end"])
             client_data = flow_data.get("client_data") or {}
             client_name = flow_data.get("client_name") or client_data.get("Imię i nazwisko", "")
-            title = flow_data.get("title", "Spotkanie")
-            if client_name and title.strip().lower() == "spotkanie":
-                title = f"Spotkanie — {client_name}"
             event_type = flow_data.get("event_type") or "in_person"
+            correct_label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
+            title = flow_data.get("title") or correct_label
+            # Legacy override: pre-5.4.1 pendings stored title="Spotkanie — X" even
+            # for phone_call/offer_email. Rewrite bare generic labels and the
+            # "{generic_label} — {client_name}" pattern so Calendar title matches
+            # event_type. Custom titles (not matching either shape) pass through.
+            if client_name:
+                stripped = title.strip()
+                generic_labels = set(_EVENT_TYPE_TO_NEXT_STEP_LABEL.values())
+                is_overridable = stripped in generic_labels or any(
+                    stripped == f"{lbl} — {client_name}" for lbl in generic_labels
+                )
+                if is_overridable:
+                    title = f"{correct_label} — {client_name}"
             status_update = flow_data.get("status_update") or None
             ambiguous_client = flow_data.get("ambiguous_client", False)
             enriched_client_row = flow_data.get("client_row")
