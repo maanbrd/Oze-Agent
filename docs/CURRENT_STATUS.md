@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 15.04.2026_
+_Last updated: 22.04.2026_
 
 ---
 
@@ -13,6 +13,21 @@ Current strategy: **selective rewrite of the behavior layer**.
 The Python behavior layer is legacy/reference — not trusted as behavior contract.
 The `.md` documentation is the primary project asset.
 We do not delete infrastructure blindly.
+
+## Current Implementation Status
+
+Phase 5 Mutation Pipeline refactor is complete in code through the final
+bundled cleanup commit (5.5 + 5.5a + 5.6 + 5.7).
+
+Completed Phase 5 closure:
+- `commit_add_client` pipeline for Sheets-only client creation.
+- `commit_update_client_fields` pipeline for duplicate merge updates.
+- Read-only audit for `show_client` / `show_day_plan` confirmed no-op; those paths already use facade-backed reads.
+- `handle_confirm` narrowed with per-flow helpers for simpler pipeline-backed flows while keeping `add_meeting`, `add_meetings`, `edit_client`, and `delete_client` inline where planned.
+
+Next: restart/deploy the final bot build and run manual smoke for add_client,
+duplicate update, batch add_clients, Sheets failure, show_client, and
+show_day_plan.
 
 ### Keep (potential reuse)
 

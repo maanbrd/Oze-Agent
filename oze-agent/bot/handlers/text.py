@@ -100,6 +100,8 @@ from shared.mutations import (
     STATUS_MEETING_AUTO_UPGRADE_FROM as _STATUS_MEETING_AUTO_UPGRADE_FROM,
     STATUS_MEETING_BOOKED as _STATUS_MEETING_BOOKED,
     STATUS_NEW_LEAD as _STATUS_NEW_LEAD,
+    commit_add_client,
+    commit_update_client_fields,
 )
 _EVENT_TYPE_DEFAULT_DURATION = {
     "in_person": 60,
@@ -2310,6 +2312,131 @@ async def handle_change_status(
     )
 
 
+# ── Slice 5.7: per-branch confirm helpers (Opcja B) ─────────────────────────
+#
+# Each _confirm_* helper owns a single pipeline-backed flow_type. Returns
+# skip_delete: bool so the caller (handle_confirm) can keep the
+# delete_pending_flow cleanup in exactly one place. Helpers are pure
+# block-moves — copy and flow-control semantics match pre-5.7 behavior 1:1.
+# edit_client / delete_client / add_meetings (plural) stay inline in
+# handle_confirm: those paths are POST-MVP / vision-only and out of this
+# slice's scope.
+
+
+async def _confirm_add_client(update, telegram_id, user_id, flow_data) -> bool:
+    remaining = flow_data.get("_offer_remaining", [])
+    result = await commit_add_client(user_id, flow_data["client_data"])
+    if not result.success:
+        await update.effective_message.reply_markdown_v2(
+            format_error(result.error_message or "google_down")
+        )
+        return False
+
+    name = flow_data["client_data"].get("Imię i nazwisko", "klient")
+    city = flow_data["client_data"].get("Miasto", "")
+    if remaining:
+        next_client = remaining[0]
+        new_remaining = remaining[1:]
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT,
+            flow_data=payload_to_flow_data(AddClientPayload(
+                client_data={"Imię i nazwisko": next_client},
+                _offer_remaining=new_remaining,
+            )),
+        ))
+        await update.effective_message.reply_text(
+            f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
+        )
+        return True
+
+    await update.effective_message.reply_text("✅ Zapisane.")
+    await send_next_action_prompt(
+        update, telegram_id, name, city,
+        client_row=result.row,
+        current_status=flow_data["client_data"].get("Status") or "",
+    )
+    return True  # r7_prompt flow created inside send_next_action_prompt
+
+
+async def _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data) -> bool:
+    duplicate_row = flow_data.get("duplicate_row")
+    if duplicate_row:
+        update_result = await commit_update_client_fields(
+            user_id, duplicate_row, flow_data["client_data"]
+        )
+        if not update_result.success:
+            await update.effective_message.reply_markdown_v2(
+                format_error(update_result.error_message or "google_down")
+            )
+            return False
+        name = flow_data.get("client_name", "klient")
+        city = flow_data.get("city", "")
+        await update.effective_message.reply_text("✅ Dane zaktualizowane.")
+        await send_next_action_prompt(
+            update, telegram_id, name, city,
+            client_row=duplicate_row,
+            current_status=flow_data["client_data"].get("Status") or "",
+        )
+        return True
+
+    # Fallback: no duplicate_row → fresh add (mirrors pre-5.5 behavior:
+    # only "✅ Zapisane.", no R7, no batch).
+    add_result = await commit_add_client(user_id, flow_data["client_data"])
+    if add_result.success:
+        await update.effective_message.reply_text("✅ Zapisane.")
+    else:
+        await update.effective_message.reply_markdown_v2(
+            format_error(add_result.error_message or "google_down")
+        )
+    return False
+
+
+async def _confirm_add_note(update, user_id, flow_data) -> bool:
+    result = await commit_add_note(
+        user_id,
+        flow_data["row"],
+        flow_data["note_text"],
+        flow_data.get("old_notes", ""),
+        date.today(),
+    )
+    if result.success:
+        await update.effective_message.reply_text("✅ Notatka dodana.")
+    else:
+        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+    # Per spec (INTENCJE_MVP.md §4.3): clean note is a closed act — no R7.
+    return False
+
+
+async def _confirm_change_status(update, telegram_id, user_id, flow_data) -> bool:
+    result = await commit_change_status(
+        user_id,
+        flow_data["row"],
+        flow_data["new_value"],
+        date.today(),
+    )
+    if not result.success:
+        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        return False
+
+    await update.effective_message.reply_text(
+        f"✅ Status zmieniony na: {flow_data['new_value']}"
+    )
+    # R7 fires for every plain change_status (INTENCJE_MVP §4.4). A future
+    # compound change_status + add_meeting flow can suppress it by setting
+    # flow_data["compound_add_meeting"]; that path does not reach this branch
+    # today, but the guard documents the contract.
+    if not flow_data.get("compound_add_meeting"):
+        await send_next_action_prompt(
+            update, telegram_id,
+            flow_data.get("client_name", "klient"),
+            flow_data.get("city", ""),
+            client_row=flow_data.get("row"),
+            current_status=flow_data.get("new_value") or "",
+        )
+    return True
+
+
 async def handle_confirm(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2337,59 +2464,10 @@ async def handle_confirm(
 
     try:
         if flow_type == "add_client":
-            remaining = flow_data.get("_offer_remaining", [])
-            row = await add_client(user_id, flow_data["client_data"])
-            if row:
-                name = flow_data["client_data"].get("Imię i nazwisko", "klient")
-                city = flow_data["client_data"].get("Miasto", "")
-                if remaining:
-                    next_client = remaining[0]
-                    new_remaining = remaining[1:]
-                    save_pending(PendingFlow(
-                        telegram_id=telegram_id,
-                        flow_type=PendingFlowType.ADD_CLIENT,
-                        flow_data=payload_to_flow_data(AddClientPayload(
-                            client_data={"Imię i nazwisko": next_client},
-                            _offer_remaining=new_remaining,
-                        )),
-                    ))
-                    await update.effective_message.reply_text(
-                        f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
-                    )
-                    skip_delete = True
-                else:
-                    await update.effective_message.reply_text("✅ Zapisane.")
-                    skip_delete = True  # r7_prompt flow created below
-                    await send_next_action_prompt(
-                        update, telegram_id, name, city,
-                        client_row=row,
-                        current_status=flow_data["client_data"].get("Status") or "",
-                    )
-            else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+            skip_delete = await _confirm_add_client(update, telegram_id, user_id, flow_data)
 
         elif flow_type == "add_client_duplicate":
-            duplicate_row = flow_data.get("duplicate_row")
-            if duplicate_row:
-                ok = await update_client(user_id, duplicate_row, flow_data["client_data"])
-                if ok:
-                    name = flow_data.get("client_name", "klient")
-                    city = flow_data.get("city", "")
-                    await update.effective_message.reply_text("✅ Dane zaktualizowane.")
-                    skip_delete = True
-                    await send_next_action_prompt(
-                        update, telegram_id, name, city,
-                        client_row=duplicate_row,
-                        current_status=flow_data["client_data"].get("Status") or "",
-                    )
-                else:
-                    await update.effective_message.reply_markdown_v2(format_error("google_down"))
-            else:
-                row = await add_client(user_id, flow_data["client_data"])
-                if row:
-                    await update.effective_message.reply_text("✅ Zapisane.")
-                else:
-                    await update.effective_message.reply_markdown_v2(format_error("google_down"))
+            skip_delete = await _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
 
         elif flow_type == "edit_client":
             updates = flow_data["updates"]
@@ -2588,46 +2666,10 @@ async def handle_confirm(
                 await update.effective_message.reply_text("Brak klientów do dodania.")
 
         elif flow_type == "change_status":
-            result = await commit_change_status(
-                user_id,
-                flow_data["row"],
-                flow_data["new_value"],
-                date.today(),
-            )
-            if not result.success:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
-            else:
-                await update.effective_message.reply_text(
-                    f"✅ Status zmieniony na: {flow_data['new_value']}"
-                )
-                skip_delete = True
-                # R7 fires for every plain change_status (INTENCJE_MVP §4.4).
-                # A future compound change_status + add_meeting flow can
-                # suppress it by setting flow_data["compound_add_meeting"];
-                # that path does not reach this branch today, but the guard
-                # documents the contract.
-                if not flow_data.get("compound_add_meeting"):
-                    await send_next_action_prompt(
-                        update, telegram_id,
-                        flow_data.get("client_name", "klient"),
-                        flow_data.get("city", ""),
-                        client_row=flow_data.get("row"),
-                        current_status=flow_data.get("new_value") or "",
-                    )
+            skip_delete = await _confirm_change_status(update, telegram_id, user_id, flow_data)
 
         elif flow_type == "add_note":
-            result = await commit_add_note(
-                user_id,
-                flow_data["row"],
-                flow_data["note_text"],
-                flow_data.get("old_notes", ""),
-                date.today(),
-            )
-            if result.success:
-                await update.effective_message.reply_text("✅ Notatka dodana.")
-            else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
-            # Per spec (INTENCJE_MVP.md §4.3): clean note is a closed act — no R7
+            skip_delete = await _confirm_add_note(update, user_id, flow_data)
 
         elif flow_type == "confirm_search":
             row = flow_data.get("row")

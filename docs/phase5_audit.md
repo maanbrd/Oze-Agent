@@ -4,6 +4,12 @@ _Session: plan implementacji Phase 5 (Mutation Pipeline)_
 _Baseline HEAD: bee2df6 ("docs: park duration mismatch and resume disambiguation slice")_
 _Zatwierdzony plan: [/Users/mansoniasty/.claude/plans/eventual-pondering-church.md](/Users/mansoniasty/.claude/plans/eventual-pondering-church.md)_
 
+**Completion update (22.04.2026):** Phase 5 Mutation Pipeline refactor COMPLETE.
+Final bundled commit closes 5.5 + 5.5a + 5.6 + 5.7: add_client pipeline,
+duplicate update pipeline, read-only audit (confirmed no-op), and narrowed
+`handle_confirm` cleanup with per-flow helpers. Commit hash intentionally not
+recorded here because this docs update is part of the same bundled commit.
+
 ---
 
 ## 1. Cel sesji
@@ -102,11 +108,11 @@ Plan przeszedł 4 rundy iteracyjnego review. Każda runda wymuszała rzetelne gu
 - **Slice 5.2** — `commit_add_note` (≈3h)
 - **Slice 5.3** — `commit_change_status` + R7 isolation (≈3h)
 - **Slice 5.4** — `commit_add_meeting` (≈6h, największa)
-- **Slice 5.5** — `commit_add_client` + 5.5a `commit_update_client_fields` (≈4h)
+- ~~**Slice 5.5** — `commit_add_client` + 5.5a `commit_update_client_fields` (≈4h)~~ ✅
 
 **Cleanup:**
-- **Slice 5.6** — read-only refactor show_client + show_day_plan (≈2h)
-- **Slice 5.7** — `handle_confirm` narrowed cleanup (≈2h)
+- ~~**Slice 5.6** — read-only refactor show_client + show_day_plan (≈2h)~~ ✅ confirmed no-op
+- ~~**Slice 5.7** — `handle_confirm` narrowed cleanup (≈2h)~~ ✅
 
 **Estimate total:** ~29h pracy. Każda slice committable i deployable samodzielnie.
 
@@ -179,26 +185,25 @@ Deleted (doc cleanup):
 
 ---
 
-## 6. Status (21.04.2026)
+## 6. Status (22.04.2026)
 
-**Czekamy na decyzję Maana:**
+**Phase 5 COMPLETE.**
 
-1. ✅ Plan zatwierdzony (/Users/mansoniasty/.claude/plans/eventual-pondering-church.md)
-2. ✅ Baseline refresh wykonany
-3. ✅ Re-audyt dirty worktree — brak kolizji ze Slice 5.0
-4. ⏳ **Decyzja:** commit dirty zmian (rekomendowane) vs kontynuuj na dirty
+Final bundled commit closes the remaining cleanup slices:
 
-**Rekomendowany workflow:**
+1. ✅ **5.5** — `shared/mutations/add_client.commit_add_client` (Sheets-only, `google_down` taxonomy)
+2. ✅ **5.5a** — `commit_update_client_fields` for duplicate merge updates via touch-contact wrapper
+3. ✅ **5.6** — read-only audit: `show_client` / `show_day_plan` already use facade-backed read paths, so no-op
+4. ✅ **5.7** — narrowed `handle_confirm` cleanup with per-flow helpers for simpler pipeline-backed flows
 
-1. Commit dirty zmian jako pre-Phase-5 konsolidacja (F7b + silent-pick + duplicate candidates + doc cleanup), ale **nie** przez ślepe `git add -A` — pominąć `.DS_Store`, `.claude/` i niepożądane artefakty.
-2. `Slice 5.0: extract first_name_ok to shared/matching` jako osobny atomowy commit
-3. Kontynuuj per kolejność implementacji z planu
+Preserved out-of-scope paths: `add_meetings` plural, `edit_client`, and
+`delete_client` remain inline (POST-MVP / vision-only). Phase 5 intentionally
+keeps `commit_add_client` F/J behavior as a mirror of current Sheets behavior
+(auto-I only); spec §4.1 auto-status compliance remains POST-MVP.
 
-**Kolejne kroki po decyzji dirty:**
-
-- Slice 5.0 (30 min) — `shared/matching.py` + migracja testu
-- Slice 5.1a (2h) — `shared/clients/find.py` z unique-rule i phone digits-compare
-- **Przed Slice 5.1d:** osobne pytanie do Maana o Gate A vs Gate B (ambiguous_client flag)
+**Next:** restart/deploy final bot build and run manual smoke for add_client,
+duplicate update, batch add_clients, Sheets failure, show_client, and
+show_day_plan.
 
 ---
 
