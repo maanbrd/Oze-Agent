@@ -567,7 +567,10 @@ async def test_add_meeting_confirm_forwards_flow_data_to_pipeline():
     args = mock_pipeline.await_args.args
     kwargs = mock_pipeline.await_args.kwargs
     assert args[0] == "u1"                                    # user_id
-    assert kwargs["title"] == "Spotkanie - X"
+    # Slice 5.4.1c: flow_data title "Spotkanie - X" + event_type=phone_call
+    # matches the legacy-ASCII-dash override pattern → rewritten with em-dash
+    # and the correct label for phone_call.
+    assert kwargs["title"] == "Telefon — X"
     assert isinstance(kwargs["start"], datetime)
     assert kwargs["start"].isoformat() == "2027-05-10T14:00:00+02:00"
     assert kwargs["event_type"] == "phone_call"
@@ -706,3 +709,14 @@ async def test_add_meeting_confirm_wrong_label_with_name_override():
         _title_override_flow(title="Telefon — Anna", event_type="in_person", client_name="Anna")
     )
     assert title == "Spotkanie — Anna"
+
+
+@pytest.mark.asyncio
+async def test_add_meeting_confirm_legacy_ascii_dash_override():
+    """Slice 5.4.1c: legacy pending with ASCII dash ("Spotkanie - Jan") also
+    enters the override — pre-5.4.1 flows and several test fixtures in this
+    repo use a plain hyphen instead of em-dash. Output still uses em-dash."""
+    title = await _confirm_and_return_title(
+        _title_override_flow(title="Spotkanie - Jan", event_type="phone_call", client_name="Jan")
+    )
+    assert title == "Telefon — Jan"

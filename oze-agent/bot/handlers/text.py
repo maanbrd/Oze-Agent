@@ -2369,11 +2369,14 @@ async def handle_confirm(
             # for phone_call/offer_email. Rewrite bare generic labels and the
             # "{generic_label} — {client_name}" pattern so Calendar title matches
             # event_type. Custom titles (not matching either shape) pass through.
+            # Slice 5.4.1c: tolerate ASCII dash "-" too — test fixtures and some
+            # pre-5.4.1 flows stored "Spotkanie - Jan" without em-dash.
             if client_name:
                 stripped = title.strip()
                 generic_labels = set(_EVENT_TYPE_TO_NEXT_STEP_LABEL.values())
                 is_overridable = stripped in generic_labels or any(
-                    stripped == f"{lbl} — {client_name}" for lbl in generic_labels
+                    stripped in (f"{lbl} — {client_name}", f"{lbl} - {client_name}")
+                    for lbl in generic_labels
                 )
                 if is_overridable:
                     title = f"{correct_label} — {client_name}"
