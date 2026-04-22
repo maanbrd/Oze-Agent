@@ -70,6 +70,18 @@ def test_add_meeting_event_type_enum_and_required_fields():
     ]
 
 
+def test_add_meeting_event_type_enum_excludes_doc_followup():
+    """Slice 5.4.2 — router tool-call schema must not offer doc_followup.
+    Real user speech for document reminders maps to phone_call or add_note.
+    Downstream (EVENT_TYPE_TO_NEXT_STEP_LABEL, Calendar metadata) still
+    tolerates legacy doc_followup values in flow_data, but new classifier
+    outputs cannot produce it."""
+    tool = _by_name()["record_add_meeting"]
+    enum = tool["input_schema"]["properties"]["event_type"]["enum"]
+    assert "doc_followup" not in enum
+    assert set(enum) == {"in_person", "phone_call", "offer_email"}
+
+
 def test_out_of_scope_enums_and_required_fields():
     tool = _by_name()["record_out_of_scope"]
     props = tool["input_schema"]["properties"]

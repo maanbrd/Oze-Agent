@@ -80,7 +80,9 @@ async def test_add_client_augment_meeting_phone_is_carried_to_meeting_flow():
         ("spotkanie, zadzwoń wcześniej", "phone_call"),
         ("zadzwonić w piątek o 10", "phone_call"),
         ("wysłać ofertę w środę", "offer_email"),
-        ("follow-up dokumentowy w poniedziałek", "doc_followup"),
+        # Slice 5.4.2: follow-up / przypomnij fold into phone_call.
+        ("follow-up dokumentowy w poniedziałek", "phone_call"),
+        ("przypomnij o fakturze jutro", "phone_call"),
     ],
 )
 async def test_add_client_augment_infers_event_type_for_action_replies(

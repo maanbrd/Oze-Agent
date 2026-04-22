@@ -8,6 +8,8 @@ from bot.handlers.text import (
     _is_client_scoped_action_reply,
     _message_with_add_client_context,
     _message_with_r7_client_context,
+    _normalize_parsed_event_type,
+    _resolve_meeting_event_type,
     handle_banner,
     handle_general,
 )
@@ -154,9 +156,46 @@ def test_client_action_replies_route_with_pending_context():
 def test_infer_meeting_event_type_uses_d4_priority_order():
     assert _infer_meeting_event_type("Zadzwoń do Tomasza Nowickiego w sobotę o 12") == "phone_call"
     assert _infer_meeting_event_type("Wyślij ofertę Janowi Kowalskiemu dzisiaj o godzinie 23") == "offer_email"
-    assert _infer_meeting_event_type("Przypomnij Wojtkowi Testowemu o dokumentach jutro o 15") == "doc_followup"
+    # Slice 5.4.2: "przypomnij" / "follow-up" now fold into phone_call (user
+    # calls to remind); doc_followup event_type removed from MVP parser.
+    assert _infer_meeting_event_type("Przypomnij Wojtkowi Testowemu o dokumentach jutro o 15") == "phone_call"
+    assert _infer_meeting_event_type("Follow-up z Janem jutro o 10") == "phone_call"
     assert _infer_meeting_event_type("Spotkanie telefoniczne z Janem jutro o 10") == "phone_call"
     assert _infer_meeting_event_type("Spotkanie z Janem jutro o 10") == "in_person"
+
+
+# ── Slice 5.4.2 — runtime normalizer for dropped doc_followup ────────────────
+
+
+def test_normalize_parsed_event_type_reroutes_doc_followup_to_phone_call():
+    """LLM drift guard: parser output doc_followup is rerouted to phone_call
+    even if prompt + schema changes fail to fully suppress it."""
+    assert _normalize_parsed_event_type("doc_followup") == "phone_call"
+
+
+def test_normalize_parsed_event_type_passes_valid_values_through():
+    for value in ("in_person", "phone_call", "offer_email"):
+        assert _normalize_parsed_event_type(value) == value
+
+
+def test_normalize_parsed_event_type_preserves_none():
+    assert _normalize_parsed_event_type(None) is None
+
+
+def test_resolve_meeting_event_type_applies_normalizer_on_inference():
+    """_infer_meeting_event_type no longer returns doc_followup after 5.4.2,
+    but if a stale caller passed an inferred value through, normalizer catches."""
+    # Neutral message (no follow-up/dokument markers) — the guard on the
+    # inferred value is what renormalizes, not re-inference from message_text.
+    result = _resolve_meeting_event_type("spotkanie z klientem jutro", "doc_followup")
+    assert result == "in_person"  # message infers in_person first; doc_followup fallback never reached
+
+
+def test_resolve_meeting_event_type_applies_normalizer_on_fallback():
+    """When message infers nothing, fallbacks go through normalizer."""
+    # Short message with no event markers at all.
+    result = _resolve_meeting_event_type("ok", "doc_followup")
+    assert result == "phone_call"
 
 
 def test_add_client_context_injected_for_action_reply():

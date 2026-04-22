@@ -273,12 +273,11 @@ Rozumiej polskie wyrażenia dat i czasu:
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
-Ustaw event_type dla KAŻDEGO obiektu (gdy markery się nakładają, wygrywa priorytet: phone_call > offer_email > doc_followup > in_person):
-- "zadzwoń", "zadzwonić", "oddzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna", "call" → "phone_call"
-- "wyślij ofertę", "oferta", "wycena", "mail", "email" → "offer_email"
-- "follow-up", "followup", "dokument", "dokumenty", "papier", "docs" → "doc_followup"
+Ustaw event_type dla KAŻDEGO obiektu (gdy markery się nakładają, wygrywa priorytet: phone_call > offer_email > in_person). Dostępne wartości: "phone_call", "offer_email", "in_person" (bez "doc_followup").
+- "zadzwoń", "zadzwonić", "oddzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna", "call", "przypomnij", "follow-up", "followup" → "phone_call" (użytkownik dzwoni żeby przypomnieć/skontaktować się)
+- "wyślij ofertę", "oferta", "wycena", "mail", "email", "wyślij dokumenty", "przesłać dokumenty" → "offer_email"
 - "spotkanie", "wizyta", "jadę do", "jade do" → "in_person"
-`duration_minutes` (int, OPCJONALNE): Dodaj to pole TYLKO gdy user jawnie podał czas trwania (np. "na 30 minut", "przez godzinę"=60, "45 min", "na pół godziny"=30, "1h"=60). W przeciwnym razie NIE dodawaj tego pola — system ustawi domyślny czas na podstawie event_type (phone_call/offer_email/doc_followup=15 min, in_person=60 min).
+`duration_minutes` (int, OPCJONALNE): Dodaj to pole TYLKO gdy user jawnie podał czas trwania (np. "na 30 minut", "przez godzinę"=60, "45 min", "na pół godziny"=30, "1h"=60). W przeciwnym razie NIE dodawaj tego pola — system ustawi domyślny czas na podstawie event_type (phone_call/offer_email=15 min, in_person=60 min).
 Przykłady duration_minutes:
 - "Zadzwoń do Tomasza jutro o 12" → bez duration_minutes (domyślne 15 dla phone_call)
 - "Zadzwoń do Tomasza jutro o 12 na 30 minut" → "duration_minutes": 30

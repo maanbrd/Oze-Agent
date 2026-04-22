@@ -277,26 +277,46 @@ def _infer_meeting_event_type(
     default: Optional[str] = "in_person",
 ) -> Optional[str]:
     text_lower = message_text.lower()
+    # Slice 5.4.2: doc_followup markers fold into phone_call — real user speech
+    # for document reminders ("przypomnij o fakturze", "follow-up z Janem jutro")
+    # is a call to remind, not a separate event type.
     if any(marker in text_lower for marker in (
         "zadzwoń", "zadzwo", "zadzwon", "zadzwonić", "zadzwonic",
         "oddzwoń", "oddzwo", "oddzwon", "telefon", "telefonicz",
         "rozmowa telefoniczna", "call",
+        "przypomn", "follow-up", "followup",
     )):
         return "phone_call"
     if any(marker in text_lower for marker in ("ofert", "wycena", "wycen", "mail", "email")):
         return "offer_email"
-    if any(marker in text_lower for marker in ("dokument", "follow-up", "followup", "papier", "docs")):
-        return "doc_followup"
     if any(marker in text_lower for marker in ("spotkanie", "wizyta", "jadę do", "jade do")):
         return "in_person"
     return default
 
 
+def _normalize_parsed_event_type(event_type: Optional[str]) -> Optional[str]:
+    """Slice 5.4.2 — drop doc_followup from generated inputs.
+
+    Parser (extract_meeting_data) and _infer_meeting_event_type should not
+    produce doc_followup after 5.4.2 (prompt + schema + marker folds), but
+    LLM drift can still slip a legacy value through. This guard reroutes to
+    phone_call on the way out of the parser. Legacy pending flows that
+    stored event_type='doc_followup' bypass this guard because they read
+    flow_data directly and need to keep rendering correctly.
+    """
+    if event_type == "doc_followup":
+        return "phone_call"
+    return event_type
+
+
 def _resolve_meeting_event_type(message_text: str, *fallbacks: Optional[str]) -> str:
-    inferred = _infer_meeting_event_type(message_text, default=None)
+    inferred = _normalize_parsed_event_type(
+        _infer_meeting_event_type(message_text, default=None)
+    )
     if inferred:
         return inferred
     for fallback in fallbacks:
+        fallback = _normalize_parsed_event_type(fallback)
         if fallback:
             return fallback
     return "in_person"

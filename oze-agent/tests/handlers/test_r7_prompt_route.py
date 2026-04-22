@@ -96,7 +96,9 @@ async def test_r7_complete_meeting_phrase_routes_to_add_meeting():
         ("spotkanie z Kowalskim, zadzwoń wcześniej", "phone_call"),
         ("zadzwonić w piątek o 10", "phone_call"),
         ("wysłać ofertę w środę", "offer_email"),
-        ("follow-up dokumentowy w poniedziałek", "doc_followup"),
+        # Slice 5.4.2: follow-up / przypomnij fold into phone_call.
+        ("follow-up dokumentowy w poniedziałek", "phone_call"),
+        ("przypomnij o dokumentach jutro o 10", "phone_call"),
     ],
 )
 async def test_r7_infers_event_type_for_temporal_replies(message_text, expected_event_type):

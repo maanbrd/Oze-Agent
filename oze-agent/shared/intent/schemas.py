@@ -20,7 +20,10 @@ STATUS_VALUES = [
     "Odrzucone",
 ]
 
-EVENT_TYPE_VALUES = ["in_person", "phone_call", "offer_email", "doc_followup"]
+# Slice 5.4.2: doc_followup dropped from router — real user speech for document
+# reminders maps to phone_call (call to remind) or add_note (just record it).
+# Downstream legacy tolerates doc_followup in flow_data / Calendar metadata.
+EVENT_TYPE_VALUES = ["in_person", "phone_call", "offer_email"]
 
 OUT_OF_SCOPE_CATEGORIES = ["post_mvp_roadmap", "vision_only", "unplanned"]
 
