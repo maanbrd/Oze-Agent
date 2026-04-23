@@ -873,6 +873,22 @@ async def _route_pending_flow(
         )
         return True
     elif flow_type == "change_status":
+        telegram_id = update.effective_user.id
+        # I2/I3 fix: non-action, non-meeting intent-switch prefixes auto-cancel
+        # pending. Węższa lista niż add_note celowo — meeting-related prefixes
+        # (spotkanie z, umów spotkanie) to legit R7 replies wchodzące w
+        # compound/add_meeting path z carry status_update. NIE tutaj.
+        _search_prefixes = (
+            "pokaż", "znajdź", "szukaj",
+            "plan na", "co mam",
+            "kto ma numer", "kto to",
+            "dodaj klienta",
+        )
+        if any(text_lower.startswith(p) for p in _search_prefixes):
+            delete_pending_flow(telegram_id)
+            await update.effective_message.reply_text("⚠️ Anulowane.")
+            return False
+
         flow_data = flow.get("flow_data", {})
         client_name = flow_data.get("client_name", "")
         city = flow_data.get("city", "")

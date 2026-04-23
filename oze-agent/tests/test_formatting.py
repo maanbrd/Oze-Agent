@@ -120,3 +120,14 @@ def test_format_edit_comparison_shows_arrow():
     assert "600111222" in result
     assert "601234567" in result
     assert "→" in result
+
+
+def test_format_edit_comparison_empty_old_value_shows_em_dash():
+    """I4 fix: empty old_value renders em dash '—' to avoid ambiguous
+    'Status:  → X' (double-space). Seen in smoke when client had Status
+    never set per 5.5 F/J mirror."""
+    result = format_edit_comparison("Status", "", "Podpisane")
+    assert "—" in result                   # em dash placeholder
+    assert "→" in result                   # arrow (separate char)
+    assert "Podpisane" in result
+    assert "Status:  →" not in result      # no double-space regression

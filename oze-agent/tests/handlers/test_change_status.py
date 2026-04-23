@@ -224,6 +224,94 @@ async def test_change_status_append_without_action_keeps_status_pending():
     assert "Dopisz następny krok" in response
 
 
+# ── phase5-followup-ux (I2/I3): intent-switch prefix auto-cancel ─────────────
+
+
+@pytest.mark.asyncio
+async def test_change_status_auto_cancels_on_pokaz_prefix():
+    """I2 fix: 'pokaż X' during pending change_status → auto-cancel + False,
+    reply '⚠️ Anulowane.', let caller re-process as fresh intent.
+    Regression guard: handle_add_meeting MUST NOT fire."""
+    upd = _update()
+    flow = {
+        "flow_type": "change_status",
+        "flow_data": {"row": 7, "old_value": "X", "new_value": "Y", "client_name": "N"},
+    }
+    with patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ):
+        consumed = await _route_pending_flow(
+            upd, MagicMock(), {"id": 1}, flow, "pokaż Jana Kowalskiego",
+        )
+    assert consumed is False
+    upd.effective_message.reply_text.assert_awaited_once_with("⚠️ Anulowane.")
+    mock_meeting.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_change_status_auto_cancels_on_co_mam_prefix():
+    """I3 fix: 'co mam dziś' during pending change_status → auto-cancel
+    BEFORE text_has_action check. Key regression guard: handle_add_meeting
+    MUST NOT fire (pre-fix bug: temporal 'dziś' routed here, parser failed)."""
+    upd = _update()
+    flow = {
+        "flow_type": "change_status",
+        "flow_data": {"row": 7, "old_value": "X", "new_value": "Y", "client_name": "N"},
+    }
+    with patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ):
+        consumed = await _route_pending_flow(
+            upd, MagicMock(), {"id": 1}, flow, "co mam dziś",
+        )
+    assert consumed is False
+    upd.effective_message.reply_text.assert_awaited_once_with("⚠️ Anulowane.")
+    mock_meeting.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_change_status_auto_cancels_on_dodaj_klienta_prefix():
+    """Smoke-observed trigger: 'dodaj klienta X' during pending change_status."""
+    upd = _update()
+    flow = {
+        "flow_type": "change_status",
+        "flow_data": {"row": 7, "old_value": "X", "new_value": "Y", "client_name": "N"},
+    }
+    with patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ):
+        consumed = await _route_pending_flow(
+            upd, MagicMock(), {"id": 1}, flow, "dodaj klienta Tadek Sprawdzony, Marki",
+        )
+    assert consumed is False
+    upd.effective_message.reply_text.assert_awaited_once_with("⚠️ Anulowane.")
+    mock_meeting.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_change_status_spotkanie_z_still_routes_to_add_meeting():
+    """Regression guard: 'spotkanie z X jutro' po change_status nadal
+    wchodzi w compound/R7 path (handle_add_meeting z status_update carried).
+    Fix I2/I3 NIE może tego zepsuć — meeting-related prefixes celowo
+    POMINIĘTE w _search_prefixes (wąższa lista niż add_note)."""
+    upd = _update()
+    flow = {
+        "flow_type": "change_status",
+        "flow_data": {
+            "row": 7, "old_value": "Oferta wysłana", "new_value": "Podpisane",
+            "client_name": "Jan Kowalski", "city": "Warszawa",
+        },
+    }
+    with patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd, MagicMock(), {"id": 1}, flow, "spotkanie z Janem jutro o 14",
+        )
+    assert consumed is True
+    mock_meeting.assert_awaited_once()
+    _, _, _, intent_data, _ = mock_meeting.await_args.args
+    assert intent_data["status_update"]["new_value"] == "Podpisane"
+
+
 @pytest.mark.asyncio
 async def test_change_status_multi_exact_match_asks_which_one():
     """lookup_client=multi → disambiguation, NOT silent pick."""

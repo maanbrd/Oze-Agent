@@ -457,5 +457,10 @@ def format_confirmation(action: str, details: dict) -> str:
 
 
 def format_edit_comparison(field: str, old_value: str, new_value: str) -> str:
-    """Show field change: 'Telefon: 600111222 → 601234567'."""
-    return f"{_e(field)}: {_e(old_value)} → {_e(new_value)}"
+    """Show field change: 'Telefon: 600111222 → 601234567'.
+
+    When old_value is empty (e.g. Status never set per 5.5 F/J mirror),
+    renders em dash '—' to avoid ambiguous 'Status:  → X' (I4 fix).
+    """
+    old_display = _e(old_value) if old_value else "—"
+    return f"{_e(field)}: {old_display} → {_e(new_value)}"
