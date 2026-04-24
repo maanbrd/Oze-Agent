@@ -15,6 +15,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from shared.database import get_user_by_id, update_user
+from shared.errors import ProactiveFetchError
 from shared.google_auth import get_google_credentials
 
 logger = logging.getLogger(__name__)
@@ -176,6 +177,48 @@ async def get_all_clients(user_id: str) -> list[dict]:
     except Exception as e:
         logger.error("get_all_clients(%s): %s", user_id, e)
         return []
+
+
+async def get_all_clients_or_raise(user_id: str) -> list[dict]:
+    """Return all client rows, raising when data cannot be trusted.
+
+    Existing `get_all_clients` keeps its legacy "[] on error" contract for
+    Phase 3/4/5 handlers. The proactive morning brief uses this strict variant
+    so a Sheets/config outage cannot be rendered as an empty follow-up list.
+    """
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ProactiveFetchError(f"user_not_found:{user_id}")
+    if not user.get("google_sheets_id"):
+        raise ProactiveFetchError("sheets_not_configured")
+    spreadsheet_id = user["google_sheets_id"]
+
+    def _fetch():
+        service = _get_sheets_service_sync(user_id)
+        if not service:
+            raise ProactiveFetchError("sheets_no_credentials")
+        return service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id, range="A1:ZZ"
+        ).execute()
+
+    try:
+        result = await asyncio.to_thread(_fetch)
+    except ProactiveFetchError:
+        raise
+    except Exception as e:
+        raise ProactiveFetchError(f"sheets_api_error: {e}") from e
+
+    rows = result.get("values", [])
+    if len(rows) < 2:
+        return []
+    headers = rows[0]
+    clients = []
+    for i, row in enumerate(rows[1:], start=2):
+        padded = row + [""] * (len(headers) - len(row))
+        client = dict(zip(headers, padded))
+        client["_row"] = i
+        clients.append(client)
+    return clients
 
 
 _POLISH_NAME_SUFFIXES = (

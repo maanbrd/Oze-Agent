@@ -7,10 +7,13 @@ from unittest.mock import AsyncMock, patch
 
 
 class _Execute:
-    def __init__(self, value):
+    def __init__(self, value=None, error=None):
         self.value = value
+        self.error = error
 
     def execute(self):
+        if self.error:
+            raise self.error
         return self.value
 
 
@@ -32,11 +35,18 @@ class _UpdateExecute:
 
 
 class _EventsService:
-    def __init__(self, existing_event: dict | None = None):
+    def __init__(self, existing_event: dict | None = None, list_result: dict | None = None, list_error: Exception | None = None):
         self.existing_event = existing_event or {}
+        self.list_result = list_result if list_result is not None else {"items": []}
+        self.list_error = list_error
         self.insert_kwargs = None
         self.get_kwargs = None
         self.update_kwargs = None
+        self.list_kwargs = None
+
+    def list(self, **kwargs):
+        self.list_kwargs = kwargs
+        return _Execute(self.list_result, self.list_error)
 
     def insert(self, **kwargs):
         self.insert_kwargs = kwargs
@@ -64,6 +74,53 @@ def _calendar_patches(events: _EventsService):
         patch("shared.google_calendar.get_user_by_id", return_value={"google_calendar_id": "cal-1"}),
         patch("shared.google_calendar._get_calendar_service_sync", return_value=_CalendarService(events)),
     )
+
+
+# ── strict proactive fetch ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_events_for_range_or_raise_raises_when_calendar_id_missing():
+    from shared.errors import ProactiveFetchError
+    from shared.google_calendar import get_events_for_range_or_raise
+
+    start = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    with patch("shared.google_calendar.get_user_by_id", return_value={"id": "u1"}):
+        with pytest.raises(ProactiveFetchError, match="calendar_not_configured"):
+            await get_events_for_range_or_raise("user-1", start, end)
+
+
+@pytest.mark.asyncio
+async def test_get_events_for_range_or_raise_raises_on_api_error():
+    from shared.errors import ProactiveFetchError
+    from shared.google_calendar import get_events_for_range_or_raise
+
+    events = _EventsService(list_error=RuntimeError("Google 500"))
+    start = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        with pytest.raises(ProactiveFetchError, match="calendar_api_error"):
+            await get_events_for_range_or_raise("user-1", start, end)
+
+
+@pytest.mark.asyncio
+async def test_get_events_for_range_or_raise_returns_empty_for_legit_empty_range():
+    from shared.google_calendar import get_events_for_range_or_raise
+
+    events = _EventsService(list_result={"items": []})
+    start = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await get_events_for_range_or_raise("user-1", start, end)
+
+    assert result == []
+    assert events.list_kwargs["timeMin"] == start.isoformat()
+    assert events.list_kwargs["timeMax"] == end.isoformat()
 
 
 # ── check_conflicts ───────────────────────────────────────────────────────────

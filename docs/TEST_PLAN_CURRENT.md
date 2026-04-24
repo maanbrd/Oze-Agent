@@ -120,18 +120,30 @@ Tests are manual Telegram tests unless stated otherwise.
 
 ---
 
-## Proactive / Morning Brief
+## Proactive / Morning Brief (Phase 6 MVP)
+
+Brief runs at **07:00 Europe/Warsaw, Monday–Friday**. Always sent on weekdays
+to every eligible user (not suspended, not deleted, `telegram_id` set). Dedup
+via `users.last_morning_brief_sent_date` — one send per Warsaw date.
 
 | # | Scenario | Expected |
 |---|----------|----------|
-| MB-1 | Morning brief at configured time | Meetings for today (client + address) + free slots + overdue follow-ups. **No pipeline stats** |
-| MB-2 | No meetings today | "Na dziś nic nie masz w kalendarzu." |
+| MB-1 | User has 2 Calendar events today + 1 Sheets row with `Następny krok ≤ today` | `Terminarz:` + event lines (`• HH:MM — Label: Client`) + blank line + `Do dopilnowania dziś:` + `• Label: Client`. No declension. |
+| MB-2 | No Calendar events, no open Sheets next-steps | Exactly two lines: `Terminarz:\nNa dziś nie masz spotkań.` |
+| MB-3 | No Calendar events but ≥1 Sheets row with overdue `Następny krok` | `Terminarz:\nNa dziś nie masz spotkań.` + blank line + `Do dopilnowania dziś:` + rows. |
+| MB-4 | `is_suspended=true` user | No brief sent to this user. |
+| MB-5 | Bot restart at 07:30 after brief fired | Dedup protects — no second send the same day. |
+| MB-6 | Weekend (Saturday / Sunday) | Brief does NOT fire. |
+| MB-7 | Calendar or Sheets API fails during brief fetch | Brief is NOT sent, dedup is NOT bumped, run logs `skipped_fetch_error`. |
+| MB-8 | User missing `google_calendar_id` or `google_sheets_id` | User is skipped with `skipped_error`; no false-empty brief is sent. |
+| MB-9 | Calendar event at 00:30 Europe/Warsaw | Event appears in that Warsaw date's brief. |
+| MB-known-limit | Bot down across the entire 07:00 window | Missed day; PTB `JobQueue` does NOT retrofire missed runs. Acceptable for MVP; POST-MVP: persistent jobstore. If Google is down across the run window, the brief is skipped and logged as `skipped_fetch_error` until a later run succeeds. |
 
----
+**NOT in MVP (do NOT test / do NOT implement):**
 
-## Proactive / Evening Follow-up
-
-| # | Scenario | Expected |
-|---|----------|----------|
-| EF-1 | After last meeting of the day | Agent asks about unreported meetings with a list of names |
-| EF-2 | Pre-meeting reminders | Agent does NOT send own pre-meeting reminders (handled by native Google Calendar) |
+- Pipeline stats, free slots, attendee lists in brief.
+- Per-user custom time (`users.morning_brief_hour` is ignored, brief is hardcoded 07:00).
+- Per-user timezone (hardcoded Europe/Warsaw).
+- Polish declension (client names in nominative, `Akcja: Klient` format).
+- Evening follow-up — moved to POST-MVP.
+- Pre-meeting reminders — NIEPLANOWANE, handled by native Google Calendar.

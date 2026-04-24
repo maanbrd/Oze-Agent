@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 22.04.2026_
+_Last updated: 24.04.2026_
 
 ---
 
@@ -16,18 +16,24 @@ We do not delete infrastructure blindly.
 
 ## Current Implementation Status
 
-Phase 5 Mutation Pipeline refactor is complete in code through the final
-bundled cleanup commit (5.5 + 5.5a + 5.6 + 5.7).
+Phase 5 (Mutation Pipeline) — done. Bundled cleanup commit `2603add`
+(5.5 + 5.5a + 5.6 + 5.7) + follow-up UX commit `210523a`, both pushed
+to `origin/develop`. Smoke 3/3 pass.
 
-Completed Phase 5 closure:
-- `commit_add_client` pipeline for Sheets-only client creation.
-- `commit_update_client_fields` pipeline for duplicate merge updates.
-- Read-only audit for `show_client` / `show_day_plan` confirmed no-op; those paths already use facade-backed reads.
-- `handle_confirm` narrowed with per-flow helpers for simpler pipeline-backed flows while keeping `add_meeting`, `add_meetings`, `edit_client`, and `delete_client` inline where planned.
+Phase 6 MVP (Morning Brief) — implemented. Scope frozen per 24.04:
+- **morning brief only**, 07:00 Europe/Warsaw, Mon–Fri.
+- Sources: Terminarz = Calendar events; Do dopilnowania dziś = Sheets K/L
+  (`Następny krok` + `Data następnego kroku` ≤ today, non-terminal status).
+- Alt template `Akcja: Klient` — zero declension, deterministic output.
+- Dedup via `users.last_morning_brief_sent_date`.
+- P6-RCF fixes applied: Warsaw-local Calendar day bounds, strict Google
+  fetch for proactive brief (no false-empty on outage), dedup write warning,
+  `Follow-up dokumentowy` brief label.
+- Evening follow-up, pipeline stats, pre-meeting reminders — POST-MVP /
+  NIEPLANOWANE.
 
-Next: restart/deploy the final bot build and run manual smoke for add_client,
-duplicate update, batch add_clients, Sheets failure, show_client, and
-show_day_plan.
+Next: manual Telegram smoke (MB-1..MB-9 in `TEST_PLAN_CURRENT.md`),
+then deploy.
 
 ### Keep (potential reuse)
 
@@ -73,7 +79,10 @@ Current voice/photo code (and any batch/multi-meeting fragments) is legacy refer
    - `SOURCE_OF_TRUTH.md`
 7. Phase 1 Infrastructure Audit — done (see `docs/PHASE1_AUDIT.md`)
 8. Phase 2 Behavior Contract Freeze — done (see `docs/PHASE2_CONTRACT_FREEZE.md`; 9/9 decyzji frozen, commits `65b5661` + `117f9c2`)
-9. Phase 3 — Intent Router Rewrite — **next** (per `docs/IMPLEMENTATION_PLAN.md`)
+9. Phase 3 — Intent Router Rewrite — done
+10. Phase 4 — Pending Flow + Confirmation Cards — done
+11. Phase 5 — Mutation Pipeline — done (commits `2603add`, `210523a` on `origin/develop`)
+12. Phase 6 — Proactive Scheduler / Morning Brief — done in code (scope: morning brief only, see `IMPLEMENTATION_PLAN.md` Phase 6). P6-RCF Codex review fixes applied. **Next:** manual Telegram smoke (MB-1..MB-9) + prod deploy.
 
 ---
 

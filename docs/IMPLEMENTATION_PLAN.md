@@ -153,15 +153,32 @@ Manual test pass.
 
 ## Phase 6 — Proactive Scheduler / Morning Brief
 
-**Goal:** Morning brief + evening follow-up, with deduplication.
+**Goal:** Morning brief at 07:00 Europe/Warsaw, Monday–Friday, with deduplication.
 
 **Input:** `agent_behavior_spec_v5.md` (proactive rules), `INTENCJE_MVP.md` §4.6 (show_day_plan format).
 
-**Output:** Clean scheduler with dedup. Morning brief formatter. Evening follow-up prompt for unreported meetings.
+**Output:**
+- `shared/proactive/morning_brief.py` — scheduler entry, eligibility filter, dedup, per-user error isolation.
+- `bot/scheduler/morning_brief_job.py` — PTB `JobQueue.run_daily` wrapper (07:00 Warsaw, weekdays).
+- `format_morning_brief_short` in `shared/formatting.py` — deterministic, MDV2-escaped, `Akcja: Klient` template.
+- Dedup column `users.last_morning_brief_sent_date` (migration in `supabase_schema.sql`).
 
-**Done when:** Morning brief sends at configured time with correct per-meeting format. Evening follow-up fires after the user's last meeting of the day. Dedup prevents double-send.
+**Done when:**
+- Morning brief sends at 07:00 Europe/Warsaw, Mon–Fri, to every eligible user.
+- Content: Terminarz (Calendar events) + "Do dopilnowania dziś" (Sheets K/L ≤ today, non-terminal status).
+- Empty state: `Terminarz:\nNa dziś nie masz spotkań.` — brief is always sent on weekdays.
+- Dedup prevents double-send on the same Warsaw date; send failure does NOT bump the dedup column (retry next weekday).
+- Per-user exceptions are isolated.
 
-**Do NOT:** Send pre-meeting reminders — those are handled by native Google Calendar according to the user's settings. Add new intent types. Change core mutation flow.
+**Do NOT (out of MVP):**
+- Evening follow-up (post-meeting check-in via `pending_followups`) — POST-MVP roadmap.
+- Pipeline stats, free slots, attendee lists — explicitly excluded from the brief.
+- Per-user custom brief time (`users.morning_brief_hour` stays untouched; MVP hardcodes 07:00) — POST-MVP.
+- Per-user timezone (D9; MVP hardcodes Europe/Warsaw) — POST-MVP.
+- Pre-meeting reminders — NIEPLANOWANE (Google Calendar native).
+- Polish declension in brief lines — POST-MVP "polish pass"; MVP uses nominative.
+
+---
 
 ---
 
@@ -211,6 +228,11 @@ Derived from `SOURCE_OF_TRUTH.md` §4. This plan must not silently promote visio
 - `edit_client`, `multi-meeting`, `voice_input`, `photo_upload`, CSV/Excel import, full dashboard.
 - `calendar_scope_narrowing` (per D7) — migrate from full `calendar` scope to `calendar.events`, with redesigned onboarding (user-created calendar + paste ID, or scope downgrade flow). Security hardening; not MVP blocker.
 - `multi_timezone_support` (per D9) — add `users.timezone` column, read in domain layer via shared helper instead of `DEFAULT_TIMEZONE` constant, UI/command to change timezone, DST coverage cross-country. Scheduled when real non-PL user demand arrives.
+- `evening_followup` — post-meeting check-in via `pending_followups` table. Shipped infra (Phase 5.3) but no runtime scheduler yet.
+- `brief_pipeline_stats` — status-count dashboard optionally appended to morning brief.
+- `per_user_brief_time` — respect existing `users.morning_brief_hour` column (currently hardcoded 07:00).
+- `morning_brief_polish_pass` — Polish declension / humanization of brief lines (MVP ships with `Akcja: Klient` nominative template).
+- `brief_persistent_jobstore` — APScheduler with SQLAlchemyJobStore so a missed 07:00 run retrofires after bot restart (PTB JobQueue does not).
 
 **Product vision only / requires separate Maan decision** (described in `poznaj_swojego_agenta_v5_FINAL.md`, but **not approved as roadmap**):
 

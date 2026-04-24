@@ -12,6 +12,7 @@ from typing import Optional
 from googleapiclient.discovery import build
 
 from shared.database import get_user_by_id
+from shared.errors import ProactiveFetchError
 from shared.google_auth import get_google_credentials
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,43 @@ async def get_events_for_range(
     except Exception as e:
         logger.error("get_events_for_range(%s): %s", user_id, e)
         return []
+
+
+async def get_events_for_range_or_raise(
+    user_id: str, start: datetime, end: datetime
+) -> list[dict]:
+    """Return events in a range, raising when data cannot be trusted.
+
+    Existing `get_events_for_range` keeps its legacy "[] on error" contract
+    for bot handlers. The proactive morning brief uses this strict variant so
+    a Google/config outage cannot be mistaken for an empty calendar.
+    """
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ProactiveFetchError(f"user_not_found:{user_id}")
+    if not user.get("google_calendar_id"):
+        raise ProactiveFetchError("calendar_not_configured")
+    calendar_id = user["google_calendar_id"]
+
+    def _fetch():
+        service = _get_calendar_service_sync(user_id)
+        if not service:
+            raise ProactiveFetchError("calendar_no_credentials")
+        return service.events().list(
+            calendarId=calendar_id,
+            timeMin=_to_rfc3339(start),
+            timeMax=_to_rfc3339(end),
+            singleEvents=True,
+            orderBy="startTime",
+        ).execute()
+
+    try:
+        result = await asyncio.to_thread(_fetch)
+    except ProactiveFetchError:
+        raise
+    except Exception as e:
+        raise ProactiveFetchError(f"calendar_api_error: {e}") from e
+    return [_event_to_dict(e) for e in result.get("items", [])]
 
 
 async def get_upcoming_events(user_id: str, hours: int = 24) -> list[dict]:

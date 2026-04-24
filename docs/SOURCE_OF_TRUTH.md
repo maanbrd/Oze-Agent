@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 14.04.2026_
+_Last updated: 24.04.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -149,6 +149,10 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 - `photo_upload` (Drive)
 - import CSV / Excel
 - pełny dashboard
+- `evening_followup` — post-meeting check-in przez `pending_followups` (infra z Phase 5.3, runtime scheduler post-MVP)
+- `brief_pipeline_stats` — status-count dashboard opcjonalnie w morning brief
+- `per_user_brief_time` — respektować `users.morning_brief_hour` (MVP hardcoduje 07:00)
+- `morning_brief_polish_pass` — deklinacja / humanizacja linii briefu (MVP używa `Akcja: Klient` w mianowniku)
 
 **Product vision only / wymaga osobnej decyzji Maana** — opisane w `poznaj_swojego_agenta_v5_FINAL.md` jako wizja, ale **nie zatwierdzone jako roadmapa**. Każdą trzeba osobno zaakceptować przed wejściem do implementacji. **Nie są NIEPLANOWANE i nie są POST-MVP roadmap** — zostają w tej warstwie dopóki Maan nie zdecyduje inaczej:
 

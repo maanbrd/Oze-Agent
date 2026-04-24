@@ -4,7 +4,9 @@ All output uses Telegram MarkdownV2. All user-facing text is in Polish.
 """
 
 import re
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 # ── MarkdownV2 escaping ───────────────────────────────────────────────────────
 
@@ -403,6 +405,117 @@ def format_morning_brief(
         parts.append(f"\n🕐 *Wolne sloty:* {', '.join(slot_strs)}")
 
     return "\n".join(parts)
+
+
+# ── Phase 6 morning brief (short / deterministic) ────────────────────────────
+
+_WARSAW_TZ = ZoneInfo("Europe/Warsaw")
+
+# Calendar event_type → brief label. Phase 5.4.2 dropped `doc_followup`
+# from the classifier; the mapping stays for any legacy events still in
+# the user's Calendar.
+_EVENT_TYPE_LABEL = {
+    "in_person": "Spotkanie",
+    "phone_call": "Telefon",
+    "offer_email": "Oferta",
+    "doc_followup": "Follow-up",
+}
+
+# Sheets K "Następny krok" enum (D4) → brief label. The Sheets value
+# "Wysłać ofertę" collapses to the shorter "Oferta" for visual parity
+# with the events section.
+_NEXT_STEP_LABEL = {
+    "Telefon": "Telefon",
+    "Spotkanie": "Spotkanie",
+    "Wysłać ofertę": "Oferta",
+    "Follow-up dokumentowy": "Follow-up",
+}
+
+
+def _event_time_hhmm(event: dict) -> str:
+    """Return 'HH:MM' in Europe/Warsaw for a Calendar event's start."""
+    raw = event.get("start", "")
+    if not raw:
+        return "??:??"
+    try:
+        iso = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            return dt.strftime("%H:%M")
+        return dt.astimezone(_WARSAW_TZ).strftime("%H:%M")
+    except (ValueError, TypeError):
+        return raw[11:16] if len(raw) >= 16 else "??:??"
+
+
+def _event_client_name(event: dict) -> str:
+    """Extract the client name from an event title of form '{Label}: {Client}'.
+
+    Falls back to the full title when no ': ' separator is present.
+    """
+    title = event.get("title", "") or ""
+    if ": " in title:
+        return title.split(": ", 1)[1].strip()
+    return title.strip()
+
+
+def _event_label(event: dict) -> Optional[str]:
+    """Return the brief label for a Calendar event, or None for unknown type."""
+    return _EVENT_TYPE_LABEL.get((event.get("event_type") or "").strip())
+
+
+def _next_step_label(next_step: str) -> str:
+    """Return the brief label for a Sheets next-step enum, falling back."""
+    return _NEXT_STEP_LABEL.get((next_step or "").strip(), "Do zrobienia")
+
+
+def _format_event_line(event: dict) -> str:
+    time_str = _e(_event_time_hhmm(event))
+    label = _event_label(event)
+    if label is None:
+        title = event.get("title") or "Spotkanie"
+        return f"• {time_str} — {_e(title)}"
+    client = _event_client_name(event) or event.get("title", "") or ""
+    return f"• {time_str} — {_e(label)}: {_e(client)}"
+
+
+def _format_followup_line(item: dict) -> str:
+    label = _next_step_label(item.get("next_step", ""))
+    name = item.get("name", "") or ""
+    return f"• {_e(label)}: {_e(name)}"
+
+
+def format_morning_brief_short(
+    events: list[dict],
+    open_next_steps: list[dict],
+) -> str:
+    """Render the Phase 6 morning brief. Deterministic, MDV2-escaped, no LLM.
+
+    Uses the 'Akcja: Klient' template — client names always in nominative,
+    exactly as stored in Sheets / Calendar. No declension, no grammar bugs.
+
+    Structure (header always present):
+        Terminarz:
+        [• HH:MM — Label: Client   OR   "Na dziś nie masz spotkań."]
+
+        [Do dopilnowania dziś:
+         • Label: Client ...]
+
+    The follow-up block is omitted entirely when `open_next_steps` is empty.
+    """
+    lines: list[str] = ["Terminarz:"]
+    if events:
+        for ev in events:
+            lines.append(_format_event_line(ev))
+    else:
+        lines.append("Na dziś nie masz spotkań\\.")
+
+    if open_next_steps:
+        lines.append("")
+        lines.append("Do dopilnowania dziś:")
+        for item in open_next_steps:
+            lines.append(_format_followup_line(item))
+
+    return "\n".join(lines)
 
 
 # ── Meeting reminder ──────────────────────────────────────────────────────────

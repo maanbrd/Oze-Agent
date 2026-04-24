@@ -46,7 +46,8 @@ CREATE TABLE users (
     telegram_link_code_expires TIMESTAMPTZ,
     is_admin BOOLEAN DEFAULT FALSE,
     is_suspended BOOLEAN DEFAULT FALSE,
-    is_deleted BOOLEAN DEFAULT FALSE
+    is_deleted BOOLEAN DEFAULT FALSE,
+    last_morning_brief_sent_date DATE
 );
 
 CREATE TABLE promo_codes (
@@ -176,3 +177,17 @@ ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_interaction_counts ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- MIGRATIONS (for existing deployments)
+-- Run only the ALTER blocks relevant to your current schema version.
+-- ============================================================
+
+-- Phase 6A (morning brief dedup): adds last_morning_brief_sent_date and
+-- a partial index to efficiently enumerate eligible users.
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS last_morning_brief_sent_date DATE;
+
+CREATE INDEX IF NOT EXISTS idx_users_eligible_brief
+    ON users (is_suspended, is_deleted, telegram_id)
+    WHERE is_suspended = FALSE AND is_deleted = FALSE AND telegram_id IS NOT NULL;

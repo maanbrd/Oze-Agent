@@ -93,6 +93,41 @@ def update_user(user_id: str, data: dict) -> Optional[dict]:
         return None
 
 
+def get_eligible_users_for_morning_brief() -> list[dict]:
+    """Return users eligible to receive the Phase 6 morning brief.
+
+    Filters: not suspended, not deleted, telegram_id set. Returns a
+    small projection — the caller only needs id, telegram_id, and the
+    dedup column to decide whether to send.
+    """
+    try:
+        result = (
+            get_supabase_client()
+            .table("users")
+            .select("id, telegram_id, last_morning_brief_sent_date")
+            .eq("is_suspended", False)
+            .eq("is_deleted", False)
+            .not_.is_("telegram_id", "null")
+            .execute()
+        )
+        return result.data if result.data else []
+    except Exception as e:
+        logger.error("get_eligible_users_for_morning_brief: %s", e)
+        return []
+
+
+def update_last_morning_brief_sent(user_id: str, sent_date: date) -> bool:
+    """Mark the Phase 6 morning brief as sent. Return True on success."""
+    try:
+        get_supabase_client().table("users").update(
+            {"last_morning_brief_sent_date": sent_date.isoformat()}
+        ).eq("id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.error("update_last_morning_brief_sent(%s): %s", user_id, e)
+        return False
+
+
 # ── Interaction logging ───────────────────────────────────────────────────────
 
 
