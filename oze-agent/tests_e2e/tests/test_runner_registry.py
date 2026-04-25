@@ -42,16 +42,30 @@ def test_categories_include_all_phase7a():
 
 
 def test_runner_select_default_excludes_opt_in_scenarios():
-    """Default `runner` (no args, no --category) excludes opt-in scenarios.
+    """Default `runner` (no args, no --category) excludes any scenario
+    with `default_in_run=False`.
 
-    debug_brief is opt-in (sends a brief); default run skips it. Codex review #2.
+    Opt-in scenarios as of 7B.1:
+      - debug_brief — sends the morning brief (Codex review #2)
+      - mutating_core/* — commits to Sheets/Calendar
     """
     selected = runner._select_scenarios([], None)
     selected_names = {s.name for s in selected}
+
+    # debug_brief is the canonical opt-in.
     assert "debug_brief" not in selected_names
-    # All other 15 scenarios should be included.
-    assert len(selected_names) == 15
-    assert set(SCENARIOS) - selected_names == {"debug_brief"}
+
+    # Every mutating_core scenario must be excluded (writes to Sheets/Calendar).
+    mutating = {n for n, s in SCENARIOS.items() if s.category == "mutating_core"}
+    assert mutating, "expected at least one mutating_core scenario to exist"
+    assert mutating.isdisjoint(selected_names), (
+        f"mutating scenarios leaked into default selection: "
+        f"{mutating & selected_names}"
+    )
+
+    # Robust invariant: default set == exactly the default_in_run=True set.
+    expected = {n for n, s in SCENARIOS.items() if s.default_in_run}
+    assert selected_names == expected
 
 
 def test_runner_select_explicit_debug_brief_works():
