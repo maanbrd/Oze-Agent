@@ -77,15 +77,29 @@ def fmt_pl_date(d: date) -> str:
 # ── Test data prefixing ──────────────────────────────────────────────────────
 
 
-def e2e_beta_name(suffix: str = "") -> str:
-    """Generate an E2E-Beta-prefixed client name. Suffix optional.
+def make_run_id() -> str:
+    """Generate a per-scenario run_id (HHMMSS) for synthetic name namespacing.
+
+    Each scenario captures one run_id at start; all `e2e_beta_name` calls
+    within the scenario should pass it so the cleanup tool can scope a
+    delete to one scenario's writes.
+    """
+    return datetime.now(tz=WARSAW).strftime("%H%M%S")
+
+
+def e2e_beta_name(suffix: str = "", run_id: str | None = None) -> str:
+    """Generate an E2E-Beta-prefixed client name.
+
+    `run_id` is the scenario-scoped HHMMSS marker (see `make_run_id`).
+    When omitted, a fresh timestamp is derived per call (legacy behavior
+    used by Phase 7A scenarios that don't track run_id explicitly).
 
     Used for cancel-only scenarios — even though no commit happens, names
     that touch parser/disambiguation paths must be unmistakably synthetic
     so manual review of any Sheet residue is trivial.
     """
-    ts = datetime.now(tz=WARSAW).strftime("%H%M%S")
-    return f"E2E-Beta-Tester-{ts}-{suffix}" if suffix else f"E2E-Beta-Tester-{ts}"
+    rid = run_id if run_id is not None else make_run_id()
+    return f"E2E-Beta-Tester-{rid}-{suffix}" if suffix else f"E2E-Beta-Tester-{rid}"
 
 
 E2E_BETA_CITY = "E2E-Beta-City"
@@ -237,3 +251,179 @@ async def close_post_save_followup(
     except Exception as e:
         logger.warning("close_post_save_followup failed: %s", e)
         return False
+
+
+# ── Setup helper (PUBLIC; used by Stage-2 scenario modules) ─────────────────
+
+
+async def setup_existing_client(
+    harness: TelegramE2EHarness,
+    result,  # tests_e2e.report.ScenarioResult — avoid import cycle
+    name: str,
+    city: str = E2E_BETA_CITY,
+    extra_fields: str = "600100200, PV",
+) -> bool:
+    """Create a client via add_client → ✅ Zapisać. Returns True on success.
+
+    Public counterpart of `mutating_core._setup_existing_client`. Use this
+    in scenarios that need a pre-existing client (notes, R6 active_client,
+    etc.). On failure adds a `blocker` check to `result` and returns False
+    so the calling scenario can short-circuit cleanly.
+
+    The `also_change_status_to` and `also_add_note` extension knobs from
+    the plan are deferred — Stage-2 scenarios that need history can chain
+    explicit follow-up trigger sends after this helper returns.
+    """
+    setup_trigger = f"dodaj klienta {name}, {city}, {extra_fields}"
+    result.context["setup_trigger"] = setup_trigger
+    await harness.send(setup_trigger)
+    setup_replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+    setup_card = find_card_message(setup_replies)
+    if setup_card is None:
+        result.add_blocker(
+            "setup_client_card_arrived",
+            f"no setup card with buttons; got "
+            f"{[m.text[:80] for m in setup_replies]}",
+        )
+        return False
+
+    save_label, confirm_replies = await click_save_and_collect(harness, setup_card)
+    if save_label is None:
+        result.add_blocker(
+            "setup_save_button_present",
+            f"setup card had no ✅ Zapisać; labels={setup_card.button_labels}",
+        )
+        return False
+    if not confirm_replies:
+        result.add_blocker(
+            "setup_save_confirmed",
+            "no reply after clicking ✅ on setup card",
+        )
+        return False
+    if not any(is_save_confirmation(m.text) for m in confirm_replies):
+        result.add_blocker(
+            "setup_save_confirmed",
+            f"setup save reply lacks confirm marker; got "
+            f"{[m.text[:80] for m in confirm_replies]}",
+        )
+        return False
+
+    result.add("setup_client_created", True, detail=f"client '{name}' setup OK")
+    closed = await close_post_save_followup(harness, confirm_replies)
+    result.context["setup_co_dalej_closed"] = closed
+    await post_setup_settle()
+    return True
+
+
+# ── API verification wrappers (Sheets + Calendar) ────────────────────────────
+
+
+async def verify_sheets_row(
+    result,  # ScenarioResult (avoid import cycle)
+    telegram_id: int,
+    name: str,
+    city: str | None = None,
+    expected_fields: dict[str, str] | None = None,
+    *,
+    check_key: str = "sheets_row_created",
+) -> dict | None:
+    """Verify a Sheets row exists for `name` (and optional `city`) and that
+    each `expected_fields` key→substring is present in the row's value.
+
+    Adds one check per scenario: `{check_key}` (PASS if row found and all
+    expected fields match), plus optional per-field sub-checks.
+
+    Settles 1.5s before reading to absorb Sheets eventual-consistency.
+    Returns the row dict (with `_row` key) on success, None otherwise.
+    """
+    # Local import: avoid module-load cost when scenarios don't verify.
+    from tests_e2e.sheets_verify import (
+        assert_row_field, find_client_row, resolve_user_id,
+    )
+
+    await asyncio.sleep(1.5)  # eventual consistency cushion
+    user_id = await resolve_user_id(telegram_id)
+    if not user_id:
+        result.add(check_key, False, detail=f"no Supabase user for telegram_id={telegram_id}",
+                   tag="blocker")
+        return None
+
+    row = await find_client_row(user_id, name, city)
+    if row is None:
+        result.add(
+            check_key, False,
+            detail=f"no Sheets row matched name={name!r} city={city!r}",
+        )
+        return None
+
+    result.add(check_key, True, detail=f"row {row.get('_row')} matched")
+
+    if expected_fields:
+        for field, expected_substring in expected_fields.items():
+            ok, detail = assert_row_field(row, field, expected_substring)
+            result.add(f"{check_key}_field_{field}", ok, detail)
+
+    return row
+
+
+async def verify_calendar_event(
+    result,
+    telegram_id: int,
+    summary_marker: str,
+    start_window,  # datetime
+    end_window,    # datetime
+    *,
+    expected_event_type: str | None = None,
+    expected_start=None,  # datetime
+    expected_duration_min: int | None = None,
+    check_key: str = "calendar_event_created",
+) -> dict | None:
+    """Verify a Calendar event matching `summary_marker` exists in
+    [start_window, end_window). Optionally check event_type / start / duration.
+
+    Settles 1.5s before reading. Returns the event dict on success.
+    """
+    from tests_e2e.calendar_verify import (
+        assert_event_at_time,
+        assert_event_duration,
+        assert_event_type,
+        find_event_by_summary_in_window,
+    )
+    from tests_e2e.sheets_verify import resolve_user_id
+
+    await asyncio.sleep(1.5)
+    user_id = await resolve_user_id(telegram_id)
+    if not user_id:
+        result.add(check_key, False, detail=f"no Supabase user for telegram_id={telegram_id}",
+                   tag="blocker")
+        return None
+
+    event = await find_event_by_summary_in_window(
+        user_id, summary_marker, start_window, end_window,
+    )
+    if event is None:
+        result.add(
+            check_key, False,
+            detail=(
+                f"no Calendar event matched summary~={summary_marker!r} "
+                f"in [{start_window.isoformat()}, {end_window.isoformat()})"
+            ),
+        )
+        return None
+
+    result.add(
+        check_key, True,
+        detail=f"event id={event.get('id')!r} title={event.get('title')!r}",
+    )
+
+    if expected_event_type is not None:
+        ok, detail = assert_event_type(event, expected_event_type)
+        result.add(f"{check_key}_event_type", ok, detail)
+    if expected_start is not None:
+        ok, detail = assert_event_at_time(event, expected_start)
+        result.add(f"{check_key}_start_time", ok, detail)
+    if expected_duration_min is not None:
+        ok, detail = assert_event_duration(event, expected_duration_min)
+        result.add(f"{check_key}_duration_min", ok, detail)
+
+    return event

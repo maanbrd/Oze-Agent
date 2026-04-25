@@ -2,12 +2,14 @@
 
 Exposes the same scenarios as the CLI (tests_e2e/runner.py) as MCP tools.
 
-Tools (Phase 7A):
+Tools (Phase 7A + 7B-final):
     e2e_status            — config health (no Telegram contact)
     list_scenarios        — registered scenarios + categories
     run_debug_brief       — convenience for the most-used scenario
     run_scenario(name)    — run one scenario by name
     run_category(name)    — run every scenario in a category
+    e2e_seed_fixtures     — idempotent: create FIXTURE_CLIENTS + 1 conflict slot
+    e2e_cleanup_run       — purge `E2E-Beta-*` synthetic data (optional run_id scope)
 
 Intentionally NOT provided (anti-timeout):
     run_all               — long sweep would exceed MCP per-call timeout
@@ -163,8 +165,9 @@ def _build_server():
 
     @mcp.tool()
     async def run_category(name: str) -> str:
-        """Run every scenario in a category. Categories: routing, read_only,
-        card_structure, error_path, rules, proactive."""
+        """Run every scenario in a category. Examples: routing, read_only,
+        card_structure, error_path, rules, proactive, mutating_core, notes,
+        polish_edge."""
         selection = _registry_list(category=name)
         if not selection:
             return (
@@ -172,6 +175,84 @@ def _build_server():
                 f"Available: {list_categories()}"
             )
         return await _run_selection(selection)
+
+    @mcp.tool()
+    async def e2e_seed_fixtures() -> str:
+        """Idempotent: create canonical fixture clients in Sheets + a
+        Calendar conflict slot for tomorrow 14:00. Skips items that
+        already exist. Safe to call multiple times.
+
+        Used by Phase 7B-final scenarios that need pre-seeded data
+        (multi-match disambiguation, Calendar conflict warning).
+        """
+        from tests_e2e.fixtures import seed_fixtures
+        try:
+            config = E2EConfig.from_env()
+        except RuntimeError as e:
+            return f"MISCONFIG — {e}"
+        report = await seed_fixtures(config.admin_telegram_id)
+        if "error" in report:
+            return f"ERROR — {report['error']}"
+        lines = [f"seeded for user_id={report['user_id']}"]
+        if report["seeded_clients"]:
+            lines.append(f"  Sheets clients seeded: {len(report['seeded_clients'])}")
+            for s in report["seeded_clients"]:
+                lines.append(f"    + {s}")
+        if report["skipped_clients"]:
+            lines.append(f"  Sheets clients skipped (exist): {len(report['skipped_clients'])}")
+            for s in report["skipped_clients"]:
+                lines.append(f"    = {s}")
+        if report["failed_clients"]:
+            lines.append(f"  Sheets clients FAILED: {len(report['failed_clients'])}")
+            for s in report["failed_clients"]:
+                lines.append(f"    ! {s}")
+        if report["seeded_events"]:
+            lines.append(f"  Calendar events seeded: {len(report['seeded_events'])}")
+            for s in report["seeded_events"]:
+                lines.append(f"    + {s}")
+        if report["skipped_events"]:
+            lines.append(f"  Calendar events skipped (exist): {len(report['skipped_events'])}")
+            for s in report["skipped_events"]:
+                lines.append(f"    = {s}")
+        if report["failed_events"]:
+            lines.append(f"  Calendar events FAILED: {len(report['failed_events'])}")
+            for s in report["failed_events"]:
+                lines.append(f"    ! {s}")
+        return "\n".join(lines)
+
+    @mcp.tool()
+    async def e2e_cleanup_run(
+        run_id: str = "",
+        include_fixtures: bool = False,
+    ) -> str:
+        """Delete `E2E-Beta-*` synthetic data from Sheets + Calendar.
+
+        Default: deletes all per-run rows / events but KEEPS fixtures
+        (`E2E-Beta-Fixture-*`). Pass `run_id="HHMMSS"` to scope the
+        delete to one scenario's writes. Pass `include_fixtures=True`
+        for a full reset (rare).
+        """
+        from tests_e2e.fixtures import cleanup_synthetic_data
+        try:
+            config = E2EConfig.from_env()
+        except RuntimeError as e:
+            return f"MISCONFIG — {e}"
+        rid = run_id.strip() or None
+        report = await cleanup_synthetic_data(
+            config.admin_telegram_id,
+            run_id=rid,
+            include_fixtures=include_fixtures,
+        )
+        if "error" in report:
+            return f"ERROR — {report['error']}"
+        return (
+            f"cleanup user_id={report['user_id']} "
+            f"run_id={report['run_id']!r} include_fixtures={report['include_fixtures']}\n"
+            f"  Sheets: found {report['sheets_rows_found']}, "
+            f"deleted {report['sheets_deleted']}\n"
+            f"  Calendar: found {report['calendar_events_found']}, "
+            f"deleted {report['calendar_deleted']}"
+        )
 
     return mcp
 
