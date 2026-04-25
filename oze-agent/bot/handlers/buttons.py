@@ -25,6 +25,7 @@ from shared.database import (
     delete_pending_flow,
     get_pending_flow,
     increment_daily_interaction_count,
+    save_pending_flow,
 )
 from shared.pending import (
     AddClientPayload,
@@ -131,18 +132,48 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _handle_edit_choice(query, telegram_id, user["id"], value)
 
     elif action == "voice_confirm":
+        # Phase post-MVP voice slice (25.04.2026): 4 values per
+        # `docs/poznaj_swojego_agenta_v5_FINAL.md` line 25.
+        flow = get_pending_flow(telegram_id)
+        is_voice_flow = bool(
+            flow and flow.get("flow_type") == "voice_transcription"
+        )
+
         if value == "yes":
-            flow = get_pending_flow(telegram_id)
-            if flow and flow.get("flow_type") == "voice_transcription":
+            if is_voice_flow:
                 transcription = flow["flow_data"]["transcription"]
                 delete_pending_flow(telegram_id)
-                # Simulate text message and re-route
+                # Inject transcription as if user typed it; reuse text router.
                 update.callback_query.message.text = transcription
                 from bot.handlers.text import handle_text
                 await handle_text(update, context)
-        else:
-            delete_pending_flow(telegram_id)
-            await query.edit_message_text("❌ Nagranie anulowane. Spróbuj ponownie.")
+
+        elif value == "correct":
+            if is_voice_flow:
+                # Mark pending as awaiting a text correction. The next
+                # plain text message will be picked up by `_route_pending_flow`
+                # in `handlers/text.py` (BEFORE generic is_yes/is_no).
+                flow_data = dict(flow.get("flow_data", {}))
+                flow_data["awaiting_text_correction"] = True
+                save_pending_flow(telegram_id, "voice_transcription", flow_data)
+                await query.edit_message_text(
+                    "📝 Wpisz poprawioną wersję jako tekst, "
+                    "lub nagraj ponownie 🎤."
+                )
+
+        elif value == "retry":
+            if is_voice_flow:
+                delete_pending_flow(telegram_id)
+                await query.edit_message_text(
+                    "🎤 Nagraj ponownie. Poprzednia transkrypcja anulowana."
+                )
+
+        elif value in ("cancel", "no"):
+            # `:no` is a back-compat alias for `:cancel` — old clients
+            # / tests may still emit `voice_confirm:no` for cancellation.
+            if is_voice_flow:
+                delete_pending_flow(telegram_id)
+                await query.edit_message_text("❌ Anulowane.")
 
     elif action == "set_status":
         # value format: "{row}:{status}"

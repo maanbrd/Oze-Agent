@@ -1,4 +1,7 @@
-"""Voice message handler — transcribe with Whisper then route as text."""
+"""Voice message handler — transcribe with Whisper, normalize Polish names,
+always-show transcript with 4-button confirmation per vision
+(`docs/poznaj_swojego_agenta_v5_FINAL.md` line 25).
+"""
 
 import asyncio
 import logging
@@ -6,34 +9,37 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.handlers.text import _run_guards, handle_general, handle_text
+from bot.handlers.text import _run_guards
 from bot.utils.telegram_helpers import (
     build_choice_buttons,
     increment_interaction,
     is_private_chat,
     send_processing_stage,
-    send_typing,
 )
-from shared.database import save_conversation_message, save_pending_flow
-from shared.formatting import format_error
+from shared.database import save_pending_flow
+from shared.formatting import escape_markdown_v2, format_error
+from shared.voice_postproc import _redacted_postproc_summary, normalize_polish_names
 from shared.whisper_stt import transcribe_voice
 
 logger = logging.getLogger(__name__)
 
-CONFIDENCE_THRESHOLD = 0.85
 WHISPER_TIMEOUT_SECONDS = 60
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle voice (and audio) messages.
 
-    Flow:
-    1. Standard guards.
-    2. Download voice file.
-    3. Transcribe with Whisper (60s timeout).
-    4. If confidence ≥ 0.85: process directly.
-    5. If confidence < 0.85: show transcription, ask for confirmation.
-    6. Log whisper + claude costs.
+    Flow (revised, post-MVP voice slice 25.04.2026):
+      1. Standard guards.
+      2. Download voice file.
+      3. Transcribe with Whisper (60s timeout).
+      4. Normalize Polish names via Claude haiku post-pass (defensive — never
+         raises, falls back to raw Whisper output on any guard trip).
+      5. Log Whisper + Claude cost ZARAZ — independent of subsequent user
+         action (vision: cost is committed once we paid for the call).
+      6. ALWAYS save pending + show 4-button transcript card. No "fast path"
+         for high-confidence — vision requires explicit user confirmation
+         before any downstream processing.
     """
     if not await is_private_chat(update):
         return
@@ -45,7 +51,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     telegram_id = update.effective_user.id
     await send_processing_stage(context, telegram_id, "transcribing")
 
-    # Download voice file
+    # ── 1. Download voice file ─────────────────────────────────────────────
     try:
         voice = update.message.voice or update.message.audio
         file = await context.bot.get_file(voice.file_id)
@@ -55,7 +61,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("❌ Nie udało się pobrać pliku. Spróbuj ponownie.")
         return
 
-    # Transcribe with timeout
+    # ── 2. Transcribe with timeout ─────────────────────────────────────────
     try:
         result = await asyncio.wait_for(
             transcribe_voice(bytes(audio_bytes), filename="voice.ogg"),
@@ -72,41 +78,55 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    transcription = result["text"].strip()
-    confidence = result["confidence"]
-    duration = result.get("duration_seconds", 0)
-
-    # Estimate Whisper cost: $0.006 per minute
+    raw_transcription = result["text"].strip()
+    confidence = float(result.get("confidence", 0.0))
+    duration = float(result.get("duration_seconds", 0.0))
     whisper_cost = (duration / 60) * 0.006
 
-    if not transcription:
+    if not raw_transcription:
         await update.message.reply_text("❌ Nie rozpoznano żadnych słów w nagraniu.")
         return
 
-    if confidence >= CONFIDENCE_THRESHOLD:
-        # High confidence — process directly
-        await send_processing_stage(context, telegram_id, "analyzing")
-        save_conversation_message(telegram_id, "user", f"[głosówka] {transcription}")
+    # ── 3. Polish name post-processing (Claude haiku) ─────────────────────
+    postproc = await normalize_polish_names(raw_transcription)
+    transcription = postproc["corrected"]
+    postproc_cost = postproc.get("cost_usd", 0.0)
+    total_cost = whisper_cost + postproc_cost
 
-        # Inject transcription as text and route through text handler
-        update.message.text = transcription
-        await handle_text(update, context)
-    else:
-        # Low confidence — show transcription, ask for confirmation
-        save_pending_flow(telegram_id, "voice_transcription", {
-            "transcription": transcription,
-            "whisper_cost": whisper_cost,
-        })
-        escaped = transcription.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
-        await update.message.reply_markdown_v2(
-            f"🎙 Transkrypcja \\(niska pewność\\):\n\n_{escaped}_\n\nCzy to poprawne?",
-            reply_markup=build_choice_buttons([
-                ("✅ Tak", "voice_confirm:yes"),
-                ("❌ Nie", "voice_confirm:no"),
-            ]),
-        )
+    # PII-safe summary log: NO raw transcription, NO change pairs.
+    logger.info(
+        "handle_voice.postproc summary=%s confidence=%.2f duration_s=%.1f whisper_cost=%.6f",
+        _redacted_postproc_summary(postproc), confidence, duration, whisper_cost,
+    )
 
-    # Log whisper usage
+    # ── 4. Cost log — fires ONCE here, regardless of user's next action ──
     await increment_interaction(
-        telegram_id, "voice_transcription", "whisper-1", 0, 0, whisper_cost
+        telegram_id, "voice_transcription", "whisper-1+haiku",
+        0, 0, total_cost,
+    )
+
+    # ── 5. Always-show transcript card with 4 buttons ─────────────────────
+    save_pending_flow(telegram_id, "voice_transcription", {
+        "transcription": transcription,
+        "confidence": confidence,
+        "whisper_cost": whisper_cost,
+        "postproc_cost": postproc_cost,
+        "fallback": postproc.get("fallback"),
+    })
+
+    # Render transcript as a quoted italic block, MarkdownV2-escaped so
+    # special chars in user speech (e.g. "Kowalski (Warszawa)") don't
+    # break Telegram parsing.
+    escaped_text = escape_markdown_v2(transcription)
+    confidence_pct = max(0, min(100, int(round(confidence * 100))))
+    badge = f"🎙 *Transkrypcja* \\(pewność: {confidence_pct}%\\)"
+
+    await update.message.reply_markdown_v2(
+        f"{badge}:\n\n_{escaped_text}_\n\nCo z tym?",
+        reply_markup=build_choice_buttons([
+            ("✅ Tak", "voice_confirm:yes"),
+            ("📝 Popraw", "voice_confirm:correct"),
+            ("🎤 Ponów", "voice_confirm:retry"),
+            ("❌ Anuluj", "voice_confirm:cancel"),
+        ]),
     )

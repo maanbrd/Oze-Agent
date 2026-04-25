@@ -580,6 +580,31 @@ async def _route_pending_flow(
     flow_type = flow.get("flow_type", "")
     text_lower = message_text.lower().strip()
 
+    # ── Voice transcription correction handling (post-MVP voice slice) ────
+    # Must come BEFORE generic is_yes/is_no — otherwise correction text
+    # like "dodaj klienta i zapisz" would trip the confirm path.
+    # Slash-commands (`/cancel` etc.) never reach this function — the
+    # text handler in bot/main.py uses `filters.TEXT & ~filters.COMMAND`,
+    # so PTB routes commands to their own CommandHandler instead.
+    if flow_type == "voice_transcription":
+        flow_data = flow.get("flow_data", {})
+        if flow_data.get("awaiting_text_correction"):
+            telegram_id = update.effective_user.id
+            # User can manually cancel via plain "anuluj"/"cancel"/"stop".
+            if text_lower in {"anuluj", "cancel", "stop"}:
+                delete_pending_flow(telegram_id)
+                await update.effective_message.reply_text("❌ Anulowane.")
+                return True  # consumed
+            # Otherwise: treat the new text as the correction. Delete
+            # pending and fall through to normal classify+dispatch — the
+            # caller will save_conversation_message + run intent routing
+            # on the corrected text as if user typed it directly.
+            delete_pending_flow(telegram_id)
+            return False  # auto-cancel + fall through
+        # Pending exists but is awaiting a CALLBACK button click, not
+        # text correction. Fall through to legacy logic below — the
+        # generic auto-cancel will close out unhandled flow_types.
+
     is_yes = text_lower in {
         "tak", "tak.", "ok", "okej", "dobrze", "zgadza się", "yes",
         "zapisz tak jak jest", "zapisz", "tak jak jest", "ok zapisz", "dobra", "spoko",

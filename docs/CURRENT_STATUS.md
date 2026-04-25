@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 24.04.2026_
+_Last updated: 25.04.2026_
 
 ---
 
@@ -34,6 +34,15 @@ Phase 6 MVP (Morning Brief) — implemented. Scope frozen per 24.04:
 
 Next: manual Telegram smoke (MB-1..MB-9 in `TEST_PLAN_CURRENT.md`),
 then deploy.
+
+**Voice transcription** — active post-MVP slice (from 25.04.2026). Previously
+deferred vision; now in-flight. Stage 1 (commit `b8bd274`) added Polish-name
+post-processing via Claude haiku in `shared/voice_postproc.py`. Stage 2
+restructures `bot/handlers/voice.py` to always show the transcript with a
+4-button card (✅ Tak / 📝 Popraw / 🎤 Ponów / ❌ Anuluj) per the vision in
+`poznaj_swojego_agenta_v5_FINAL.md` line 25, plus a global `/cancel`
+slash-command (`bot/handlers/cancel.py`) usable beyond voice. Photo flow and
+multi-meeting remain deferred.
 
 ### Keep (potential reuse)
 
