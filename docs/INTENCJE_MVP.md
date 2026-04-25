@@ -554,9 +554,10 @@ Plan dnia filtruje po **dedykowanym OZE calendar** (events tworzone tylko w tym 
 | `edit_client` | Pokrycie przez `add_note` + `change_status` wystarczy na MVP. Pełna edycja pola wymaga dodatkowego parsera i walidacji. |
 | `lejek_sprzedazowy` | Funkcja dashboardowa, czeka na dashboard Next.js. W bocie zostaje jako referencja. |
 | `multi-meeting` | Batch kilku spotkań w jednej wiadomości. MVP obsługuje single meeting tylko. |
-| `voice input` | Whisper API + polski. Duża infra + post-processing dla polskich nazw własnych. |
 | `Drive photos` | Zdjęcia z terenu → Drive folder klienta. Kolumny N i O w Sheets zostają puste w MVP. |
 | `proactive morning brief` | Scheduler-driven, wymaga APScheduler + dedupy. |
+
+> **Active post-MVP slice (live od 25.04.2026):** Voice transcription jako input adapter — Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) i podlega standardowej intent classification. Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
 
 ### 8.2. Product vision only — wymaga osobnej decyzji Maana
 

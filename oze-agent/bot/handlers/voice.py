@@ -1,7 +1,7 @@
 """Voice message handler — transcribe with Whisper, normalize Polish names,
-always-show transcript with 4-button confirmation per vision
-(`docs/poznaj_swojego_agenta_v5_FINAL.md` line 25).
-"""
+always-show transcript with 2-button confirmation (Zapisz/Anuluj). After
+"Zapisz" the transcription is fed into handle_text via text_override and
+flows through the normal text path."""
 
 import asyncio
 import logging
@@ -37,9 +37,11 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
          raises, falls back to raw Whisper output on any guard trip).
       5. Log Whisper + Claude cost ZARAZ — independent of subsequent user
          action (vision: cost is committed once we paid for the call).
-      6. ALWAYS save pending + show 4-button transcript card. No "fast path"
-         for high-confidence — vision requires explicit user confirmation
-         before any downstream processing.
+      6. ALWAYS save pending + show 2-button transcript card (Zapisz/Anuluj).
+         No "fast path" for high-confidence — vision requires explicit user
+         confirmation before any downstream processing. After "Zapisz" the
+         transcription is fed via `handle_text(text_override=...)` and flows
+         through the normal text path.
     """
     if not await is_private_chat(update):
         return

@@ -28,7 +28,7 @@ _Last updated: 14.04.2026_
 - Module boundaries and responsibilities
 - Decisions: what to reuse, what to rewrite
 - Technical risk identification
-- Boundary between core behavior rewrite, deferred flows (voice / photo / multi-meeting), and stable wrappers vs behavior layer
+- Boundary between core behavior rewrite, deferred flows (photo / multi-meeting), active post-MVP slices (voice transcription — live since 25.04.2026), and stable wrappers vs behavior layer
 
 **Does NOT:** Change product decisions. Edit spec documents. Implement features without plan approval.
 
@@ -41,7 +41,7 @@ _Last updated: 14.04.2026_
 - Small, controlled changes per phase
 - No off-plan features
 
-**Does NOT:** Change SSOT documents without Maan's approval. Skip phases. Add features not in the current phase. Implement POST-MVP or vision-only features without explicit Maan approval — especially `reschedule_meeting`, `cancel_meeting`, `free_slots`, `delete_client`, voice / photo / multi-meeting.
+**Does NOT:** Change SSOT documents without Maan's approval. Skip phases. Add features not in the current phase. Implement POST-MVP or vision-only features without explicit Maan approval — especially `reschedule_meeting`, `cancel_meeting`, `free_slots`, `delete_client`, photo / multi-meeting.
 
 ---
 

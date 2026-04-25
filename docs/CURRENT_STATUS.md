@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 24.04.2026_
+_Last updated: 25.04.2026_
 
 ---
 
@@ -56,11 +56,19 @@ then deploy.
 
 ### Deferred beyond first version
 
-- voice flow
 - photo flow
 - multi-meeting
 
-Current voice/photo code (and any batch/multi-meeting fragments) is legacy reference only.
+Current photo code (and any batch/multi-meeting fragments) is legacy reference only.
+
+### Active post-MVP slice (live)
+
+- **Voice transcription** — live since 25.04.2026 (post-MVP slice, 5 commits
+  `8beecba..6a8b1d4` on main). Whisper STT → Polish name post-pass via Claude
+  haiku → 2-button confirm card (Zapisz/Anuluj). Confirmed transcription flows
+  through normal text path via `handle_text(text_override=...)`.
+- **Global `/cancel` command** — universal escape hatch for any pending flow
+  (added in `48e4a76`).
 
 ---
 
@@ -132,6 +140,18 @@ Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, 
 - `INTENCJE_MVP.md` — docs follow-up: §4.5 K/L semantics per D4 (K=label, L=data, P=event_id), extendedProperties tylko `event_type` per D8 (usunięte `client_sheet_row`/`managed_by`), §7 plan dnia filtruje po dedykowanym OZE calendar zamiast `managed_by` flag, offer_email emoji 📨.
 - `IMPLEMENTATION_PLAN.md` — dopisane POST-MVP roadmap items: `calendar_scope_narrowing` (D7), `multi_timezone_support` (D9).
 - Drift reconcile #2 (pre-Phase 3): `INTENCJE_MVP.md` §8.2 split na vision-only + §8.3 NIEPLANOWANE (per 4-tier SSOT model z 14.04; reschedule/cancel/free_slots/delete_client przeklasyfikowane z NIEPLANOWANE → VISION_ONLY; daily interaction limit oznaczony jako policy/business vision, nie router intent); §11 kolumna P poprawiona (populated w MVP dla Calendar-backed next steps, per D8); `agent_behavior_spec_v5.md` §6.3 rename NIEPLANOWANE → VISION-ONLY + §6.4 NIEPLANOWANE (tylko pre-meeting reminders); `PHASE2_CONTRACT_FREEZE.md` D8 wording "POST-MVP flows" → "Vision-only flows"; `TEST_PLAN_CURRENT.md` SDP-5 reclassify POST-MVP → VISION_ONLY.
+
+### Sesja 25.04
+
+Voice transcription post-MVP slice deployed na Railway, 5 commitów `8beecba..6a8b1d4` on main:
+
+- **Stage 1** (`8beecba`) — `shared/voice_postproc.py` Polish name normalizer (Claude haiku post-pass, 8-guard fallback strategy: empty input, empty model response, empty corrected, over-long, too many changes, too much diff, JSON invalid, API error) + 28 unit tests. Cherry-pick z reverted `b8bd274`.
+- **Stage 2** (`48e4a76`) — `bot/handlers/cancel.py` global `/cancel` command + register w `bot/main.py` + 6 tests. Universal escape hatch dla każdego pending flow.
+- **Stage 3** (`8c6c467`) — `bot/handlers/voice.py` rewrite: zawsze pokazuje transcript card (nie ma już high-confidence fast-path), Whisper STT + post-proc integration, MarkdownV2 escape via `escape_markdown_v2()`, single cost log `"whisper-1+haiku"` post-transcribe regardless of next user action. Initial scope miał 4 buttons (Tak/Popraw/Ponów/Anuluj) + 17 tests.
+- **Stage 3.5** (`cda6302`) — hotfix `shared/whisper_stt.py:_segment_avg_logprob` helper. OpenAI SDK ≥1.50 zwraca segmenty jako Pydantic `TranscriptionSegment` objects (attribute access), nie dict. Bug istniał wcześniej w stable wrapper, objawił się po Stage 3 deploy. Helper wspiera oba formaty (`isinstance(dict)` → `.get()`, else `getattr()`). 4 nowe testy.
+- **Stage 3.6** (`6a8b1d4`) — simplification + readonly fix. 4 buttons → 2 (✅ Zapisz / ❌ Anuluj), drop `:correct`/`:retry` w `buttons.py`. Krytyczny fix: `Message.text` jest read-only w PTB ≥21 (raise AttributeError on assignment) — dodany `text_override: str | None = None` parameter do `handle_text(...)`. Voice intent routing branch w `text.py` ANULOWANY — confirmed transcription idzie przez normalny text path (`handle_text(text_override=transcription)`). Drop 5 nieaktualnych testów.
+
+End state: 801 testów zielony (0 xfailed). Voice end-to-end zweryfikowany na Railway (Telegram smoke: voice → 2-button card → ✅ Zapisz → klasyfikacja → mutation card add_client). Whisper SDK breaking change naprawiony niezależnie. `/cancel` global escape hatch działa.
 
 ---
 

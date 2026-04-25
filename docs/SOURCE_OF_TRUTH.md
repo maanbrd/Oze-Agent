@@ -38,11 +38,12 @@ Obecna strategia to **selective rewrite**.
 
 ### Odłożone poza pierwszą wersję behavior layer
 
-- voice flow
 - photo flow
 - multi-meeting
 
-Obecny kod voice/photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+Obecny kod photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+
+Voice transcription — **live od 25.04.2026** (post-MVP slice). Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path.
 
 Kolejność przepisywania w ramach selective rewrite (w tym czy proactive scheduler/morning brief wchodzi w pierwszej rundzie, czy później) jest decyzją `IMPLEMENTATION_PLAN.md`, nie SSOT.
 
@@ -145,7 +146,6 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 - `edit_client`
 - `multi-meeting` (batch kilku spotkań w jednej wiadomości)
-- `voice_input`
 - `photo_upload` (Drive)
 - import CSV / Excel
 - pełny dashboard
@@ -168,11 +168,17 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 - pre-meeting reminders po stronie agenta — przypomnienia przed spotkaniem obsługuje natywnie Google Calendar
 
-### Voice, photo i multi-meeting
+### Photo i multi-meeting
 
 - Nie wchodzą do pierwszej wersji selective rewrite.
 - Zostają jako POST-MVP / późniejsza runda.
-- Obecny kod voice/photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+- Obecny kod photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+
+### Voice transcription (live od 25.04.2026)
+
+- Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj) — `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`.
+- Po Zapisz transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) — voice działa jako input adapter, nie odrębny intent type.
+- Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
 
 ### Product Vision
 

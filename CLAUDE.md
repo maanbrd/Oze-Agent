@@ -38,7 +38,7 @@ The current Python behavior layer is useful as reference, but not trusted as the
 - proactive scheduler / morning brief
 - agent decision layer
 
-Voice flow, photo flow, and multi-meeting are POST-MVP and not on the current rewrite list.
+Photo flow and multi-meeting are POST-MVP and not on the current rewrite list. Voice transcription (Whisper STT + Polish name post-pass + 2-button confirm card) is live as of 25.04.2026 — `bot/handlers/voice.py` + `shared/voice_postproc.py`.
 
 Do not delete large parts of the codebase without explicit approval from Maan.
 

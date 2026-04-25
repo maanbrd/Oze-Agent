@@ -320,12 +320,13 @@ Te intencje nie są w MVP, ale klasyfikator musi je rozpoznać, żeby agent odpo
 | `lejek_sprzedazowy` | 'ilu klientów', 'lejek', 'ile mam w' | ilu mam klientów? | Funkcja dashboardowa, czeka na dashboard |
 | `filtruj_klientów` | 'klienci z', 'pokaż wszystkich z' + kryterium | pokaż klientów z Warszawy | Dashboard, nie bot — handlowiec nie filtruje w locie |
 | `multi-meeting` | kilka spotkań w jednej wiadomości | jutro o 10 do Kowalskiego, o 14 do Nowaka | MVP obsługuje tylko single meeting |
-| `voice input` | Whisper transcription polskich wiadomości głosowych | (voice message) | Wymaga Whisper API + post-processing polskich nazw własnych |
 | `Drive photos` | zdjęcia dachu/instalacji → folder Drive klienta | (photo attachment) | Wymaga Google Drive integracji; kolumny N i O w Sheets puste w MVP |
+
+> **Active post-MVP slice (live od 25.04.2026):** voice transcription jako input adapter — Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj). Po potwierdzeniu transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`). Voice nie jest odrębnym intent type — podlega standardowej intent classification. Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
 
 Dla `edit_client` / `lejek_sprzedazowy` / `filtruj_klientów` agent odpowiada: _"To feature post-MVP. Zrobisz to w Google Sheets / dashboardzie, który wejdzie w kolejnej fazie."_ — krótko, bez przeprosin, bez udawania że robi.
 
-Dla `multi-meeting` / `voice input` / `Drive photos` — w MVP te ścieżki nie są w ogóle aktywne w runtime (agent obsługuje tylko tekst i pojedyncze spotkanie). Voice/photo/image-document — stub per D5 w `bot/main.py`. Multi-meeting — rejection przez router (`IntentType.MULTI_MEETING`) z prośbą o jedno spotkanie naraz.
+Dla `multi-meeting` / `Drive photos` — w MVP te ścieżki nie są aktywne w runtime (agent obsługuje tylko tekst i pojedyncze spotkanie). Photo / image-document — stub per D5 w `bot/main.py`. Multi-meeting — rejection przez router (`IntentType.MULTI_MEETING`) z prośbą o jedno spotkanie naraz. Voice transcription — LIVE od 25.04.2026 jako input adapter (handle_voice → Whisper → post-pass → confirm card → handle_text text_override).
 
 ### 6.3. Intencje VISION-ONLY (wymaga osobnej decyzji Maana)
 

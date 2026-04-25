@@ -456,6 +456,6 @@ After user responds (voice/text about multiple clients at once) → parse, show 
 | Subscription expired | "Subskrypcja wygasła. Wykup dostęp → [link]" |
 | Unintelligible message | "Co chcesz zrobić?" |
 
-## Voice, photos, multi-meeting
+## Voice transcription, photo, multi-meeting
 
-Voice input (Whisper transcription), photo upload to Google Drive, and multi-meeting batch parsing are **POST-MVP** (see `INTENCJE_MVP.md` section 8.1). In MVP agent handles only text messages and single meeting per message.
+Voice transcription is **live as an input adapter** since 25.04.2026 (Whisper STT → Polish name post-pass via Claude haiku → 2-button confirm card; confirmed transcription flows through normal text path via `handle_text(text_override=...)`). Photo upload to Google Drive and multi-meeting batch parsing remain **POST-MVP** (see `INTENCJE_MVP.md` section 8.1). In MVP agent handles text messages, voice messages (transcribed to text), and single meeting per message.

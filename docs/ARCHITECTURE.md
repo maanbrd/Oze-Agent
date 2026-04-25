@@ -39,15 +39,23 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 
 ---
 
+## Active post-MVP slices
+
+| Component | Files | Status |
+|-----------|-------|--------|
+| Voice transcription | `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py` | Live since 25.04.2026 — Whisper STT + Polish name post-pass (Claude haiku), 2-button confirm card (Zapisz/Anuluj), transcription flows through normal text path via `handle_text(text_override=...)` |
+| Global cancel | `bot/handlers/cancel.py` | Live since 25.04.2026 — universal escape hatch for any pending flow |
+
+---
+
 ## Deferred flows
 
 | Component | Current Location | Problem |
 |-----------|-----------------|---------|
-| Voice flow | `bot/handlers/voice.py` | Whisper → text → re-route, fragile |
 | Photo flow | `bot/handlers/photo.py` | Drive upload, not fully tested |
 | Multi-meeting | Handlers / parser fragments (not centralized) | Batch of several meetings in one message |
 
-Current voice/photo code and any batch/multi-meeting fragments are legacy reference only — not the contract. These flows are POST-MVP roadmap candidates.
+Current photo code and any batch/multi-meeting fragments are legacy reference only — not the contract. These flows are POST-MVP roadmap candidates.
 
 ---
 
@@ -69,7 +77,7 @@ bot/
   utils/               # Telegram helpers: buttons, typing indicators
 ```
 
-`shared/voice/` and `shared/photo/` are POST-MVP module candidates, not part of the core first-version behavior layer.
+`shared/photo/` is a POST-MVP module candidate, not part of the core first-version behavior layer. Voice work currently lives in `shared/voice_postproc.py` + `shared/whisper_stt.py` + `bot/handlers/voice.py` — could be moved into `shared/voice/` if/when refactor is needed.
 
 ---
 

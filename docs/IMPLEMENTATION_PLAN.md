@@ -51,7 +51,7 @@ _Last updated: 14.04.2026_
 
 **Do NOT:** Rewrite wrappers. Change behavior logic. Add new features.
 
-Voice/photo/multi-meeting handlers and their current code are legacy reference only — not a blocker for core MVP audit. They will be revisited when deferred flows are scheduled.
+Photo/multi-meeting handlers and their current code are legacy reference only — not a blocker for core MVP audit. They will be revisited when deferred flows are scheduled. Voice transcription went live 25.04.2026 (post-Phase 7 slice) — see `CURRENT_STATUS.md`.
 
 ---
 
@@ -89,7 +89,7 @@ Voice/photo/multi-meeting handlers and their current code are legacy reference o
 
 **Done when:** Router correctly classifies all 6 MVP intents + `general_question` with structured JSON output. Out-of-MVP requests are distinguished per `SOURCE_OF_TRUTH.md` §4, and the agent replies accordingly without hallucinating or misrouting:
 
-- **POST-MVP roadmap** (e.g. `edit_client`, `multi-meeting`, `voice_input`, `photo_upload`, CSV/Excel import, dashboard) → "to feature post-MVP".
+- **POST-MVP roadmap** (e.g. `edit_client`, `multi-meeting`, `photo_upload`, CSV/Excel import, dashboard) → "to feature post-MVP".
 - **Vision-only** (e.g. `reschedule_meeting`, `cancel_meeting`, `free_slots`, `delete_client`) → "to poza aktualnym zakresem; wymaga osobnej decyzji".
 - **NIEPLANOWANE** (e.g. agent-side pre-meeting reminders) → short refusal with a pointer to the native alternative (e.g. reminders handled by Google Calendar).
 
@@ -121,7 +121,7 @@ Manual test pass.
 - All 4 pending routes (auto-cancel, Dopisać, auto-doklejanie, compound fusion) work.
 - Cards render correctly.
 
-**Do NOT:** Touch mutation pipeline internals. Add new card types. Implement voice/photo.
+**Do NOT:** Touch mutation pipeline internals. Add new card types. Implement photo.
 
 ---
 
@@ -147,7 +147,7 @@ Manual test pass.
 - R1 enforced: no writes before confirmation.
 - Error messages in Polish, user-friendly.
 
-**Do NOT:** Touch voice/photo. Add POST-MVP intents. Change card format.
+**Do NOT:** Touch photo. Add POST-MVP intents. Change card format.
 
 ---
 
@@ -200,7 +200,13 @@ Manual test pass.
 - Dual-write rules per intent (per Phase 5)
 - Proactive scheduler (morning brief + evening follow-up)
 
-**Do NOT:** Treat voice / photo / multi-meeting test failures as MVP blockers — those flows are POST-MVP. Add features. Change specs. Rush to deploy.
+**Do NOT:** Treat photo / multi-meeting test failures as MVP blockers — those flows are POST-MVP. Add features. Change specs. Rush to deploy. (Voice transcription went live 25.04.2026 — its tests **are** MVP blockers.)
+
+---
+
+## Active post-MVP slices (live)
+
+- **Voice transcription** — Whisper STT + Polish name post-pass (Claude haiku) + 2-button confirm card (Zapisz/Anuluj). Live since 25.04.2026 (post-Phase 7 slice). Confirmed transcription flows through normal text path via `handle_text(text_override=...)`. Voice acts as input adapter — no separate voice intent type. Files: `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`, `bot/handlers/cancel.py`.
 
 ---
 
@@ -208,7 +214,6 @@ Manual test pass.
 
 These flows are out of scope for the first version of the behavior layer. Current Python code for these is legacy reference only — not a contract.
 
-- **Voice input** — Whisper transcription, voice-driven intent routing.
 - **Photo upload** — Drive upload and Sheets link.
 - **Multi-meeting** — batch of several meetings in one message.
 
@@ -225,7 +230,7 @@ Derived from `SOURCE_OF_TRUTH.md` §4. This plan must not silently promote visio
 
 **POST-MVP roadmap** (scheduled after MVP stabilizes):
 
-- `edit_client`, `multi-meeting`, `voice_input`, `photo_upload`, CSV/Excel import, full dashboard.
+- `edit_client`, `multi-meeting`, `photo_upload`, CSV/Excel import, full dashboard.
 - `calendar_scope_narrowing` (per D7) — migrate from full `calendar` scope to `calendar.events`, with redesigned onboarding (user-created calendar + paste ID, or scope downgrade flow). Security hardening; not MVP blocker.
 - `multi_timezone_support` (per D9) — add `users.timezone` column, read in domain layer via shared helper instead of `DEFAULT_TIMEZONE` constant, UI/command to change timezone, DST coverage cross-country. Scheduled when real non-PL user demand arrives.
 - `evening_followup` — post-meeting check-in via `pending_followups` table. Shipped infra (Phase 5.3) but no runtime scheduler yet.
