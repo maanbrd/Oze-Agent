@@ -13,7 +13,12 @@ PHASE_7B1_SCENARIOS = {
     "add_client_full_save",
     "add_client_missing_fields_fillin_save",
     "add_client_with_followup_meeting_save",
-    "add_client_dup_nowy_save",
+    # Renamed 25.04.2026 from `add_client_dup_nowy_save` after 2nd smoke
+    # run revealed bot does NOT serve a separate [Nowy]/[Aktualizuj] routing
+    # card — duplicate handling is integrated into the standard 3-button
+    # mutation card via ➕ Dopisać. Scenario now tests the "click ✅ Zapisać"
+    # path (create new), with the form divergence logged as known_drift.
+    "add_client_dup_save_create_new",
     "add_meeting_in_person_save",
     "add_meeting_phone_call_save",
     "add_meeting_relative_date_save",

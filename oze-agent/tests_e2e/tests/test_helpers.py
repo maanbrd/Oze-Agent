@@ -48,6 +48,15 @@ def test_is_save_confirmation_recognizes_meeting_specific():
     assert is_save_confirmation("Spotkanie umówione: ...") is True
 
 
+def test_is_save_confirmation_recognizes_spotkanie_dodane():
+    """Bot's actual meeting-save reply is `✅ Spotkanie dodane do kalendarza.`
+    Added 25.04.2026 after 2nd 7B.1 smoke run revealed this wording."""
+    assert is_save_confirmation("✅ Spotkanie dodane do kalendarza.") is True
+    assert is_save_confirmation(
+        "✅ Spotkanie dodane do kalendarza. Status klienta: Podpisane."
+    ) is True
+
+
 def test_is_save_confirmation_recognizes_status_specific():
     assert is_save_confirmation("Status zmieniony.") is True
 

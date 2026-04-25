@@ -133,7 +133,7 @@ _SAVE_CONFIRMATION_MARKERS = (
     "Zapisałem", "Zapisałam", "Zapisano", "Zapisana", "Zapisane",
     "Dodałem", "Dodałam", "Dodano",
     "Zaktualizowano", "Zaktualizowane", "Zaktualizowałem",
-    "Spotkanie umówione", "Spotkanie zapisane",
+    "Spotkanie umówione", "Spotkanie zapisane", "Spotkanie dodane",
     "Status zmieniony", "Zmieniłem status",
     "Notatka dodana", "Notatkę dodano", "Notatkę zapisałem",
 )
