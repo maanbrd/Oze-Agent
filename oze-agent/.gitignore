@@ -37,3 +37,11 @@ Thumbs.db
 # Misc
 *.log
 *.tmp
+
+# E2E harness — session files contain auth tokens, .env has secrets,
+# reports are per-machine artifacts.
+tests_e2e/.env
+tests_e2e/.sessions/
+*.session
+*.session-journal
+test_results_e2e.md
