@@ -12,6 +12,7 @@ from telegram.ext import (
 
 from bot.config import Config
 from bot.handlers.buttons import handle_button
+from bot.handlers.cancel import handle_cancel_command
 from bot.handlers.debug import debug_brief_command
 from bot.handlers.fallback import handle_fallback
 from bot.handlers.photo import handle_photo
@@ -47,6 +48,7 @@ def main():
 
     # Order matters — first match wins
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("cancel", handle_cancel_command))
     app.add_handler(CommandHandler("debug_brief", debug_brief_command))
     app.add_handler(CommandHandler("odswiez_kolumny", handle_refresh_columns_command))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
