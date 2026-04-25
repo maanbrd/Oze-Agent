@@ -253,6 +253,86 @@ async def close_post_save_followup(
         return False
 
 
+# ── Save-confirm assertion + Co-dalej cleanup (extracted from mutating_core) ─
+
+
+async def assert_save_confirmed(
+    harness: TelegramE2EHarness,
+    result,  # tests_e2e.report.ScenarioResult
+    replies: list[_ObservedMessage],
+    *,
+    check_key: str = "save_confirmed",
+) -> bool:
+    """Verify at least one reply contains a save confirmation marker.
+
+    Side effect: closes the bot's 'Co dalej —' follow-up by sending 'nic'
+    when the bot emitted one (see `close_post_save_followup`). Cleanup
+    runs regardless of the confirm assertion result — if the save *did*
+    commit and the bot *did* prompt 'Co dalej', we must close that
+    pending even when our marker check missed (e.g. bot wording drift).
+    """
+    if not replies:
+        result.add(check_key, False, detail="no reply after ✅ Zapisać", tag="blocker")
+        return False
+    confirmed = any(is_save_confirmation(m.text) for m in replies)
+    detail = (
+        f"got {len(replies)} reply(ies); first: {replies[0].text[:200]!r}"
+        if replies else "no replies"
+    )
+    result.add(check_key, confirmed, detail=detail)
+    if not confirmed:
+        # Still log all the replies so investigation is easy.
+        result.context[f"{check_key}_replies"] = [m.text[:200] for m in replies]
+    # Always attempt to close 'Co dalej' — invariant for next-step safety.
+    closed = await close_post_save_followup(harness, replies)
+    result.context[f"{check_key}_co_dalej_closed"] = closed
+    return confirmed
+
+
+# ── Date-mention tolerant check (PL or ISO form) ────────────────────────────
+
+
+def card_mentions_date_pl_str(card_text: str, pl_date_str: str) -> bool:
+    """True if a PL date (DD.MM.YYYY) appears in card_text, in PL OR ISO form.
+
+    Tolerant because bot drifts: as of 25.04.2026 the 'Data nastepnego
+    kroku' field on compound cards leaks ISO format. The date IS correct
+    — only the formatting is wrong (a separate `pl_date_format` known_drift
+    captures that). For 'mentions the right day' assertions, accept either.
+    """
+    if pl_date_str in card_text:
+        return True
+    parts = pl_date_str.split(".")
+    if len(parts) == 3:
+        iso = f"{parts[2]}-{parts[1]}-{parts[0]}"
+        return iso in card_text
+    return False
+
+
+def check_pl_date_or_drift(result, card_msg) -> None:
+    """Run `assert_pl_date_format`; ISO-leak failures become `known_drift`.
+
+    Per Maan's 25.04.2026 decision: don't fix bot/ in this phase, only
+    log drifts. A failure for any other reason (Excel serial, no PL
+    date when expected) is still a real `fail`.
+    """
+    # Local import to avoid a hard dependency on `tests_e2e.asserts` in
+    # callers that don't need this helper.
+    from tests_e2e.asserts import assert_pl_date_format
+    ok, detail = assert_pl_date_format(card_msg.text)
+    if ok:
+        result.add("pl_date_format", True, detail)
+        return
+    if "ISO-format date leaked" in detail:
+        result.add_known_drift(
+            "pl_date_format",
+            detail,
+            doc_ref="agent_system_prompt.md — 'Never expose raw ISO dates'",
+        )
+    else:
+        result.add("pl_date_format", False, detail)
+
+
 # ── Setup helper (PUBLIC; used by Stage-2 scenario modules) ─────────────────
 
 

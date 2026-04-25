@@ -1,4 +1,4 @@
-"""Pytest checks for the Phase 7B.1 mutating-core scenario registry.
+"""Pytest checks for the mutating_core scenario registry.
 
 Pure registry assertions — these do NOT actually run any scenario (those
 require a live Telegram and a real bot). The unit tests just verify
@@ -25,6 +25,18 @@ PHASE_7B1_SCENARIOS = {
     "add_meeting_compound_change_status_save",
     "change_status_simple_save",
 }
+
+# Phase 7B-final added 6 more mutating_core scenarios.
+PHASE_7B_FINAL_MUTATING = {
+    "add_meeting_offer_email_save",
+    "add_meeting_doc_followup_save",
+    "add_meeting_calendar_conflict_warning",
+    "add_client_dup_dopisac_update_path",
+    "change_status_rezygnacja_save",
+    "change_status_status_first_compound_save",
+}
+
+ALL_MUTATING_CORE = PHASE_7B1_SCENARIOS | PHASE_7B_FINAL_MUTATING
 
 
 def test_phase7b1_all_scenarios_registered():
@@ -62,20 +74,34 @@ def test_phase7b1_scenarios_have_descriptions():
         assert scen.description, f"{name} has no description"
 
 
-def test_mutating_core_category_contains_only_phase7b1_for_now():
-    """Sanity: as 7B.2/7B.3 add more, this test will need updating."""
+def test_mutating_core_category_matches_expected_set():
+    """The mutating_core category should equal the union of 7B.1 + 7B-final."""
     in_category = {s.name for s in list_scenarios(category="mutating_core")}
-    assert in_category == PHASE_7B1_SCENARIOS, (
+    assert in_category == ALL_MUTATING_CORE, (
         f"unexpected mutating_core members; "
-        f"got {in_category}, expected {PHASE_7B1_SCENARIOS}"
+        f"got {in_category}, expected {ALL_MUTATING_CORE}"
     )
 
 
-def test_default_runner_excludes_all_7b1_scenarios():
+def test_phase7b_final_scenarios_registered():
+    missing = PHASE_7B_FINAL_MUTATING - set(SCENARIOS)
+    assert not missing, f"missing 7B-final mutating_core scenarios: {missing}"
+
+
+def test_phase7b_final_scenarios_are_opt_in():
+    """7B-final mutating scenarios must NEVER run by default."""
+    for name in PHASE_7B_FINAL_MUTATING:
+        scen = SCENARIOS[name]
+        assert scen.default_in_run is False, (
+            f"{name} writes to Sheets/Calendar — must have default_in_run=False"
+        )
+
+
+def test_default_runner_excludes_all_mutating_scenarios():
     """Belt-and-suspenders: default `runner` selection must NEVER include
     a mutating_core scenario, even if `default_in_run` regresses to True."""
     default_names = {s.name for s in list_scenarios(only_default=True)}
-    overlap = default_names & PHASE_7B1_SCENARIOS
+    overlap = default_names & ALL_MUTATING_CORE
     assert not overlap, (
-        f"7B.1 mutating scenarios leaked into default selection: {overlap}"
+        f"mutating scenarios leaked into default selection: {overlap}"
     )
