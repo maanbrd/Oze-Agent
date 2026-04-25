@@ -124,8 +124,13 @@ def find_card_message(messages: list[_ObservedMessage]) -> _ObservedMessage | No
 
 # Tolerant marker set — bot wording drifts. PASS if ANY marker is present
 # in the post-click reply text. Keep these as substrings (no anchors).
+#
+# "Zapisane" added 25.04.2026 after first 7B.1 smoke run revealed bot's
+# canonical confirm form is `✅ Zapisane.` (impersonal past participle),
+# not the spec-suggested `Zapisałem` (1st person). Eight blockers in one
+# run traced to this single missing marker.
 _SAVE_CONFIRMATION_MARKERS = (
-    "Zapisałem", "Zapisałam", "Zapisano", "Zapisana",
+    "Zapisałem", "Zapisałam", "Zapisano", "Zapisana", "Zapisane",
     "Dodałem", "Dodałam", "Dodano",
     "Zaktualizowano", "Zaktualizowane", "Zaktualizowałem",
     "Spotkanie umówione", "Spotkanie zapisane",
@@ -189,3 +194,46 @@ async def post_setup_settle() -> None:
     `pending_flow` confusion. 2s is enough in practice.
     """
     await asyncio.sleep(2.0)
+
+
+# ── Co-dalej cleanup (post-save text-pending state) ─────────────────────────
+
+
+def _has_co_dalej(replies: list[_ObservedMessage]) -> bool:
+    """True iff any reply text contains the bot's 'Co dalej —' follow-up."""
+    return any("Co dalej" in m.text for m in replies)
+
+
+async def close_post_save_followup(
+    harness: TelegramE2EHarness,
+    replies: list[_ObservedMessage],
+) -> bool:
+    """Close the soft text-pending state bot enters after a successful save.
+
+    Bot's post-save pattern (observed 25.04.2026):
+
+        msg 1: "✅ Zapisane."
+        msg 2: "Co dalej — {client} ({city})? Spotkanie, telefon, mail, ..."
+
+    The "Co dalej" message creates a soft pending — if the next user
+    message arrives without closing it, bot replies "Nie rozumiem. Podaj
+    np. 'spotkanie jutro o 14', 'telefon', albo napisz 'nic' żeby..."
+    instead of treating the message as a fresh intent.
+
+    Bot's own hint is to send 'nic' to close it, so that's what we do —
+    only when we actually saw 'Co dalej' (avoid creating residue when no
+    follow-up was emitted).
+
+    Returns True iff cleanup was sent. Failures are swallowed — this is
+    teardown, not assertion.
+    """
+    if not _has_co_dalej(replies):
+        return False
+    try:
+        await harness.send("nic")
+        # 3s is enough for bot's ack of 'nic' to land. Not asserted on.
+        await harness.collect_messages(duration_s=3.0)
+        return True
+    except Exception as e:
+        logger.warning("close_post_save_followup failed: %s", e)
+        return False

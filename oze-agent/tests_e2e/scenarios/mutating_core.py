@@ -43,10 +43,10 @@ from tests_e2e.scenarios._base import new_result, register, stamp_end
 from tests_e2e.scenarios._helpers import (
     E2E_BETA_CITY,
     click_save_and_collect,
+    close_post_save_followup,
     e2e_beta_name,
     find_card_message,
     find_routing_button_label,
-    find_save_button_label,
     fmt_pl_date,
     is_save_confirmation,
     post_setup_settle,
@@ -110,11 +110,54 @@ async def _setup_existing_client(
         return False
 
     result.add("setup_client_created", True, detail=f"client '{name}' setup OK")
+    # Close the bot's "Co dalej —" follow-up so the main test trigger
+    # doesn't race into a soft text-pending state and get "Nie rozumiem".
+    closed = await close_post_save_followup(harness, confirm_replies)
+    result.context["setup_co_dalej_closed"] = closed
     await post_setup_settle()
     return True
 
 
 # ── Generic main-flow assertion bundle (used by every scenario) ─────────────
+
+
+def _card_mentions_date_pl_str(card_text: str, pl_date_str: str) -> bool:
+    """True if a PL date (DD.MM.YYYY) appears in card_text, in PL OR ISO form.
+
+    Tolerant because bot drifts: as of 25.04.2026 the 'Data nastepnego
+    kroku' field on compound cards leaks ISO format. The date IS correct
+    — only the formatting is wrong (a separate `pl_date_format` known_drift
+    captures that). For 'mentions the right day' assertions, accept either.
+    """
+    if pl_date_str in card_text:
+        return True
+    # Convert DD.MM.YYYY → YYYY-MM-DD and also accept that.
+    parts = pl_date_str.split(".")
+    if len(parts) == 3:
+        iso = f"{parts[2]}-{parts[1]}-{parts[0]}"
+        return iso in card_text
+    return False
+
+
+def _check_pl_date_or_drift(result: ScenarioResult, card_msg: _ObservedMessage) -> None:
+    """Run `assert_pl_date_format`; ISO-leak failures become `known_drift`.
+
+    Per Maan's 25.04.2026 decision: don't fix bot/ in this phase, only
+    log drifts. A failure for any other reason (Excel serial, no PL
+    date when expected) is still a real `fail`.
+    """
+    ok, detail = assert_pl_date_format(card_msg.text)
+    if ok:
+        result.add("pl_date_format", True, detail)
+        return
+    if "ISO-format date leaked" in detail:
+        result.add_known_drift(
+            "pl_date_format",
+            detail,
+            doc_ref="agent_system_prompt.md — 'Never expose raw ISO dates'",
+        )
+    else:
+        result.add("pl_date_format", False, detail)
 
 
 def _assert_card_basics(
@@ -138,10 +181,21 @@ def _assert_card_basics(
     result.add("no_internal_field_leak", ok, detail)
 
 
-def _assert_save_confirmed(
-    result: ScenarioResult, replies: list[_ObservedMessage], *, check_key: str = "save_confirmed",
+async def _assert_save_confirmed(
+    harness: TelegramE2EHarness,
+    result: ScenarioResult,
+    replies: list[_ObservedMessage],
+    *,
+    check_key: str = "save_confirmed",
 ) -> bool:
-    """Verify at least one reply contains a save confirmation marker."""
+    """Verify at least one reply contains a save confirmation marker.
+
+    Side effect: closes the bot's 'Co dalej —' follow-up by sending 'nic'
+    when the bot emitted one (see `close_post_save_followup`). Cleanup
+    runs regardless of the confirm assertion result — if the save *did*
+    commit and the bot *did* prompt 'Co dalej', we must close that
+    pending even when our marker check missed (e.g. bot wording drift).
+    """
     if not replies:
         result.add(check_key, False, detail="no reply after ✅ Zapisać", tag="blocker")
         return False
@@ -154,6 +208,9 @@ def _assert_save_confirmed(
     if not confirmed:
         # Still log all the replies so investigation is easy.
         result.context[f"{check_key}_replies"] = [m.text[:200] for m in replies]
+    # Always attempt to close 'Co dalej' — invariant for next-step safety.
+    closed = await close_post_save_followup(harness, replies)
+    result.context[f"{check_key}_co_dalej_closed"] = closed
     return confirmed
 
 
@@ -206,7 +263,7 @@ async def run_add_client_minimal_save(
             )
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_client_minimal_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -273,7 +330,7 @@ async def run_add_client_full_save(
             )
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_client_full_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -356,7 +413,7 @@ async def run_add_client_missing_fields_fillin_save(
             result.add_blocker("save_button_present", f"no ✅ on updated card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_client_missing_fields_fillin_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -410,13 +467,12 @@ async def run_add_client_with_followup_meeting_save(
         )
         result.add(
             "card_mentions_meeting_date",
-            expected_date in card_msg.text,
-            detail=f"expected '{expected_date}' in card; got: {card_msg.text[:200]!r}",
+            _card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
         )
 
         # PL date format check on the card text.
-        ok, detail = assert_pl_date_format(card_msg.text)
-        result.add("pl_date_format", ok, detail)
+        _check_pl_date_or_drift(result, card_msg)
 
         save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
         result.context["save_label"] = save_label
@@ -425,7 +481,7 @@ async def run_add_client_with_followup_meeting_save(
             result.add_blocker("save_button_present", f"no ✅ on compound card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_client_with_followup_meeting_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -528,7 +584,7 @@ async def run_add_client_dup_nowy_save(
             )
             return result
         result.add("final_save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies, check_key="final_save_confirmed")
+        await _assert_save_confirmed(harness, result, confirm_replies, check_key="final_save_confirmed")
     except Exception as e:
         logger.exception("add_client_dup_nowy_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -576,11 +632,10 @@ async def run_add_meeting_in_person_save(
         expected_date = fmt_pl_date(tmr).split(" ")[0]
         result.add(
             "card_mentions_meeting_date",
-            expected_date in card_msg.text,
-            detail=f"expected '{expected_date}' in card; got: {card_msg.text[:200]!r}",
+            _card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
         )
-        ok, detail = assert_pl_date_format(card_msg.text)
-        result.add("pl_date_format", ok, detail)
+        _check_pl_date_or_drift(result, card_msg)
 
         save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
         result.context["save_label"] = save_label
@@ -589,7 +644,7 @@ async def run_add_meeting_in_person_save(
             result.add_blocker("save_button_present", f"no ✅ on meeting card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_meeting_in_person_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -654,11 +709,10 @@ async def run_add_meeting_phone_call_save(
         expected_date = fmt_pl_date(target_day).split(" ")[0]
         result.add(
             "card_mentions_meeting_date",
-            expected_date in card_msg.text,
-            detail=f"expected '{expected_date}' in card; got: {card_msg.text[:200]!r}",
+            _card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
         )
-        ok, detail = assert_pl_date_format(card_msg.text)
-        result.add("pl_date_format", ok, detail)
+        _check_pl_date_or_drift(result, card_msg)
 
         save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
         result.context["save_label"] = save_label
@@ -667,7 +721,7 @@ async def run_add_meeting_phone_call_save(
             result.add_blocker("save_button_present", f"no ✅ on phone meeting card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_meeting_phone_call_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -722,14 +776,13 @@ async def run_add_meeting_relative_date_save(
         # Check for the exact date OR any DD.MM.YYYY in the right week.
         result.add(
             "card_mentions_resolved_tuesday",
-            expected_date in card_msg.text,
+            _card_mentions_date_pl_str(card_msg.text, expected_date),
             detail=(
-                f"expected '{expected_date}' (next-week Tuesday) in card; "
-                f"got: {card_msg.text[:200]!r}"
+                f"expected '{expected_date}' (PL) or its ISO form (next-week "
+                f"Tuesday) in card; got: {card_msg.text[:200]!r}"
             ),
         )
-        ok, detail = assert_pl_date_format(card_msg.text)
-        result.add("pl_date_format", ok, detail)
+        _check_pl_date_or_drift(result, card_msg)
 
         save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
         result.context["save_label"] = save_label
@@ -738,7 +791,7 @@ async def run_add_meeting_relative_date_save(
             result.add_blocker("save_button_present", f"no ✅ on relative-date card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_meeting_relative_date_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -791,8 +844,8 @@ async def run_add_meeting_compound_change_status_save(
         expected_date = fmt_pl_date(target_day).split(" ")[0]
         result.add(
             "card_mentions_meeting_date",
-            expected_date in card_msg.text,
-            detail=f"expected '{expected_date}' in card; got: {card_msg.text[:200]!r}",
+            _card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
         )
         # Status mention — accept any of the umowa-status synonyms tolerantly.
         umowa_markers = ("Umowa podpisana", "umowa", "Podpisana", "podpisał")
@@ -804,8 +857,7 @@ async def run_add_meeting_compound_change_status_save(
                 f"expected one of {umowa_markers!r}; got: {card_msg.text[:200]!r}"
             ),
         )
-        ok, detail = assert_pl_date_format(card_msg.text)
-        result.add("pl_date_format", ok, detail)
+        _check_pl_date_or_drift(result, card_msg)
 
         save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
         result.context["save_label"] = save_label
@@ -814,7 +866,7 @@ async def run_add_meeting_compound_change_status_save(
             result.add_blocker("save_button_present", f"no ✅ on compound card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("add_meeting_compound_change_status_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
@@ -875,7 +927,7 @@ async def run_change_status_simple_save(
             result.add_blocker("save_button_present", f"no ✅ on status card")
             return result
         result.add("save_button_present", True, detail=save_label)
-        _assert_save_confirmed(result, confirm_replies)
+        await _assert_save_confirmed(harness, result, confirm_replies)
     except Exception as e:
         logger.exception("change_status_simple_save crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
