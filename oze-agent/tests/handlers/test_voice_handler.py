@@ -213,8 +213,9 @@ async def test_markdownv2_escape_for_special_chars():
 
 
 @pytest.mark.asyncio
-async def test_card_has_four_buttons():
-    """Always-show card carries Tak / Popraw / Ponów / Anuluj."""
+async def test_card_has_two_buttons():
+    """Always-show card carries Zapisz / Anuluj only — voice slice
+    simplified to mirror normal text mutation flow (R1: confirm or cancel)."""
     update = _make_voice_update()
     ctx = _make_context()
     with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
@@ -231,15 +232,13 @@ async def test_card_has_four_buttons():
 
     md_call = update.message.reply_markdown_v2.call_args
     keyboard = md_call.kwargs["reply_markup"]
-    # Flatten button rows; verify all 4 callback values present.
     callback_data = []
     for row in keyboard.inline_keyboard:
         for btn in row:
             callback_data.append(btn.callback_data)
-    assert "voice_confirm:yes" in callback_data
-    assert "voice_confirm:correct" in callback_data
-    assert "voice_confirm:retry" in callback_data
-    assert "voice_confirm:cancel" in callback_data
+    assert callback_data == ["voice_confirm:yes", "voice_confirm:cancel"]
+    assert "voice_confirm:correct" not in callback_data
+    assert "voice_confirm:retry" not in callback_data
 
 
 @pytest.mark.asyncio
@@ -278,8 +277,9 @@ async def test_voice_overwrites_existing_pending():
 
 @pytest.mark.asyncio
 async def test_voice_confirm_yes_routes_to_handle_text_with_exact_text():
-    """Click ✅ Tak → bot mutates message.text to transcription, calls handle_text.
-    Test #17: verify the EXACT text payload."""
+    """Click ✅ Zapisz → bot routes transcription via handle_text(text_override=...).
+    NOTE: PTB ≥21 makes Message.text read-only — must use text_override
+    parameter, NEVER mutate update.message.text."""
     update = _make_callback_update(callback_data="voice_confirm:yes")
     ctx = MagicMock()
     flow = {
@@ -297,50 +297,10 @@ async def test_voice_confirm_yes_routes_to_handle_text_with_exact_text():
 
     mock_delete.assert_called_once_with(12345)
     mock_handle.assert_awaited_once()
-    # Mutated message text MUST equal the saved transcription.
-    assert update.callback_query.message.text == "dodaj klienta Jan Kowalski"
-
-
-@pytest.mark.asyncio
-async def test_voice_confirm_correct_sets_awaiting_flag():
-    """Click 📝 Popraw → pending flow gets `awaiting_text_correction=True`."""
-    update = _make_callback_update(callback_data="voice_confirm:correct")
-    ctx = MagicMock()
-    flow = {
-        "flow_type": "voice_transcription",
-        "flow_data": {"transcription": "Jan Kowalski"},
-    }
-    with patch("bot.handlers.buttons.is_private_chat", new=AsyncMock(return_value=True)), \
-         patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
-         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
-         patch("bot.handlers.buttons.save_pending_flow") as mock_save, \
-         patch("bot.handlers.buttons.delete_pending_flow") as mock_delete:
-        from bot.handlers.buttons import handle_button
-        await handle_button(update, ctx)
-
-    mock_delete.assert_not_called()  # we DON'T delete — flag is set
-    mock_save.assert_called_once()
-    saved_data = mock_save.call_args.args[2]
-    assert saved_data["awaiting_text_correction"] is True
-    assert saved_data["transcription"] == "Jan Kowalski"
-
-
-@pytest.mark.asyncio
-async def test_voice_confirm_retry_clears_pending():
-    """Click 🎤 Ponów → pending deleted, retry prompt shown."""
-    update = _make_callback_update(callback_data="voice_confirm:retry")
-    ctx = MagicMock()
-    flow = {"flow_type": "voice_transcription", "flow_data": {"transcription": "x"}}
-    with patch("bot.handlers.buttons.is_private_chat", new=AsyncMock(return_value=True)), \
-         patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
-         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
-         patch("bot.handlers.buttons.delete_pending_flow") as mock_delete:
-        from bot.handlers.buttons import handle_button
-        await handle_button(update, ctx)
-    mock_delete.assert_called_once_with(12345)
-    update.callback_query.edit_message_text.assert_awaited_once()
-    msg = update.callback_query.edit_message_text.call_args.args[0]
-    assert "Nagraj ponownie" in msg or "ponown" in msg.lower()
+    # text_override MUST equal the saved transcription — feed-into-text-router
+    # path, no Message.text mutation (would AttributeError on PTB ≥21).
+    call_kwargs = mock_handle.await_args.kwargs
+    assert call_kwargs.get("text_override") == "dodaj klienta Jan Kowalski"
 
 
 @pytest.mark.asyncio
@@ -374,101 +334,7 @@ async def test_voice_confirm_no_alias_acts_as_cancel():
     update.callback_query.edit_message_text.assert_awaited_once_with("❌ Anulowane.")
 
 
-# ── 3. _route_pending_flow voice_transcription branch ──────────────────────
-
-
-@pytest.mark.xfail(
-    reason="text.py voice_transcription branch lands in Stage 4 of fragmented voice deploy; "
-    "test xfailed in Stage 3 to keep suite green during incremental rollout.",
-    strict=False,
-)
-@pytest.mark.asyncio
-async def test_text_correction_falls_through_for_classify():
-    """User types correction text after clicking 📝 Popraw → branch in
-    _route_pending_flow deletes pending and returns False → caller falls
-    through to normal classify+dispatch."""
-    update = MagicMock()
-    update.effective_user.id = 12345
-    update.effective_message.reply_text = AsyncMock()
-    flow = {
-        "flow_type": "voice_transcription",
-        "flow_data": {
-            "transcription": "Jan Kowalski",
-            "awaiting_text_correction": True,
-        },
-    }
-    with patch("bot.handlers.text.delete_pending_flow") as mock_delete:
-        from bot.handlers.text import _route_pending_flow
-        consumed = await _route_pending_flow(
-            update, MagicMock(), {"id": "uid"}, flow,
-            "dodaj klienta Marek Nowak z Wyszkowa",
-        )
-
-    # Auto-cancel + fall-through (False = caller will run classify normally).
-    assert consumed is False
-    mock_delete.assert_called_once_with(12345)
-    # No "anulowane" reply — the correction is just delivered to classify.
-    update.effective_message.reply_text.assert_not_awaited()
-
-
-@pytest.mark.xfail(
-    reason="text.py voice_transcription branch lands in Stage 4 of fragmented voice deploy; "
-    "test xfailed in Stage 3 to keep suite green during incremental rollout.",
-    strict=False,
-)
-@pytest.mark.asyncio
-async def test_anuluj_in_correction_mode_cancels():
-    """User types 'anuluj' in correction mode → R3 manual override:
-    pending deleted, "Anulowane" reply, NOT classified as add_client."""
-    update = MagicMock()
-    update.effective_user.id = 12345
-    update.effective_message.reply_text = AsyncMock()
-    flow = {
-        "flow_type": "voice_transcription",
-        "flow_data": {
-            "transcription": "x",
-            "awaiting_text_correction": True,
-        },
-    }
-    with patch("bot.handlers.text.delete_pending_flow") as mock_delete:
-        from bot.handlers.text import _route_pending_flow
-        consumed = await _route_pending_flow(
-            update, MagicMock(), {"id": "uid"}, flow, "anuluj",
-        )
-
-    # Consumed = True → caller does NOT fall through to classify.
-    assert consumed is True
-    mock_delete.assert_called_once_with(12345)
-    update.effective_message.reply_text.assert_awaited_once_with("❌ Anulowane.")
-
-
-@pytest.mark.asyncio
-async def test_voice_pending_without_awaiting_falls_through_to_legacy():
-    """Voice pending exists but awaiting_text_correction is FALSE — branch
-    falls through (does NOT auto-cancel). The legacy is_yes/is_no logic
-    further down handles the user's text in the generic confirmation way."""
-    update = MagicMock()
-    update.effective_user.id = 12345
-    update.effective_message.reply_text = AsyncMock()
-    flow = {
-        "flow_type": "voice_transcription",
-        "flow_data": {"transcription": "x"},  # no awaiting_text_correction
-    }
-    # Sending plain "tak" → should be picked up by generic is_yes branch
-    # → handle_confirm called. Mock that.
-    with patch("bot.handlers.text.delete_pending_flow"), \
-         patch("bot.handlers.text.handle_confirm", new=AsyncMock()) as mock_confirm:
-        from bot.handlers.text import _route_pending_flow
-        consumed = await _route_pending_flow(
-            update, MagicMock(), {"id": "uid"}, flow, "tak",
-        )
-
-    # The legacy is_yes path handles it (consumed=True via handle_confirm).
-    assert consumed is True
-    mock_confirm.assert_awaited_once()
-
-
-# ── 4. PII redaction ───────────────────────────────────────────────────────
+# ── 3. PII redaction ───────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio

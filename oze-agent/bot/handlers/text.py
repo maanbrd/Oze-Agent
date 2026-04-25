@@ -501,8 +501,17 @@ async def _run_guards(update: Update) -> Optional[dict]:
 # ── Main handler ──────────────────────────────────────────────────────────────
 
 
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Main text message handler — classify intent and route to sub-handler."""
+async def handle_text(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text_override: str | None = None,
+) -> None:
+    """Main text message handler — classify intent and route to sub-handler.
+
+    `text_override` lets callers (e.g. voice_confirm button) feed a
+    transcription as if user typed it, without mutating the read-only
+    `Message.text` attribute (PTB ≥21 blocks that with AttributeError).
+    """
     if not await is_private_chat(update):
         return
 
@@ -511,7 +520,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     telegram_id = update.effective_user.id
-    message_text = update.effective_message.text.strip()
+    raw_text = text_override if text_override is not None else update.effective_message.text
+    message_text = raw_text.strip()
 
     await send_typing(context, telegram_id)
 

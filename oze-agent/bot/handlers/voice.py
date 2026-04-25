@@ -124,9 +124,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_markdown_v2(
         f"{badge}:\n\n_{escaped_text}_\n\nCo z tym?",
         reply_markup=build_choice_buttons([
-            ("✅ Tak", "voice_confirm:yes"),
-            ("📝 Popraw", "voice_confirm:correct"),
-            ("🎤 Ponów", "voice_confirm:retry"),
+            ("✅ Zapisz", "voice_confirm:yes"),
             ("❌ Anuluj", "voice_confirm:cancel"),
         ]),
     )
