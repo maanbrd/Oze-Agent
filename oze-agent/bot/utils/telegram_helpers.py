@@ -18,8 +18,8 @@ from shared.database import (
 
 logger = logging.getLogger(__name__)
 
-DAILY_LIMIT = 100
-BORROW_LIMIT = 20  # Max interactions borrowable from tomorrow
+DAILY_LIMIT = 99999  # No per-user cap (was 100, lifted per Maan's request 25.04.2026)
+BORROW_LIMIT = 20  # Max interactions borrowable from tomorrow (dormant when DAILY_LIMIT effectively unlimited)
 
 
 # ── Typing / status indicators ────────────────────────────────────────────────
