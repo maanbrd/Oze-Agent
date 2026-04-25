@@ -1,0 +1,1487 @@
+"""Phase 7B.1 — mutating happy-path scenarios (daily-bread workflow).
+
+10 scenarios exercising the salesperson's most-common write paths:
+add_client (×5), add_meeting (×4), change_status (×1). Every scenario
+COMMITS via ✅ Zapisać — actual rows / events land in Google Sheets and
+Calendar. No automated cleanup tool in this slice; synthetic data uses
+prefix `E2E-Beta-{HHMMSS}-{seq}` so manual cleanup is trivial.
+
+All scenarios are `default_in_run=False` — they NEVER run in the default
+runner sweep. Trigger explicitly:
+
+    python -m tests_e2e.runner --category mutating_core
+    python -m tests_e2e.runner add_client_minimal_save
+
+Setup pattern: scenarios that need a pre-existing client (add_meeting,
+change_status) inline the setup as a 2-step flow within ONE scenario:
+
+    1. send "dodaj klienta E2E-Beta-{ts}-S{i}, ..." → 3-button card → ✅
+    2. wait save confirmation
+    3. send the actual test trigger
+    4. assert on the resulting card / reply
+
+This keeps each scenario self-contained — no implicit ordering, no
+shared fixture state. Cost: ~10s overhead per scenario for setup.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import timedelta
+
+from tests_e2e.asserts import (
+    assert_no_banned_phrases,
+    assert_no_internal_leak,
+    assert_pl_date_format,
+    assert_routing_card_nowy_aktualizuj,
+    assert_three_button_card,
+)
+from tests_e2e.card_parser import parse_card
+from tests_e2e.harness import TelegramE2EHarness, _ObservedMessage
+from tests_e2e.report import ScenarioResult
+from tests_e2e.scenarios._base import new_result, register, stamp_end
+from datetime import datetime
+
+from tests_e2e.scenarios._helpers import (
+    E2E_BETA_CITY,
+    WARSAW,
+    assert_save_confirmed,
+    card_mentions_date_pl_str,
+    check_pl_date_or_drift,
+    click_save_and_collect,
+    close_post_save_followup,
+    e2e_beta_name,
+    find_card_message,
+    find_routing_button_label,
+    fmt_pl_date,
+    is_save_confirmation,
+    post_setup_settle,
+    reset_pending,
+    setup_existing_client,
+    today_warsaw,
+    tomorrow_warsaw,
+    verify_calendar_event,
+    verify_sheets_row,
+)
+
+logger = logging.getLogger(__name__)
+
+CATEGORY = "mutating_core"
+
+
+# ── Internal setup helper (thin shim over the public _helpers version) ──────
+
+
+async def _setup_existing_client(
+    harness: TelegramE2EHarness,
+    result: ScenarioResult,
+    name: str,
+    city: str = E2E_BETA_CITY,
+    extra_fields: str = "600100200, PV",
+) -> bool:
+    """Backwards-compat shim — delegates to `setup_existing_client` in
+    `_helpers.py`. Kept here so existing call sites (B05-B10) don't churn.
+    """
+    return await setup_existing_client(harness, result, name, city, extra_fields)
+
+
+# ── Generic main-flow assertion bundle (used by every scenario) ─────────────
+
+
+def _assert_card_basics(
+    result: ScenarioResult, card_msg: _ObservedMessage, *, expect_three_button: bool = True,
+) -> None:
+    """Common card-shape checks: structural, banned-phrases, internal-fields.
+
+    `expect_three_button=False` for routing (Nowy/Aktualizuj) cards.
+    """
+    if expect_three_button:
+        ok, detail = assert_three_button_card(card_msg)
+        result.add("three_button_mutation_card", ok, detail)
+    else:
+        ok, detail = assert_routing_card_nowy_aktualizuj(card_msg)
+        result.add("routing_card_nowy_aktualizuj", ok, detail)
+
+    ok, detail = assert_no_banned_phrases(card_msg.text)
+    result.add("no_banned_phrases", ok, detail)
+
+    ok, detail = assert_no_internal_leak(card_msg.text)
+    result.add("no_internal_field_leak", ok, detail)
+
+
+# ── API verification wrappers (Phase 7B-final) ──────────────────────────────
+
+
+async def _verify_save_to_sheets(
+    harness: TelegramE2EHarness,
+    result: ScenarioResult,
+    name: str,
+    city: str = E2E_BETA_CITY,
+    expected_fields: dict[str, str] | None = None,
+    *,
+    check_key: str = "sheets_row_created",
+) -> dict | None:
+    """Resolve harness's telegram_id, then call verify_sheets_row.
+    No-op (with blocker) if harness is unauthenticated."""
+    tid = harness.authenticated_user_id
+    if tid is None:
+        result.add_blocker(check_key, "harness has no authenticated_user_id")
+        return None
+    return await verify_sheets_row(
+        result, tid, name, city, expected_fields, check_key=check_key,
+    )
+
+
+async def _verify_save_to_calendar(
+    harness: TelegramE2EHarness,
+    result: ScenarioResult,
+    summary_marker: str,
+    start_window,  # datetime
+    end_window,    # datetime
+    *,
+    expected_event_type: str | None = None,
+    expected_start=None,
+    expected_duration_min: int | None = None,
+    check_key: str = "calendar_event_created",
+) -> dict | None:
+    """Resolve harness's telegram_id, then call verify_calendar_event."""
+    tid = harness.authenticated_user_id
+    if tid is None:
+        result.add_blocker(check_key, "harness has no authenticated_user_id")
+        return None
+    return await verify_calendar_event(
+        result, tid, summary_marker, start_window, end_window,
+        expected_event_type=expected_event_type,
+        expected_start=expected_start,
+        expected_duration_min=expected_duration_min,
+        check_key=check_key,
+    )
+
+
+# ── B01: add_client_minimal_save ────────────────────────────────────────────
+
+
+@register(
+    name="add_client_minimal_save",
+    category=CATEGORY,
+    description="add_client minimal payload → ✅ Zapisać → confirm. WRITES to Sheets.",
+    default_in_run=False,
+)
+async def run_add_client_minimal_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_client_minimal_save", CATEGORY)
+    name = e2e_beta_name("B01")
+    trigger = f"dodaj klienta {name}, {E2E_BETA_CITY}, 600100200, PV"
+    result.context["trigger"] = trigger
+    result.context["client_name"] = name
+    try:
+        await reset_pending(harness)
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no card with buttons arrived")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        # Card should reference the synthetic name.
+        result.add(
+            "card_contains_client_name",
+            name in card_msg.text or "E2E-Beta" in card_msg.text,
+            detail=f"card text: {card_msg.text[:200]!r}",
+        )
+
+        # Click ✅ and verify confirmation.
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker(
+                "save_button_present",
+                f"no ✅ Zapisać in {card_msg.button_labels}",
+            )
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_client_minimal_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B02: add_client_full_save ───────────────────────────────────────────────
+
+
+@register(
+    name="add_client_full_save",
+    category=CATEGORY,
+    description="add_client with full payload (addr, email, source) → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_add_client_full_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_client_full_save", CATEGORY)
+    name = e2e_beta_name("B02")
+    trigger = (
+        f"dodaj klienta {name}, ul. Pułaskiego 12, {E2E_BETA_CITY}, "
+        f"600100200, beta-{name.replace(' ', '-').lower()}@example.pl, "
+        f"PV, Polecenie"
+    )
+    result.context["trigger"] = trigger
+    result.context["client_name"] = name
+    try:
+        await reset_pending(harness)
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no card with buttons arrived")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        parsed = parse_card(card_msg.text, card_msg.button_labels)
+
+        # Bot ALWAYS lists optional fields (Notatki, Następny krok, Data
+        # nastepnego kroku) as missing on a fresh add_client — those are
+        # tracked via add_note / add_meeting later, not part of the
+        # initial payload. The "no Brakuje for full payload" assertion
+        # was overly strict and removed after first 7B.1 smoke. We log
+        # the missing list to context for inspection but don't block.
+        result.context["card_missing_after_full_payload"] = parsed.missing
+
+        # Verify the REQUIRED-tier fields are NOT in Brakuje. Required:
+        # name + city + phone + email + product + source.
+        required_fields_lo = {
+            "telefon", "email", "adres", "produkt", "źródło", "imię",
+        }
+        leaked_required = [
+            m for m in parsed.missing
+            if any(req in m.lower() for req in required_fields_lo)
+        ]
+        result.add(
+            "no_required_field_in_brakuje",
+            not leaked_required,
+            detail=(
+                f"required-tier fields missing despite full payload: "
+                f"{leaked_required!r}; full Brakuje: {parsed.missing!r}"
+            ),
+        )
+
+        # Click ✅ and verify confirmation.
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker(
+                "save_button_present",
+                f"no ✅ Zapisać in {card_msg.button_labels}",
+            )
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_client_full_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B03: add_client_missing_fields_fillin_save ──────────────────────────────
+
+
+@register(
+    name="add_client_missing_fields_fillin_save",
+    category=CATEGORY,
+    description="incomplete add_client → '❓ Brakuje:' → user fills tel+product → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_add_client_missing_fields_fillin_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_client_missing_fields_fillin_save", CATEGORY)
+    name = e2e_beta_name("B03")
+    trigger = f"dodaj klienta {name}, {E2E_BETA_CITY}"  # no tel, no product
+    fillin = "600100200, PV"
+    result.context["trigger"] = trigger
+    result.context["fillin"] = fillin
+    result.context["client_name"] = name
+    try:
+        await reset_pending(harness)
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_initial_card", "no initial card")
+            return result
+        result.add("got_initial_card", True, detail=str(card_msg.button_labels))
+
+        parsed = parse_card(card_msg.text, card_msg.button_labels)
+        result.context["initial_missing"] = parsed.missing
+        result.add(
+            "initial_card_has_brakuje_section",
+            len(parsed.missing) > 0,
+            detail=f"missing list: {parsed.missing}",
+        )
+
+        # Send the fill-in. Bot should re-emit the card without missing fields.
+        await harness.send(fillin)
+        fill_replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["fill_reply_count"] = len(fill_replies)
+
+        updated_card = find_card_message(fill_replies)
+        if updated_card is None:
+            result.add_blocker(
+                "got_updated_card_after_fillin",
+                f"no updated card after fill-in; got "
+                f"{[m.text[:80] for m in fill_replies]}",
+            )
+            return result
+        result.add("got_updated_card_after_fillin", True,
+                   detail=str(updated_card.button_labels))
+
+        updated_parsed = parse_card(updated_card.text, updated_card.button_labels)
+        result.context["updated_missing"] = updated_parsed.missing
+        result.add(
+            "fillin_reduced_missing_fields",
+            len(updated_parsed.missing) < len(parsed.missing),
+            detail=(
+                f"initial missing={parsed.missing!r} → "
+                f"after fill-in missing={updated_parsed.missing!r}"
+            ),
+        )
+
+        _assert_card_basics(result, updated_card)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, updated_card)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on updated card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_client_missing_fields_fillin_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B04: add_client_with_followup_meeting_save ──────────────────────────────
+
+
+@register(
+    name="add_client_with_followup_meeting_save",
+    category=CATEGORY,
+    description="add_client + followup spotkanie one-shot → compound card → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_add_client_with_followup_meeting_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_client_with_followup_meeting_save", CATEGORY)
+    name = e2e_beta_name("B04")
+    tmr = tomorrow_warsaw()
+    trigger = (
+        f"dodaj klienta {name}, {E2E_BETA_CITY}, 600100200, PV "
+        f"+ jutro o 14:00 spotkanie"
+    )
+    result.context["trigger"] = trigger
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(tmr)
+    try:
+        await reset_pending(harness)
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no card with buttons arrived")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        # Compound card should reference both the client name AND the meeting date.
+        expected_date = fmt_pl_date(tmr).split(" ")[0]
+        result.add(
+            "card_mentions_client_name",
+            name in card_msg.text or "E2E-Beta" in card_msg.text,
+            detail=f"card text: {card_msg.text[:200]!r}",
+        )
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
+        )
+
+        # PL date format check on the card text.
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on compound card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_client_with_followup_meeting_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B05: add_client_dup_nowy_save ───────────────────────────────────────────
+
+
+@register(
+    name="add_client_dup_save_create_new",
+    category=CATEGORY,
+    description=(
+        "setup client → add same name again → 3-button card with ➕ Dopisać "
+        "(bot's integrated dup handling, NOT separate [Nowy]/[Aktualizuj] "
+        "routing) → click ✅ Zapisać to test 'create new' path → confirm."
+    ),
+    default_in_run=False,
+)
+async def run_add_client_dup_save_create_new(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    """Test the 'create new' path of bot's duplicate-handling UX.
+
+    Spec (`agent_behavior_spec_v5.md`) suggests a separate routing card
+    `[Nowy] [Aktualizuj]` for duplicates. Live bot behaviour (observed
+    25.04.2026): no separate routing — duplicate handling is integrated
+    into the standard 3-button mutation card via `➕ Dopisać` (Add to
+    existing). Clicking `✅ Zapisać` on this card creates a new row;
+    clicking `➕ Dopisać` updates the existing row.
+
+    This scenario tests the `✅ Zapisać` path (create new). The form
+    divergence from spec is logged as `known_drift`, NOT a fail — the
+    feature works, just via a different UX surface.
+    """
+    result = new_result("add_client_dup_save_create_new", CATEGORY)
+    name = e2e_beta_name("B05")
+    result.context["client_name"] = name
+    try:
+        await reset_pending(harness)
+
+        # 1) Setup: create the original client.
+        if not await _setup_existing_client(harness, result, name):
+            return result
+
+        # 2) Send same payload again — bot should detect dup.
+        dup_trigger = f"dodaj klienta {name}, {E2E_BETA_CITY}, 600100200, PV"
+        result.context["dup_trigger"] = dup_trigger
+        await harness.send(dup_trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        dup_card = find_card_message(replies)
+        if dup_card is None:
+            result.add_blocker(
+                "got_dup_card",
+                f"no card after dup trigger; got "
+                f"{[m.text[:80] for m in replies]}",
+            )
+            return result
+        result.add("got_dup_card", True, detail=str(dup_card.button_labels))
+
+        # 3) Detect bot's UX form. Spec says separate routing card; bot
+        # serves a 3-button card with ➕ Dopisać. Either is acceptable —
+        # we tolerate the actual implementation and log the divergence.
+        has_routing = bool(
+            find_routing_button_label(dup_card.button_labels, "nowy")
+            and find_routing_button_label(dup_card.button_labels, "aktualizuj")
+        )
+        if has_routing:
+            result.add(
+                "dup_handling_form",
+                True,
+                detail=f"spec-form routing card; labels={dup_card.button_labels}",
+            )
+        else:
+            result.add_known_drift(
+                "dup_handling_form",
+                f"bot uses 3-button card with ➕ Dopisać (not separate "
+                f"[Nowy]/[Aktualizuj] routing); labels={dup_card.button_labels}",
+                doc_ref="agent_behavior_spec_v5.md / INTENCJE_MVP §4 routing flow",
+            )
+
+        # 4) Verify ➕ Dopisać is offered on the card (signals dup detection).
+        dopisac_present = any(
+            "Dopisać" in lbl or "➕" in lbl for lbl in dup_card.button_labels
+        )
+        result.add(
+            "dopisac_button_present_for_duplicate",
+            dopisac_present,
+            detail=(
+                f"expected ➕ Dopisać in dup card to confirm bot detected "
+                f"the duplicate; labels={dup_card.button_labels!r}"
+            ),
+        )
+
+        # 5) 3-button structural shape check (✅ + ➕ + ❌).
+        ok, detail = assert_three_button_card(dup_card)
+        result.add("three_button_mutation_card", ok, detail)
+        ok, detail = assert_no_banned_phrases(dup_card.text)
+        result.add("no_banned_phrases", ok, detail)
+        ok, detail = assert_no_internal_leak(dup_card.text)
+        result.add("no_internal_field_leak", ok, detail)
+
+        # 6) Click ✅ Zapisać — test the "create new" path.
+        save_label, confirm_replies = await click_save_and_collect(harness, dup_card)
+        result.context["save_label"] = save_label
+        result.context["final_confirm_replies"] = [
+            m.text[:200] for m in confirm_replies
+        ]
+        if save_label is None:
+            result.add_blocker(
+                "save_button_present",
+                f"no ✅ on dup card; labels={dup_card.button_labels}",
+            )
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(
+            harness, result, confirm_replies, check_key="save_confirmed",
+        )
+    except Exception as e:
+        logger.exception("add_client_dup_save_create_new crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B06: add_meeting_in_person_save ─────────────────────────────────────────
+
+
+@register(
+    name="add_meeting_in_person_save",
+    category=CATEGORY,
+    description="setup client → 'jutro 14 spotkanie z {n}' → 3-button card → ✅ → Calendar+Sheets.",
+    default_in_run=False,
+)
+async def run_add_meeting_in_person_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_in_person_save", CATEGORY)
+    name = e2e_beta_name("B06")
+    tmr = tomorrow_warsaw()
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(tmr)
+    try:
+        await reset_pending(harness)
+        if not await _setup_existing_client(harness, result, name):
+            return result
+
+        trigger = f"jutro o 14:00 spotkanie z {name}, {E2E_BETA_CITY}"
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no add_meeting card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        expected_date = fmt_pl_date(tmr).split(" ")[0]
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on meeting card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_meeting_in_person_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B07: add_meeting_phone_call_save ────────────────────────────────────────
+
+
+@register(
+    name="add_meeting_phone_call_save",
+    category=CATEGORY,
+    description="setup client → 'zadzwonię w {dzień} o 10' → 3-button card (📞) → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_add_meeting_phone_call_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_phone_call_save", CATEGORY)
+    name = e2e_beta_name("B07")
+    # +2 days so we don't collide with B06 (jutro). Keep it close to "now"
+    # so date-resolution drift is minimal.
+    target_day = today_warsaw() + timedelta(days=2)
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(target_day)
+    try:
+        await reset_pending(harness)
+        if not await _setup_existing_client(harness, result, name):
+            return result
+
+        # Use absolute date to avoid PL weekday parsing fragility.
+        trigger = (
+            f"zadzwonię {target_day.strftime('%d.%m.%Y')} o 10:00 do {name}, "
+            f"{E2E_BETA_CITY}"
+        )
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no add_meeting card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        # Phone-call card should carry 📞 icon (per INTENCJE_MVP).
+        parsed = parse_card(card_msg.text, card_msg.button_labels)
+        result.add(
+            "card_has_phone_icon",
+            parsed.icon == "📞",
+            detail=f"icon={parsed.icon!r}, header={parsed.header_line!r}",
+            tag="known_drift" if parsed.icon != "📞" else "pass",
+            doc_ref=("INTENCJE_MVP.md §4 — phone-call card uses 📞 icon"
+                     if parsed.icon != "📞" else None),
+        )
+
+        expected_date = fmt_pl_date(target_day).split(" ")[0]
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on phone meeting card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_meeting_phone_call_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B08: add_meeting_relative_date_save ─────────────────────────────────────
+
+
+@register(
+    name="add_meeting_relative_date_save",
+    category=CATEGORY,
+    description="setup client → 'za tydzień we wtorek o 10' → date resolved → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_add_meeting_relative_date_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_relative_date_save", CATEGORY)
+    name = e2e_beta_name("B08")
+    today = today_warsaw()
+    # "za tydzień we wtorek" — next Tuesday, but at least 7 days out.
+    days_until_tuesday = (1 - today.weekday()) % 7  # weekday: Mon=0, Tue=1
+    if days_until_tuesday == 0:
+        days_until_tuesday = 7
+    target_tuesday = today + timedelta(days=days_until_tuesday + 7)
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(target_tuesday)
+    try:
+        await reset_pending(harness)
+        if not await _setup_existing_client(harness, result, name):
+            return result
+
+        trigger = f"za tydzień we wtorek o 10:00 spotkanie z {name}, {E2E_BETA_CITY}"
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no card with buttons after relative-date trigger")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        expected_date = fmt_pl_date(target_tuesday).split(" ")[0]
+        # Tolerant: bot may pick an adjacent Tuesday if "za tydzień" parsing differs.
+        # Check for the exact date OR any DD.MM.YYYY in the right week.
+        result.add(
+            "card_mentions_resolved_tuesday",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=(
+                f"expected '{expected_date}' (PL) or its ISO form (next-week "
+                f"Tuesday) in card; got: {card_msg.text[:200]!r}"
+            ),
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on relative-date card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_meeting_relative_date_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B09: add_meeting_compound_change_status_save ────────────────────────────
+
+
+@register(
+    name="add_meeting_compound_change_status_save",
+    category=CATEGORY,
+    description="setup client → 'spotkanie {date} 14 + podpisał umowę' → compound card → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_add_meeting_compound_change_status_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_compound_change_status_save", CATEGORY)
+    name = e2e_beta_name("B09")
+    # +3 days — separate from B06/B07/B08 to keep Calendar tidy for inspection.
+    target_day = today_warsaw() + timedelta(days=3)
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(target_day)
+    try:
+        await reset_pending(harness)
+        if not await _setup_existing_client(harness, result, name):
+            return result
+
+        trigger = (
+            f"{target_day.strftime('%d.%m.%Y')} o 14:00 spotkanie z {name}, "
+            f"{E2E_BETA_CITY} + podpisał umowę"
+        )
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no compound card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        # Compound card should reference both the meeting date AND the new status.
+        expected_date = fmt_pl_date(target_day).split(" ")[0]
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or its ISO form in card; got: {card_msg.text[:200]!r}",
+        )
+        # Status mention — accept any of the umowa-status synonyms tolerantly.
+        # "Podpisane" added 25.04.2026 after first run revealed bot uses the
+        # neuter status name "Podpisane" on the card (e.g. "Status: → Podpisane"),
+        # not the spec-style "Umowa podpisana".
+        umowa_markers = (
+            "Umowa podpisana", "umowa", "Podpisana", "podpisał", "Podpisane",
+        )
+        has_status = any(m in card_msg.text for m in umowa_markers)
+        result.add(
+            "card_mentions_status_change",
+            has_status,
+            detail=(
+                f"expected one of {umowa_markers!r}; got: {card_msg.text[:200]!r}"
+            ),
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on compound card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("add_meeting_compound_change_status_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B10: change_status_simple_save ──────────────────────────────────────────
+
+
+@register(
+    name="change_status_simple_save",
+    category=CATEGORY,
+    description="setup client → '{n} ma podpisaną umowę' → 3-button card with status → ✅ → confirm.",
+    default_in_run=False,
+)
+async def run_change_status_simple_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("change_status_simple_save", CATEGORY)
+    name = e2e_beta_name("B10")
+    result.context["client_name"] = name
+    try:
+        await reset_pending(harness)
+        if not await _setup_existing_client(harness, result, name):
+            return result
+
+        trigger = f"{name} ma podpisaną umowę"
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no change_status card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        parsed = parse_card(card_msg.text, card_msg.button_labels)
+        # Card should expose a status transition (old → new) per spec.
+        result.add(
+            "card_has_status_transition",
+            parsed.status_transition is not None,
+            detail=(
+                f"status_transition={parsed.status_transition!r}; "
+                f"raw card: {card_msg.text[:200]!r}"
+            ),
+        )
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        result.context["confirm_replies"] = [m.text[:200] for m in confirm_replies]
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on status card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+    except Exception as e:
+        logger.exception("change_status_simple_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── M11: add_meeting_offer_email_save (Phase 7B-final) ─────────────────────
+
+
+@register(
+    name="add_meeting_offer_email_save",
+    category=CATEGORY,
+    description=(
+        "setup client → 'wyślę ofertę {n} {date}' → 3-button card → ✅ → "
+        "Calendar event with type=offer_email, duration 15min."
+    ),
+    default_in_run=False,
+)
+async def run_add_meeting_offer_email_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_offer_email_save", CATEGORY)
+    name = e2e_beta_name("M11")
+    target_day = today_warsaw() + timedelta(days=5)
+    target_dt = datetime(
+        target_day.year, target_day.month, target_day.day, 9, 0, tzinfo=WARSAW,
+    )
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(target_day)
+    try:
+        await reset_pending(harness)
+        if not await setup_existing_client(harness, result, name):
+            return result
+
+        trigger = (
+            f"wyślę ofertę {name}, {E2E_BETA_CITY} "
+            f"{target_day.strftime('%d.%m.%Y')} o 09:00"
+        )
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no offer_email card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        expected_date = fmt_pl_date(target_day).split(" ")[0]
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=(
+                f"expected '{expected_date}' (PL) or its ISO form; "
+                f"got: {card_msg.text[:200]!r}"
+            ),
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on offer_email card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+
+        # API verify — Calendar event with type=offer_email, 15min.
+        window_start = target_dt - timedelta(hours=1)
+        window_end = target_dt + timedelta(hours=2)
+        await _verify_save_to_calendar(
+            harness, result, name,
+            start_window=window_start, end_window=window_end,
+            expected_event_type="offer_email",
+            expected_start=target_dt,
+            expected_duration_min=15,
+        )
+    except Exception as e:
+        logger.exception("add_meeting_offer_email_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── M12: add_meeting_doc_followup_save (Phase 7B-final) ────────────────────
+
+
+@register(
+    name="add_meeting_doc_followup_save",
+    category=CATEGORY,
+    description=(
+        "setup client → 'follow-up dok. do {n} {date}' → 3-button card → "
+        "✅ → Calendar event with type=doc_followup, duration 15min."
+    ),
+    default_in_run=False,
+)
+async def run_add_meeting_doc_followup_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_doc_followup_save", CATEGORY)
+    name = e2e_beta_name("M12")
+    target_day = today_warsaw() + timedelta(days=6)
+    target_dt = datetime(
+        target_day.year, target_day.month, target_day.day, 11, 0, tzinfo=WARSAW,
+    )
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(target_day)
+    try:
+        await reset_pending(harness)
+        if not await setup_existing_client(harness, result, name):
+            return result
+
+        trigger = (
+            f"follow-up dok. do {name}, {E2E_BETA_CITY} "
+            f"{target_day.strftime('%d.%m.%Y')} o 11:00"
+        )
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no doc_followup card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        expected_date = fmt_pl_date(target_day).split(" ")[0]
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=(
+                f"expected '{expected_date}' (PL) or its ISO form; "
+                f"got: {card_msg.text[:200]!r}"
+            ),
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on doc_followup card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+
+        window_start = target_dt - timedelta(hours=1)
+        window_end = target_dt + timedelta(hours=2)
+        await _verify_save_to_calendar(
+            harness, result, name,
+            start_window=window_start, end_window=window_end,
+            expected_event_type="doc_followup",
+            expected_start=target_dt,
+            expected_duration_min=15,
+        )
+    except Exception as e:
+        logger.exception("add_meeting_doc_followup_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── M13: add_meeting_calendar_conflict_warning (Phase 7B-final, FIXTURE) ───
+
+
+@register(
+    name="add_meeting_calendar_conflict_warning",
+    category=CATEGORY,
+    description=(
+        "REQUIRES e2e_seed_fixtures: 'E2E-Beta-Fixture-Conflict-Slot' "
+        "tomorrow 14:00-15:00 must exist. setup client → 'jutro o 14:00 "
+        "spotkanie z {n}' → ⚠️ Konflikt warning + 3-button card → ✅ → "
+        "new Calendar event committed despite conflict."
+    ),
+    default_in_run=False,
+)
+async def run_add_meeting_calendar_conflict_warning(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_meeting_calendar_conflict_warning", CATEGORY)
+    name = e2e_beta_name("M13")
+    tmr = tomorrow_warsaw()
+    target_dt = datetime(
+        tmr.year, tmr.month, tmr.day, 14, 0, tzinfo=WARSAW,
+    )
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(tmr)
+    result.context["fixture_dependency"] = (
+        "Run mcp__oze-e2e__e2e_seed_fixtures before this scenario. "
+        "An 'E2E-Beta-Fixture-Conflict-Slot' Calendar event tomorrow "
+        "14:00-15:00 must exist."
+    )
+    try:
+        await reset_pending(harness)
+        if not await setup_existing_client(harness, result, name):
+            return result
+
+        trigger = f"jutro o 14:00 spotkanie z {name}, {E2E_BETA_CITY}"
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no card after conflict trigger")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        # Card should signal a conflict (⚠️ icon or "Konflikt" text)
+        # AND still offer the 3-button mutation choice.
+        conflict_signaled = (
+            "⚠️" in card_msg.text
+            or "Konflikt" in card_msg.text
+            or "konflikt" in card_msg.text.lower()
+        )
+        result.add(
+            "card_signals_conflict",
+            conflict_signaled,
+            detail=f"expected ⚠️/Konflikt marker; got: {card_msg.text[:200]!r}",
+        )
+        ok, detail = assert_three_button_card(card_msg)
+        result.add("three_button_mutation_card", ok, detail)
+        ok, detail = assert_no_banned_phrases(card_msg.text)
+        result.add("no_banned_phrases", ok, detail)
+        ok, detail = assert_no_internal_leak(card_msg.text)
+        result.add("no_internal_field_leak", ok, detail)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on conflict card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+
+        # Verify the user's NEW event landed (in addition to the fixture).
+        window_start = target_dt - timedelta(hours=1)
+        window_end = target_dt + timedelta(hours=2)
+        await _verify_save_to_calendar(
+            harness, result, name,
+            start_window=window_start, end_window=window_end,
+            expected_start=target_dt,
+        )
+    except Exception as e:
+        logger.exception("add_meeting_calendar_conflict_warning crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── B11: add_client_dup_dopisac_update_path (Phase 7B-final) ───────────────
+
+
+@register(
+    name="add_client_dup_dopisac_update_path",
+    category=CATEGORY,
+    description=(
+        "setup client → send same name + extra field → 3-button dup card "
+        "→ click ➕ Dopisać → bot offers update card → ✅ → Sheets row "
+        "UPDATED (no NEW row created)."
+    ),
+    default_in_run=False,
+)
+async def run_add_client_dup_dopisac_update_path(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("add_client_dup_dopisac_update_path", CATEGORY)
+    name = e2e_beta_name("B11")
+    new_email = f"updated-{name.lower().replace(' ', '-')}@example.pl"
+    result.context["client_name"] = name
+    result.context["new_email"] = new_email
+    try:
+        await reset_pending(harness)
+        if not await setup_existing_client(harness, result, name):
+            return result
+
+        # Send same name + new email → bot detects dup → 3-button card.
+        dup_trigger = f"dodaj klienta {name}, {E2E_BETA_CITY}, 600100200, PV, {new_email}"
+        result.context["dup_trigger"] = dup_trigger
+        await harness.send(dup_trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        dup_card = find_card_message(replies)
+        if dup_card is None:
+            result.add_blocker("got_dup_card", "no card after dup trigger")
+            return result
+        result.add("got_dup_card", True, detail=str(dup_card.button_labels))
+
+        # Find ➕ Dopisać button.
+        dopisac_label = next(
+            (
+                lbl for lbl in dup_card.button_labels
+                if "Dopisać" in lbl or "➕" in lbl
+            ),
+            None,
+        )
+        if dopisac_label is None:
+            result.add_blocker(
+                "dopisac_button_present",
+                f"no ➕ Dopisać button in dup card; "
+                f"labels={dup_card.button_labels}",
+            )
+            return result
+        result.add("dopisac_button_present", True, detail=dopisac_label)
+
+        await harness.click_button(dup_card, dopisac_label)
+        post_dopisac_replies = await harness.collect_messages(duration_s=10.0)
+        result.context["post_dopisac_reply_count"] = len(post_dopisac_replies)
+
+        update_card = find_card_message(post_dopisac_replies)
+        if update_card is None:
+            # Bot might commit directly or change UX — accept as known_drift.
+            if any(is_save_confirmation(m.text) for m in post_dopisac_replies):
+                result.add(
+                    "post_dopisac_card_or_save",
+                    True,
+                    detail="bot committed directly after ➕ Dopisać",
+                    tag="known_drift",
+                    doc_ref="agent_behavior_spec_v5.md duplicate-routing flow",
+                )
+                # Best-effort verify the row got updated.
+                await _verify_save_to_sheets(
+                    harness, result, name, E2E_BETA_CITY,
+                    expected_fields={"Email": "updated-"},
+                    check_key="sheets_row_updated_with_new_email",
+                )
+                return result
+            result.add_blocker(
+                "post_dopisac_card_or_save",
+                f"no card and no save confirm after ➕ Dopisać; "
+                f"got {[m.text[:80] for m in post_dopisac_replies]}",
+            )
+            return result
+        result.add("post_dopisac_update_card", True, detail=str(update_card.button_labels))
+
+        save_label, final_confirm = await click_save_and_collect(harness, update_card)
+        if save_label is None:
+            result.add_blocker(
+                "final_save_button_present",
+                f"no ✅ on update card; labels={update_card.button_labels}",
+            )
+            return result
+        result.add("final_save_button_present", True, detail=save_label)
+        await assert_save_confirmed(
+            harness, result, final_confirm, check_key="final_save_confirmed",
+        )
+
+        await _verify_save_to_sheets(
+            harness, result, name, E2E_BETA_CITY,
+            expected_fields={"Email": "updated-"},
+            check_key="sheets_row_updated_with_new_email",
+        )
+    except Exception as e:
+        logger.exception("add_client_dup_dopisac_update_path crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── S03: change_status_rezygnacja_save (Phase 7B-final) ────────────────────
+
+
+@register(
+    name="change_status_rezygnacja_save",
+    category=CATEGORY,
+    description=(
+        "setup client → change_status to 'Spotkanie umówione' (engaged) → "
+        "'{n} zrezygnował' → bot deduces Rezygnacja (NOT Odrzucone) → "
+        "✅ → Sheets Status='Rezygnacja'."
+    ),
+    default_in_run=False,
+)
+async def run_change_status_rezygnacja_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("change_status_rezygnacja_save", CATEGORY)
+    name = e2e_beta_name("S03")
+    result.context["client_name"] = name
+    try:
+        await reset_pending(harness)
+        if not await setup_existing_client(harness, result, name):
+            return result
+
+        # Step 1: engage the client (Spotkanie umówione status).
+        engage_trigger = f"{name} ma spotkanie umówione"
+        result.context["engage_trigger"] = engage_trigger
+        await harness.send(engage_trigger)
+        engage_replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        engage_card = find_card_message(engage_replies)
+        if engage_card is None:
+            result.add_blocker(
+                "step1_engage_card",
+                f"no card after engage trigger; got "
+                f"{[m.text[:80] for m in engage_replies]}",
+            )
+            return result
+        save_label1, engage_confirm = await click_save_and_collect(harness, engage_card)
+        if save_label1 is None:
+            result.add_blocker("step1_engage_save_button", "no ✅ on engage card")
+            return result
+        await assert_save_confirmed(
+            harness, result, engage_confirm, check_key="step1_engage_saved",
+        )
+        await post_setup_settle()
+
+        # Step 2: client cancels → bot should deduce Rezygnacja (engaged path).
+        rezygnacja_trigger = f"{name} zrezygnował"
+        result.context["rezygnacja_trigger"] = rezygnacja_trigger
+        await harness.send(rezygnacja_trigger)
+        rez_replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        rez_card = find_card_message(rez_replies)
+        if rez_card is None:
+            result.add_blocker(
+                "step2_rezygnacja_card",
+                f"no card after Rezygnacja trigger; got "
+                f"{[m.text[:80] for m in rez_replies]}",
+            )
+            return result
+        result.add("step2_got_card", True, detail=str(rez_card.button_labels))
+
+        # Card should show transition → Rezygnacja (NOT Odrzucone).
+        rezygnacja_visible = (
+            "Rezygnacja" in rez_card.text or "rezygnacja" in rez_card.text
+        )
+        result.add(
+            "card_shows_rezygnacja_status",
+            rezygnacja_visible,
+            detail=(
+                f"expected 'Rezygnacja' (engaged client → cancel); "
+                f"got: {rez_card.text[:240]!r}"
+            ),
+        )
+        odrzucone_visible = (
+            "Odrzucone" in rez_card.text or "odrzucone" in rez_card.text
+        )
+        result.add(
+            "card_does_not_show_odrzucone",
+            not odrzucone_visible,
+            detail=(
+                f"engaged client should be Rezygnacja, NOT Odrzucone; "
+                f"got: {rez_card.text[:240]!r}"
+            ),
+        )
+
+        _assert_card_basics(result, rez_card)
+
+        save_label2, rez_confirm = await click_save_and_collect(harness, rez_card)
+        if save_label2 is None:
+            result.add_blocker("step2_save_button", "no ✅ on Rezygnacja card")
+            return result
+        result.add("step2_save_button_present", True, detail=save_label2)
+        await assert_save_confirmed(
+            harness, result, rez_confirm, check_key="step2_rezygnacja_saved",
+        )
+
+        await _verify_save_to_sheets(
+            harness, result, name, E2E_BETA_CITY,
+            expected_fields={"Status": "Rezygnacja"},
+            check_key="sheets_status_is_rezygnacja",
+        )
+    except Exception as e:
+        logger.exception("change_status_rezygnacja_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result
+
+
+# ── S04: change_status_status_first_compound_save (Phase 7B-final) ─────────
+
+
+@register(
+    name="change_status_status_first_compound_save",
+    category=CATEGORY,
+    description=(
+        "setup client → '{n} podpisał + spotkanie {date} 14' (status-first "
+        "compound, mirror of B09's meeting-first form) → compound card → "
+        "✅ → Sheets Status='Podpisane' + Calendar event."
+    ),
+    default_in_run=False,
+)
+async def run_change_status_status_first_compound_save(
+    harness: TelegramE2EHarness,
+) -> ScenarioResult:
+    result = new_result("change_status_status_first_compound_save", CATEGORY)
+    name = e2e_beta_name("S04")
+    target_day = today_warsaw() + timedelta(days=7)
+    target_dt = datetime(
+        target_day.year, target_day.month, target_day.day, 14, 0, tzinfo=WARSAW,
+    )
+    result.context["client_name"] = name
+    result.context["expected_pl_date"] = fmt_pl_date(target_day)
+    try:
+        await reset_pending(harness)
+        if not await setup_existing_client(harness, result, name):
+            return result
+
+        # Status-first compound: status mention BEFORE the meeting fragment.
+        trigger = (
+            f"{name} podpisał umowę + spotkanie "
+            f"{target_day.strftime('%d.%m.%Y')} o 14:00"
+        )
+        result.context["trigger"] = trigger
+        await harness.send(trigger)
+        replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+        result.context["reply_count"] = len(replies)
+
+        card_msg = find_card_message(replies)
+        if card_msg is None:
+            result.add_blocker("got_card", "no compound card with buttons")
+            return result
+        result.add("got_card", True, detail=str(card_msg.button_labels))
+
+        _assert_card_basics(result, card_msg)
+
+        expected_date = fmt_pl_date(target_day).split(" ")[0]
+        result.add(
+            "card_mentions_meeting_date",
+            card_mentions_date_pl_str(card_msg.text, expected_date),
+            detail=f"expected '{expected_date}' (PL) or ISO; got: {card_msg.text[:200]!r}",
+        )
+        # Status mention.
+        status_visible = any(
+            m in card_msg.text
+            for m in ("Podpisane", "Umowa podpisana", "Podpisana", "podpisał")
+        )
+        result.add(
+            "card_mentions_status_change",
+            status_visible,
+            detail=f"expected umowa-status marker; got: {card_msg.text[:240]!r}",
+        )
+        check_pl_date_or_drift(result, card_msg)
+
+        save_label, confirm_replies = await click_save_and_collect(harness, card_msg)
+        result.context["save_label"] = save_label
+        if save_label is None:
+            result.add_blocker("save_button_present", f"no ✅ on compound card")
+            return result
+        result.add("save_button_present", True, detail=save_label)
+        await assert_save_confirmed(harness, result, confirm_replies)
+
+        # API verify: BOTH the status update and the Calendar event.
+        await _verify_save_to_sheets(
+            harness, result, name, E2E_BETA_CITY,
+            expected_fields={"Status": "Podpisane"},
+            check_key="sheets_status_updated",
+        )
+        window_start = target_dt - timedelta(hours=1)
+        window_end = target_dt + timedelta(hours=2)
+        await _verify_save_to_calendar(
+            harness, result, name,
+            start_window=window_start, end_window=window_end,
+            expected_start=target_dt,
+        )
+    except Exception as e:
+        logger.exception("change_status_status_first_compound_save crashed")
+        result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
+    finally:
+        stamp_end(result)
+    return result

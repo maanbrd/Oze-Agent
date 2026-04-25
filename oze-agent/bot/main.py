@@ -12,16 +12,20 @@ from telegram.ext import (
 
 from bot.config import Config
 from bot.handlers.buttons import handle_button
+from bot.handlers.debug import debug_brief_command
 from bot.handlers.fallback import handle_fallback
 from bot.handlers.photo import handle_photo
 from bot.handlers.start import start_command
-from bot.handlers.text import handle_text
+from bot.handlers.text import handle_refresh_columns_command, handle_text
 from bot.handlers.voice import handle_voice
+from bot.scheduler import register_morning_brief
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -43,12 +47,16 @@ def main():
 
     # Order matters — first match wins
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("debug_brief", debug_brief_command))
+    app.add_handler(CommandHandler("odswiez_kolumny", handle_refresh_columns_command))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(CallbackQueryHandler(handle_button))
     app.add_handler(MessageHandler(filters.ALL, handle_fallback))
     app.add_error_handler(error_handler)
+
+    register_morning_brief(app)
 
     if Config.ENV == "dev":
         logger.info("Starting bot in POLLING mode (dev)")

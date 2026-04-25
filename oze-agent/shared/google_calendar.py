@@ -12,12 +12,14 @@ from typing import Optional
 from googleapiclient.discovery import build
 
 from shared.database import get_user_by_id
+from shared.errors import ProactiveFetchError
 from shared.google_auth import get_google_credentials
 
 logger = logging.getLogger(__name__)
 
 WORKING_HOURS_START = 9   # 09:00
 WORKING_HOURS_END = 18    # 18:00
+EVENT_TYPE_VALUES = {"in_person", "phone_call", "offer_email", "doc_followup"}
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -42,6 +44,7 @@ def _event_to_dict(event: dict) -> dict:
     """Normalize a Google Calendar event to a clean dict."""
     start = event.get("start", {})
     end = event.get("end", {})
+    private = event.get("extendedProperties", {}).get("private", {})
     return {
         "id": event.get("id"),
         "title": event.get("summary", ""),
@@ -50,7 +53,31 @@ def _event_to_dict(event: dict) -> dict:
         "start": start.get("dateTime") or start.get("date"),
         "end": end.get("dateTime") or end.get("date"),
         "status": event.get("status", "confirmed"),
+        "event_type": private.get("event_type", ""),
     }
+
+
+def _add_event_type_metadata(body: dict, event_type: Optional[str]) -> None:
+    if event_type is None:
+        return
+    if event_type not in EVENT_TYPE_VALUES:
+        logger.warning("Ignoring unknown Calendar event_type: %s", event_type)
+        return
+    body["extendedProperties"] = {"private": {"event_type": event_type}}
+
+
+def _update_event_type_metadata(event: dict, event_type: Optional[str]) -> None:
+    if event_type in (None, ""):
+        private = event.get("extendedProperties", {}).get("private")
+        if isinstance(private, dict):
+            private.pop("event_type", None)
+        return
+    if event_type not in EVENT_TYPE_VALUES:
+        logger.warning("Ignoring unknown Calendar event_type: %s", event_type)
+        return
+    extended = event.setdefault("extendedProperties", {})
+    private = extended.setdefault("private", {})
+    private["event_type"] = event_type
 
 
 # ── Public async API ──────────────────────────────────────────────────────────
@@ -139,6 +166,43 @@ async def get_events_for_range(
         return []
 
 
+async def get_events_for_range_or_raise(
+    user_id: str, start: datetime, end: datetime
+) -> list[dict]:
+    """Return events in a range, raising when data cannot be trusted.
+
+    Existing `get_events_for_range` keeps its legacy "[] on error" contract
+    for bot handlers. The proactive morning brief uses this strict variant so
+    a Google/config outage cannot be mistaken for an empty calendar.
+    """
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ProactiveFetchError(f"user_not_found:{user_id}")
+    if not user.get("google_calendar_id"):
+        raise ProactiveFetchError("calendar_not_configured")
+    calendar_id = user["google_calendar_id"]
+
+    def _fetch():
+        service = _get_calendar_service_sync(user_id)
+        if not service:
+            raise ProactiveFetchError("calendar_no_credentials")
+        return service.events().list(
+            calendarId=calendar_id,
+            timeMin=_to_rfc3339(start),
+            timeMax=_to_rfc3339(end),
+            singleEvents=True,
+            orderBy="startTime",
+        ).execute()
+
+    try:
+        result = await asyncio.to_thread(_fetch)
+    except ProactiveFetchError:
+        raise
+    except Exception as e:
+        raise ProactiveFetchError(f"calendar_api_error: {e}") from e
+    return [_event_to_dict(e) for e in result.get("items", [])]
+
+
 async def get_upcoming_events(user_id: str, hours: int = 24) -> list[dict]:
     """Return events in the next `hours` hours."""
     now = datetime.now(tz=timezone.utc)
@@ -152,6 +216,7 @@ async def create_event(
     end: datetime,
     location: Optional[str] = None,
     description: Optional[str] = None,
+    event_type: Optional[str] = None,
 ) -> Optional[dict]:
     """Create a calendar event. Returns event dict with ID or None."""
     try:
@@ -169,6 +234,7 @@ async def create_event(
             body["location"] = location
         if description:
             body["description"] = description
+        _add_event_type_metadata(body, event_type)
 
         def _create():
             service = _get_calendar_service_sync(user_id)
@@ -219,6 +285,8 @@ async def update_event(
                 event["location"] = updates["location"]
             if "description" in updates:
                 event["description"] = updates["description"]
+            if "event_type" in updates:
+                _update_event_type_metadata(event, updates["event_type"])
 
             updated = service.events().update(
                 calendarId=calendar_id, eventId=event_id, body=event

@@ -4,6 +4,44 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+class _Execute:
+    def __init__(self, value=None, error=None):
+        self.value = value
+        self.error = error
+
+    def execute(self):
+        if self.error:
+            raise self.error
+        return self.value
+
+
+class _ValuesService:
+    def __init__(self, get_result=None, get_error=None):
+        self.get_result = get_result if get_result is not None else {"values": []}
+        self.get_error = get_error
+        self.get_kwargs = None
+
+    def get(self, **kwargs):
+        self.get_kwargs = kwargs
+        return _Execute(self.get_result, self.get_error)
+
+
+class _SpreadsheetsService:
+    def __init__(self, values: _ValuesService):
+        self._values = values
+
+    def values(self):
+        return self._values
+
+
+class _SheetsService:
+    def __init__(self, values: _ValuesService):
+        self._values = values
+
+    def spreadsheets(self):
+        return _SpreadsheetsService(self._values)
+
+
 # ── search_clients fuzzy matching ─────────────────────────────────────────────
 
 
@@ -106,3 +144,74 @@ async def test_get_sheet_headers_returns_empty_on_missing_sheet():
         from shared.google_sheets import get_sheet_headers
         result = await get_sheet_headers("user-1")
     assert result == []
+
+
+# ── strict proactive fetch ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_all_clients_or_raise_raises_when_sheets_id_missing():
+    from shared.errors import ProactiveFetchError
+    from shared.google_sheets import get_all_clients_or_raise
+
+    with patch("shared.google_sheets.get_user_by_id", return_value={"id": "u1"}):
+        with pytest.raises(ProactiveFetchError, match="sheets_not_configured"):
+            await get_all_clients_or_raise("user-1")
+
+
+@pytest.mark.asyncio
+async def test_get_all_clients_or_raise_raises_on_api_error():
+    from shared.errors import ProactiveFetchError
+    from shared.google_sheets import get_all_clients_or_raise
+
+    values = _ValuesService(get_error=RuntimeError("Google 500"))
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=_SheetsService(values),
+    ):
+        with pytest.raises(ProactiveFetchError, match="sheets_api_error"):
+            await get_all_clients_or_raise("user-1")
+
+
+@pytest.mark.asyncio
+async def test_get_all_clients_or_raise_returns_empty_for_empty_sheet():
+    from shared.google_sheets import get_all_clients_or_raise
+
+    values = _ValuesService(get_result={"values": [["Imię i nazwisko", "Miasto"]]})
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=_SheetsService(values),
+    ):
+        result = await get_all_clients_or_raise("user-1")
+
+    assert result == []
+    assert values.get_kwargs["spreadsheetId"] == "sheet-1"
+    assert values.get_kwargs["range"] == "A1:ZZ"
+
+
+@pytest.mark.asyncio
+async def test_get_all_clients_or_raise_returns_rows_for_valid_sheet():
+    from shared.google_sheets import get_all_clients_or_raise
+
+    values = _ValuesService(get_result={
+        "values": [
+            ["Imię i nazwisko", "Miasto"],
+            ["Jan Kowalski", "Warszawa"],
+        ],
+    })
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=_SheetsService(values),
+    ):
+        result = await get_all_clients_or_raise("user-1")
+
+    assert result == [{"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2}]

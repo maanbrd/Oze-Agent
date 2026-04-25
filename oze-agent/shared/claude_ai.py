@@ -10,7 +10,6 @@ All functions return dicts and never raise — errors return empty/default value
 import json
 import logging
 from datetime import date
-from typing import Optional
 
 import anthropic
 
@@ -24,17 +23,6 @@ MODEL_SIMPLE = "claude-haiku-4-5-20251001"
 # Cost per million tokens (USD)
 COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
 COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
-
-VALID_INTENTS = {
-    # MVP (6)
-    "add_client", "show_client", "add_note", "change_status", "add_meeting", "show_day_plan",
-    # POST-MVP (3 — R5 banner when triggered)
-    "edit_client", "filtruj_klientów", "lejek_sprzedazowy",
-    # Utility
-    "assign_photo", "refresh_columns",
-    "general_question", "confirm_yes", "confirm_no", "cancel_flow",
-}
-
 
 # ── Core API call ─────────────────────────────────────────────────────────────
 
@@ -86,6 +74,7 @@ async def call_claude_with_tools(
     user_message: str,
     tools: list[dict],
     model_type: str = "complex",
+    force_tool: bool = False,
 ) -> dict:
     """Call Claude with tool use enabled.
 
@@ -101,13 +90,16 @@ async def call_claude_with_tools(
     client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
 
     try:
-        response = await client.messages.create(
-            model=model,
-            max_tokens=1024,
-            system=system_prompt,
-            tools=tools,
-            messages=[{"role": "user", "content": user_message}],
-        )
+        request = {
+            "model": model,
+            "max_tokens": 1024,
+            "system": system_prompt,
+            "tools": tools,
+            "messages": [{"role": "user", "content": user_message}],
+        }
+        if force_tool:
+            request["tool_choice"] = {"type": "any"}
+        response = await client.messages.create(**request)
         tokens_in = response.usage.input_tokens
         tokens_out = response.usage.output_tokens
         cost = (
@@ -193,104 +185,6 @@ Zasady:
     }
 
 
-# ── Intent classification ─────────────────────────────────────────────────────
-
-
-async def classify_intent(
-    message: str, context: Optional[list[dict]] = None
-) -> dict:
-    """Classify user message intent using the SIMPLE model.
-
-    Returns:
-        {"intent": str, "entities": dict, "confidence": float}
-    """
-    intents_list = ", ".join(sorted(VALID_INTENTS))
-    context_str = ""
-    if context:
-        last = context[-3:]
-        context_str = "\n".join(f"{m['role']}: {m['content']}" for m in last)
-
-    system_prompt = f"""Klasyfikuj zamiar użytkownika. Zwróć TYLKO JSON:
-{{"intent": "<jeden z: {intents_list}>", "entities": {{}}, "confidence": 0.0-1.0}}
-
-Przykłady:
-- "Jan Nowak Piaseczno 601234567 pompa" → add_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
-- "Stefan Jankowski PV 12kW" → add_client, entities: {{"name": "Stefan Jankowski"}}
-- "znajdź Jana Kowalskiego z Warszawy" → show_client, entities: {{"name": "Jan Kowalski", "city": "Warszawa"}}
-- "co mam o Janie Mazurze?" → show_client, entities: {{"name": "Jan Mazur"}}
-- "umów spotkanie na wtorek" → add_meeting, entities: {{"day": "wtorek"}}
-- "spotkanie 22 kwietnia o 17:30 Marki Fiołkowa 24" → add_meeting, entities: {{"date": "22 kwietnia", "time": "17:30", "location": "Marki Fiołkowa 24"}}
-- "jutro o 10 jadę do Jana Nowaka ul. Różana 3 Piaseczno" → add_meeting, entities: {{"day": "jutro", "time": "10:00", "name": "Jan Nowak", "location": "ul. Różana 3 Piaseczno"}}
-- "spotkanie z Janem Kowalskim pojutrze 15:00" → add_meeting, entities: {{"name": "Jan Kowalski", "day": "pojutrze", "time": "15:00"}}
-- WAŻNE: Każda wiadomość zawierająca datę/godzinę + miejsce lub klienta to add_meeting, NIE general_question.
-- "co mam dziś?" / "plan na dziś" / "jakie mam spotkania?" → show_day_plan
-- "ile mam klientów?" / "pokaż lejek" / "ilu klientów mam" → lejek_sprzedazowy
-- "pokaż klientów z Warszawy" → filtruj_klientów, entities: {{"city": "Warszawa"}}
-- "kto czeka na ofertę?" → filtruj_klientów, entities: {{"status": "Oferta wysłana"}}
-- "wrocław" / "kraków" / [sama nazwa miasta, bez imienia, daty ani akcji] → show_client, entities: {{"city": "Wrocław"}}
-- WAŻNE: Sama nazwa miasta (bez klienta, daty, słowa akcji jak "zmień/dodaj/pokaż klientów") → show_client.
-- "klienci z pompą ciepła" → filtruj_klientów, entities: {{"product": "Pompa ciepła"}}
-- "wysłałem ofertę Janowi Nowakowi" → change_status, entities: {{"name": "Jan Nowak", "status": "Oferta wysłana"}}
-- "Jan Kowalski podpisał" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
-- "Jan Kowalski podpisał kwit" → change_status, entities: {{"name": "Jan Kowalski", "status": "Podpisane"}}
-- "Adam Wiśniewski rezygnuje" → change_status, entities: {{"name": "Adam Wiśniewski", "status": "Rezygnacja z umowy"}}
-- "Jan Nowak rezygnuje" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
-- "spadł kwit u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Rezygnacja z umowy"}}
-- "Jan Nowak odpada" → change_status, entities: {{"name": "Jan Nowak", "status": "Odrzucone"}}
-- "Jan Nowak nieaktywny" → change_status, entities: {{"name": "Jan Nowak", "status": "Nieaktywny"}}
-- "zamontowali u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
-- "gotowe u Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Zamontowana"}}
-- "spotkanie z Janem Nowakiem się odbyło" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- "byłem u Jana Nowaka, odbyło się" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- "Jana Nowaka odbyłem" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- "odwiedziłem Jana Nowaka" → change_status, entities: {{"name": "Jan Nowak", "status": "Spotkanie odbyte"}}
-- WAŻNE: "się odbyło" / "odbyłem" / "odbyło się" / "odwiedziłem" + imię klienta → change_status "Spotkanie odbyte", NIE "Zamontowana".
-- "Jan Kowalski ma 45 metrów dachu, nie 40" → edit_client, entities: {{"name": "Jan Kowalski"}}
-- "zmień telefon Jana Nowaka na 601234567" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "zmień numer Jana Nowaka z Piaseczna na 609888777" → edit_client, entities: {{"name": "Jan Nowak", "city": "Piaseczno"}}
-- "zaktualizuj telefon Jana Kowalskiego na 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
-- "popraw metraż dachu Jana Nowaka na 45" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "Jan Nowak ma nowy numer 609222333" → edit_client, entities: {{"name": "Jan Nowak"}}
-- "nowy telefon Jana Kowalskiego to 601000222" → edit_client, entities: {{"name": "Jan Kowalski"}}
-- WAŻNE: wiadomości zawierające "zmień", "zaktualizuj", "popraw", "edytuj", "nowy telefon", "nowy numer", "ma nowy", "nie X a Y" + imię i nazwisko klienta → edit_client, NIE add_client, nawet gdy zawierają numer telefonu.
-- "kto ma numer 600123456" → show_client, entities: {{"phone": "600123456"}}
-- "pokaż klienta z numerem 501234567" → show_client, entities: {{"phone": "501234567"}}
-- "znajdź klienta po numerze 48601111222" → show_client, entities: {{"phone": "601111222"}}
-- WAŻNE: Wiadomości zawierające "kto ma numer", "znajdź po numerze", "klient z numerem", "pokaż klienta X numerze" → show_client, NIE add_client.
-- "dodaj notatkę do Jana Mazura: zadzwoń po 15" → add_note, entities: {{"name": "Jan Mazur"}}
-- "Jan Mazur interesuje się też magazynem" → add_note, entities: {{"name": "Jan Mazur"}}
-- "odśwież kolumny" / "zaktualizuj kolumny" / "przeładuj arkusz" → refresh_columns
-- "tak" / "ok" / "zgadza się" → confirm_yes
-- "nie" / "anuluj" → confirm_no lub cancel_flow
-- "asdkjfhaskdjfh" / losowe znaki / niezrozumiały tekst → general_question, confidence: 0.1
-- WAŻNE: "podpisał", "podpisał kwit/papier/umowę", "klient podpisał" → change_status {{"status": "Podpisane"}}.
-- WAŻNE: "wysłałem X", "rezygnuje", "spadł kwit" → change_status, NIE edit_client.
-- WAŻNE: Jeśli wiadomość dotyczy zmiany danych ISTNIEJĄCEGO klienta (metraż, telefon, notatki, produkt) → edit_client NIE add_client.
-
-Kontekst poprzednich wiadomości:
-{context_str}"""
-
-    result = await call_claude(system_prompt, message, model_type="simple", max_tokens=256)
-
-    raw = result["text"].strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-
-    try:
-        parsed = json.loads(raw)
-        if parsed.get("intent") not in VALID_INTENTS:
-            parsed["intent"] = "general_question"
-        parsed.setdefault("entities", {})
-        parsed.setdefault("confidence", 0.5)
-        return parsed
-    except Exception:
-        logger.error("classify_intent: JSON parse failed: %s", result["text"][:100])
-        return {"intent": "general_question", "entities": {}, "confidence": 0.0}
-
-
 # ── Client data extraction ────────────────────────────────────────────────────
 
 
@@ -362,19 +256,37 @@ async def extract_meeting_data(message: str, today: str) -> dict:
 
     Returns:
         {"meetings": [{"client_name": str, "date": str, "time": str,
-                       "duration_minutes": int, "location": str}],
+                       "location": str, "event_type": str,
+                       "duration_minutes": Optional[int]}],
          "tokens_in": int, "tokens_out": int, "cost_usd": float}
+
+    `duration_minutes` is included only when the user explicitly mentions a
+    duration (e.g. "na 30 minut", "przez godzinę"); otherwise the caller
+    applies the event-type default via `_default_duration_for_event_type`.
     """
     system_prompt = f"""Wyciągnij dane spotkań z wiadomości. Dzisiaj: {today}.
 Zwróć TYLKO JSON z listą spotkań (nawet jeśli jedno):
-{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "duration_minutes": 60, "location": ""}}]}}
+{{"meetings": [{{"client_name": "", "date": "YYYY-MM-DD", "time": "HH:MM", "location": "", "event_type": "in_person"}}]}}
 Rozumiej polskie wyrażenia dat i czasu:
 - "jutro", "w środę", "za tydzień", "pojutrze", "w przyszłą środę"
 - "o 14", "na 14:30", "o czternastej", "na szesnastą"
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
-WAŻNE: client_name zapisuj w mianowniku (nominative): "Jan Nowak" nie "Janem Nowakiem", "Mazur" nie "Mazurem", "Anna Kowalska" nie "Anny Kowalskiej".
+Ustaw event_type dla KAŻDEGO obiektu (gdy markery się nakładają, wygrywa priorytet: phone_call > offer_email > in_person). Dostępne wartości: "phone_call", "offer_email", "in_person" (bez "doc_followup").
+- "zadzwoń", "zadzwonić", "oddzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna", "call", "przypomnij", "follow-up", "followup" → "phone_call" (użytkownik dzwoni żeby przypomnieć/skontaktować się)
+- "wyślij ofertę", "oferta", "wycena", "mail", "email", "wyślij dokumenty", "przesłać dokumenty" → "offer_email"
+- "spotkanie", "wizyta", "jadę do", "jade do" → "in_person"
+`duration_minutes` (int, OPCJONALNE): Dodaj to pole TYLKO gdy user jawnie podał czas trwania (np. "na 30 minut", "przez godzinę"=60, "45 min", "na pół godziny"=30, "1h"=60). W przeciwnym razie NIE dodawaj tego pola — system ustawi domyślny czas na podstawie event_type (phone_call/offer_email=15 min, in_person=60 min).
+Przykłady duration_minutes:
+- "Zadzwoń do Tomasza jutro o 12" → bez duration_minutes (domyślne 15 dla phone_call)
+- "Zadzwoń do Tomasza jutro o 12 na 30 minut" → "duration_minutes": 30
+- "Spotkanie z Janem jutro o 14" → bez duration_minutes (domyślne 60 dla in_person)
+WAŻNE: client_name ZAWSZE w mianowniku (kto? co?): "Jan Nowak" NIE "Janem Nowakiem", "Anna Kowalska" NIE "Anny Kowalskiej", "Mazur" NIE "Mazurem", "Grabowski" NIE "Grabowskim". Dotyczy KAŻDEGO spotkania w liście — sprawdź wszystkie client_name przed zwróceniem.
+Przykłady wielu spotkań z odmienionymi formami:
+- "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00", "event_type": "in_person"}}, {{"client_name": "Anna Kowalska", "time": "15:00", "event_type": "in_person"}}]
+- "Spotkanie z Markiem Zielińskim jutro o 9 i z Barbarą Wiśniewską o 14" → meetings: [{{"client_name": "Marek Zieliński", "time": "09:00", "event_type": "in_person"}}, {{"client_name": "Barbara Wiśniewska", "time": "14:00", "event_type": "in_person"}}]
+- "Dodaj spotkanie z Janem Kowalskim jutro o 9, zadzwoń do Tomasza Nowickiego jutro o 12 i wyślij ofertę do Wojtka Testowego jutro o 15" → meetings: [{{"client_name": "Jan Kowalski", "time": "09:00", "event_type": "in_person"}}, {{"client_name": "Tomasz Nowicki", "time": "12:00", "event_type": "phone_call"}}, {{"client_name": "Wojtek Testowy", "time": "15:00", "event_type": "offer_email"}}]
 WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" / "przez telefon" / "rozmowa telefoniczna" → location: "telefonicznie". Gdy brak innego adresu a spotkanie jest telefoniczne — ustaw location na "telefonicznie", nie na miasto klienta."""
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)

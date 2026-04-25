@@ -1,6 +1,6 @@
 """Unit tests for shared/database.py — all Supabase calls are mocked."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,6 +30,7 @@ def _make_client(data=None, raises=False):
     chain.upsert.return_value = chain
     chain.delete.return_value = chain
     chain.eq.return_value = chain
+    chain.gte.return_value = chain
     chain.order.return_value = chain
     chain.limit.return_value = chain
     chain.single.return_value = chain
@@ -94,18 +95,84 @@ def test_log_interaction_does_not_raise_on_db_error():
 
 
 def test_get_daily_interaction_count_new_day_returns_zero():
-    with patch("shared.database.get_supabase_client", return_value=_make_client(data=None, raises=True)):
+    with patch("shared.database.get_supabase_client", return_value=_make_client(data=[])):
         from shared.database import get_daily_interaction_count
         result = get_daily_interaction_count(123, date.today())
     assert result == 0
 
 
 def test_get_daily_interaction_count_existing_row():
-    row = {"count": 5, "borrowed_from_tomorrow": 2}
-    with patch("shared.database.get_supabase_client", return_value=_make_client(data=row)):
+    rows = [{"count": 5, "borrowed_from_tomorrow": 2}]
+    with patch("shared.database.get_supabase_client", return_value=_make_client(data=rows)):
         from shared.database import get_daily_interaction_count
         result = get_daily_interaction_count(123, date.today())
     assert result == 7
+
+
+# ── increment_daily_interaction_count ─────────────────────────────────────────
+
+
+def test_increment_daily_interaction_count_inserts_when_no_row():
+    client = _make_client(data=[])
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import increment_daily_interaction_count
+        result = increment_daily_interaction_count(123, date.today())
+    assert result == 1
+    insert_calls = [c for c in client.insert.call_args_list]
+    assert len(insert_calls) == 1
+    payload = insert_calls[0].args[0]
+    assert payload["telegram_id"] == 123
+    assert payload["date"] == date.today().isoformat()
+    assert payload["count"] == 1
+    client.update.assert_not_called()
+
+
+def test_increment_daily_interaction_count_updates_existing_row():
+    client = _make_client(data=[{"count": 4}])
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import increment_daily_interaction_count
+        result = increment_daily_interaction_count(123, date.today())
+    assert result == 5
+    client.update.assert_called_once_with({"count": 5})
+    client.insert.assert_not_called()
+
+
+def test_increment_daily_interaction_count_returns_zero_on_error():
+    with patch(
+        "shared.database.get_supabase_client",
+        return_value=_make_client(raises=True),
+    ):
+        from shared.database import increment_daily_interaction_count
+        result = increment_daily_interaction_count(123, date.today())
+    assert result == 0
+
+
+# ── get_conversation_history ──────────────────────────────────────────────────
+
+
+def test_get_conversation_history_no_since_skips_filter():
+    rows = [{"role": "user", "content": "hi", "message_type": "text", "created_at": "2026-04-15T10:00:00+00:00"}]
+    client = _make_client(data=rows)
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import get_conversation_history
+        result = get_conversation_history(123, limit=5)
+    assert result == rows
+    client.gte.assert_not_called()
+
+
+def test_get_conversation_history_with_since_applies_gte():
+    client = _make_client(data=[])
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import get_conversation_history
+        get_conversation_history(123, limit=5, since=timedelta(minutes=30))
+
+    assert client.gte.call_count == 1
+    column, value = client.gte.call_args.args
+    assert column == "created_at"
+    parsed = datetime.fromisoformat(value)
+    assert parsed.tzinfo is not None
+    expected = datetime.now(tz=timezone.utc) - timedelta(minutes=30)
+    assert abs(parsed - expected) < timedelta(seconds=5)
 
 
 # ── pending flows ─────────────────────────────────────────────────────────────

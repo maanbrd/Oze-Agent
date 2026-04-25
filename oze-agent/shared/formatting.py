@@ -4,7 +4,9 @@ All output uses Telegram MarkdownV2. All user-facing text is in Polish.
 """
 
 import re
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 # ── MarkdownV2 escaping ───────────────────────────────────────────────────────
 
@@ -275,14 +277,91 @@ def format_meeting(event: dict) -> str:
     return "\n".join(lines)
 
 
-def format_daily_schedule(events: list[dict]) -> str:
-    """Format a full day's schedule."""
+def _parse_client_from_title(title: str) -> str:
+    """Extract client name from event title like 'Spotkanie — Jan Kowalski'."""
+    if "—" in title:
+        return title.split("—", 1)[1].strip()
+    if "-" in title:
+        return title.split("-", 1)[1].strip()
+    return title
+
+
+def _parse_product_from_description(description: str) -> str:
+    """Extract 'Produkt: X' from event description."""
+    for line in description.split("\n"):
+        if line.startswith("Produkt:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def format_schedule_entry(event: dict) -> str:
+    """Format a single calendar event as a compact schedule line (MarkdownV2).
+
+    Output per INTENCJE_MVP.md §4.6:
+        09:00 🤝 Jan Kowalski \\(Warszawa\\) — spotkanie
+              Kościuszki 15, Warszawa • Produkt: PV
+    """
+    start = event.get("start", "")
+    title = event.get("title", "Spotkanie")
+    location = event.get("location", "")
+    description = event.get("description", "")
+
+    # Time HH:MM
+    time_str = start[11:16] if len(start) >= 16 else "??:??"
+
+    # Client name from title
+    client = _parse_client_from_title(title)
+
+    # City from location (first part or full)
+    city = ""
+    address = ""
+    if location:
+        parts = [p.strip() for p in location.split(",")]
+        if len(parts) >= 2:
+            address = location
+            city = parts[-1]  # last part is usually city
+        else:
+            city = location
+
+    # Build main line
+    city_part = f" \\({_e(city)}\\)" if city else ""
+    main_line = f"{_e(time_str)} 🤝 {_e(client)}{city_part} — spotkanie"
+
+    # Build detail line (address + product) for in-person meetings
+    details = []
+    if address:
+        details.append(_e(address))
+    product = _parse_product_from_description(description)
+    if product:
+        details.append(f"Produkt: {_e(product)}")
+
+    if details:
+        detail_line = "      " + " • ".join(details)
+        return f"{main_line}\n{detail_line}"
+    return main_line
+
+
+def format_daily_schedule(events: list[dict], target_date=None) -> str:
+    """Format a full day's schedule per INTENCJE_MVP.md §4.6.
+
+    Header: 📅 Plan na DD.MM.YYYY (Dzień tygodnia)
+    Empty:  Na DD.MM.YYYY nic nie masz w kalendarzu.
+    """
+    from datetime import date as _date
+    if target_date is None:
+        target_date = _date.today()
+
+    date_str = target_date.strftime("%d.%m.%Y")
+    day_name = _DAYS_PL[target_date.weekday()]
+    header = f"{_e(date_str)} \\({_e(day_name)}\\)"
+
     if not events:
-        return "📭 Brak spotkań na dziś\\."
-    parts = ["📅 *Plan dnia:*\n"]
+        return f"Na {header} nic nie masz w kalendarzu\\."
+
+    lines = [f"📅 *Plan na {header}:*\n"]
     for event in events:
-        parts.append(format_meeting(event))
-    return "\n\n".join(parts)
+        lines.append(format_schedule_entry(event))
+    return "\n".join(lines)
 
 
 # ── Pipeline stats ────────────────────────────────────────────────────────────
@@ -326,6 +405,117 @@ def format_morning_brief(
         parts.append(f"\n🕐 *Wolne sloty:* {', '.join(slot_strs)}")
 
     return "\n".join(parts)
+
+
+# ── Phase 6 morning brief (short / deterministic) ────────────────────────────
+
+_WARSAW_TZ = ZoneInfo("Europe/Warsaw")
+
+# Calendar event_type → brief label. Phase 5.4.2 dropped `doc_followup`
+# from the classifier; the mapping stays for any legacy events still in
+# the user's Calendar.
+_EVENT_TYPE_LABEL = {
+    "in_person": "Spotkanie",
+    "phone_call": "Telefon",
+    "offer_email": "Oferta",
+    "doc_followup": "Follow-up",
+}
+
+# Sheets K "Następny krok" enum (D4) → brief label. The Sheets value
+# "Wysłać ofertę" collapses to the shorter "Oferta" for visual parity
+# with the events section.
+_NEXT_STEP_LABEL = {
+    "Telefon": "Telefon",
+    "Spotkanie": "Spotkanie",
+    "Wysłać ofertę": "Oferta",
+    "Follow-up dokumentowy": "Follow-up",
+}
+
+
+def _event_time_hhmm(event: dict) -> str:
+    """Return 'HH:MM' in Europe/Warsaw for a Calendar event's start."""
+    raw = event.get("start", "")
+    if not raw:
+        return "??:??"
+    try:
+        iso = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            return dt.strftime("%H:%M")
+        return dt.astimezone(_WARSAW_TZ).strftime("%H:%M")
+    except (ValueError, TypeError):
+        return raw[11:16] if len(raw) >= 16 else "??:??"
+
+
+def _event_client_name(event: dict) -> str:
+    """Extract the client name from an event title of form '{Label}: {Client}'.
+
+    Falls back to the full title when no ': ' separator is present.
+    """
+    title = event.get("title", "") or ""
+    if ": " in title:
+        return title.split(": ", 1)[1].strip()
+    return title.strip()
+
+
+def _event_label(event: dict) -> Optional[str]:
+    """Return the brief label for a Calendar event, or None for unknown type."""
+    return _EVENT_TYPE_LABEL.get((event.get("event_type") or "").strip())
+
+
+def _next_step_label(next_step: str) -> str:
+    """Return the brief label for a Sheets next-step enum, falling back."""
+    return _NEXT_STEP_LABEL.get((next_step or "").strip(), "Do zrobienia")
+
+
+def _format_event_line(event: dict) -> str:
+    time_str = _e(_event_time_hhmm(event))
+    label = _event_label(event)
+    if label is None:
+        title = event.get("title") or "Spotkanie"
+        return f"• {time_str} — {_e(title)}"
+    client = _event_client_name(event) or event.get("title", "") or ""
+    return f"• {time_str} — {_e(label)}: {_e(client)}"
+
+
+def _format_followup_line(item: dict) -> str:
+    label = _next_step_label(item.get("next_step", ""))
+    name = item.get("name", "") or ""
+    return f"• {_e(label)}: {_e(name)}"
+
+
+def format_morning_brief_short(
+    events: list[dict],
+    open_next_steps: list[dict],
+) -> str:
+    """Render the Phase 6 morning brief. Deterministic, MDV2-escaped, no LLM.
+
+    Uses the 'Akcja: Klient' template — client names always in nominative,
+    exactly as stored in Sheets / Calendar. No declension, no grammar bugs.
+
+    Structure (header always present):
+        Terminarz:
+        [• HH:MM — Label: Client   OR   "Na dziś nie masz spotkań."]
+
+        [Do dopilnowania dziś:
+         • Label: Client ...]
+
+    The follow-up block is omitted entirely when `open_next_steps` is empty.
+    """
+    lines: list[str] = ["Terminarz:"]
+    if events:
+        for ev in events:
+            lines.append(_format_event_line(ev))
+    else:
+        lines.append("Na dziś nie masz spotkań\\.")
+
+    if open_next_steps:
+        lines.append("")
+        lines.append("Do dopilnowania dziś:")
+        for item in open_next_steps:
+            lines.append(_format_followup_line(item))
+
+    return "\n".join(lines)
 
 
 # ── Meeting reminder ──────────────────────────────────────────────────────────
@@ -380,5 +570,10 @@ def format_confirmation(action: str, details: dict) -> str:
 
 
 def format_edit_comparison(field: str, old_value: str, new_value: str) -> str:
-    """Show field change: 'Telefon: 600111222 → 601234567'."""
-    return f"{_e(field)}: {_e(old_value)} → {_e(new_value)}"
+    """Show field change: 'Telefon: 600111222 → 601234567'.
+
+    When old_value is empty (e.g. Status never set per 5.5 F/J mirror),
+    renders em dash '—' to avoid ambiguous 'Status:  → X' (I4 fix).
+    """
+    old_display = _e(old_value) if old_value else "—"
+    return f"{_e(field)}: {old_display} → {_e(new_value)}"

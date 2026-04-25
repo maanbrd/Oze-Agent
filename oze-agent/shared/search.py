@@ -104,23 +104,59 @@ def find_best_match(query: str, candidates: list[str]) -> str | None:
     return results[0][0] if results else None
 
 
-def detect_potential_duplicate(
+def detect_duplicate_candidates(
     name: str, city: str, existing_clients: list[dict]
-) -> dict | None:
-    """Check if a client with a similar name in the same city already exists.
+) -> list[dict]:
+    """Return all potential duplicate clients for the given name/city input.
 
-    Returns the existing client dict if a duplicate is found, else None.
+    Match rule: full name (≥2 tokens) within Levenshtein distance 2.
+    If `city` is provided and at least one candidate shares a same/similar city
+    (Levenshtein ≤1 on city), returns only same-city candidates. Otherwise
+    returns all name-only matches — cross-city included — preserving the
+    cross-city duplicate-warning contract.
+
+    First-name-only inputs (e.g. "Jan") return an empty list to avoid
+    overmatching; callers should treat empty as "no duplicate found".
     """
     name_norm = normalize_polish(name)
-    city_norm = normalize_polish(city)
+    # Guard against overmatching first-name-only inputs like "Jan".
+    if len(name_norm.split()) < 2:
+        return []
+    city_norm = normalize_polish(city or "")
 
+    name_matches: list[dict] = []
+    same_city_matches: list[dict] = []
     for client in existing_clients:
         existing_name = normalize_polish(client.get("Imię i nazwisko", ""))
         existing_city = normalize_polish(
             client.get("Miasto", client.get("Miejscowość", ""))
         )
-        name_dist = levenshtein_distance(name_norm, existing_name)
-        city_dist = levenshtein_distance(city_norm, existing_city)
-        if name_dist <= 2 and city_dist <= 1:
-            return client
-    return None
+        if levenshtein_distance(name_norm, existing_name) > 2:
+            continue
+        name_matches.append(client)
+        if (
+            city_norm
+            and existing_city
+            and levenshtein_distance(city_norm, existing_city) <= 1
+        ):
+            same_city_matches.append(client)
+
+    if not name_matches:
+        return []
+    if city_norm and same_city_matches:
+        return same_city_matches
+    return name_matches
+
+
+def detect_potential_duplicate(
+    name: str, city: str, existing_clients: list[dict]
+) -> dict | None:
+    """Check if a client with a similar full name already exists.
+
+    Thin wrapper over detect_duplicate_candidates — returns the first candidate
+    (same-city if any, else first name-only match), or None if no candidates.
+    Retained for backward compatibility with call-sites that only need a single
+    duplicate row; disambiguation flows should use detect_duplicate_candidates.
+    """
+    candidates = detect_duplicate_candidates(name, city, existing_clients)
+    return candidates[0] if candidates else None

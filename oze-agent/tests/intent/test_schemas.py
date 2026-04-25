@@ -1,0 +1,161 @@
+"""Structural tests for shared/intent/schemas.py."""
+
+from shared.intent.intents import IntentType
+from shared.intent.schemas import (
+    ALL_TOOLS,
+    EVENT_TYPE_VALUES,
+    FEATURE_KEYS,
+    FEATURE_KEY_TO_CATEGORY,
+    OUT_OF_SCOPE_CATEGORIES,
+    POST_MVP_FEATURE_KEYS,
+    STATUS_VALUES,
+    TOOL_NAME_TO_INTENT,
+    UNPLANNED_FEATURE_KEYS,
+    VISION_ONLY_FEATURE_KEYS,
+)
+
+
+EXPECTED_TOOLS = {
+    "record_add_client",
+    "record_show_client",
+    "record_add_note",
+    "record_change_status",
+    "record_add_meeting",
+    "record_show_day_plan",
+    "record_general_question",
+    "record_out_of_scope",
+    "record_multi_meeting_rejection",
+}
+
+
+def _by_name() -> dict[str, dict]:
+    return {tool["name"]: tool for tool in ALL_TOOLS}
+
+
+def test_all_tools_have_required_top_level_keys():
+    for tool in ALL_TOOLS:
+        assert set(tool.keys()) >= {"name", "description", "input_schema"}
+        schema = tool["input_schema"]
+        assert schema["type"] == "object"
+        assert "properties" in schema
+
+
+def test_all_expected_tools_present_and_no_extras():
+    names = {tool["name"] for tool in ALL_TOOLS}
+    assert names == EXPECTED_TOOLS
+
+
+def test_tool_name_to_intent_covers_all_tools_except_out_of_scope():
+    # record_out_of_scope dispatches on category, not a 1:1 mapping.
+    expected = EXPECTED_TOOLS - {"record_out_of_scope"}
+    assert set(TOOL_NAME_TO_INTENT.keys()) == expected
+    for value in TOOL_NAME_TO_INTENT.values():
+        assert isinstance(value, IntentType)
+
+
+def test_change_status_enum_matches_frozen_set():
+    tool = _by_name()["record_change_status"]
+    assert tool["input_schema"]["properties"]["status"]["enum"] == STATUS_VALUES
+    assert tool["input_schema"]["required"] == ["client_name", "status"]
+
+
+def test_add_meeting_event_type_enum_and_required_fields():
+    tool = _by_name()["record_add_meeting"]
+    props = tool["input_schema"]["properties"]
+    assert props["event_type"]["enum"] == EVENT_TYPE_VALUES
+    assert tool["input_schema"]["required"] == [
+        "client_name",
+        "date_iso",
+        "event_type",
+    ]
+
+
+# ── Slice 5.4.3 — compound status_update property ──────────────────────────
+
+
+def test_add_meeting_schema_has_optional_status_update_property():
+    """Slice 5.4.3 — router tool exposes a compound status_update field so
+    classifier can emit both add_meeting and change_status in a single
+    tool call (e.g. "Wojtek podpisał, spotkanie jutro o 14")."""
+    tool = _by_name()["record_add_meeting"]
+    props = tool["input_schema"]["properties"]
+    assert "status_update" in props
+    su = props["status_update"]
+    assert su["type"] == "object"
+    assert set(su["properties"]) == {"field", "new_value"}
+    assert su["required"] == ["field", "new_value"]
+    assert su.get("additionalProperties") is False
+    assert "status_update" not in tool["input_schema"]["required"]
+
+
+def test_add_meeting_status_update_field_is_const_status():
+    tool = _by_name()["record_add_meeting"]
+    field_enum = tool["input_schema"]["properties"]["status_update"]["properties"]["field"]["enum"]
+    assert field_enum == ["Status"]
+
+
+def test_add_meeting_status_update_new_value_matches_canonical_status_values():
+    """Enum trzyma classifier w kanonie 9 statusów. Żadnych 'Przełożone'
+    ani innych LLM-wymyślonych wartości."""
+    tool = _by_name()["record_add_meeting"]
+    nv_enum = tool["input_schema"]["properties"]["status_update"]["properties"]["new_value"]["enum"]
+    assert nv_enum == STATUS_VALUES          # equality — schema may copy the list
+    assert "Podpisane" in nv_enum
+    assert "Rezygnacja z umowy" in nv_enum   # not "Rezygnacja"
+    assert "Zamontowana" in nv_enum
+    assert "Nowy lead" in nv_enum
+    assert "Przełożone" not in nv_enum
+    assert len(nv_enum) == 9
+
+
+def test_add_meeting_event_type_enum_excludes_doc_followup():
+    """Slice 5.4.2 — router tool-call schema must not offer doc_followup.
+    Real user speech for document reminders maps to phone_call or add_note.
+    Downstream (EVENT_TYPE_TO_NEXT_STEP_LABEL, Calendar metadata) still
+    tolerates legacy doc_followup values in flow_data, but new classifier
+    outputs cannot produce it."""
+    tool = _by_name()["record_add_meeting"]
+    enum = tool["input_schema"]["properties"]["event_type"]["enum"]
+    assert "doc_followup" not in enum
+    assert set(enum) == {"in_person", "phone_call", "offer_email"}
+
+
+def test_out_of_scope_enums_and_required_fields():
+    tool = _by_name()["record_out_of_scope"]
+    props = tool["input_schema"]["properties"]
+    assert props["category"]["enum"] == OUT_OF_SCOPE_CATEGORIES
+    assert props["feature_key"]["enum"] == FEATURE_KEYS
+    assert tool["input_schema"]["required"] == ["category", "feature_key"]
+
+
+def test_feature_key_to_category_mapping_is_exhaustive():
+    assert set(FEATURE_KEY_TO_CATEGORY) == set(FEATURE_KEYS)
+    assert set(FEATURE_KEYS) == (
+        set(POST_MVP_FEATURE_KEYS)
+        | set(VISION_ONLY_FEATURE_KEYS)
+        | set(UNPLANNED_FEATURE_KEYS)
+    )
+    assert {
+        FEATURE_KEY_TO_CATEGORY[key] for key in POST_MVP_FEATURE_KEYS
+    } == {"post_mvp_roadmap"}
+    assert {
+        FEATURE_KEY_TO_CATEGORY[key] for key in VISION_ONLY_FEATURE_KEYS
+    } == {"vision_only"}
+    assert {
+        FEATURE_KEY_TO_CATEGORY[key] for key in UNPLANNED_FEATURE_KEYS
+    } == {"unplanned"}
+
+
+def test_show_client_schema_avoids_unsupported_top_level_anyof():
+    tool = _by_name()["record_show_client"]
+    assert "anyOf" not in tool["input_schema"]
+    assert set(tool["input_schema"]["properties"]) == {"name", "city", "phone"}
+    assert "co najmniej jedno" in tool["description"]
+
+
+def test_multi_meeting_requires_count_min_two():
+    tool = _by_name()["record_multi_meeting_rejection"]
+    props = tool["input_schema"]["properties"]
+    assert props["meeting_count"]["type"] == "integer"
+    assert props["meeting_count"]["minimum"] == 2
+    assert tool["input_schema"]["required"] == ["meeting_count"]

@@ -1,0 +1,10 @@
+# Phase 7 E2E harness dependencies.
+# Kept separate from the main requirements.txt so Railway runtime stays
+# lean — the bot itself does not need Telethon or the MCP SDK.
+#
+# Install locally: pip install -r tests_e2e/requirements-e2e.txt
+
+telethon>=1.36,<2.0
+# MCP SDK is optional — only needed if you want to run tests_e2e.mcp_server.
+# Comment out to skip.
+mcp[cli]>=1.2,<2.0

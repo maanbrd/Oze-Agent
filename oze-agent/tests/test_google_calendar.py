@@ -1,8 +1,126 @@
 """Unit tests for shared/google_calendar.py — Google API and DB calls are mocked."""
 
+import logging
 import pytest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+
+
+class _Execute:
+    def __init__(self, value=None, error=None):
+        self.value = value
+        self.error = error
+
+    def execute(self):
+        if self.error:
+            raise self.error
+        return self.value
+
+
+class _InsertExecute:
+    def __init__(self, events):
+        self.events = events
+
+    def execute(self):
+        body = self.events.insert_kwargs["body"]
+        return {"id": "event-1", "status": "confirmed", **body}
+
+
+class _UpdateExecute:
+    def __init__(self, events):
+        self.events = events
+
+    def execute(self):
+        return self.events.update_kwargs["body"]
+
+
+class _EventsService:
+    def __init__(self, existing_event: dict | None = None, list_result: dict | None = None, list_error: Exception | None = None):
+        self.existing_event = existing_event or {}
+        self.list_result = list_result if list_result is not None else {"items": []}
+        self.list_error = list_error
+        self.insert_kwargs = None
+        self.get_kwargs = None
+        self.update_kwargs = None
+        self.list_kwargs = None
+
+    def list(self, **kwargs):
+        self.list_kwargs = kwargs
+        return _Execute(self.list_result, self.list_error)
+
+    def insert(self, **kwargs):
+        self.insert_kwargs = kwargs
+        return _InsertExecute(self)
+
+    def get(self, **kwargs):
+        self.get_kwargs = kwargs
+        return _Execute(self.existing_event)
+
+    def update(self, **kwargs):
+        self.update_kwargs = kwargs
+        return _UpdateExecute(self)
+
+
+class _CalendarService:
+    def __init__(self, events: _EventsService):
+        self._events = events
+
+    def events(self):
+        return self._events
+
+
+def _calendar_patches(events: _EventsService):
+    return (
+        patch("shared.google_calendar.get_user_by_id", return_value={"google_calendar_id": "cal-1"}),
+        patch("shared.google_calendar._get_calendar_service_sync", return_value=_CalendarService(events)),
+    )
+
+
+# ── strict proactive fetch ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_events_for_range_or_raise_raises_when_calendar_id_missing():
+    from shared.errors import ProactiveFetchError
+    from shared.google_calendar import get_events_for_range_or_raise
+
+    start = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    with patch("shared.google_calendar.get_user_by_id", return_value={"id": "u1"}):
+        with pytest.raises(ProactiveFetchError, match="calendar_not_configured"):
+            await get_events_for_range_or_raise("user-1", start, end)
+
+
+@pytest.mark.asyncio
+async def test_get_events_for_range_or_raise_raises_on_api_error():
+    from shared.errors import ProactiveFetchError
+    from shared.google_calendar import get_events_for_range_or_raise
+
+    events = _EventsService(list_error=RuntimeError("Google 500"))
+    start = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        with pytest.raises(ProactiveFetchError, match="calendar_api_error"):
+            await get_events_for_range_or_raise("user-1", start, end)
+
+
+@pytest.mark.asyncio
+async def test_get_events_for_range_or_raise_returns_empty_for_legit_empty_range():
+    from shared.google_calendar import get_events_for_range_or_raise
+
+    events = _EventsService(list_result={"items": []})
+    start = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await get_events_for_range_or_raise("user-1", start, end)
+
+    assert result == []
+    assert events.list_kwargs["timeMin"] == start.isoformat()
+    assert events.list_kwargs["timeMax"] == end.isoformat()
 
 
 # ── check_conflicts ───────────────────────────────────────────────────────────
@@ -83,6 +201,158 @@ async def test_get_free_slots_returns_empty_on_error():
         from shared.google_calendar import get_free_slots
         slots = await get_free_slots("user-1", date(2026, 4, 10))
     assert slots == []
+
+
+# ── D8 event_type metadata ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_event_writes_minimal_private_event_type():
+    from shared.google_calendar import create_event
+
+    events = _EventsService()
+    start = datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 4, 10, 11, 0, tzinfo=timezone.utc)
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await create_event(
+            "user-1",
+            "Spotkanie",
+            start,
+            end,
+            event_type="in_person",
+        )
+
+    private = events.insert_kwargs["body"]["extendedProperties"]["private"]
+    assert private == {"event_type": "in_person"}
+    assert not {"client_name", "client_row", "oze_agent"} & set(private)
+    assert result["event_type"] == "in_person"
+
+
+@pytest.mark.asyncio
+async def test_create_event_ignores_unknown_event_type(caplog):
+    from shared.google_calendar import create_event
+
+    caplog.set_level(logging.WARNING, logger="shared.google_calendar")
+    events = _EventsService()
+    start = datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 4, 10, 11, 0, tzinfo=timezone.utc)
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await create_event(
+            "user-1",
+            "Spotkanie",
+            start,
+            end,
+            event_type="unsupported",
+        )
+
+    assert "extendedProperties" not in events.insert_kwargs["body"]
+    assert result["event_type"] == ""
+    assert "Ignoring unknown Calendar event_type: unsupported" in caplog.text
+
+
+def test_event_to_dict_returns_event_type():
+    from shared.google_calendar import _event_to_dict
+
+    event = {
+        "id": "event-1",
+        "summary": "Spotkanie",
+        "start": {"dateTime": "2026-04-10T10:00:00+00:00"},
+        "end": {"dateTime": "2026-04-10T11:00:00+00:00"},
+        "extendedProperties": {"private": {"event_type": "phone_call"}},
+    }
+
+    assert _event_to_dict(event)["event_type"] == "phone_call"
+
+
+@pytest.mark.asyncio
+async def test_update_event_without_event_type_preserves_existing_metadata():
+    from shared.google_calendar import update_event
+
+    events = _EventsService(existing_event={
+        "id": "event-1",
+        "summary": "Old",
+        "start": {"dateTime": "2026-04-10T10:00:00+00:00"},
+        "end": {"dateTime": "2026-04-10T11:00:00+00:00"},
+        "extendedProperties": {"private": {"event_type": "in_person"}},
+    })
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await update_event("user-1", "event-1", {"title": "New"})
+
+    body = events.update_kwargs["body"]
+    assert body["summary"] == "New"
+    assert body["extendedProperties"]["private"] == {"event_type": "in_person"}
+    assert result["event_type"] == "in_person"
+
+
+@pytest.mark.asyncio
+async def test_update_event_sets_event_type():
+    from shared.google_calendar import update_event
+
+    events = _EventsService(existing_event={
+        "id": "event-1",
+        "summary": "Spotkanie",
+        "start": {"dateTime": "2026-04-10T10:00:00+00:00"},
+        "end": {"dateTime": "2026-04-10T11:00:00+00:00"},
+    })
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await update_event("user-1", "event-1", {"event_type": "doc_followup"})
+
+    body = events.update_kwargs["body"]
+    assert body["extendedProperties"]["private"] == {"event_type": "doc_followup"}
+    assert result["event_type"] == "doc_followup"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event_type", [None, ""])
+async def test_update_event_removes_event_type(event_type):
+    from shared.google_calendar import update_event
+
+    events = _EventsService(existing_event={
+        "id": "event-1",
+        "summary": "Spotkanie",
+        "start": {"dateTime": "2026-04-10T10:00:00+00:00"},
+        "end": {"dateTime": "2026-04-10T11:00:00+00:00"},
+        "extendedProperties": {"private": {"event_type": "in_person"}},
+    })
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await update_event("user-1", "event-1", {"event_type": event_type})
+
+    private = events.update_kwargs["body"]["extendedProperties"]["private"]
+    assert "event_type" not in private
+    assert result["event_type"] == ""
+
+
+@pytest.mark.asyncio
+async def test_update_event_ignores_unknown_event_type(caplog):
+    from shared.google_calendar import update_event
+
+    caplog.set_level(logging.WARNING, logger="shared.google_calendar")
+    events = _EventsService(existing_event={
+        "id": "event-1",
+        "summary": "Spotkanie",
+        "start": {"dateTime": "2026-04-10T10:00:00+00:00"},
+        "end": {"dateTime": "2026-04-10T11:00:00+00:00"},
+        "extendedProperties": {"private": {"event_type": "in_person"}},
+    })
+
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        result = await update_event("user-1", "event-1", {"event_type": "unsupported"})
+
+    private = events.update_kwargs["body"]["extendedProperties"]["private"]
+    assert private == {"event_type": "in_person"}
+    assert result["event_type"] == "in_person"
+    assert "Ignoring unknown Calendar event_type: unsupported" in caplog.text
 
 
 # ── get_todays_last_event ─────────────────────────────────────────────────────

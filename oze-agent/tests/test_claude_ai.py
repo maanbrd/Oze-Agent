@@ -12,10 +12,29 @@ def _make_anthropic_response(text: str, tokens_in: int = 50, tokens_out: int = 1
     return response
 
 
+def _make_tool_response(tool_name: str, tool_input: dict):
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.input = tool_input
+    response = MagicMock()
+    response.content = [block]
+    response.usage = MagicMock(input_tokens=50, output_tokens=100)
+    return response
+
+
 def _mock_client(text: str, **kwargs):
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(text, **kwargs)
+    )
+    return mock_client
+
+
+def _mock_tool_client(tool_name: str, tool_input: dict):
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_tool_response(tool_name, tool_input)
     )
     return mock_client
 
@@ -77,42 +96,25 @@ async def test_cost_calculation_complex_more_expensive():
     assert complex_result["cost_usd"] > simple_result["cost_usd"]
 
 
-# ── classify_intent ───────────────────────────────────────────────────────────
+# ── call_claude_with_tools ───────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_classify_intent_returns_valid_intent():
-    payload = json.dumps({"intent": "add_client", "entities": {"name": "Jan"}, "confidence": 0.95})
-    client = _mock_client(payload)
+async def test_call_claude_with_tools_force_tool_sets_tool_choice():
+    client = _mock_tool_client("record_general_question", {"reason": "test"})
     with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
-        from shared.claude_ai import classify_intent
-        result = await classify_intent("dodaj klienta Jana")
+        from shared.claude_ai import call_claude_with_tools
+        result = await call_claude_with_tools(
+            "system",
+            "user",
+            [{"name": "record_general_question", "input_schema": {"type": "object"}}],
+            model_type="simple",
+            force_tool=True,
+        )
 
-    assert result["intent"] == "add_client"
-    assert result["entities"]["name"] == "Jan"
-    assert result["confidence"] == 0.95
-
-
-@pytest.mark.asyncio
-async def test_classify_intent_falls_back_on_invalid_intent():
-    payload = json.dumps({"intent": "INVALID_INTENT", "entities": {}, "confidence": 0.9})
-    client = _mock_client(payload)
-    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
-        from shared.claude_ai import classify_intent
-        result = await classify_intent("coś dziwnego")
-
-    assert result["intent"] == "general_question"
-
-
-@pytest.mark.asyncio
-async def test_classify_intent_falls_back_on_json_error():
-    client = _mock_client("not valid json at all")
-    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
-        from shared.claude_ai import classify_intent
-        result = await classify_intent("test")
-
-    assert result["intent"] == "general_question"
-    assert result["confidence"] == 0.0
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["tool_choice"] == {"type": "any"}
+    assert result["tool_name"] == "record_general_question"
 
 
 # ── parse_voice_note ──────────────────────────────────────────────────────────

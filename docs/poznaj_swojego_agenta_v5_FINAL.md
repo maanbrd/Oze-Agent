@@ -1,5 +1,7 @@
 # Poznaj swojego agenta
 
+> **Status dokumentu.** Ten dokument opisuje wizję produktu z perspektywy handlowca. Aktualny zakres MVP i kontrakty intencji są w `docs/INTENCJE_MVP.md`. Aktualny stan implementacji jest w `docs/CURRENT_STATUS.md`. Część funkcji opisanych tutaj jest POST-MVP i pojawi się w kolejnych rundach.
+
 ## Czym jest OZE-Agent?
 
 OZE-Agent to Twój osobisty asystent sprzedażowy, który żyje w aplikacji Telegram na Twoim telefonie. Rozmawiasz z nim tak, jak rozmawiasz ze znajomym — po polsku, swoimi słowami, bez żadnych specjalnych komend ani skomplikowanych formularzy.
@@ -58,18 +60,19 @@ Agent prowadzi Twoją bazę klientów w arkuszu Google Sheets. Ale Ty nigdy nie 
 *Tel. 600 123 456*
 *Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę do środy*
 *❓ Brakuje: źródło leada*
-*Zapisać?"*
 
-*Ty: "Tak"*
+*[✅ Zapisać]  [➕ Dopisać]  [❌ Anulować]"*
+
+*Ty: klikasz ✅ Zapisać albo piszesz "tak"*
 
 *Agent: "✅ Zapisane."*
 
 Dwie wiadomości — klient w arkuszu.
 
 **Wyszukiwanie klientów** — chcesz sprawdzić dane klienta? Wystarczy powiedzieć:
-- *"Co mam o Kowalskim?"*
-- *"Znajdź klienta z Piaseczna"*
-- *"Pokaż dane Nowaka"*
+- *"Co mam o Mariuszu Kowalskim?"*
+- *"Pokaż dane Karola Nowaka"*
+- *"Jan Kowalski z Warszawy"*
 
 Agent przeszuka arkusz i pokaże kartę klienta ze wszystkimi danymi. Jeśli znajdzie kilku klientów o podobnym nazwisku, pokaże listę i zapyta którego masz na myśli. Nawet jeśli zrobisz literówkę (np. "Kowalsky" zamiast "Kowalski"), agent domyśli się o kogo chodzi.
 
@@ -84,14 +87,14 @@ Gdy zmieniasz np. numer telefonu, agent zapyta: "Zostawić stary numer i dodać 
 
 Agent pokaże co zmieni i poczeka na Twoje potwierdzenie.
 
-**Zmiana statusu klienta** — Twoi klienci przechodzą przez etapy sprzedaży (nowy lead → spotkanie → oferta → negocjacje → podpisane). Żeby przesunąć klienta dalej, wystarczy powiedzieć:
-- *"Kowalski — wysłałem ofertę"*
-- *"Nowak podpisał umowę!"*
-- *"Wiśniewski zrezygnował"*
+**Zmiana statusu klienta** — Twoi klienci przechodzą przez etapy sprzedaży (nowy lead → spotkanie → oferta → podpisane). Żeby przesunąć klienta dalej, wystarczy powiedzieć:
+- *"Marek Kowalski — wysłałem ofertę"*
+- *"Krzystof Nowak podpisał umowę!"*
+- *"Cezary Wiśniewski zrezygnował"*
 
 Agent zaproponuje zmianę statusu i poczeka na Twoje potwierdzenie.
 
-**Usuwanie klientów** — jeśli chcesz usunąć klienta z bazy, powiedz np. *"Usuń Nowaka z Piaseczna"*. Agent zawsze pyta o potwierdzenie, bo tej operacji nie da się cofnąć.
+**Usuwanie klientów** — jeśli chcesz usunąć klienta z bazy, powiedz np. *"Usuń z bazy Krzysztofa Nowaka z Piaseczna"*. Agent zawsze pyta o potwierdzenie, bo tej operacji nie da się cofnąć.
 
 ### 📅 Kalendarz i spotkania
 
@@ -99,9 +102,8 @@ Agent zarządza Twoim dedykowanym kalendarzem Google. To osobny kalendarz tylko 
 
 **Dodawanie spotkań** — mów naturalnie:
 - *"Jutro o 10 jadę do Marka Kowalskiego"*
-- *"Umów spotkanie z Nowakiem w piątek o czternastej"*
+- *"Umów spotkanie z Zbyszkiem Nowakiem w piątek o czternastej"*
 - *"W środę o szesnastej wycena u Czarka Wiśniewskiego w Legionowie"*
-- *"Wpół do ósmej jestem u Krzysztofa Majewskiego"* (agent zrozumie że to 7:30)
 
 Możesz dodać kilka spotkań w jednej wiadomości:
 *"Jutro o 10 Wojtek Kowalski, o 14 Marek Nowak, o 17 Jarek Wiśniewski"*
@@ -120,24 +122,22 @@ Każde spotkanie ma adres klienta — agent zapisuje go zarówno w kalendarzu ja
 - *"Jakie mam wolne okna w czwartek?"*
 
 **Przenoszenie spotkań** — jeśli klient odwołał:
-- *"Przełóż Kowalskiego na piątek o 10"*
-- *"Przesuń jutrzejsze spotkanie z Nowakiem na przyszły wtorek"*
+- *"Przełóż Artura Kowalskiego na piątek o 10"*
+- *"Przesuń jutrzejsze spotkanie z Wojciechem Nowakiem na przyszły wtorek"*
 
 Agent pokaże dane klienta, stary termin i nowy termin — poczeka na potwierdzenie, a potem sam zmieni kalendarz i datę w arkuszu.
 
 **Odwoływanie spotkań:**
-- *"Odwołaj spotkanie z Kowalskim"*
+- *"Odwołaj spotkanie z Andrzejem Kowalskim"*
 - *"Usuń jutrzejsze spotkanie o 14"*
 
-Do przeglądania i usuwania spotkań możesz też używać natywnej aplikacji Kalendarz Google na telefonie — zmiany będą widoczne od razu.
+Do przeglądania i usuwania spotkań możesz też używać natywnej aplikacji Kalendarz Google na telefonie — zmiany będą widoczne od razu. Przypomnienia przed spotkaniem obsługuje natywnie Google Calendar według ustawień Twojej aplikacji kalendarza.
 
 ### 🤖 Co agent robi sam, bez Twojego pytania
 
-Są trzy rzeczy, które agent robi automatycznie:
+Są dwie rzeczy, które agent robi automatycznie:
 
-**☀️ Poranny brief** — codziennie rano w Twoje dni robocze (które ustawiasz w ustawieniach — domyślnie poniedziałek-piątek, godzina 7:00) dostajesz wiadomość z planem dnia: wszystkie spotkania z danymi klientów i adresami, wolne okna czasowe, zaległe follow-upy i krótkie podsumowanie pipeline'u.
-
-**⏰ Przypomnienie przed spotkaniem** — domyślnie godzinę przed każdym spotkaniem (możesz zmienić na 15, 30 lub 120 minut w ustawieniach) agent wyśle Ci przypomnienie z nazwą klienta, adresem, numerem telefonu i notatkami z arkusza. Jedziesz na spotkanie przygotowany.
+**☀️ Poranny brief** — codziennie rano w Twoje dni robocze (które ustawiasz w ustawieniach — domyślnie poniedziałek-piątek, godzina 7:00) dostajesz wiadomość z planem dnia: wszystkie spotkania z danymi klientów i adresami, wolne okna czasowe oraz zaległe follow-upy.
 
 **📋 Follow-up po spotkaniach** — po Twoim ostatnim spotkaniu dnia agent sam się odezwie i zapyta jak poszły spotkania, o których jeszcze mu nie powiedziałeś. Wylistuje nieraportowane spotkania i poczeka na Twoją odpowiedź. Możesz odpowiedzieć jedną głosówką, opisując wszystkie spotkania naraz:
 
@@ -168,7 +168,6 @@ Agent rozumie polskie sposoby podawania czasu:
 - *"dziś"*, *"jutro"*, *"pojutrze"*
 - *"w piątek"*, *"we wtorek"*, *"w przyszłą środę"*
 - *"o czternastej"*, *"o dwudziestej drugiej"*, *"o ósmej"*
-- *"wpół do ósmej"* → 7:30, *"za kwadrans dziesiąta"* → 9:45
 - *"o 14"*, *"o 14:30"*, *"na 16"*
 - *"za godzinę"*, *"za dwie godziny"*
 - *"12 maja"*, *"15.04.2026"*
@@ -179,19 +178,18 @@ Agent rozumie polskie sposoby podawania czasu:
 
 Przy rejestracji agent zaproponuje domyślne kolumny dostosowane do branży OZE:
 
-Imię i nazwisko, Telefon, Email, Adres, Miejscowość, Produkt, Status, Źródło leada, Data pierwszego kontaktu, Data ostatniego kontaktu, Data następnego kontaktu, Notatki, Zdjęcia.
+Imię i nazwisko, Telefon, Email, Miasto, Adres, Status, Produkt, Notatki, Data pierwszego kontaktu, Data ostatniego kontaktu, Następny krok, Data następnego kroku, Źródło pozyskania, Zdjęcia, Link do zdjęć, ID wydarzenia Kalendarz.
 
 **Gdzie trafiają szczegóły techniczne?** Metraż domu, metraż dachu, kierunek dachu, zużycie prądu, typ dachu i wszelkie inne dane techniczne lądują w kolumnie **Notatki** — jako tekst, w jednej kolumnie, wyszukiwalne. Agent celowo nie tworzy osobnych kolumn dla każdego parametru, bo każdy handlowiec ma trochę inne potrzeby. Jeśli potrzebujesz wyciągnąć wszystkich klientów z dachem 40m² — wyszukasz w Notatkach.
 
 **Moc produktu** (np. 8kW, 12kW, 10kWh) trafia do kolumny **Notatki** razem z resztą specs technicznych — tak samo jak metraż domu, dachu czy kierunek. Kolumna **Produkt** zawiera tylko typ produktu (PV, Pompa ciepła, Magazyn energii, PV + Magazyn), bez wartości liczbowych. Nie ma osobnej kolumny "moc".
 
-Ale to Twój arkusz — możesz dodawać i zmieniać kolumny w ustawieniach na dashboardzie. Agent odczytuje nagłówki co kilka godzin i dostosowuje się automatycznie. Jeśli dodasz kolumnę "Numer działki" — agent zacznie pytać o numer działki przy następnych klientach.
+W aktualnej wersji schemat arkusza jest stały — 16 kolumn powyżej. W przyszłości będziesz mógł dodawać i zmieniać kolumny z poziomu dashboardu; agent odczyta nowe nagłówki i zacznie pytać o nowe pola przy kolejnych klientach.
 
-**Ważne:** Jeśli właśnie zmieniłeś kolumny w arkuszu i chcesz żeby agent od razu to widział, napisz do niego "odśwież kolumny" — agent natychmiast odczyta nowe nagłówki.
+Niektóre kolumny są fundamentami bazy klientów i pozostają zawsze: Imię i nazwisko, Telefon, Miasto, Adres, Produkt, Status, Notatki. Bez nich agent nie mógłby działać.
 
-Niektóre kolumny są chronione i nie da się ich usunąć: Imię i nazwisko, Telefon, Adres, Miejscowość, Produkt, Status, Notatki. To fundamenty bazy klientów — bez nich agent nie mógłby działać.
+Domyślne statusy lejka sprzedażowego: Nowy lead → Spotkanie umówione → Spotkanie odbyte → Oferta wysłana → Podpisane → Zamontowana → Rezygnacja z umowy → Nieaktywny → Odrzucone. W przyszłości statusy będzie można edytować z dashboardu.
 
-Statusy lejka sprzedażowego możesz edytować. Domyślne to: Nowy lead → Spotkanie umówione → Spotkanie odbyte → Oferta wysłana → Negocjacje → Podpisane → Zamontowana → Rezygnacja z umowy → Nieaktywny → Odrzucone.
 ---
 
 ## Adresy i miejscowości
@@ -202,15 +200,41 @@ Agent zawsze zapisuje adres klienta w dwóch miejscach: w arkuszu Google Sheets 
 
 ## Przyciski w Telegramie
 
-Przy pytaniach z zamkniętą odpowiedzią (np. "Zapisać?" → Tak/Nie) agent pokaże Ci przyciski do szybkiego kliknięcia. Ale zawsze możesz zamiast tego napisać odpowiedź tekstem lub nagrać głosówkę — przyciski to skrót, nie jedyna opcja.
+Przy każdej zmianie danych (dodanie klienta, notatka, zmiana statusu, dodanie spotkania) agent pokazuje kartę z trzema przyciskami:
+
+**[✅ Zapisać]  [➕ Dopisać]  [❌ Anulować]**
+
+- **✅ Zapisać** — zapisuje i zamyka
+- **➕ Dopisać** — pozwala dopisać coś przed zapisem
+- **❌ Anulować** — anuluje jednym kliknięciem, bez pytania "na pewno?"
+
+Zamiast klikać możesz też odpowiedzieć tekstem ("tak", "zapisz", "anuluj") lub głosówką.
+
+Przy prostych pytaniach nie-mutacyjnych (np. *"Czy chodziło Ci o Jana Kowalskiego z Warszawy?"*) agent pokazuje zwykłe **[Tak]** / **[Nie]**.
 
 ---
 
 ## Potwierdzenia
 
-Agent nigdy nie zrobi niczego ważnego bez Twojego OK. Dodanie klienta, edycja, usunięcie, zmiana statusu, dodanie spotkania, przeniesienie — każda taka akcja wymaga Twojego potwierdzenia. Dopóki nie powiesz "tak" — nic się nie zmienia.
+Agent nigdy nie zapisuje ważnych zmian bez Twojego OK. Dodanie klienta, notatki, zmiana statusu, dodanie spotkania — każda taka akcja najpierw pokazuje kartę 3-button i czeka.
 
-Jeśli przy pytaniu "Zapisać?" powiesz "nie" — agent zapyta czy anulować całą operację. Jeśli potwierdzisz — dane są odrzucone. Jeśli nie — agent czeka na poprawki.
+Dopóki nie klikniesz **✅ Zapisać** (lub nie odpowiesz tekstem "tak" / "zapisz") — nic się nie zapisuje.
+
+**❌ Anulować** zamyka operację od razu, bez pętli "Na pewno anulować?".
+
+
+## Gdy klient już jest w bazie
+
+Jeśli dodajesz klienta, którego agent rozpozna po imieniu, nazwisku i miejscowości, zapyta:
+
+*Ten klient już jest w arkuszu: Jan Kowalski, Warszawa. Czy zapisać go w nowym wierszu czy zaktualizować?*
+
+**[Nowy]  [Aktualizuj]**
+
+- **[Nowy]** tworzy osobny wiersz w arkuszu (np. dwóch różnych Janów Kowalskich).
+- **[Aktualizuj]** prowadzi do karty zapisu dla istniejącego klienta.
+
+Bez tej decyzji agent sam nie łączy klientów i nic nie zapisuje.
 
 
 ## Pamięć rozmowy
@@ -218,9 +242,20 @@ Jeśli przy pytaniu "Zapisać?" powiesz "nie" — agent zapyta czy anulować ca�
 Agent pamięta ostatnie 10 wiadomości (lub do 30 minut przerwy). Możesz prowadzić naturalną rozmowę bez powtarzania o kim mówisz:
 
 *Ty: "Dodaj Kowalskiego z Warszawy, Piłsudskiego 12, PV 8kW, tel 600123456"*
-*Agent: "📋 Zapisuję Jana Kowalskiego. Brakuje: email, źródło leada. Zapisać?"*
-*Ty: "Tak, dodaj jeszcze że dom 160 metrów i dach 40 metrów na południe"*
-*Agent: "✅ Zapisane: Jan Kowalski, Warszawa, Produkt: PV. Do Notatek dołożyłem: moc PV 8kW, dom 160m², dach 40m² płd."*
+
+*Agent pokazuje kartę:*
+*"📋 Zapisuję: Jan Kowalski, Warszawa, PV. Brakuje: email, źródło pozyskania.*
+*[✅ Zapisać]  [➕ Dopisać]  [❌ Anulować]"*
+
+*Ty: "dopisz że dom 160 metrów i dach 40 metrów na południe"*
+
+*Agent aktualizuje kartę:*
+*"📋 Jan Kowalski, Warszawa, PV. Notatki: moc PV 8kW, dom 160m², dach 40m² płd. Brakuje: email, źródło pozyskania.*
+*[✅ Zapisać]  [➕ Dopisać]  [❌ Anulować]"*
+
+*Ty: klikasz ✅ Zapisać*
+
+*Agent: "✅ Zapisane."*
 
 ---
 
@@ -236,7 +271,7 @@ Podawaj jak najwięcej informacji w jednej wiadomości lub głosówce. Agent prz
 
 Jedna rozbudowana głosówka po spotkaniu jest lepsza niż pięć krótkich wiadomości z pojedynczymi danymi.
 
-Masz 100 interakcji dziennie. Jeśli się zbliżasz do limitu, agent Cię poinformuje i zaproponuje pożyczenie do 20 interakcji z następnego dnia.
+Docelowo może pojawić się dzienny budżet interakcji, żeby koszty AI były przewidywalne. W praktyce jedna bogata wiadomość zawsze będzie lepsza niż pięć krótkich.
 
 ---
 

@@ -4,7 +4,7 @@ All functions use the service key (bypasses RLS). Returns None on failure.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from supabase import Client, create_client
@@ -93,6 +93,41 @@ def update_user(user_id: str, data: dict) -> Optional[dict]:
         return None
 
 
+def get_eligible_users_for_morning_brief() -> list[dict]:
+    """Return users eligible to receive the Phase 6 morning brief.
+
+    Filters: not suspended, not deleted, telegram_id set. Returns a
+    small projection — the caller only needs id, telegram_id, and the
+    dedup column to decide whether to send.
+    """
+    try:
+        result = (
+            get_supabase_client()
+            .table("users")
+            .select("id, telegram_id, last_morning_brief_sent_date")
+            .eq("is_suspended", False)
+            .eq("is_deleted", False)
+            .not_.is_("telegram_id", "null")
+            .execute()
+        )
+        return result.data if result.data else []
+    except Exception as e:
+        logger.error("get_eligible_users_for_morning_brief: %s", e)
+        return []
+
+
+def update_last_morning_brief_sent(user_id: str, sent_date: date) -> bool:
+    """Mark the Phase 6 morning brief as sent. Return True on success."""
+    try:
+        get_supabase_client().table("users").update(
+            {"last_morning_brief_sent_date": sent_date.isoformat()}
+        ).eq("id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.error("update_last_morning_brief_sent(%s): %s", user_id, e)
+        return False
+
+
 # ── Interaction logging ───────────────────────────────────────────────────────
 
 
@@ -129,11 +164,12 @@ def get_daily_interaction_count(telegram_id: int, day: date) -> int:
             .select("count, borrowed_from_tomorrow")
             .eq("telegram_id", telegram_id)
             .eq("date", day.isoformat())
-            .single()
+            .limit(1)
             .execute()
         )
         if result.data:
-            return result.data["count"] + result.data["borrowed_from_tomorrow"]
+            row = result.data[0]
+            return row["count"] + row["borrowed_from_tomorrow"]
         return 0
     except Exception as e:
         logger.debug("get_daily_interaction_count(%s, %s): %s", telegram_id, day, e)
@@ -144,16 +180,16 @@ def increment_daily_interaction_count(telegram_id: int, day: date) -> int:
     """Upsert daily count row, increment by 1. Returns new count."""
     try:
         client = get_supabase_client()
-        result = (
+        existing = (
             client.table("daily_interaction_counts")
             .select("count")
             .eq("telegram_id", telegram_id)
             .eq("date", day.isoformat())
-            .single()
+            .limit(1)
             .execute()
         )
-        if result.data:
-            new_count = result.data["count"] + 1
+        if existing.data:
+            new_count = existing.data[0]["count"] + 1
             client.table("daily_interaction_counts").update(
                 {"count": new_count}
             ).eq("telegram_id", telegram_id).eq("date", day.isoformat()).execute()
@@ -191,14 +227,27 @@ def save_conversation_message(
         logger.error("save_conversation_message(%s): %s", telegram_id, e)
 
 
-def get_conversation_history(telegram_id: int, limit: int = 10) -> list:
-    """Return the last `limit` messages for this user, oldest first."""
+def get_conversation_history(
+    telegram_id: int,
+    limit: int = 10,
+    since: Optional[timedelta] = None,
+) -> list:
+    """Return the last `limit` messages for this user, oldest first.
+
+    If `since` is provided, only rows newer than `now_utc - since` are returned.
+    """
     try:
-        result = (
+        query = (
             get_supabase_client()
             .table("conversation_history")
             .select("role, content, message_type, created_at")
             .eq("telegram_id", telegram_id)
+        )
+        if since is not None:
+            cutoff = datetime.now(tz=timezone.utc) - since
+            query = query.gte("created_at", cutoff.isoformat())
+        result = (
+            query
             .order("created_at", desc=True)
             .limit(limit)
             .execute()
