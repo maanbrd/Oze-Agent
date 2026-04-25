@@ -1,7 +1,6 @@
 """Common Telegram bot utilities for OZE-Agent."""
 
 import logging
-import os
 from datetime import date
 from typing import Optional
 
@@ -19,10 +18,7 @@ from shared.database import (
 
 logger = logging.getLogger(__name__)
 
-# Daily interaction cap. Production default = 100. Override via env var
-# DAILY_INTERACTION_LIMIT (e.g. set 99999 on Railway during voice/feature
-# smoke testing; remove the env var to restore the default).
-DAILY_LIMIT = int(os.getenv("DAILY_INTERACTION_LIMIT", "100"))
+DAILY_LIMIT = 100
 BORROW_LIMIT = 20  # Max interactions borrowable from tomorrow
 
 
