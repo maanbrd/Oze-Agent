@@ -11,6 +11,15 @@ import openai
 from bot.config import Config
 
 
+def _segment_avg_logprob(segment, default: float = -0.3) -> float:
+    """Extract avg_logprob from a Whisper segment, compatible with both
+    dict (legacy / test mocks) and Pydantic TranscriptionSegment object
+    (openai SDK 1.50+)."""
+    if isinstance(segment, dict):
+        return segment.get("avg_logprob", default)
+    return getattr(segment, "avg_logprob", default)
+
+
 async def transcribe_voice(audio_bytes: bytes, filename: str = "voice.ogg") -> dict:
     """Transcribe audio using Whisper API.
 
@@ -35,7 +44,7 @@ async def transcribe_voice(audio_bytes: bytes, filename: str = "voice.ogg") -> d
         segments = response.segments if hasattr(response, "segments") else []
         avg_confidence = 1.0
         if segments:
-            confidences = [s.get("avg_logprob", -0.3) for s in segments]
+            confidences = [_segment_avg_logprob(s) for s in segments]
             avg_logprob = sum(confidences) / len(confidences)
             avg_confidence = min(1.0, max(0.0, 1.0 + avg_logprob / 0.5))
 
