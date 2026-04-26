@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agent-OZE Web App
+
+Panel webowy dla Agent-OZE. Web app jest osobnym Next.js appem w monorepo,
+deployowanym docelowo na Vercel z root directory `web/`.
+
+Phase 0A zawiera tylko scaffold:
+
+- Next.js 16 App Router
+- TypeScript
+- Tailwind CSS v4
+- ESLint
+- placeholder landing page po polsku
+- `/healthz` jako JSON healthcheck
 
 ## Getting Started
 
-First, run the development server:
+Uruchom lokalnie:
 
 ```bash
+cd web
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Adresy:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `http://localhost:3000` — placeholder landing
+- `http://localhost:3000/healthz` — healthcheck JSON
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+```bash
+npm run lint
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+`npm run build` używa webpacka, bo Turbopack w Next.js 16 potrafi panikować w
+ograniczonych środowiskach lokalnych przy transformacji CSS. Do świadomego testu
+Turbopacka służy `npm run build:turbo`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scope
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+W Phase 0A web app nie integruje jeszcze Supabase, Stripe, Resend, Railway ani
+Google API. Bot w `../oze-agent/` pozostaje nietknięty.
 
-## Deploy on Vercel
+Docelowy landing użyje animacji Midjourney dostarczonej przez usera. Pliki
+medialne trzymaj w `public/media/`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Development Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Przy pracy z Next.js 16, Tailwind v4, shadcn/ui i Supabase SSR używaj Context7
+do aktualnych docs. Next 16 ma breaking changes względem starszej wiedzy modeli.
