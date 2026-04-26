@@ -4,11 +4,19 @@
 
 The cinematic hero background video for the landing page (`/`). Generated via Midjourney by the user.
 
-**Specs (recommended):**
+**Current asset:**
+- File: `hero-bg.mp4`
+- Source: Claude Design export / Midjourney upload
+- Format: MP4 (H.264)
+- Resolution: 624×624
+- Duration: 9.04s
+- Size: 4.3 MB
+
+**Future optimization target:**
 - Format: MP4 (H.264) for max browser compatibility; consider WebM/AV1 as additional source for smaller bundle
-- Resolution: 1920×1080 minimum; 2560×1440 ideal
-- Duration: 6–10s loop (the landing component handles the seamless loop with crossfade)
-- Aspect: 16:9 cover; the landing applies `object-fit: cover`
+- Resolution: 1920×1080 minimum, 2560×1440 ideal, if regenerating a wider cinematic asset
+- Duration: 6–10s loop (the landing component uses native muted autoplay + loop)
+- Aspect: current file is square and works with `object-fit: cover`; a wider 16:9 render would crop less on desktop
 - Audio: muted (browser autoplay requires it)
 - Color: works in any palette — landing applies `hue-rotate(70deg) saturate(1.6)` to push everything green
 

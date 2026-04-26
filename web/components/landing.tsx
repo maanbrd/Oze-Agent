@@ -1,9 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const G = "#3DFF7A"; // bright OZE green from cinematic hero design
+const VOICE_WAVE_HEIGHTS = [3, 9, 12, 7, 5, 11, 8, 4, 10, 12, 6, 5, 9, 11, 7];
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [query]);
+
+  return matches;
+}
 
 export function Landing() {
   return (
@@ -25,6 +41,9 @@ export function Landing() {
 // ── NAV ───────────────────────────────────────────────────────────────────
 function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
+  const compact = useMediaQuery("(max-width: 920px)");
+  const mobile = useMediaQuery("(max-width: 560px)");
+
   useEffect(() => {
     const f = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", f);
@@ -49,20 +68,23 @@ function LandingNav() {
         style={{
           maxWidth: 1280,
           margin: "0 auto",
-          padding: "20px 32px",
+          padding: mobile ? "16px 20px" : "20px 32px",
           display: "flex",
           alignItems: "center",
-          gap: 28,
+          justifyContent: "space-between",
+          gap: mobile ? 12 : 28,
         }}
       >
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "#fff" }}>
           <RingLogo />
-          <span style={{ fontWeight: 600, fontSize: 17, letterSpacing: -0.01 }}>OZE Agent</span>
+          <span style={{ fontWeight: 600, fontSize: 17, letterSpacing: -0.01, whiteSpace: "nowrap" }}>
+            OZE Agent
+          </span>
         </Link>
-        <nav style={{ display: "flex", gap: 4, marginLeft: 32, flex: 1 }}>
+        <nav style={{ display: compact ? "none" : "flex", gap: 4, marginLeft: 32, flex: 1 }}>
           {(
             [
-              ["dla firm", "#dla-firm"],
+              ["jak działa", "#jak-dziala"],
               ["co umie agent", "#demo"],
               ["cennik", "#cennik"],
               ["faq", "#faq"],
@@ -89,6 +111,7 @@ function LandingNav() {
         <Link
           href="/login"
           style={{
+            display: compact ? "none" : "inline-flex",
             background: "transparent",
             border: 0,
             color: "rgba(255,255,255,0.85)",
@@ -102,17 +125,18 @@ function LandingNav() {
         <Link
           href="/rejestracja"
           style={{
-            height: 40,
-            padding: "0 18px",
+            height: mobile ? 38 : 40,
+            padding: mobile ? "0 14px" : "0 18px",
             borderRadius: 999,
             background: G,
             color: "#000",
             fontWeight: 700,
-            fontSize: 14,
+            fontSize: mobile ? 13 : 14,
             border: 0,
             boxShadow: `0 0 24px ${G}55`,
-            display: "inline-flex",
+            display: mobile ? "none" : "inline-flex",
             alignItems: "center",
+            whiteSpace: "nowrap",
             textDecoration: "none",
           }}
         >
@@ -153,58 +177,32 @@ function RingLogo() {
 
 // ── HERO ──────────────────────────────────────────────────────────────────
 function CinematicHero() {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [vop, setVop] = useState(0);
   const [hasVideo, setHasVideo] = useState(true); // assume yes; flips off on error
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    let raf = 0;
-    const target = 0.7;
-    const loop = () => {
-      const dur = v.duration || 8;
-      const ct = v.currentTime;
-      let op = target;
-      if (ct < 0.5) op = target * (ct / 0.5);
-      else if (dur && ct > dur - 0.5) op = target * Math.max(0, (dur - ct) / 0.5);
-      setVop(op);
-      raf = requestAnimationFrame(loop);
-    };
-    const onEnded = () => {
-      setVop(0);
-      setTimeout(() => {
-        try {
-          v.currentTime = 0;
-          void v.play().catch(() => {});
-        } catch {}
-      }, 100);
-    };
-    v.addEventListener("ended", onEnded);
-    void v.play().catch(() => {});
-    raf = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(raf);
-      v.removeEventListener("ended", onEnded);
-    };
-  }, [hasVideo]);
+  const [videoReady, setVideoReady] = useState(false);
+  const compact = useMediaQuery("(max-width: 860px)");
+  const tablet = useMediaQuery("(max-width: 1080px)");
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const showVideo = hasVideo && !reduceMotion;
 
   return (
     <section
       style={{
         position: "relative",
-        minHeight: "100vh",
-        paddingTop: 96,
+        minHeight: compact ? "auto" : "100vh",
+        paddingTop: compact ? 76 : 96,
         overflow: "hidden",
       }}
     >
-      {hasVideo && (
+      {showVideo && (
         <video
-          ref={videoRef}
           src="/media/hero-bg.mp4"
           muted
           playsInline
           autoPlay
+          loop
+          preload="metadata"
+          aria-hidden="true"
+          onCanPlay={() => setVideoReady(true)}
           onError={() => setHasVideo(false)}
           style={{
             position: "absolute",
@@ -212,8 +210,8 @@ function CinematicHero() {
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            opacity: vop,
-            transition: "opacity .15s linear",
+            opacity: videoReady ? 0.7 : 0,
+            transition: "opacity .4s ease",
             filter: "hue-rotate(70deg) saturate(1.6) contrast(1.05) brightness(0.85)",
           }}
         />
@@ -243,28 +241,31 @@ function CinematicHero() {
           zIndex: 10,
           maxWidth: 1280,
           margin: "0 auto",
-          padding: "40px 40px 80px",
+          padding: compact ? "64px 24px 56px" : tablet ? "40px 32px 72px" : "40px 40px 80px",
           display: "grid",
-          gridTemplateColumns: "1.05fr 1fr",
-          gap: 60,
+          gridTemplateColumns: compact ? "1fr" : tablet ? "0.95fr 0.82fr" : "1.05fr 1fr",
+          gap: compact ? 34 : tablet ? 36 : 60,
           alignItems: "center",
-          minHeight: "calc(100vh - 96px)",
+          minHeight: compact ? "auto" : "calc(100vh - 96px)",
         }}
       >
         {/* Left: copy */}
         <div>
           <h1
             style={{
-              fontSize: "clamp(44px, 5.4vw, 76px)",
+              fontSize: compact ? "clamp(40px, 12vw, 54px)" : "clamp(44px, 5.4vw, 76px)",
               lineHeight: 1.05,
               letterSpacing: "-0.03em",
               fontWeight: 600,
               margin: "0 0 28px",
+              maxWidth: compact ? 360 : 720,
             }}
           >
-            <span style={{ display: "block" }}>Skup Się na Sprzedaży,</span>
+            <span style={{ display: "block" }}>
+              Skup Się{compact ? <br /> : " "}na Sprzedaży,
+            </span>
             <span style={{ display: "block", color: G, textShadow: `0 0 40px ${G}44` }}>
-              resztę robi AgentOZE.
+              resztę robi{compact ? <br /> : " "}AgentOZE.
             </span>
           </h1>
           <p
@@ -280,7 +281,14 @@ function CinematicHero() {
             <br />
             follow-up pilnowany. Bez klikania w Excelu.
           </p>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              flexWrap: "wrap",
+              alignItems: compact ? "stretch" : "center",
+            }}
+          >
             <Link
               href="/rejestracja"
               style={{
@@ -295,6 +303,7 @@ function CinematicHero() {
                 boxShadow: `0 0 28px ${G}55, 0 8px 24px rgba(0,0,0,0.4)`,
                 display: "inline-flex",
                 alignItems: "center",
+                justifyContent: "center",
                 textDecoration: "none",
               }}
             >
@@ -313,6 +322,7 @@ function CinematicHero() {
                 border: "1.5px solid rgba(255,255,255,0.5)",
                 display: "inline-flex",
                 alignItems: "center",
+                justifyContent: "center",
                 textDecoration: "none",
               }}
             >
@@ -321,33 +331,33 @@ function CinematicHero() {
           </div>
         </div>
         {/* Right: phone */}
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <HeroPhone />
+        <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
+          <HeroPhone compact={compact} />
         </div>
       </div>
     </section>
   );
 }
 
-function HeroPhone() {
+function HeroPhone({ compact = false }: { compact?: boolean }) {
   return (
     <div
       style={{
-        width: 340,
+        width: compact ? "min(310px, calc(100vw - 48px))" : 340,
         position: "relative",
-        borderRadius: 48,
-        padding: 9,
+        borderRadius: compact ? 40 : 48,
+        padding: compact ? 7 : 9,
         background: "linear-gradient(160deg, #2a2d33 0%, #0a0c0f 60%)",
         boxShadow: `0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06), 0 0 60px ${G}25`,
-        transform: "rotate(2deg)",
+        transform: compact ? "rotate(0deg)" : "rotate(2deg)",
       }}
     >
       <div
         style={{
           background: "#0E1216",
-          borderRadius: 40,
+          borderRadius: compact ? 34 : 40,
           overflow: "hidden",
-          height: 660,
+          height: compact ? 590 : 660,
           display: "flex",
           flexDirection: "column",
           position: "relative",
@@ -482,8 +492,7 @@ function HeroPhone() {
             </span>
             <svg width="60" height="14" viewBox="0 0 60 14">
               <g fill="rgba(0,0,0,0.55)">
-                {Array.from({ length: 15 }).map((_, i) => {
-                  const h = Math.abs(Math.sin(i * 0.9)) * 12 || 3;
+                {VOICE_WAVE_HEIGHTS.map((h, i) => {
                   return <rect key={i} x={i * 4} y={7 - h / 2} width="2" height={h} rx="1" />;
                 })}
               </g>
@@ -782,8 +791,13 @@ function TelegramMark() {
 
 // ── PATH SECTION ──────────────────────────────────────────────────────────
 function PathSection() {
+  const compact = useMediaQuery("(max-width: 860px)");
+
   return (
-    <section id="dla-firm" style={{ padding: "120px 32px 80px", position: "relative" }}>
+    <section
+      id="jak-dziala"
+      style={{ padding: compact ? "76px 24px 56px" : "120px 32px 80px", position: "relative" }}
+    >
       <div style={{ maxWidth: 1180, margin: "0 auto" }}>
         <SectionEyebrow>Setup w 3 minuty</SectionEyebrow>
         <SectionTitle>Trzy kroki — wszystko zostaje u&nbsp;Ciebie.</SectionTitle>
@@ -797,10 +811,10 @@ function PathSection() {
           }}
         >
           Płacisz, łączysz konto Google, parujesz Telegrama. Twój arkusz, kalendarz i folder na
-          zdjęcia zakładamy w Twoim koncie Google — nie kopiujemy ich do siebie.
+          materiały zakładamy w Twoim koncie Google — nie kopiujemy ich do siebie.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "repeat(3, 1fr)", gap: 18 }}>
           <PathCard
             num="01"
             title="Załóż konto i opłać"
@@ -813,7 +827,7 @@ function PathSection() {
           <PathCard
             num="02"
             title="Połącz Google"
-            body='OAuth do Sheets, Calendar i Drive. Tworzymy „OZE Klienci 2026", kalendarz „OZE Spotkania" i folder na zdjęcia.'
+            body="OAuth do Sheets, Calendar i Drive. Tworzymy arkusz „OZE Klienci 2026”, kalendarz „OZE Spotkania” i folder na materiały."
             cta="Pokaż jak"
             href="/rejestracja"
           >
@@ -1122,10 +1136,11 @@ function TelegramVisual() {
 
 // ── CONVERSATION DEMO ─────────────────────────────────────────────────────
 function ConversationDemo() {
+  const compact = useMediaQuery("(max-width: 860px)");
   const cards: [string, string, string][] = [
     [
       "🎙️",
-      "Głosówka, tekst, zdjęcie",
+      "Głosówka i tekst",
       'Agent rozumie polskie odmiany („u Krzywińskim" → Krzywiński).',
     ],
     [
@@ -1160,7 +1175,7 @@ function ConversationDemo() {
           Po spotkaniu wysyłasz głosówkę. Agent wyciąga imię, miasto, telefon, produkt i pyta o
           brakujące rzeczy. Ty potwierdzasz — wpada do arkusza i kalendarza.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "repeat(3, 1fr)", gap: 18 }}>
           {cards.map(([ic, t, b]) => (
             <div
               key={t}
@@ -1207,6 +1222,7 @@ function ConversationDemo() {
 
 // ── PRICING ───────────────────────────────────────────────────────────────
 function PricingSection() {
+  const compact = useMediaQuery("(max-width: 760px)");
   const plans = [
     {
       name: "Miesięcznie",
@@ -1258,7 +1274,7 @@ function PricingSection() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
+            gridTemplateColumns: compact ? "1fr" : "repeat(2, 1fr)",
             gap: 16,
             maxWidth: 760,
             margin: "0 auto",
@@ -1384,10 +1400,11 @@ function PricingSection() {
 
 // ── DATA PROMISE ──────────────────────────────────────────────────────────
 function DataPromise() {
+  const compact = useMediaQuery("(max-width: 760px)");
   const items = [
     { mark: <SheetsMark />, t: "Sheets", b: "Twój arkusz, 16 kolumn, 9 statusów." },
     { mark: <CalendarMark />, t: "Calendar", b: 'Dedykowany kalendarz „OZE Spotkania".' },
-    { mark: <DriveMark />, t: "Drive", b: "Folder na zdjęcia z każdego spotkania." },
+    { mark: <DriveMark />, t: "Drive", b: "Folder na materiały i zdjęcia klienta." },
   ];
   return (
     <section
@@ -1417,7 +1434,7 @@ function DataPromise() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: compact ? "1fr" : "repeat(3, 1fr)",
             gap: 16,
             maxWidth: 720,
             margin: "0 auto",
@@ -1636,6 +1653,8 @@ function FinalCTA() {
 
 // ── FOOTER ────────────────────────────────────────────────────────────────
 function FooterMin() {
+  const compact = useMediaQuery("(max-width: 760px)");
+
   return (
     <footer
       style={{
@@ -1649,8 +1668,9 @@ function FooterMin() {
           maxWidth: 1280,
           margin: "0 auto",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          flexDirection: compact ? "column" : "row",
+          justifyContent: compact ? "flex-start" : "space-between",
+          alignItems: compact ? "flex-start" : "center",
           flexWrap: "wrap",
           gap: 16,
           fontSize: 12,
@@ -1659,13 +1679,18 @@ function FooterMin() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <RingLogo />
-          <span>© 2026 OZE Agent · ul. Marszałkowska 1, Warszawa · NIP 1234567890</span>
+          <span>© 2026 OZE Agent</span>
         </div>
-        <div style={{ display: "flex", gap: 22 }}>
-          <a style={{ color: "inherit" }}>Polityka prywatności</a>
-          <a style={{ color: "inherit" }}>Regulamin</a>
-          <a style={{ color: "inherit" }}>Kontakt</a>
-          <a style={{ color: "inherit" }}>Status</a>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+          <Link href="/polityka-prywatnosci" style={{ color: "inherit" }}>
+            Polityka prywatności
+          </Link>
+          <Link href="/regulamin" style={{ color: "inherit" }}>
+            Regulamin
+          </Link>
+          <a href="#kontakt" style={{ color: "inherit" }}>
+            Kontakt
+          </a>
         </div>
       </div>
     </footer>
