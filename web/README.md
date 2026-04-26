@@ -3,13 +3,15 @@
 Panel webowy dla Agent-OZE. Web app jest osobnym Next.js appem w monorepo,
 deployowanym docelowo na Vercel z root directory `web/`.
 
-Phase 0A zawiera tylko scaffold:
+Phase 0A zawiera:
 
 - Next.js 16 App Router
 - TypeScript
 - Tailwind CSS v4
 - ESLint
-- placeholder landing page po polsku
+- cinematic landing page po polsku
+- statyczne placeholder routes: `/rejestracja`, `/login`, `/regulamin`,
+  `/polityka-prywatnosci`
 - `/healthz` jako JSON healthcheck
 
 ## Getting Started
@@ -24,8 +26,10 @@ npm run dev
 
 Adresy:
 
-- `http://localhost:3000` — placeholder landing
+- `http://localhost:3000` — cinematic landing
 - `http://localhost:3000/healthz` — healthcheck JSON
+- `http://localhost:3000/rejestracja` — placeholder onboardingu
+- `http://localhost:3000/login` — placeholder logowania
 
 ## Scripts
 
@@ -43,8 +47,8 @@ Turbopacka służy `npm run build:turbo`.
 W Phase 0A web app nie integruje jeszcze Supabase, Stripe, Resend, Railway ani
 Google API. Bot w `../oze-agent/` pozostaje nietknięty.
 
-Docelowy landing użyje animacji Midjourney dostarczonej przez usera. Pliki
-medialne trzymaj w `public/media/`.
+Landing używa animacji Midjourney dostarczonej przez usera:
+`public/media/hero-bg.mp4`. Pliki medialne trzymaj w `public/media/`.
 
 ## Development Notes
 

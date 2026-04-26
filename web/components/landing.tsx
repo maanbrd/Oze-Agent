@@ -46,6 +46,7 @@ function LandingNav() {
 
   useEffect(() => {
     const f = () => setScrolled(window.scrollY > 24);
+    f();
     window.addEventListener("scroll", f);
     return () => window.removeEventListener("scroll", f);
   }, []);
@@ -572,9 +573,8 @@ function HeroPhone({ compact = false }: { compact?: boolean }) {
           </div>
 
           {/* Action buttons (under bot card) */}
-          <div style={{ alignSelf: "flex-start", display: "flex", gap: 6, marginLeft: 4 }}>
-            <button
-              type="button"
+          <div aria-hidden="true" style={{ alignSelf: "flex-start", display: "flex", gap: 6, marginLeft: 4 }}>
+            <span
               style={{
                 background: G,
                 color: "#000",
@@ -590,9 +590,8 @@ function HeroPhone({ compact = false }: { compact?: boolean }) {
               }}
             >
               ✓ Zapisać
-            </button>
-            <button
-              type="button"
+            </span>
+            <span
               style={{
                 background: "#1B1F23",
                 color: "#fff",
@@ -607,9 +606,8 @@ function HeroPhone({ compact = false }: { compact?: boolean }) {
               }}
             >
               + Dopisać
-            </button>
-            <button
-              type="button"
+            </span>
+            <span
               style={{
                 background: "#1B1F23",
                 color: "#fff",
@@ -624,7 +622,7 @@ function HeroPhone({ compact = false }: { compact?: boolean }) {
               }}
             >
               × Anulować
-            </button>
+            </span>
           </div>
         </div>
         {/* Input */}
@@ -1522,6 +1520,8 @@ function FAQSection() {
             >
               <button
                 type="button"
+                aria-expanded={open === i}
+                aria-controls={`faq-panel-${i}`}
                 onClick={() => setOpen(open === i ? -1 : i)}
                 style={{
                   width: "100%",
@@ -1553,6 +1553,7 @@ function FAQSection() {
               </button>
               {open === i && (
                 <div
+                  id={`faq-panel-${i}`}
                   style={{
                     padding: "0 22px 20px",
                     fontSize: 14,
