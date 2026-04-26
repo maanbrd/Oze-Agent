@@ -78,7 +78,7 @@ function LandingNav() {
       >
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "#fff" }}>
           <RingLogo />
-          <span style={{ fontWeight: 600, fontSize: 17, letterSpacing: -0.01, whiteSpace: "nowrap" }}>
+          <span style={{ fontWeight: 600, fontSize: 17, whiteSpace: "nowrap" }}>
             OZE Agent
           </span>
         </Link>
@@ -256,7 +256,6 @@ function CinematicHero() {
             style={{
               fontSize: compact ? "clamp(40px, 12vw, 54px)" : "clamp(44px, 5.4vw, 76px)",
               lineHeight: 1.05,
-              letterSpacing: "-0.03em",
               fontWeight: 600,
               margin: "0 0 28px",
               maxWidth: compact ? 360 : 720,
@@ -891,7 +890,7 @@ function PathCard({
         <span className="num" style={{ fontSize: 13, color: G, fontWeight: 700 }}>
           {num}
         </span>
-        <h3 style={{ fontSize: 19, fontWeight: 600, margin: 0, letterSpacing: "-0.01em" }}>
+        <h3 style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>
           {title}
         </h3>
       </div>
@@ -1025,7 +1024,6 @@ function GoogleVisual() {
         style={{
           fontSize: 10.5,
           color: "rgba(255,255,255,0.4)",
-          letterSpacing: "0.04em",
           textTransform: "uppercase",
           marginBottom: 4,
         }}
@@ -1089,7 +1087,6 @@ function TelegramVisual() {
         style={{
           fontSize: 10.5,
           color: "rgba(255,255,255,0.4)",
-          letterSpacing: "0.06em",
           textTransform: "uppercase",
         }}
       >
@@ -1101,7 +1098,6 @@ function TelegramVisual() {
           fontSize: 38,
           fontWeight: 700,
           color: G,
-          letterSpacing: "0.08em",
           fontVariantNumeric: "tabular-nums",
           textShadow: `0 0 20px ${G}55`,
         }}
@@ -1303,7 +1299,6 @@ function PricingSection() {
                     fontWeight: 700,
                     padding: "4px 10px",
                     borderRadius: 999,
-                    letterSpacing: "0.04em",
                     textTransform: "uppercase",
                   }}
                 >
@@ -1318,7 +1313,7 @@ function PricingSection() {
               >
                 <span
                   className="num"
-                  style={{ fontSize: 44, fontWeight: 600, letterSpacing: "-0.02em" }}
+                  style={{ fontSize: 44, fontWeight: 600 }}
                 >
                   {p.price}
                 </span>
@@ -1597,7 +1592,6 @@ function FinalCTA() {
           style={{
             fontSize: "clamp(36px, 5vw, 64px)",
             lineHeight: 1.05,
-            letterSpacing: "-0.03em",
             fontWeight: 600,
             margin: "0 0 20px",
           }}
@@ -1714,7 +1708,6 @@ function SectionEyebrow({
         gap: 8,
         fontSize: 11.5,
         fontWeight: 600,
-        letterSpacing: "0.08em",
         textTransform: "uppercase",
         color: G,
         marginBottom: 12,
@@ -1740,7 +1733,6 @@ function SectionTitle({
       style={{
         fontSize: "clamp(32px, 4.5vw, 56px)",
         lineHeight: 1.05,
-        letterSpacing: "-0.025em",
         fontWeight: 600,
         margin: 0,
         textAlign: center ? "center" : "left",
