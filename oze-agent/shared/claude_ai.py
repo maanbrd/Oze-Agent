@@ -24,6 +24,16 @@ MODEL_SIMPLE = "claude-haiku-4-5-20251001"
 COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
 COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
 
+
+def _sanitize_model_text(text: str) -> str:
+    """Normalize Unicode separators that can break SDK/request encoding."""
+    return text.replace("\u2028", "\n").replace("\u2029", "\n")
+
+
+def _anthropic_api_key() -> str:
+    return (Config.ANTHROPIC_API_KEY or "").strip()
+
+
 # ── Core API call ─────────────────────────────────────────────────────────────
 
 
@@ -39,7 +49,9 @@ async def call_claude(
         {"text": str, "tokens_in": int, "tokens_out": int, "cost_usd": float, "model": str}
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
-    client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=_anthropic_api_key())
+    system_prompt = _sanitize_model_text(system_prompt)
+    user_message = _sanitize_model_text(user_message)
 
     try:
         response = await client.messages.create(
@@ -74,9 +86,12 @@ async def call_claude_with_tools(
     user_message: str,
     tools: list[dict],
     model_type: str = "complex",
-    force_tool: bool = False,
+    force_tool: bool | str = False,
 ) -> dict:
     """Call Claude with tool use enabled.
+
+    force_tool=True forces the model to call ANY tool from the list.
+    force_tool="<tool_name>" forces a specific tool by name.
 
     Returns:
         {
@@ -87,7 +102,9 @@ async def call_claude_with_tools(
         }
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
-    client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=_anthropic_api_key())
+    system_prompt = _sanitize_model_text(system_prompt)
+    user_message = _sanitize_model_text(user_message)
 
     try:
         request = {
@@ -97,7 +114,9 @@ async def call_claude_with_tools(
             "tools": tools,
             "messages": [{"role": "user", "content": user_message}],
         }
-        if force_tool:
+        if isinstance(force_tool, str):
+            request["tool_choice"] = {"type": "tool", "name": force_tool}
+        elif force_tool:
             request["tool_choice"] = {"type": "any"}
         response = await client.messages.create(**request)
         tokens_in = response.usage.input_tokens

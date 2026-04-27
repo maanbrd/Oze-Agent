@@ -6,6 +6,7 @@ to a GENERAL_QUESTION fallback.
 """
 
 import logging
+import re
 from datetime import timedelta
 from typing import Optional
 
@@ -20,6 +21,42 @@ logger = logging.getLogger(__name__)
 
 HISTORY_LIMIT = 5
 HISTORY_SINCE = timedelta(minutes=30)
+
+# Slice 5.1d.4: deterministic preflight for meeting+client compound messages.
+# When the message clearly describes a meeting/call/offer with a temporal
+# marker, force record_add_meeting at the API level. This blocks the failure
+# mode where rich client data (phone, address, city, product) misled Haiku
+# into record_add_client and silently dropped the meeting side of the intent.
+_MEETING_KEYWORD_RE = re.compile(
+    r"\b(spotkani[aęeu]|spotkanie|telefon|zadzwoń|zadzwonić|"
+    r"wyślij\s+ofert\w*|wysłać\s+ofert\w*|follow.?up)\b",
+    re.IGNORECASE,
+)
+_TEMPORAL_MARKER_RE = re.compile(
+    r"\b(jutro|pojutrze|dzisiaj|dziś|przyszł\w+|"
+    r"godz(?:in[ąyaeę])?|o\s+\d{1,2}(?::\d{2})?|\d{1,2}:\d{2}|"
+    r"(?:godzin[ąyaeę]\s+)?"
+    r"(?:siódm|ósm|dziewiąt|dziesiąt|jedenast|dwunast|trzynast|czternast|"
+    r"piętnast|szesnast|siedemnast|osiemnast|dziewiętnast|dwudziest)\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _meeting_preflight_hint(message: str) -> bool:
+    """True iff message contains both a meeting keyword and a temporal marker.
+
+    When True, the classifier forces tool=record_add_meeting at the Anthropic
+    API level. The Haiku model still fills the schema fields (client_name,
+    date_iso, event_type, ...), it just cannot pick a different tool.
+
+    Edge cases (intentionally NOT forced):
+      - "spotkanie z Wojtkiem podpisane"     — meeting keyword, no temporal
+      - "co mam jutro?"                      — temporal, no meeting keyword
+      - "Dodaj klienta Jana z Warszawy"      — neither
+    """
+    return bool(
+        _MEETING_KEYWORD_RE.search(message) and _TEMPORAL_MARKER_RE.search(message)
+    )
 
 _INTENT_TO_SCOPE: dict[IntentType, ScopeTier] = {
     IntentType.ADD_CLIENT: ScopeTier.MVP,
@@ -108,11 +145,19 @@ async def classify(message: str, telegram_id: int) -> IntentResult:
         since=HISTORY_SINCE,
     )
     system_prompt = build_router_system_prompt(history=history)
+    meeting_hint = _meeting_preflight_hint(message)
+    force_tool: bool | str = "record_add_meeting" if meeting_hint else True
     result = await call_claude_with_tools(
         system_prompt=system_prompt,
         user_message=message,
         tools=ALL_TOOLS,
         model_type="simple",
-        force_tool=True,
+        force_tool=force_tool,
+    )
+    logger.info(
+        "intent classify: tool=%s preflight_meeting_hint=%s message_prefix=%r",
+        result.get("tool_name"),
+        meeting_hint,
+        message[:80],
     )
     return _to_intent_result(result)
