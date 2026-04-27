@@ -63,6 +63,7 @@ class AddMeetingPayload:
     location: str = ""
     description: str = ""
     client_data: Optional[dict] = None
+    client_updates: Optional[dict] = None
     event_type: Optional[str] = None
     status_update: Optional[dict] = None
     # Resolved by _enrich_meeting so handle_confirm can Sheets-sync without a

@@ -75,6 +75,63 @@ async def test_add_meeting_confirm_offers_add_client_with_carried_client_data():
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_confirm_new_client_draft_keeps_full_meeting_client_data():
+    flow_data = {
+        "title": "Spotkanie - Marek Markowy",
+        "start": "2027-04-20T14:00:00+02:00",
+        "end": "2027-04-20T15:00:00+02:00",
+        "client_name": "Marek Markowy",
+        "location": "Marki, ul. Markowa 25",
+        "description": "",
+        "event_type": "in_person",
+        "client_data": {
+            "Imię i nazwisko": "Marek Markowy",
+            "Telefon": "736326756",
+            "Miasto": "Marki",
+            "Adres": "ul. Markowa 25",
+            "Produkt": "PV + Magazyn energii",
+        },
+    }
+    upd = _update()
+
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value={"flow_type": "add_meeting", "flow_data": flow_data},
+    ), patch(
+        "shared.mutations.add_meeting.create_event",
+        new=AsyncMock(return_value={"id": "event-1"}),
+    ), patch("bot.handlers.text.save_pending") as mock_save, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ) as mock_delete:
+        await handle_confirm(
+            upd,
+            MagicMock(),
+            {"id": 1, "sheet_columns": [
+                "Imię i nazwisko", "Telefon", "Email", "Miasto", "Adres", "Produkt", "Status",
+            ]},
+            {},
+            "",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    draft = saved_flow.flow_data["client_data"]
+    assert draft["Imię i nazwisko"] == "Marek Markowy"
+    assert draft["Telefon"] == "736326756"
+    assert draft["Miasto"] == "Marki"
+    assert draft["Adres"] == "ul. Markowa 25"
+    assert draft["Produkt"] == "PV + Magazyn energii"
+    assert draft["Status"] == "Spotkanie umówione"
+    response = upd.effective_message.reply_text.call_args.args[0]
+    assert "❓ Brakuje: Email" in response
+    missing_line = next(line for line in response.splitlines() if line.startswith("❓ Brakuje:"))
+    assert "Telefon" not in missing_line
+    assert "Miasto" not in missing_line
+    assert "Adres" not in missing_line
+    assert "Produkt" not in missing_line
+    mock_delete.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_confirm_recovers_client_name_from_client_data():
     flow_data = {
         "title": "Spotkanie",

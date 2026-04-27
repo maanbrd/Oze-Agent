@@ -282,6 +282,44 @@ async def test_event_type_forwarded_to_create_event_kwarg():
     assert mock_create.await_args.kwargs["event_type"] == "offer_email"
 
 
+@pytest.mark.asyncio
+async def test_client_updates_merge_into_sheets_payload():
+    _, _, mock_sheets = await _call(
+        client_row=7,
+        event_type="in_person",
+        client_current_status="Oferta wysłana",
+        status_update=None,
+    )
+    base_updates = mock_sheets.await_args.args[2]
+    assert "Telefon" not in base_updates
+
+    with patch(
+        "shared.mutations.add_meeting.create_event",
+        new=AsyncMock(return_value={"id": "ev-1"}),
+    ), patch(
+        "shared.mutations.add_meeting.update_client_row_touching_contact",
+        new=AsyncMock(return_value=True),
+    ) as mock_sheets_with_updates:
+        await commit_add_meeting(
+            "u1",
+            title="Spotkanie",
+            start=_start(),
+            end=_end(),
+            event_type="in_person",
+            location="",
+            description="",
+            client_row=7,
+            today=date(2027, 5, 10),
+            client_current_status="Oferta wysłana",
+            client_updates={"Telefon": "736326756", "Produkt": "PV + Magazyn energii"},
+        )
+
+    updates = mock_sheets_with_updates.await_args.args[2]
+    assert updates["Telefon"] == "736326756"
+    assert updates["Produkt"] == "PV + Magazyn energii"
+    assert updates["Następny krok"] == "Spotkanie"
+
+
 # ── Guard: pipeline never calls search_clients / lookup_client ───────────────
 
 
