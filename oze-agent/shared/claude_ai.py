@@ -24,6 +24,11 @@ MODEL_SIMPLE = "claude-haiku-4-5-20251001"
 COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
 COST_PER_MTOK_OUT = {"complex": 15.0, "simple": 4.0}
 
+
+def _sanitize_model_text(text: str) -> str:
+    """Normalize Unicode separators that can break SDK/request encoding."""
+    return text.replace("\u2028", "\n").replace("\u2029", "\n")
+
 # ── Core API call ─────────────────────────────────────────────────────────────
 
 
@@ -40,6 +45,8 @@ async def call_claude(
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
     client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+    system_prompt = _sanitize_model_text(system_prompt)
+    user_message = _sanitize_model_text(user_message)
 
     try:
         response = await client.messages.create(
@@ -88,6 +95,8 @@ async def call_claude_with_tools(
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
     client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+    system_prompt = _sanitize_model_text(system_prompt)
+    user_message = _sanitize_model_text(user_message)
 
     try:
         request = {

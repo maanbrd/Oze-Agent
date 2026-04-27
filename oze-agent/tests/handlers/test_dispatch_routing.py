@@ -1,5 +1,8 @@
 """Pure-routing tests for bot/handlers/text.py dispatch primitives."""
 
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from bot.handlers.text import (
     _BANNER_INTENTS,
     _HANDLERS,
@@ -161,6 +164,22 @@ def test_general_question_fallback_resolves_to_handle_general():
     legacy = _intent_result_to_legacy_dict(result, "?")
     assert legacy["intent"] == "general_question"
     assert legacy["confidence"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_handle_general_never_sends_empty_message():
+    update = MagicMock()
+    update.effective_user.id = 12345
+    update.effective_message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    with patch("bot.handlers.text.get_conversation_history", return_value=[]), \
+         patch("bot.handlers.text.generate_bot_response", new=AsyncMock(return_value={"text": ""})), \
+         patch("bot.handlers.text.save_conversation_message"), \
+         patch("bot.handlers.text.increment_interaction", new=AsyncMock()):
+        await handle_general(update, context, {"id": "uid"}, {}, "x")
+
+    update.effective_message.reply_text.assert_awaited_once_with("Co chcesz zrobić?")
 
 
 def test_r7_context_injected_when_reply_has_no_client_name():

@@ -78,6 +78,18 @@ async def test_call_claude_returns_empty_on_api_error():
     assert result["cost_usd"] == 0.0
 
 
+@pytest.mark.asyncio
+async def test_call_claude_normalizes_unicode_line_separators():
+    client = _mock_client("ok")
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude
+        await call_claude("sys\u2028tem", "u\u2029ser", model_type="simple")
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["system"] == "sys\ntem"
+    assert kwargs["messages"] == [{"role": "user", "content": "u\nser"}]
+
+
 # ── model routing cost calculation ───────────────────────────────────────────
 
 
@@ -115,6 +127,24 @@ async def test_call_claude_with_tools_force_tool_sets_tool_choice():
     kwargs = client.messages.create.call_args.kwargs
     assert kwargs["tool_choice"] == {"type": "any"}
     assert result["tool_name"] == "record_general_question"
+
+
+@pytest.mark.asyncio
+async def test_call_claude_with_tools_normalizes_unicode_line_separators():
+    client = _mock_tool_client("record_general_question", {"reason": "test"})
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude_with_tools
+        await call_claude_with_tools(
+            "sys\u2028tem",
+            "u\u2029ser",
+            [{"name": "record_general_question", "input_schema": {"type": "object"}}],
+            model_type="simple",
+            force_tool=True,
+        )
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["system"] == "sys\ntem"
+    assert kwargs["messages"] == [{"role": "user", "content": "u\nser"}]
 
 
 # ── parse_voice_note ──────────────────────────────────────────────────────────

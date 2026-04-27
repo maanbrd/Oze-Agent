@@ -2838,7 +2838,7 @@ async def handle_general(
     )
 
     result = await generate_bot_response(system_context, message_text, history)
-    response_text = result.get("text", "Nie rozumiem. Spróbuj ponownie.")
+    response_text = (result.get("text") or "").strip() or "Co chcesz zrobić?"
 
     save_conversation_message(telegram_id, "assistant", response_text)
 
