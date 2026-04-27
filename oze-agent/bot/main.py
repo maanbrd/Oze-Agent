@@ -39,6 +39,8 @@ async def error_handler(update, context):
 
 
 def main():
+    Config.warn_secret_whitespace()
+
     missing = Config.validate_phase_a()
     if missing:
         logger.error("Missing required env vars: %s", missing)

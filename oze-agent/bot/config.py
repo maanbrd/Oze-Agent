@@ -1,7 +1,29 @@
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+SECRET_ENV_NAMES = (
+    "TELEGRAM_BOT_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GOOGLE_CLIENT_SECRET",
+    "SUPABASE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SUPABASE_JWT_SECRET",
+    "ENCRYPTION_KEY",
+    "PRZELEWY24_API_KEY",
+    "PRZELEWY24_CRC",
+    "SENTRY_DSN",
+    "GMAIL_SMTP_PASSWORD",
+)
+
+
+def _clean_env(name: str, default: str = "") -> str:
+    return (os.getenv(name, default) or "").strip()
 
 
 class Config:
@@ -10,30 +32,30 @@ class Config:
     TIMEZONE = os.getenv("TIMEZONE", "Europe/Warsaw")
 
     # Telegram
-    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_BOT_TOKEN = _clean_env("TELEGRAM_BOT_TOKEN")
 
     # AI
-    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    ANTHROPIC_API_KEY = _clean_env("ANTHROPIC_API_KEY")
+    OPENAI_API_KEY = _clean_env("OPENAI_API_KEY")
 
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_CLIENT_SECRET = _clean_env("GOOGLE_CLIENT_SECRET")
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
 
     # Supabase
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-    SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-    SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+    SUPABASE_KEY = _clean_env("SUPABASE_KEY")
+    SUPABASE_SERVICE_KEY = _clean_env("SUPABASE_SERVICE_KEY")
+    SUPABASE_JWT_SECRET = _clean_env("SUPABASE_JWT_SECRET")
 
     # Security
-    ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
+    ENCRYPTION_KEY = _clean_env("ENCRYPTION_KEY")
 
     # Payments
     PRZELEWY24_MERCHANT_ID = os.getenv("PRZELEWY24_MERCHANT_ID", "")
-    PRZELEWY24_API_KEY = os.getenv("PRZELEWY24_API_KEY", "")
-    PRZELEWY24_CRC = os.getenv("PRZELEWY24_CRC", "")
+    PRZELEWY24_API_KEY = _clean_env("PRZELEWY24_API_KEY")
+    PRZELEWY24_CRC = _clean_env("PRZELEWY24_CRC")
 
     # Pricing
     ACTIVATION_FEE_PLN = int(os.getenv("ACTIVATION_FEE_PLN", "199"))
@@ -42,7 +64,7 @@ class Config:
     YEARLY_SUBSCRIPTION_PLN = int(os.getenv("YEARLY_SUBSCRIPTION_PLN", "350"))
 
     # Monitoring
-    SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+    SENTRY_DSN = _clean_env("SENTRY_DSN")
     ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID", "")
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 
@@ -53,7 +75,21 @@ class Config:
 
     # Email
     GMAIL_SMTP_USER = os.getenv("GMAIL_SMTP_USER", "")
-    GMAIL_SMTP_PASSWORD = os.getenv("GMAIL_SMTP_PASSWORD", "")
+    GMAIL_SMTP_PASSWORD = _clean_env("GMAIL_SMTP_PASSWORD")
+
+    @classmethod
+    def warn_secret_whitespace(cls) -> None:
+        """Log secret env vars with surrounding whitespace without exposing values."""
+        for name in SECRET_ENV_NAMES:
+            raw = os.getenv(name, "")
+            if raw and raw != raw.strip():
+                logger.warning(
+                    "Config: env var %s has leading/trailing whitespace; "
+                    "using stripped value (raw_len=%d stripped_len=%d)",
+                    name,
+                    len(raw),
+                    len(raw.strip()),
+                )
 
     @classmethod
     def validate_phase_a(cls) -> list[str]:

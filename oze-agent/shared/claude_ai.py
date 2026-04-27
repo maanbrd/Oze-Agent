@@ -29,6 +29,10 @@ def _sanitize_model_text(text: str) -> str:
     """Normalize Unicode separators that can break SDK/request encoding."""
     return text.replace("\u2028", "\n").replace("\u2029", "\n")
 
+
+def _anthropic_api_key() -> str:
+    return (Config.ANTHROPIC_API_KEY or "").strip()
+
 # ── Core API call ─────────────────────────────────────────────────────────────
 
 
@@ -44,7 +48,7 @@ async def call_claude(
         {"text": str, "tokens_in": int, "tokens_out": int, "cost_usd": float, "model": str}
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
-    client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=_anthropic_api_key())
     system_prompt = _sanitize_model_text(system_prompt)
     user_message = _sanitize_model_text(user_message)
 
@@ -94,7 +98,7 @@ async def call_claude_with_tools(
         }
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
-    client = anthropic.AsyncAnthropic(api_key=Config.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=_anthropic_api_key())
     system_prompt = _sanitize_model_text(system_prompt)
     user_message = _sanitize_model_text(user_message)
 

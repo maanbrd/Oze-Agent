@@ -90,6 +90,17 @@ async def test_call_claude_normalizes_unicode_line_separators():
     assert kwargs["messages"] == [{"role": "user", "content": "u\nser"}]
 
 
+@pytest.mark.asyncio
+async def test_call_claude_strips_anthropic_api_key():
+    client = _mock_client("ok")
+    with patch("shared.claude_ai.Config.ANTHROPIC_API_KEY", "sk-test\u2028"), \
+         patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client) as mock_anthropic:
+        from shared.claude_ai import call_claude
+        await call_claude("system", "user", model_type="simple")
+
+    mock_anthropic.assert_called_once_with(api_key="sk-test")
+
+
 # ── model routing cost calculation ───────────────────────────────────────────
 
 
