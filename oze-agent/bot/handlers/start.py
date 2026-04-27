@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.config import Config
+from bot.utils.conversation_reply import reply_text
 from bot.utils.telegram_helpers import is_private_chat
 from shared.database import get_supabase_client, get_user_by_telegram_id, update_user
 
@@ -55,10 +56,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # No linking code — check if already registered
     user = get_user_by_telegram_id(telegram_id)
     if user:
-        await update.message.reply_text(_ALREADY_LINKED_MESSAGE)
+        await reply_text(update, _ALREADY_LINKED_MESSAGE)
     else:
         dashboard_url = Config.DASHBOARD_URL or "https://oze-agent.pl"
-        await update.message.reply_text(
+        await reply_text(update,
             _NOT_REGISTERED_MESSAGE.format(dashboard_url=dashboard_url)
         )
 
@@ -79,13 +80,13 @@ async def _handle_linking_code(
         user = result.data
     except Exception as e:
         logger.error("start_command linking: DB lookup failed: %s", e)
-        await update.message.reply_text(
+        await reply_text(update,
             "❌ Nie udało się zweryfikować kodu. Spróbuj ponownie lub skontaktuj się z pomocą."
         )
         return
 
     if not user:
-        await update.message.reply_text(
+        await reply_text(update,
             "❌ Nieprawidłowy lub wygasły kod. Wygeneruj nowy w ustawieniach konta."
         )
         return
@@ -96,7 +97,7 @@ async def _handle_linking_code(
         try:
             expires = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
             if datetime.now(tz=timezone.utc) > expires:
-                await update.message.reply_text(
+                await reply_text(update,
                     "❌ Kod wygasł. Wygeneruj nowy w ustawieniach konta."
                 )
                 return
@@ -105,7 +106,7 @@ async def _handle_linking_code(
 
     # Check if this Telegram account is already linked to a different user
     if user.get("telegram_id") and user["telegram_id"] != telegram_id:
-        await update.message.reply_text(
+        await reply_text(update,
             "❌ To konto jest już połączone z innym użytkownikiem Telegram."
         )
         return
@@ -118,4 +119,4 @@ async def _handle_linking_code(
     })
 
     logger.info("Linked telegram_id=%s to user_id=%s", telegram_id, user["id"])
-    await update.message.reply_text(_WELCOME_MESSAGE)
+    await reply_text(update, _WELCOME_MESSAGE)

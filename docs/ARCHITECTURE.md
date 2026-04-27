@@ -45,6 +45,7 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 |-----------|-------|--------|
 | Voice transcription | `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py` | Live since 25.04.2026 — Whisper STT + Polish name post-pass (Claude haiku), 2-button confirm card (Zapisz/Anuluj), transcription flows through normal text path via `handle_text(text_override=...)` |
 | Global cancel | `bot/handlers/cancel.py` | Live since 25.04.2026 — universal escape hatch for any pending flow |
+| R6 conversation memory | `shared/conversation_format.py`, `shared/active_client.py`, `bot/utils/conversation_reply.py` | Live since 27.04.2026 — 10 messages / 30 min rolling history, assistant replies persisted from handler wrappers, active client derive'owany just-in-time |
 
 ---
 

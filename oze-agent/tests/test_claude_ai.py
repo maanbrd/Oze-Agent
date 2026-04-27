@@ -93,12 +93,14 @@ async def test_call_claude_normalizes_unicode_line_separators():
 @pytest.mark.asyncio
 async def test_call_claude_strips_anthropic_api_key():
     client = _mock_client("ok")
-    with patch("shared.claude_ai.Config.ANTHROPIC_API_KEY", "sk-test\u2028"), \
-         patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client) as mock_anthropic:
+    with (
+        patch("shared.claude_ai.Config.ANTHROPIC_API_KEY", "sk-test\u2028"),
+        patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client) as constructor,
+    ):
         from shared.claude_ai import call_claude
         await call_claude("system", "user", model_type="simple")
 
-    mock_anthropic.assert_called_once_with(api_key="sk-test")
+    constructor.assert_called_once_with(api_key="sk-test")
 
 
 # ── model routing cost calculation ───────────────────────────────────────────
@@ -174,6 +176,67 @@ async def test_call_claude_with_tools_normalizes_unicode_line_separators():
     kwargs = client.messages.create.call_args.kwargs
     assert kwargs["system"] == "sys\ntem"
     assert kwargs["messages"] == [{"role": "user", "content": "u\nser"}]
+
+
+# ── R6 conversation history injection ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_generate_bot_response_injects_conversation_history():
+    with patch(
+        "shared.claude_ai.call_claude",
+        new=AsyncMock(return_value={"text": "ok"}),
+    ) as mock_call:
+        from shared.claude_ai import generate_bot_response
+        await generate_bot_response(
+            "system",
+            "user",
+            [{"role": "assistant", "content": "Jan Kowalski", "message_type": "text"}],
+        )
+
+    system_prompt = mock_call.await_args.args[0]
+    assert "<conversation_history>" in system_prompt
+    assert "assistant: Jan Kowalski" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_extract_note_data_uses_history_when_provided():
+    with patch(
+        "shared.claude_ai.call_claude",
+        new=AsyncMock(return_value={
+            "text": '{"client_name":"Jan Kowalski","city":"","note":"x"}',
+            "tokens_in": 1,
+            "tokens_out": 1,
+            "cost_usd": 0.0,
+        }),
+    ) as mock_call:
+        from shared.claude_ai import extract_note_data
+        await extract_note_data(
+            "dodaj notatkę: x",
+            history=[{"role": "assistant", "content": "Jan Kowalski"}],
+        )
+
+    system_prompt = mock_call.await_args.args[0]
+    assert "<conversation_history>" in system_prompt
+    assert "Jan Kowalski" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_extract_meeting_data_omits_history_when_none():
+    with patch(
+        "shared.claude_ai.call_claude",
+        new=AsyncMock(return_value={
+            "text": '{"meetings":[]}',
+            "tokens_in": 1,
+            "tokens_out": 1,
+            "cost_usd": 0.0,
+        }),
+    ) as mock_call:
+        from shared.claude_ai import extract_meeting_data
+        await extract_meeting_data("telefon jutro 10", "2026-04-27")
+
+    system_prompt = mock_call.await_args.args[0]
+    assert "<conversation_history>" not in system_prompt
 
 
 # ── parse_voice_note ──────────────────────────────────────────────────────────

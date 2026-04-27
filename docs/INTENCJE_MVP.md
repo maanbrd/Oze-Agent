@@ -61,6 +61,8 @@ Wszystkie intencje które pracują na istniejącym kliencie (`show_client`, `add
 
 **R4 nie stosuje się do `show_day_plan`** — bo to lista wszystkich wydarzeń dnia, nie operacja na konkretnym kliencie.
 
+**Fallback R6:** jeśli wiadomość mutacyjna nie zawiera identyfikatora klienta, agent może użyć aktywnego klienta z rolling memory R6 (10 wiadomości / 30 min), ale tylko gdy wynik jest jednoznaczny. Gdy R6 daje `multi` albo `not_found`, wracamy do standardowego pytania/disambiguation z R4.
+
 **Duplicate resolution:** gdy przy `add_client` match = 1 w Sheets → agent przechodzi przez flow duplicate resolution (sekcja 5.3): krótki komunikat + `[Nowy]` / `[Aktualizuj]`, potem karta mutacyjna.
 
 ---

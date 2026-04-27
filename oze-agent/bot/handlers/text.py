@@ -26,6 +26,8 @@ from bot.utils.telegram_helpers import (
     send_typing,
     send_unregistered_message,
 )
+from bot.utils.conversation_reply import reply_markdown_v2, reply_text
+from shared.active_client import derive_active_client
 from shared.claude_ai import (
     call_claude_with_tools,
     extract_client_data,
@@ -58,6 +60,7 @@ from shared.database import (
     save_pending_flow,
     update_pending_followup,
 )
+from shared.history_for_llm import get_history_unless_pending
 from shared.formatting import (
     format_add_client_card,
     format_client_card,
@@ -613,6 +616,7 @@ async def handle_text(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     text_override: str | None = None,
+    message_type_override: str = "text",
 ) -> None:
     """Main text message handler — classify intent and route to sub-handler.
 
@@ -632,11 +636,18 @@ async def handle_text(
     message_text = raw_text.strip()
 
     await send_typing(context, telegram_id)
+    if message_text:
+        save_conversation_message(
+            telegram_id,
+            "user",
+            message_text,
+            message_type=message_type_override,
+        )
 
     # Pre-check: "statusy" command → return formatted list, skip LLM
     if message_text.lower().strip() in ("statusy", "lista statusów", "jakie są statusy", "pokaż statusy"):
         statuses_text = "📋 Dostępne statusy lejka:\n" + "\n".join(f"• {s}" for s in _VALID_STATUSES)
-        await update.effective_message.reply_text(statuses_text)
+        await reply_text(update, statuses_text)
         await increment_interaction(telegram_id, "show_statuses", "none", 0, 0, 0.0)
         return
 
@@ -647,9 +658,6 @@ async def handle_text(
         if consumed:
             return
         # Flow was auto-cancelled — fall through to process the new message normally
-
-    # Save message and get history
-    save_conversation_message(telegram_id, "user", message_text)
 
     # Classify intent via the structured router (shared.intent.classify pulls
     # its own 30-min history window internally).
@@ -725,7 +733,7 @@ async def _route_pending_flow(
         if any(text_lower.startswith(p) for p in _search_prefixes):
             telegram_id = update.effective_user.id
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         # User is augmenting an in-progress add_client flow with more data
@@ -764,7 +772,7 @@ async def _route_pending_flow(
             sheet_columns = user.get("sheet_columns") or headers
             missing = [col for col in sheet_columns if col and not old_client_data.get(col) and col not in SYSTEM_FIELDS]
             card = format_add_client_card(old_client_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+            await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
             return True
 
         # If the new message names a different client → start fresh, don't merge
@@ -779,7 +787,7 @@ async def _route_pending_flow(
                 flow_data=payload_to_flow_data(AddClientPayload(client_data=new_data)),
             ))
             card = format_add_client_card(new_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+            await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
             return True
 
         merged = {**old_client_data, **new_data}
@@ -805,13 +813,13 @@ async def _route_pending_flow(
                             _offer_remaining=new_remaining,
                         )),
                     ))
-                    await update.effective_message.reply_text(
+                    await reply_text(update,
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
                 else:
-                    await update.effective_message.reply_text("✅ Zapisane.")
+                    await reply_text(update, "✅ Zapisane.")
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                await reply_markdown_v2(update, format_error("google_down"))
             return True
 
         # User is correcting/adding data (possibly after tapping [Nie]) — clear cancel flag, re-show card
@@ -825,13 +833,13 @@ async def _route_pending_flow(
             )),
         ))
         card = format_add_client_card(merged, missing)
-        await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+        await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
         return True
     elif flow_type == "add_meeting":
         if _looks_like_intent_switch_reply(message_text):
             telegram_id = update.effective_user.id
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         flow_data = flow.get("flow_data", {})
@@ -895,7 +903,7 @@ async def _route_pending_flow(
                         "client_data": client_data,
                         "status_update": status_update,
                     })
-                    await update.effective_message.reply_markdown_v2(
+                    await reply_markdown_v2(update,
                         card,
                         reply_markup=build_mutation_buttons("confirm"),
                     )
@@ -944,13 +952,13 @@ async def _route_pending_flow(
                 "description": description,
                 "client_data": client_data,
             })
-            await update.effective_message.reply_markdown_v2(
+            await reply_markdown_v2(update,
                 card,
                 reply_markup=build_mutation_buttons("confirm"),
             )
         except Exception as e:
             logger.error("add_meeting augment failed: %s", e)
-            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            await reply_markdown_v2(update, format_error("timeout"))
         return True
     elif flow_type == "add_note":
         telegram_id = update.effective_user.id
@@ -962,7 +970,7 @@ async def _route_pending_flow(
         )
         if any(text_lower.startswith(p) for p in _search_prefixes):
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         # User is appending more text after clicking Dopisać on add_note
@@ -973,7 +981,7 @@ async def _route_pending_flow(
         if row is None:
             logger.error("add_note augment: pending flow_data without row: %s", flow_data)
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            await reply_markdown_v2(update, format_error("timeout"))
             return True
         save_pending(PendingFlow(
             telegram_id=telegram_id,
@@ -991,7 +999,7 @@ async def _route_pending_flow(
         name = flow_data.get("client_name", "")
         c_city = flow_data.get("city", "")
         city_part = f", {c_city}" if c_city else ""
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
             reply_markup=build_mutation_buttons("confirm"),
         )
@@ -1010,7 +1018,7 @@ async def _route_pending_flow(
         )
         if any(text_lower.startswith(p) for p in _search_prefixes):
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         flow_data = flow.get("flow_data", {})
@@ -1027,7 +1035,7 @@ async def _route_pending_flow(
             )
         )
         if not text_has_action:
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "Dopisz następny krok, np. 'telefon jutro o 14' albo 'spotkanie w piątek o 10'."
             )
             return True
@@ -1099,7 +1107,7 @@ async def _route_pending_flow(
         # Slice 5.1d.2: no markers at all — tell the user instead of silently
         # dropping the flow so they know the reply wasn't understood.
         delete_pending_flow(telegram_id)
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Nie rozumiem. Podaj np. 'spotkanie jutro o 14', 'telefon', "
             "albo napisz 'nic' żeby zakończyć."
         )
@@ -1108,7 +1116,7 @@ async def _route_pending_flow(
         # New message arrived during a non-add_client pending flow → auto-cancel, process message normally
         telegram_id = update.effective_user.id
         delete_pending_flow(telegram_id)
-        await update.effective_message.reply_text("⚠️ Anulowane.")
+        await reply_text(update, "⚠️ Anulowane.")
         return False
 
 
@@ -1123,7 +1131,7 @@ async def handle_banner(
     message_text: str,
 ) -> None:
     """R5 / out-of-scope banner — copy resolved from intent + feature_key."""
-    await update.effective_message.reply_text(banner_for_legacy(intent_data))
+    await reply_text(update, banner_for_legacy(intent_data))
 
 
 async def handle_add_note(
@@ -1139,28 +1147,40 @@ async def handle_add_note(
 
     await send_typing(context, telegram_id)
 
-    result = await extract_note_data(message_text)
+    history = get_history_unless_pending(telegram_id)
+    result = await extract_note_data(message_text, history=history)
     client_name = result.get("client_name", "")
     city = result.get("city", "")
     note_text = result.get("note", "")
 
+    active_client = None
+    if not client_name and note_text:
+        active_client = await derive_active_client(telegram_id, user_id)
+        if active_client is not None:
+            client_name = active_client.get("Imię i nazwisko", "")
+            city = active_client.get("Miasto", active_client.get("Miejscowość", "")) or city
+
     if not client_name or not note_text:
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Podaj imię i nazwisko klienta, miasto i treść notatki.\n"
             "Np.: 'dodaj notatkę do Jana Kowalskiego z Warszawy: dzwonił w sprawie gwarancji'"
         )
         return
 
-    result = await lookup_client(user_id, client_name, city)
+    if active_client is not None:
+        result = None
+        client = active_client
+    else:
+        result = await lookup_client(user_id, client_name, city)
 
-    if result.status == "not_found":
+    if result is not None and result.status == "not_found":
         city_part = f" ({city})" if city else ""
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Nie znalazłem klienta: '{client_name}{city_part}'"
         )
         return
 
-    if result.status == "multi":
+    if result is not None and result.status == "multi":
         lines = [f"Mam {len(result.clients)} klientów:"]
         options = []
         for i, c in enumerate(result.clients[:10], start=1):
@@ -1179,13 +1199,14 @@ async def handle_add_note(
                 note_text=note_text,
             )),
         ))
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "\n".join(lines),
             reply_markup=build_choice_buttons(options),
         )
         return
 
-    client = result.clients[0]
+    if result is not None:
+        client = result.clients[0]
 
     row = client.get("_row")
     old_notes = client.get("Notatki", "")
@@ -1194,7 +1215,7 @@ async def handle_add_note(
 
     if row is None:
         logger.error("handle_add_note: client without _row: %s", client)
-        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
         return
 
     save_pending(PendingFlow(
@@ -1211,7 +1232,7 @@ async def handle_add_note(
 
     display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
     city_part = f", {c_city}" if c_city else ""
-    await update.effective_message.reply_text(
+    await reply_text(update,
         f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
         reply_markup=build_mutation_buttons("confirm"),
     )
@@ -1294,7 +1315,7 @@ async def handle_add_client(
     client_data = _filter_invalid_products(result.get("client_data", {}))
 
     if not client_data:
-        await update.effective_message.reply_text("Co chcesz zrobić?")
+        await reply_text(update, "Co chcesz zrobić?")
         return
 
     # Duplicate check
@@ -1306,11 +1327,11 @@ async def handle_add_client(
     if duplicate:
         built = _build_add_client_duplicate_card(telegram_id, client_data, duplicate)
         if built is None:
-            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            await reply_markdown_v2(update, format_error("timeout"))
             return
         flow, text, markup = built
         save_pending(flow)
-        await update.effective_message.reply_text(text, reply_markup=markup)
+        await reply_text(update, text, reply_markup=markup)
         return
 
     # No duplicate → new-client flow
@@ -1325,7 +1346,7 @@ async def handle_add_client(
     ))
 
     card = format_add_client_card(client_data, missing)
-    await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+    await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_search_client(
@@ -1357,7 +1378,7 @@ async def handle_search_client(
                 candidate_city = candidate.get("Miasto", "")
                 suggestion_text = candidate_name + (f" z {candidate_city}" if candidate_city else "")
                 save_pending_flow(telegram_id, "confirm_search", {"row": candidate.get("_row")})
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Nie mam \"{query}\". Chodziło o {suggestion_text}?",
                     reply_markup=build_choice_buttons([
                         ("✅ Tak, pokaż", "confirm:yes"),
@@ -1365,12 +1386,12 @@ async def handle_search_client(
                     ]),
                 )
                 return
-        await update.effective_message.reply_text(f"Nie mam \"{query}\" w bazie.")
+        await reply_text(update, f"Nie mam \"{query}\" w bazie.")
         return
 
     if result.status == "multi" and len(result.clients) >= 50:
         sheets_url = f"https://docs.google.com/spreadsheets/d/{user.get('google_sheets_id', '')}"
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Znalazłem {len(result.clients)} klientów. Otwórz arkusz:\n{sheets_url}"
         )
         return
@@ -1379,12 +1400,12 @@ async def handle_search_client(
         client = result.clients[0]
         try:
             card = format_client_card(client)
-            await update.effective_message.reply_markdown_v2(card)
+            await reply_markdown_v2(update, card)
         except Exception as e:
             logger.error("format_client_card failed: %s", e)
             name = client.get("Imię i nazwisko", "?")
             city = client.get("Miasto", "")
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
             )
         return
@@ -1400,7 +1421,7 @@ async def handle_search_client(
         options.append((label, f"select_client:{row}"))
     lines.append("Którego?")
 
-    await update.effective_message.reply_text(
+    await reply_text(update,
         "\n".join(lines),
         reply_markup=build_choice_buttons(options),
     )
@@ -1422,7 +1443,7 @@ async def handle_edit_client(
     logger.info("handle_edit_client: query=%r", query)
     results = await search_clients(user_id, query)
     if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await reply_text(update, f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
@@ -1497,11 +1518,11 @@ async def handle_edit_client(
     if not updates:
         # Detect which keyword was mentioned and report missing column
         if any(kw in msg_lower for kw in ["dachu", "dach", "metraż"]):
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "Nie mam kolumny 'Metraż dachu' w arkuszu. Dodaj ją lub napisz 'odśwież kolumny'."
             )
         else:
-            await update.effective_message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
+            await reply_text(update, "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
         return
 
     # For phone/email fields: if client already has a value, offer replace or keep-both
@@ -1520,7 +1541,7 @@ async def handle_edit_client(
             "other_updates": other_updates,
         })
         field_label = field.lower()
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"{client_name} — {field_label}:\n"
             f"Stary: {old_val}\n"
             f"Nowy: {new_val}\n"
@@ -1563,7 +1584,7 @@ async def handle_edit_client(
         lines.append("Zmienić?")
         msg = "\n".join(lines)
 
-    await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
+    await reply_text(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_edit_client_v2(
@@ -1582,7 +1603,7 @@ async def handle_edit_client_v2(
     logger.info("handle_edit_client_v2: query=%r msg=%r", query, message_text)
     results = await search_clients(user_id, query)
     if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await reply_text(update, f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
@@ -1681,7 +1702,7 @@ Zasady:
             f"Będzie: {new_value}\n"
             f"Zmienić?"
         )
-        await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_text(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     elif tool_name == "append_client_note":
         note_text = tool_input.get("note_text", "")
@@ -1703,16 +1724,16 @@ Zasady:
             f"Dodaję: \"{note_text}\"\n"
             f"Zapisać?"
         )
-        await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_text(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     elif tool_name == "request_clarification":
         reason = tool_input.get("reason", "Nie rozumiem co chcesz zmienić. Opisz dokładniej.")
-        await update.effective_message.reply_text(reason)
+        await reply_text(update, reason)
 
     else:
         text = result.get("text") or "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej."
         logger.warning("handle_edit_client_v2: no tool called, text=%r", text[:100])
-        await update.effective_message.reply_text(text)
+        await reply_text(update, text)
 
 
 def _filter_invalid_products(client_data: dict) -> dict:
@@ -1963,11 +1984,12 @@ async def handle_add_meeting(
     user_id = user["id"]
 
     today_str = date.today().isoformat()
-    meeting_result = await extract_meeting_data(message_text, today_str)
+    history = get_history_unless_pending(telegram_id)
+    meeting_result = await extract_meeting_data(message_text, today_str, history=history)
     meetings = meeting_result.get("meetings", [])
 
     if not meetings:
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
         )
         return
@@ -1978,7 +2000,7 @@ async def handle_add_meeting(
         # Single meeting — original flow with format_confirmation card
         m = meetings[0]
         if not m.get("date") or not m.get("time"):
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
             )
             return
@@ -1997,14 +2019,14 @@ async def handle_add_meeting(
             )
             end_dt = start_dt + timedelta(minutes=duration)
         except Exception:
-            await update.effective_message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
+            await reply_text(update, "Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
             return
 
         # Temporal guard: reject past dates
         if start_dt < datetime.now(WARSAW):
             _DAYS_PL_TG = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
             date_display = start_dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL_TG[start_dt.weekday()]})"
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Data {date_display} o {start_dt.strftime('%H:%M')} jest w przeszłości. Podaj datę przyszłą."
             )
             return
@@ -2066,7 +2088,7 @@ async def handle_add_meeting(
         if enriched.get("ambiguous_client") and ambiguous_candidates:
             if len(ambiguous_candidates) > _AMBIGUOUS_CANDIDATE_CAP:
                 # No pending saved — user must supply more context and retry.
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Znalazłem {len(ambiguous_candidates)} klientów o tym nazwisku. "
                     "Dopisz więcej danych klienta, np. miasto albo telefon."
                 )
@@ -2096,7 +2118,7 @@ async def handle_add_meeting(
                 for c in ambiguous_candidates
             ]
             options.append(("Żaden z nich", "select_client:none"))
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Mam {len(ambiguous_candidates)} klientów o tym nazwisku. Którego użyć do spotkania?",
                 reply_markup=build_choice_buttons(options),
             )
@@ -2145,7 +2167,7 @@ async def handle_add_meeting(
                 f"{status_update.get('new_value', '')}"
             )
         msg = format_confirmation("add_meeting", details) + conflict_warning
-        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_markdown_v2(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     else:
         # Multiple meetings — build all, check conflicts, confirm as a batch
@@ -2194,7 +2216,7 @@ async def handle_add_meeting(
             })
 
         if not flow_meetings:
-            await update.effective_message.reply_text("Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
+            await reply_text(update, "Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
             return
 
         save_pending_flow(telegram_id, "add_meetings", {"meetings": flow_meetings})
@@ -2206,7 +2228,7 @@ async def handle_add_meeting(
             lines.append(f"• {fm.get('client_name', '?')} — {start.strftime('%d.%m %H:%M')}{loc}")
         lines.extend(conflict_warnings)
         msg = escape_markdown_v2("\n".join(lines))
-        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_markdown_v2(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
 
 _DAY_NAME_TO_WEEKDAY = {
@@ -2305,7 +2327,7 @@ async def handle_show_day_plan(
         events = await get_events_for_date(user_id, target)
 
     schedule = format_daily_schedule(events, target or today)
-    await update.effective_message.reply_markdown_v2(schedule)
+    await reply_markdown_v2(update, schedule)
 
 
 async def handle_change_status(
@@ -2344,7 +2366,7 @@ async def handle_change_status(
         result = await lookup_client(user_id, name_query, city)
 
         if result.status == "not_found":
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Nie znalazłem klienta: '{name_query}'"
             )
             return
@@ -2368,7 +2390,7 @@ async def handle_change_status(
                     new_status=new_status,
                 )),
             ))
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "\n".join(lines),
                 reply_markup=build_choice_buttons(options),
             )
@@ -2382,7 +2404,7 @@ async def handle_change_status(
         # reject whole-message queries that routinely matched fuzzily before).
         results = await search_clients(user_id, search_query)
         if not results:
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Nie znalazłem klienta: '{search_query}'"
             )
             return
@@ -2406,7 +2428,7 @@ async def handle_change_status(
                     new_status=new_status,
                 )),
             ))
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "\n".join(lines),
                 reply_markup=build_choice_buttons(options),
             )
@@ -2419,14 +2441,14 @@ async def handle_change_status(
     # No-op guard: new status == current status
     if new_status and old_status and old_status.lower() == new_status.lower():
         name = client.get("Imię i nazwisko", "klient")
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Status klienta {name} jest już: {old_status}."
         )
         return
 
     if not new_status:
         options = [(s, f"set_status:{client.get('_row')}:{s}") for s in _VALID_STATUSES]
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
             reply_markup=build_choice_buttons(options),
         )
@@ -2438,7 +2460,7 @@ async def handle_change_status(
         if matched:
             new_status = matched
         else:
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Nie znam statusu \"{new_status}\".\n"
                 f"Dostępne: {', '.join(_VALID_STATUSES)}"
             )
@@ -2447,7 +2469,7 @@ async def handle_change_status(
     row = client.get("_row")
     if row is None:
         logger.error("handle_change_status: client without _row: %s", client)
-        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
         return
     save_pending(PendingFlow(
         telegram_id=telegram_id,
@@ -2461,7 +2483,7 @@ async def handle_change_status(
         )),
     ))
 
-    await update.effective_message.reply_markdown_v2(
+    await reply_markdown_v2(update,
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
         + format_edit_comparison("Status", old_status, new_status),
         reply_markup=build_mutation_buttons("confirm"),
@@ -2483,7 +2505,7 @@ async def _confirm_add_client(update, telegram_id, user_id, flow_data) -> bool:
     remaining = flow_data.get("_offer_remaining", [])
     result = await commit_add_client(user_id, flow_data["client_data"])
     if not result.success:
-        await update.effective_message.reply_markdown_v2(
+        await reply_markdown_v2(update,
             format_error(result.error_message or "google_down")
         )
         return False
@@ -2501,12 +2523,12 @@ async def _confirm_add_client(update, telegram_id, user_id, flow_data) -> bool:
                 _offer_remaining=new_remaining,
             )),
         ))
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
         )
         return True
 
-    await update.effective_message.reply_text("✅ Zapisane.")
+    await reply_text(update, "✅ Zapisane.")
     await send_next_action_prompt(
         update, telegram_id, name, city,
         client_row=result.row,
@@ -2522,13 +2544,13 @@ async def _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
             user_id, duplicate_row, flow_data["client_data"]
         )
         if not update_result.success:
-            await update.effective_message.reply_markdown_v2(
+            await reply_markdown_v2(update,
                 format_error(update_result.error_message or "google_down")
             )
             return False
         name = flow_data.get("client_name", "klient")
         city = flow_data.get("city", "")
-        await update.effective_message.reply_text("✅ Dane zaktualizowane.")
+        await reply_text(update, "✅ Dane zaktualizowane.")
         await send_next_action_prompt(
             update, telegram_id, name, city,
             client_row=duplicate_row,
@@ -2540,9 +2562,9 @@ async def _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
     # only "✅ Zapisane.", no R7, no batch).
     add_result = await commit_add_client(user_id, flow_data["client_data"])
     if add_result.success:
-        await update.effective_message.reply_text("✅ Zapisane.")
+        await reply_text(update, "✅ Zapisane.")
     else:
-        await update.effective_message.reply_markdown_v2(
+        await reply_markdown_v2(update,
             format_error(add_result.error_message or "google_down")
         )
     return False
@@ -2557,9 +2579,9 @@ async def _confirm_add_note(update, user_id, flow_data) -> bool:
         date.today(),
     )
     if result.success:
-        await update.effective_message.reply_text("✅ Notatka dodana.")
+        await reply_text(update, "✅ Notatka dodana.")
     else:
-        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        await reply_markdown_v2(update, format_error("google_down"))
     # Per spec (INTENCJE_MVP.md §4.3): clean note is a closed act — no R7.
     return False
 
@@ -2572,10 +2594,10 @@ async def _confirm_change_status(update, telegram_id, user_id, flow_data) -> boo
         date.today(),
     )
     if not result.success:
-        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        await reply_markdown_v2(update, format_error("google_down"))
         return False
 
-    await update.effective_message.reply_text(
+    await reply_text(update,
         f"✅ Status zmieniony na: {flow_data['new_value']}"
     )
     # R7 fires for every plain change_status (INTENCJE_MVP §4.4). A future
@@ -2607,7 +2629,7 @@ async def handle_confirm(
     flow = get_pending_flow(telegram_id)
     if not flow:
         if message_text:  # From text input: inform user. From button (empty ""): silent return.
-            await update.effective_message.reply_text("Nie ma nic do potwierdzenia.")
+            await reply_text(update, "Nie ma nic do potwierdzenia.")
         return
 
     flow_type = flow.get("flow_type", "")
@@ -2638,17 +2660,17 @@ async def handle_confirm(
                     final_updates[field] = new_val
             ok = await update_client(user_id, flow_data["row"], final_updates)
             if ok:
-                await update.effective_message.reply_text("✅ Zapisane.")
+                await reply_text(update, "✅ Zapisane.")
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                await reply_markdown_v2(update, format_error("google_down"))
 
         elif flow_type == "delete_client":
             from shared.google_sheets import delete_client
             ok = await delete_client(user_id, flow_data["row"])
             if ok:
-                await update.effective_message.reply_text("✅ Klient usunięty z arkusza.")
+                await reply_text(update, "✅ Klient usunięty z arkusza.")
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                await reply_markdown_v2(update, format_error("google_down"))
 
         elif flow_type == "add_meeting":
             start = datetime.fromisoformat(flow_data["start"])
@@ -2696,13 +2718,13 @@ async def handle_confirm(
 
             if not result.success:
                 # Calendar failure — pipeline made no Sheets writes.
-                await update.effective_message.reply_markdown_v2(
+                await reply_markdown_v2(update,
                     format_error(result.error_message or "calendar_down")
                 )
             elif not result.sheets_attempted and ambiguous_client:
                 # Gate A fallback — stays in handler because the pipeline
                 # doesn't know about the disambiguation UX.
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"✅ Spotkanie dodane do kalendarza. Klient '{client_name}' ma "
                     f"≥2 wpisy w arkuszu — nie synchronizuję, uściślij przy add_note/change_status."
                 )
@@ -2728,22 +2750,22 @@ async def handle_confirm(
                     if col and not draft_client_data.get(col) and col not in SYSTEM_FIELDS
                 ]
                 card = format_add_client_card(draft_client_data, missing)
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"✅ Spotkanie dodane.\n{card}",
                     reply_markup=build_mutation_buttons("confirm"),
                 )
                 skip_delete = True
             elif result.sheets_attempted and not result.sheets_synced:
                 # Partial: Calendar event created, Sheets sync failed.
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
                 )
             elif result.status_updated:
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"✅ Spotkanie dodane do kalendarza. Status klienta: {result.status_new_value}."
                 )
             else:
-                await update.effective_message.reply_text("✅ Spotkanie dodane do kalendarza.")
+                await reply_text(update, "✅ Spotkanie dodane do kalendarza.")
 
         elif flow_type == "add_meetings":
             created = []
@@ -2777,13 +2799,13 @@ async def handle_confirm(
                 names_str = ", ".join(missing_from_sheets)
                 save_pending_flow(telegram_id, "offer_add_clients", {"names": missing_from_sheets})
                 msg_parts.append(f"Nie mam w bazie: {names_str}. Dodać?")
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     "\n".join(msg_parts),
                     reply_markup=build_mutation_buttons("confirm"),
                 )
                 skip_delete = True
             else:
-                await update.effective_message.reply_text("\n".join(msg_parts))
+                await reply_text(update, "\n".join(msg_parts))
 
         elif flow_type == "offer_add_client":
             client_name = flow_data.get("client_name", "")
@@ -2795,12 +2817,12 @@ async def handle_confirm(
                         client_data={"Imię i nazwisko": client_name},
                     )),
                 ))
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Podaj dane {client_name} — adres, telefon, produkt."
                 )
                 skip_delete = True
             else:
-                await update.effective_message.reply_text("Brak klienta do dodania.")
+                await reply_text(update, "Brak klienta do dodania.")
 
         elif flow_type == "offer_add_clients":
             names = flow_data.get("names", [])
@@ -2815,12 +2837,12 @@ async def handle_confirm(
                         _offer_remaining=new_remaining,
                     )),
                 ))
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Podaj dane {first} — adres, telefon, produkt."
                 )
                 skip_delete = True
             else:
-                await update.effective_message.reply_text("Brak klientów do dodania.")
+                await reply_text(update, "Brak klientów do dodania.")
 
         elif flow_type == "change_status":
             skip_delete = await _confirm_change_status(update, telegram_id, user_id, flow_data)
@@ -2835,23 +2857,23 @@ async def handle_confirm(
             if client:
                 try:
                     card = format_client_card(client)
-                    await update.effective_message.reply_markdown_v2(card)
+                    await reply_markdown_v2(update, card)
                 except Exception as e:
                     logger.error("format_client_card failed: %s", e)
                     name = client.get("Imię i nazwisko", "?")
                     city = client.get("Miasto", "")
-                    await update.effective_message.reply_text(
+                    await reply_text(update,
                         f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
                     )
             else:
-                await update.effective_message.reply_text("Nie znalazłem tego klienta.")
+                await reply_text(update, "Nie znalazłem tego klienta.")
 
         else:
-            await update.effective_message.reply_text("✅ Gotowe.")
+            await reply_text(update, "✅ Gotowe.")
 
     except Exception as e:
         logger.error("handle_confirm(flow_type=%s): %s", flow_type, e)
-        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
     finally:
         if not skip_delete:
             delete_pending_flow(telegram_id)
@@ -2869,7 +2891,7 @@ async def handle_cancel_flow(
     flow = get_pending_flow(telegram_id)
     if flow:
         delete_pending_flow(telegram_id)
-    await update.effective_message.reply_text("Anulowane.")
+    await reply_text(update, "Anulowane.")
 
 
 async def send_next_action_prompt(
@@ -2900,7 +2922,7 @@ async def send_next_action_prompt(
             current_status=current_status,
         )),
     ))
-    await update.effective_message.reply_text(
+    await reply_text(update,
         f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
         reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
     )
@@ -2918,9 +2940,9 @@ async def handle_refresh_columns(
     headers = await get_sheet_headers(user_id)  # already updates Supabase on success
     if headers:
         cols = ", ".join(headers)
-        await update.effective_message.reply_text(f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
+        await reply_text(update, f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
     else:
-        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        await reply_markdown_v2(update, format_error("google_down"))
 
 
 async def handle_refresh_columns_command(
@@ -2951,7 +2973,11 @@ async def handle_general(
 ) -> None:
     """Handle general questions via Claude."""
     telegram_id = update.effective_user.id
-    history = get_conversation_history(telegram_id, limit=10)
+    history = get_conversation_history(
+        telegram_id,
+        limit=10,
+        since=timedelta(minutes=30),
+    )
 
     system_context = (
         "Jesteś asystentem handlowca OZE (odnawialne źródła energii) w Polsce. "
@@ -2971,9 +2997,7 @@ async def handle_general(
     result = await generate_bot_response(system_context, message_text, history)
     response_text = (result.get("text") or "").strip() or "Co chcesz zrobić?"
 
-    save_conversation_message(telegram_id, "assistant", response_text)
-
-    await update.effective_message.reply_text(response_text)
+    await reply_text(update, response_text)
 
     await increment_interaction(
         telegram_id,

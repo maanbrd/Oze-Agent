@@ -353,7 +353,7 @@ async def test_classify_uses_30min_history_window_and_all_tools():
     hist_mock.assert_called_once()
     args, kwargs = hist_mock.call_args
     assert (args and args[0] == 42) or kwargs.get("telegram_id") == 42
-    assert kwargs.get("limit") == 5
+    assert kwargs.get("limit") == 10
     assert kwargs.get("since") == timedelta(minutes=30)
 
     assert captured["tools"] is ALL_TOOLS

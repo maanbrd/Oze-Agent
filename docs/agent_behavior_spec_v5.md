@@ -143,6 +143,8 @@ Rolling window: ostatnie 10 wiadomości LUB 30 minut (cokolwiek nastąpi wcześn
 
 **Aktywny klient:** z rolling window agent utrzymuje `user_data["active_client"]` — ostatnio wspomnianego klienta z ostatnich 10 wiadomości. Gdy handlowiec mówi "dodaj że ma duży dom" bez wskazania klienta, agent bierze aktywnego z kontekstu zamiast pytać "którego klienta?".
 
+**Status implementacji (27.04.2026):** R6 działa bez nowej tabeli/kolumny — `active_client` jest derive'owany just-in-time z `conversation_history` przez `shared/active_client.py`. Odpowiedzi bota zapisuje wrapper w `bot/utils/conversation_reply.py`; wiadomości usera konsumowane przez pending flow też trafiają do historii.
+
 ### R7: Next action prompt (po commit mutacji, warunkowy)
 
 Po committed mutacji agent wysyła **jedno wolnotekstowe pytanie** o następny krok — **tylko gdy z samej mutacji nie wynika już wprost następny krok.**

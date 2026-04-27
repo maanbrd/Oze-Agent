@@ -19,7 +19,7 @@ from .schemas import ALL_TOOLS, FEATURE_KEY_TO_CATEGORY, TOOL_NAME_TO_INTENT
 
 logger = logging.getLogger(__name__)
 
-HISTORY_LIMIT = 5
+HISTORY_LIMIT = 10
 HISTORY_SINCE = timedelta(minutes=30)
 
 # Slice 5.1d.4: deterministic preflight for meeting+client compound messages.

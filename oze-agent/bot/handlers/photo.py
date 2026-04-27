@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.text import _run_guards
+from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from bot.utils.telegram_helpers import is_private_chat, send_processing_stage
 from shared.database import delete_pending_flow, get_pending_flow, save_pending_flow
 from shared.formatting import format_error
@@ -43,7 +44,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         photo_bytes = await file.download_as_bytearray()
     except Exception as e:
         logger.error("handle_photo: download failed for %s: %s", telegram_id, e)
-        await update.message.reply_text("❌ Nie udało się pobrać zdjęcia. Spróbuj ponownie.")
+        await reply_text(update, "❌ Nie udało się pobrać zdjęcia. Spróbuj ponownie.")
         return
 
     # Check for active photo flow
@@ -72,7 +73,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     save_pending_flow(telegram_id, "assign_photo_pending", {
         "photo_bytes": list(bytes(photo_bytes)),
     })
-    await update.message.reply_text(
+    await reply_text(update,
         "📸 Do którego klienta przypisać to zdjęcie?\n"
         "Podaj imię i miejscowość klienta."
     )
@@ -99,7 +100,7 @@ async def _upload_to_client(
     try:
         folder_id = await get_or_create_client_folder(user_id, client_name, city)
         if not folder_id:
-            await update.message.reply_markdown_v2(format_error("drive_down"))
+            await reply_markdown_v2(update, format_error("drive_down"))
             return
 
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -107,19 +108,19 @@ async def _upload_to_client(
 
         link = await upload_photo(user_id, folder_id, photo_bytes, filename)
         if not link:
-            await update.message.reply_markdown_v2(format_error("drive_down"))
+            await reply_markdown_v2(update, format_error("drive_down"))
             return
 
         # Update Sheets "Zdjęcia" column if we have the row number
         if row:
             await update_client(user_id, row, {"Zdjęcia": link})
 
-        await update.message.reply_text(
+        await reply_text(update,
             f"📸 Zdjęcie dodane do klienta *{client_name}*\\.",
             parse_mode="MarkdownV2",
         )
     except Exception as e:
         logger.error("_upload_to_client(%s): %s", telegram_id, e)
-        await update.message.reply_markdown_v2(format_error("drive_down"))
+        await reply_markdown_v2(update, format_error("drive_down"))
     finally:
         delete_pending_flow(telegram_id)

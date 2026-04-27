@@ -16,6 +16,7 @@ from bot.utils.telegram_helpers import (
     is_private_chat,
     send_processing_stage,
 )
+from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from shared.database import save_pending_flow
 from shared.formatting import escape_markdown_v2, format_error
 from shared.voice_postproc import _redacted_postproc_summary, normalize_polish_names
@@ -60,7 +61,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         audio_bytes = await file.download_as_bytearray()
     except Exception as e:
         logger.error("handle_voice: download failed for %s: %s", telegram_id, e)
-        await update.message.reply_text("❌ Nie udało się pobrać pliku. Spróbuj ponownie.")
+        await reply_text(update, "❌ Nie udało się pobrać pliku. Spróbuj ponownie.")
         return
 
     # ── 2. Transcribe with timeout ─────────────────────────────────────────
@@ -71,11 +72,11 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
     except asyncio.TimeoutError:
         logger.warning("handle_voice: Whisper timeout for %s", telegram_id)
-        await update.message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
         return
     except RuntimeError as e:
         logger.error("handle_voice: transcription failed for %s: %s", telegram_id, e)
-        await update.message.reply_text(
+        await reply_text(update,
             "❌ Nie udało się przetworzyć nagrania. Spróbuj wysłać wiadomość tekstową."
         )
         return
@@ -86,7 +87,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     whisper_cost = (duration / 60) * 0.006
 
     if not raw_transcription:
-        await update.message.reply_text("❌ Nie rozpoznano żadnych słów w nagraniu.")
+        await reply_text(update, "❌ Nie rozpoznano żadnych słów w nagraniu.")
         return
 
     # ── 3. Polish name post-processing (Claude haiku) ─────────────────────
@@ -123,7 +124,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     confidence_pct = max(0, min(100, int(round(confidence * 100))))
     badge = f"🎙 *Transkrypcja* \\(pewność: {confidence_pct}%\\)"
 
-    await update.message.reply_markdown_v2(
+    await reply_markdown_v2(update,
         f"{badge}:\n\n_{escaped_text}_\n\nCo z tym?",
         reply_markup=build_choice_buttons([
             ("✅ Zapisz", "voice_confirm:yes"),

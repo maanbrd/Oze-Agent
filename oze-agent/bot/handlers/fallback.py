@@ -5,6 +5,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.utils.conversation_reply import reply_text
 from bot.utils.telegram_helpers import is_private_chat
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,8 @@ async def handle_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     # Unsupported types
-    await message.reply_text(
+    await reply_text(
+        update,
         "Obsługuję wiadomości tekstowe, głosówki i zdjęcia. "
         "Wyślij jedną z tych form, żeby zacząć."
     )

@@ -41,6 +41,44 @@ def _patched_lookup(result: ClientLookupResult):
 
 
 @pytest.mark.asyncio
+async def test_add_note_without_client_uses_active_client():
+    upd = _update()
+    extract = AsyncMock(return_value={
+        "client_name": "",
+        "city": "",
+        "note": "zainteresowany pompą",
+    })
+    active = {
+        "_row": 5,
+        "Imię i nazwisko": "Jan Kowalski",
+        "Miasto": "Warszawa",
+        "Notatki": "",
+    }
+
+    with patch("bot.handlers.text.extract_note_data", new=extract), \
+         patch("bot.handlers.text.get_history_unless_pending", return_value=[]), \
+         patch("bot.handlers.text.derive_active_client", new=AsyncMock(return_value=active)), \
+         patch("bot.handlers.text.lookup_client", new=AsyncMock()) as lookup, \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_note(
+            upd,
+            MagicMock(),
+            {"id": "uid"},
+            {"entities": {}},
+            "dodaj notatkę: zainteresowany pompą",
+        )
+
+    lookup.assert_not_awaited()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_NOTE
+    assert saved_flow.flow_data["row"] == 5
+    assert saved_flow.flow_data["client_name"] == "Jan Kowalski"
+    reply = upd.effective_message.reply_text.call_args.args[0]
+    assert "Jan Kowalski" in reply
+    assert "zainteresowany pompą" in reply
+
+
+@pytest.mark.asyncio
 async def test_add_note_multi_exact_match_asks_which_one():
     """lookup_client=multi → disambiguation list, NOT silent pick."""
     upd = _update()
