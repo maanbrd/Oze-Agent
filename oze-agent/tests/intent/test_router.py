@@ -418,6 +418,32 @@ async def test_meeting_preflight_forces_add_meeting_for_production_voice_transcr
 
 
 @pytest.mark.asyncio
+async def test_add_client_preflight_forces_explicit_add_client_with_history():
+    result, captured = await _capture_force_tool(
+        "dodaj klienta E2E-Beta-Tester, E2E-Beta-City, 600100200, PV",
+        "record_add_client",
+        {"name": "E2E-Beta-Tester", "city": "E2E-Beta-City"},
+    )
+    assert captured["force_tool"] == "record_add_client"
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_CLIENT
+
+
+@pytest.mark.asyncio
+async def test_note_shorthand_preflight_forces_add_note():
+    result, captured = await _capture_force_tool(
+        "E2E-Beta-Tester: test note dla R04 — historia",
+        "record_add_note",
+        {"client_name": "E2E-Beta-Tester", "note": "test note dla R04 — historia"},
+    )
+    assert captured["force_tool"] == "record_add_note"
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_NOTE
+
+
+@pytest.mark.asyncio
 async def test_classify_log_redacts_message_content(caplog):
     message = "Dodaj spotkanie z Jurkiem Kluziakiem jutro o 18, telefon 722236366"
     caplog.set_level(logging.INFO, logger="shared.intent.router")

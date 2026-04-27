@@ -41,6 +41,15 @@ _TEMPORAL_MARKER_RE = re.compile(
     r"piętnast|szesnast|siedemnast|osiemnast|dziewiętnast|dwudziest)\w*)\b",
     re.IGNORECASE,
 )
+_ADD_CLIENT_COMMAND_RE = re.compile(
+    r"\b(?:dodaj|dopisz|dodać|dodac)\s+klient[ae]?\b",
+    re.IGNORECASE,
+)
+_NOTE_SHORTHAND_RE = re.compile(r"^\s*[^:\n]{3,100}:\s*\S.{3,}", re.IGNORECASE)
+_STATUS_MARKER_RE = re.compile(
+    r"\b(podpisał\w*|podpisan\w*|rezygn\w*|zamontowan\w*|umow\w*|status)\b",
+    re.IGNORECASE,
+)
 
 
 def _meeting_preflight_hint(message: str) -> bool:
@@ -57,6 +66,25 @@ def _meeting_preflight_hint(message: str) -> bool:
     """
     return bool(
         _MEETING_KEYWORD_RE.search(message) and _TEMPORAL_MARKER_RE.search(message)
+    )
+
+
+def _add_client_preflight_hint(message: str) -> bool:
+    """True for explicit add-client commands that do not carry scheduling data."""
+    return bool(
+        _ADD_CLIENT_COMMAND_RE.search(message)
+        and not _MEETING_KEYWORD_RE.search(message)
+        and not _TEMPORAL_MARKER_RE.search(message)
+    )
+
+
+def _add_note_preflight_hint(message: str) -> bool:
+    """True for terse `Client: note` shorthand without status/meeting markers."""
+    return bool(
+        _NOTE_SHORTHAND_RE.search(message)
+        and not _MEETING_KEYWORD_RE.search(message)
+        and not _TEMPORAL_MARKER_RE.search(message)
+        and not _STATUS_MARKER_RE.search(message)
     )
 
 _INTENT_TO_SCOPE: dict[IntentType, ScopeTier] = {
@@ -147,7 +175,16 @@ async def classify(message: str, telegram_id: int) -> IntentResult:
     )
     system_prompt = build_router_system_prompt(history=history)
     meeting_hint = _meeting_preflight_hint(message)
-    force_tool: bool | str = "record_add_meeting" if meeting_hint else True
+    add_client_hint = _add_client_preflight_hint(message)
+    add_note_hint = _add_note_preflight_hint(message)
+    if meeting_hint:
+        force_tool: bool | str = "record_add_meeting"
+    elif add_client_hint:
+        force_tool = "record_add_client"
+    elif add_note_hint:
+        force_tool = "record_add_note"
+    else:
+        force_tool = True
     result = await call_claude_with_tools(
         system_prompt=system_prompt,
         user_message=message,
@@ -156,9 +193,12 @@ async def classify(message: str, telegram_id: int) -> IntentResult:
         force_tool=force_tool,
     )
     logger.info(
-        "intent classify: tool=%s preflight_meeting_hint=%s message_len=%d",
+        "intent classify: tool=%s preflight_meeting_hint=%s "
+        "preflight_add_client_hint=%s preflight_add_note_hint=%s message_len=%d",
         result.get("tool_name"),
         meeting_hint,
+        add_client_hint,
+        add_note_hint,
         len(message),
     )
     return _to_intent_result(result)
