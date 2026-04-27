@@ -1,5 +1,6 @@
 """Unit tests for shared/intent/router.py — Anthropic + DB calls mocked."""
 
+import logging
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -364,3 +365,163 @@ async def test_classify_uses_30min_history_window_and_all_tools():
     assert "R4" not in sys_prompt
     assert "<conversation_history>" in sys_prompt
     assert "poprzednia wiadomość" in sys_prompt
+
+
+# Slice 5.1d.4 — meeting+client compound preflight. Production bug 27.04.2026:
+# voice "Dodaj spotkanie z X jutro 18, telefon 722..., Marki Zielona 28" got
+# classified as record_add_client by Haiku because of the rich client data.
+# The preflight forces tool=record_add_meeting at the API level whenever the
+# message contains both a meeting keyword and a temporal marker.
+
+async def _capture_force_tool(message: str, mock_tool_name: str, mock_input: dict | None = None):
+    captured = {}
+
+    async def _capture(**kwargs):
+        captured.update(kwargs)
+        return _tool_result(mock_tool_name, mock_input or {})
+
+    with patch(
+        "shared.intent.router.get_conversation_history",
+        return_value=[],
+    ), patch(
+        "shared.intent.router.call_claude_with_tools",
+        new=_capture,
+    ):
+        from shared.intent.router import classify
+        result = await classify(message, 1)
+    return result, captured
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_forces_add_meeting_for_production_voice_transcription():
+    """Exact transcription from prod bug (Maan 27.04.2026 09:14): voice with
+    meeting + rich client data must force record_add_meeting, not record_add_client."""
+    message = (
+        "Dodaj spotkanie z Jurkiem Kluziakiem na jutro na godzinę osiemnastą, "
+        "spotkanie na fotowoltaikę i pompę ciepła, numer telefonu 722-236-366, "
+        "jest mieszka w Markach na ulicy Zielonej 28."
+    )
+    result, captured = await _capture_force_tool(
+        message,
+        "record_add_meeting",
+        {
+            "client_name": "Jurek Kluziak",
+            "date_iso": "2026-04-28",
+            "time": "18:00",
+            "event_type": "in_person",
+        },
+    )
+    assert captured["force_tool"] == "record_add_meeting"
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_MEETING
+
+
+@pytest.mark.asyncio
+async def test_classify_log_redacts_message_content(caplog):
+    message = "Dodaj spotkanie z Jurkiem Kluziakiem jutro o 18, telefon 722236366"
+    caplog.set_level(logging.INFO, logger="shared.intent.router")
+
+    await _capture_force_tool(
+        message,
+        "record_add_meeting",
+        {"client_name": "Jurek Kluziak", "time": "18:00"},
+    )
+
+    assert "message_len=" in caplog.text
+    assert "Jurek" not in caplog.text
+    assert "722236366" not in caplog.text
+    assert "message_prefix" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_forces_add_meeting_for_simple_meeting():
+    result, captured = await _capture_force_tool(
+        "spotkanie z Janem jutro 14:00",
+        "record_add_meeting",
+        {
+            "client_name": "Jan",
+            "date_iso": "2026-04-28",
+            "time": "14:00",
+            "event_type": "in_person",
+        },
+    )
+    assert captured["force_tool"] == "record_add_meeting"
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_MEETING
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_forces_add_meeting_for_phone_call():
+    result, captured = await _capture_force_tool(
+        "telefon do Marka pojutrze o 10",
+        "record_add_meeting",
+        {
+            "client_name": "Marek",
+            "date_iso": "2026-04-29",
+            "time": "10:00",
+            "event_type": "phone_call",
+        },
+    )
+    assert captured["force_tool"] == "record_add_meeting"
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_MEETING
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_does_not_fire_for_pure_add_client():
+    """No temporal marker → preflight off → classifier picks normally."""
+    result, captured = await _capture_force_tool(
+        "Dodaj Jana Kowalskiego z Warszawy 600100200",
+        "record_add_client",
+        {"name": "Jan Kowalski", "city": "Warszawa", "phone": "600100200"},
+    )
+    assert captured["force_tool"] is True
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_CLIENT
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_does_not_treat_contact_phone_as_phone_call():
+    """A contact field named 'telefon' plus a future follow-up note must not
+    force add_meeting unless the text asks for a call/meeting action."""
+    result, captured = await _capture_force_tool(
+        "Dodaj klienta Jan Kowalski, telefon 600100200, jutro podeślę dane",
+        "record_add_client",
+        {"name": "Jan Kowalski", "phone": "600100200"},
+    )
+    assert captured["force_tool"] is True
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.ADD_CLIENT
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_does_not_fire_for_status_change_only():
+    """Meeting keyword absent, no temporal → preflight off."""
+    result, captured = await _capture_force_tool(
+        "Wojtek podpisał umowę",
+        "record_change_status",
+        {"client_name": "Wojtek", "status": "Podpisane"},
+    )
+    assert captured["force_tool"] is True
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.CHANGE_STATUS
+
+
+@pytest.mark.asyncio
+async def test_meeting_preflight_does_not_fire_for_show_day_plan():
+    """Temporal 'jutro' but no meeting keyword → preflight off."""
+    result, captured = await _capture_force_tool(
+        "co mam jutro?",
+        "record_show_day_plan",
+        {"date_iso": "2026-04-28"},
+    )
+    assert captured["force_tool"] is True
+
+    from shared.intent.intents import IntentType
+    assert result.intent == IntentType.SHOW_DAY_PLAN

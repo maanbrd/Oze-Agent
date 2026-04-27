@@ -85,9 +85,12 @@ async def call_claude_with_tools(
     user_message: str,
     tools: list[dict],
     model_type: str = "complex",
-    force_tool: bool = False,
+    force_tool: bool | str = False,
 ) -> dict:
     """Call Claude with tool use enabled.
+
+    force_tool=True forces the model to call ANY tool from the list.
+    force_tool="<tool_name>" forces a specific tool by name.
 
     Returns:
         {
@@ -110,7 +113,9 @@ async def call_claude_with_tools(
             "tools": tools,
             "messages": [{"role": "user", "content": user_message}],
         }
-        if force_tool:
+        if isinstance(force_tool, str):
+            request["tool_choice"] = {"type": "tool", "name": force_tool}
+        elif force_tool:
             request["tool_choice"] = {"type": "any"}
         response = await client.messages.create(**request)
         tokens_in = response.usage.input_tokens

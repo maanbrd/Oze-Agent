@@ -141,6 +141,24 @@ async def test_call_claude_with_tools_force_tool_sets_tool_choice():
 
 
 @pytest.mark.asyncio
+async def test_call_claude_with_tools_force_specific_tool_sets_tool_choice_name():
+    client = _mock_tool_client("record_add_meeting", {"client_name": "Jan"})
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude_with_tools
+        result = await call_claude_with_tools(
+            "system",
+            "user",
+            [{"name": "record_add_meeting", "input_schema": {"type": "object"}}],
+            model_type="simple",
+            force_tool="record_add_meeting",
+        )
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["tool_choice"] == {"type": "tool", "name": "record_add_meeting"}
+    assert result["tool_name"] == "record_add_meeting"
+
+
+@pytest.mark.asyncio
 async def test_call_claude_with_tools_normalizes_unicode_line_separators():
     client = _mock_tool_client("record_general_question", {"reason": "test"})
     with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):

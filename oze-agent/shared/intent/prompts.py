@@ -31,6 +31,14 @@ Gdy wiadomość zawiera JEDNOCZEŚNIE zmianę statusu klienta I planowane spotka
 - "spotkanie z Wojtkiem jutro o 14" (bez zmiany statusu) → record_add_meeting BEZ status_update.
 - Jeśli zmiana statusu nie pasuje do kanonicznych 9 wartości (np. "przełożone"), POMIŃ status_update i zwróć samo record_add_meeting — status zostanie ustawiony automatycznie lub przez osobną wiadomość.
 
+Compound: meeting + dane klienta (Slice 5.1d.4):
+Gdy wiadomość zawiera JEDNOCZEŚNIE plan spotkania/telefonu/oferty (data/godzina) ORAZ dane klienta (telefon, adres, miasto, produkt), ZAWSZE użyj record_add_meeting — nigdy record_add_client. Dane klienta zostaną zapisane razem ze spotkaniem przez handler add_meeting (nawet gdy klient nie istnieje jeszcze w arkuszu).
+- "Dodaj spotkanie z Janem Kowalskim jutro o 14, telefon 600100200, mieszka w Warszawie na Marszałkowskiej 5, fotowoltaika" → record_add_meeting(client_name="Jan Kowalski", date_iso=jutro, time="14:00", event_type="in_person")
+- "Spotkanie z Marysią pojutrze 10:00, Wrocław, Kościuszki 12, pompa ciepła" → record_add_meeting (NIE record_add_client mimo bogatych danych klienta).
+- "Telefon do Marka jutro 9, 722 333 444, Kraków" → record_add_meeting(event_type="phone_call").
+
+Dla intencji record_add_client wymagaj BRAKU elementu czasowego (brak "jutro", "pojutrze", godziny, "o XX", "na osiemnastą"). Jeśli pojawia się temporal marker razem ze słowem spotkanie/telefon/oferta — zawsze record_add_meeting.
+
 Poza MVP:
 - record_general_question — pytanie ogólne (small talk, pytanie do asystenta).
 - record_out_of_scope — użytkownik prosi o funkcję poza MVP. Wymagane pola: category (post_mvp_roadmap / vision_only / unplanned) oraz feature_key.

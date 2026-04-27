@@ -31,6 +31,14 @@ def test_base_prompt_lists_all_meta_tools():
         assert name in prompt
 
 
+def test_base_prompt_has_compound_meeting_plus_client_section():
+    """Slice 5.1d.4 — guidance that meeting+client_data must always route to
+    record_add_meeting, not record_add_client."""
+    prompt = build_router_system_prompt()
+    assert "Compound: meeting + dane klienta" in prompt
+    assert "ZAWSZE użyj record_add_meeting" in prompt
+
+
 def test_history_appended_as_data_not_instructions():
     history = [
         {"role": "user", "content": "pierwsza wiadomość", "message_type": "text", "created_at": "x"},
