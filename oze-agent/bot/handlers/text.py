@@ -343,6 +343,29 @@ def _message_with_add_client_context(message_text: str, client_data: dict) -> st
     )
 
 
+_POLISH_LETTERS = "A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+
+
+def _normalize_street_address(address: str) -> str:
+    address = re.sub(r"\s+", " ", address).strip(" ,.;")
+    if not address:
+        return ""
+
+    parts = address.split()
+    if len(parts) >= 2:
+        street = parts[0]
+        if street.lower().endswith("owej"):
+            street = street[:-4] + "owa"
+        elif street.lower().endswith("ej"):
+            street = street[:-2] + "a"
+        parts[0] = street
+        address = " ".join(parts)
+
+    if re.match(r"(?i)^ul\.?\s+", address):
+        return re.sub(r"(?i)^ul\.?\s+", "ul. ", address)
+    return f"ul. {address}"
+
+
 def _extract_inline_client_facts(message_text: str) -> dict:
     """Extract obvious client facts from a meeting/detail reply without LLM.
 
@@ -373,14 +396,38 @@ def _extract_inline_client_facts(message_text: str) -> dict:
     if has_storage:
         product_parts.append("Magazyn energii")
     if product_parts:
-        facts["Produkt"] = " + ".join(product_parts)
+        facts["Produkt"] = (
+            "PV + Magazyn energii"
+            if has_pv and has_storage
+            else " + ".join(product_parts)
+        )
 
     if re.search(r"zużycie|zuzycie|\bkw\b|\bkwh\b|zainteresowan|magazyn", text_lower):
         facts["Notatki"] = text
 
     address_prefix = re.match(r"\s*(?:adres|ul\.?|ulica)\s+(.+)", text, flags=re.IGNORECASE)
     if address_prefix:
-        facts["Adres"] = address_prefix.group(1).strip()
+        facts["Adres"] = _normalize_street_address(address_prefix.group(1))
+
+    city_match = re.search(
+        rf"\bmieszka\s+w\s+(?:miejscowości|miejscowosci|mieście|miescie)\s+"
+        rf"([{_POLISH_LETTERS}][{_POLISH_LETTERS}\- ]*?)"
+        rf"(?=\s+(?:na\s+ulicy|na\s+ul\.|ulicy|ul\.|numer|telefon)|[,.]|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if city_match:
+        facts["Miasto"] = re.sub(r"\s+", " ", city_match.group(1)).strip(" ,.;")
+
+    address_match = re.search(
+        rf"(?:na\s+)?(?:ulicy|ul\.?)\s+"
+        rf"([{_POLISH_LETTERS}][{_POLISH_LETTERS}\- ]+\s+\d+[A-Za-z0-9/\\-]*)"
+        rf"(?=\s+(?:numer|telefon|jest|zainteresowan)|[,.]|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if address_match:
+        facts["Adres"] = _normalize_street_address(address_match.group(1))
 
     return facts
 
@@ -409,6 +456,67 @@ def _merge_client_context_data(base: dict, extra: dict) -> dict:
             continue
         merged[key] = value
     return merged
+
+
+def _merge_client_data_prefer_extra(base: dict, extra: dict) -> dict:
+    merged = {
+        k: v
+        for k, v in (base or {}).items()
+        if v and k not in SYSTEM_FIELDS
+    }
+    for key, value in (extra or {}).items():
+        if value and key not in SYSTEM_FIELDS:
+            merged[key] = value
+    return merged
+
+
+async def _extract_meeting_client_data(
+    user: dict,
+    message_text: str,
+    client_name: str,
+) -> dict:
+    deterministic = _extract_inline_client_facts(message_text)
+    user_id = user["id"]
+    try:
+        headers = user.get("sheet_columns") or await get_sheet_headers(user_id)
+        result = await extract_client_data(message_text, headers)
+        llm_data = {
+            k: v
+            for k, v in _filter_invalid_products(result.get("client_data", {})).items()
+            if v
+        }
+    except Exception as e:
+        logger.warning("meeting client-data extraction failed: %s", e)
+        llm_data = {}
+
+    client_data = _merge_client_data_prefer_extra(deterministic, llm_data)
+    if client_name and not client_data.get("Imię i nazwisko"):
+        client_data["Imię i nazwisko"] = client_name
+    return client_data
+
+
+def _client_updates_for_empty_fields(client_data: dict, existing_client: dict | None) -> dict:
+    if not client_data or not existing_client:
+        return {}
+
+    blocked = SYSTEM_FIELDS | {
+        "Imię i nazwisko",
+        "Notatki",
+        "Następny krok",
+        "Data następnego kroku",
+        "ID wydarzenia Kalendarz",
+    }
+    updates: dict[str, str] = {}
+    for key, value in client_data.items():
+        if not value or key in blocked:
+            continue
+        if key == "Miasto" and (existing_client.get("Miasto") or existing_client.get("Miejscowość")):
+            continue
+        if key == "Miejscowość" and (existing_client.get("Miejscowość") or existing_client.get("Miasto")):
+            continue
+        if not existing_client.get(key):
+            updates[key] = value
+    return updates
 
 
 def _client_data_summary(client_data: dict) -> str:
@@ -755,6 +863,10 @@ async def _route_pending_flow(
                         status_update = _auto_status_update_from_enriched(
                             enriched, flow_data.get("event_type")
                         )
+                    client_updates = _client_updates_for_empty_fields(
+                        client_data,
+                        enriched.get("existing_client_data") or {},
+                    )
                     save_pending(PendingFlow(
                         telegram_id=update.effective_user.id,
                         flow_type=PendingFlowType.ADD_MEETING,
@@ -766,6 +878,7 @@ async def _route_pending_flow(
                             location=enriched["location"],
                             description=description,
                             client_data=client_data,
+                            client_updates=client_updates,
                             event_type=flow_data.get("event_type"),
                             status_update=status_update,
                             client_row=enriched.get("client_row"),
@@ -818,6 +931,7 @@ async def _route_pending_flow(
                     location=flow_data.get("location", ""),
                     description=description,
                     client_data=client_data or None,
+                    client_updates=flow_data.get("client_updates"),
                     event_type=flow_data.get("event_type"),
                     status_update=flow_data.get("status_update"),
                     client_row=flow_data.get("client_row"),
@@ -1688,6 +1802,7 @@ def _build_enriched_from_client(
         "client_row": client_row,
         "current_status": current_status,
         "client_city": client_city,
+        "existing_client_data": client,
         "ambiguous_client": False,
         # Slice 5.1d.3: unique path — no disambiguation needed.
         "ambiguous_candidates": [],
@@ -1901,14 +2016,28 @@ async def handle_add_meeting(
         r7_client_row = intent_data.get("r7_client_row")
         r7_client_name = intent_data.get("r7_client_name") or ""
         enriched_client_name = m.get("client_name") or r7_client_name
+        message_client_data = await _extract_meeting_client_data(
+            user,
+            message_text,
+            enriched_client_name,
+        )
+        source_client_data = _merge_client_context_data(
+            intent_data.get("source_client_data") or {},
+            message_client_data,
+        )
+        if not source_client_data:
+            source_client_data = None
         enriched = await _enrich_meeting(
             user_id,
             enriched_client_name,
-            m.get("location", ""),
+            m.get("location", "") or _location_hint_from_client_data(source_client_data or {}),
             known_client_row=r7_client_row,
             event_type=event_type,
         )
-        source_client_data = intent_data.get("source_client_data") or None
+        client_updates = _client_updates_for_empty_fields(
+            source_client_data or {},
+            enriched.get("existing_client_data") or {},
+        )
         raw_status_update = intent_data.get("status_update") or None
         # Slice 5.4.3: 3-branch status_update resolution.
         #   1) Ambiguous client → preserve raw compound in disambiguation payload;
@@ -1984,6 +2113,7 @@ async def handle_add_meeting(
                 location=enriched["location"],
                 description=enriched["description"],
                 client_data=source_client_data,
+                client_updates=client_updates,
                 event_type=event_type,
                 status_update=status_update,
                 client_row=enriched.get("client_row"),
@@ -2561,6 +2691,7 @@ async def handle_confirm(
                 today=date.today(),
                 client_current_status=current_status_hint,
                 status_update=status_update,
+                client_updates=flow_data.get("client_updates") or None,
             )
 
             if not result.success:

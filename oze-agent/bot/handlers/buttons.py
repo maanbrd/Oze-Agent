@@ -11,6 +11,7 @@ from bot.handlers.text import (
     _auto_status_update_from_enriched,
     _build_enriched_from_client,
     _client_data_summary,
+    _client_updates_for_empty_fields,
     _normalize_compound_status_update,
     handle_cancel_flow,
     handle_confirm,
@@ -502,6 +503,7 @@ async def _resume_add_meeting_disambiguation(
     )
 
     source_client_data = flow_data.get("source_client_data") or None
+    client_updates = _client_updates_for_empty_fields(source_client_data or {}, client)
     save_pending(PendingFlow(
         telegram_id=telegram_id,
         flow_type=PendingFlowType.ADD_MEETING,
@@ -513,6 +515,7 @@ async def _resume_add_meeting_disambiguation(
             location=enriched["location"],
             description=enriched["description"],
             client_data=source_client_data,
+            client_updates=client_updates,
             event_type=flow_data.get("event_type"),
             status_update=status_update,
             client_row=enriched.get("client_row"),

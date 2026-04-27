@@ -128,6 +128,136 @@ async def test_add_meeting_augment_product_details_go_to_client_data_not_descrip
 
 
 @pytest.mark.asyncio
+async def test_handle_add_meeting_extracts_client_data_from_same_message():
+    upd = _update()
+    message = (
+        "Zapisz spotkanie na jutro o 14 z Markiem Markowym, który mieszka "
+        "w miejscowości Marki na ulicy Markowej 25. Numer telefonu 736-326-756. "
+        "Jest zainteresowany fotowoltaiką i magazynem energii."
+    )
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2027-04-20",
+                "time": "14:00",
+                "client_name": "Marek Markowy",
+                "location": "Marki, ul. Markowa 25",
+                "event_type": "in_person",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={"client_data": {}}),
+    ) as mock_extract_client, patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Marek Markowy",
+            "location": "Marki, ul. Markowa 25",
+            "description": "",
+            "full_name": "Marek Markowy",
+            "client_found": False,
+            "client_row": None,
+            "current_status": "",
+            "client_city": "",
+            "ambiguous_client": False,
+            "ambiguous_candidates": [],
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {
+                "id": 1,
+                "default_meeting_duration": 60,
+                "sheet_columns": ["Imię i nazwisko", "Miasto", "Adres", "Telefon", "Produkt"],
+            },
+            {"entities": {"event_type": "in_person"}},
+            message,
+        )
+
+    mock_extract_client.assert_awaited_once()
+    saved_flow = mock_save.call_args.args[0]
+    client_data = saved_flow.flow_data["client_data"]
+    assert client_data["Imię i nazwisko"] == "Marek Markowy"
+    assert client_data["Telefon"] == "736326756"
+    assert client_data["Miasto"] == "Marki"
+    assert client_data["Adres"] == "ul. Markowa 25"
+    assert client_data["Produkt"] == "PV + Magazyn energii"
+    card = upd.effective_message.reply_markdown_v2.call_args.args[0]
+    assert "Dane klienta do zapisu" in card
+    assert "736326756" in card
+    assert "PV \\+ Magazyn energii" in card
+
+
+@pytest.mark.asyncio
+async def test_handle_add_meeting_existing_client_updates_only_empty_fields():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2027-04-20",
+                "time": "14:00",
+                "client_name": "Marek Markowy",
+                "location": "",
+                "event_type": "in_person",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={
+            "client_data": {
+                "Telefon": "736326756",
+                "Produkt": "PV + Magazyn energii",
+                "Adres": "ul. Markowa 25",
+            }
+        }),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Spotkanie — Marek Markowy",
+            "location": "Marki",
+            "description": "",
+            "full_name": "Marek Markowy",
+            "client_found": True,
+            "client_row": 7,
+            "current_status": "Oferta wysłana",
+            "client_city": "Marki",
+            "existing_client_data": {
+                "_row": 7,
+                "Imię i nazwisko": "Marek Markowy",
+                "Telefon": "",
+                "Produkt": "PV",
+                "Adres": "",
+                "Miasto": "Marki",
+            },
+            "ambiguous_client": False,
+            "ambiguous_candidates": [],
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {
+                "id": 1,
+                "default_meeting_duration": 60,
+                "sheet_columns": ["Imię i nazwisko", "Telefon", "Miasto", "Adres", "Produkt"],
+            },
+            {"entities": {"event_type": "in_person"}},
+            "Spotkanie z Markiem jutro o 14, telefon 736326756, ul. Markowa 25, fotowoltaika i magazyn",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_data["client_updates"] == {
+        "Telefon": "736326756",
+        "Adres": "ul. Markowa 25",
+    }
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_augment_preserves_existing_description():
     upd = _update()
     with patch("bot.handlers.text.save_pending") as mock_save:

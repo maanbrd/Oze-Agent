@@ -77,6 +77,7 @@ async def commit_add_meeting(
     today: date,
     client_current_status: Optional[str] = None,
     status_update: Optional[dict] = None,
+    client_updates: Optional[dict] = None,
 ) -> AddMeetingResult:
     """Create the Calendar event and (if a client row is resolvable) sync
     K/L/P/F on that row.
@@ -136,6 +137,10 @@ async def commit_add_meeting(
     }
     if calendar_event_id:
         sheet_updates["ID wydarzenia Kalendarz"] = calendar_event_id
+
+    for key, value in (client_updates or {}).items():
+        if value and key not in sheet_updates and key != "Status":
+            sheet_updates[key] = value
 
     status_updated = False
     status_new_value: Optional[str] = None

@@ -243,6 +243,39 @@ async def test_select_candidate_saves_add_meeting_pending_with_enriched_row():
 
 
 @pytest.mark.asyncio
+async def test_select_candidate_carries_source_client_data_as_empty_field_updates():
+    q = _query()
+    source = {
+        "Imię i nazwisko": "Mariusz Krzywinski",
+        "Telefon": "736326756",
+        "Produkt": "PV + Magazyn energii",
+        "Adres": "ul. Markowa 25",
+    }
+    existing = _client_row(7)
+    existing["Telefon"] = ""
+    existing["Produkt"] = "PV"
+    existing["Adres"] = ""
+    with patch(
+        "bot.handlers.buttons.get_pending_flow",
+        return_value=_pending_disambiguation(source_client_data=source),
+    ), patch(
+        "bot.handlers.buttons.get_all_clients",
+        new=AsyncMock(return_value=[existing]),
+    ), patch(
+        "bot.handlers.buttons.check_conflicts",
+        new=AsyncMock(return_value=[]),
+    ), patch("bot.handlers.buttons.save_pending") as mock_save:
+        await _handle_select_client(q, MagicMock(), {"id": "u1"}, "7")
+
+    saved = mock_save.call_args.args[0]
+    assert saved.flow_data["client_data"] == source
+    assert saved.flow_data["client_updates"] == {
+        "Telefon": "736326756",
+        "Adres": "ul. Markowa 25",
+    }
+
+
+@pytest.mark.asyncio
 async def test_select_candidate_row_not_in_pending_candidates_rejects():
     """Row 99 exists in the sheet but is NOT a pending candidate — reject."""
     q = _query()
