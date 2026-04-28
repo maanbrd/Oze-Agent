@@ -55,4 +55,16 @@ assert.doesNotMatch(
   "App UI must not expose CRM mutation forms.",
 );
 
+for (const route of [
+  "app/(app)/dashboard/page.tsx",
+  "app/(app)/klienci/page.tsx",
+  "app/(app)/kalendarz/page.tsx",
+]) {
+  assert.match(
+    read(route),
+    /getCrmDashboardData|CrmNotice|DataFreshnessBadge/,
+    `${route} must use CRM read-only primitives.`,
+  );
+}
+
 console.log("web invariants passed");
