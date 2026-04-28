@@ -77,4 +77,27 @@ for (const route of [
   assert.ok(read(route).length > 200, `${route} must be implemented.`);
 }
 
+const onboardingHelper = read("lib/api/onboarding.ts");
+assert.match(
+  onboardingHelper,
+  /getOnboardingStatus/,
+  "Web must have onboarding status helper.",
+);
+assert.match(
+  onboardingHelper,
+  /startGoogleOAuth/,
+  "Web must have Google OAuth helper.",
+);
+assert.match(
+  onboardingHelper,
+  /createGoogleResources/,
+  "Web must have resource creation helper.",
+);
+assert.match(
+  onboardingHelper,
+  /generateTelegramCode/,
+  "Web must have Telegram code helper.",
+);
+assert.doesNotMatch(appSource, /Przelewy24/i, "Web UI must not mention Przelewy24.");
+
 console.log("web invariants passed");

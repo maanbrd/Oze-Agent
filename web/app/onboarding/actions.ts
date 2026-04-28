@@ -1,6 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import {
+  createGoogleResources,
+  generateTelegramCode,
+  startGoogleOAuth,
+  updateAccount,
+} from "@/lib/api/onboarding";
 import { getCurrentAccount } from "@/lib/api/account";
 import {
   getStripe,
@@ -91,4 +97,30 @@ export async function createCheckoutSession(formData: FormData) {
   }
 
   redirect(checkoutUrl);
+}
+
+export async function startGoogleOAuthAction() {
+  const url = await startGoogleOAuth();
+  redirect(url);
+}
+
+export async function createGoogleResourcesAction(formData: FormData) {
+  await createGoogleResources({
+    sheetsName: String(formData.get("sheetsName") ?? ""),
+    calendarName: String(formData.get("calendarName") ?? ""),
+  });
+  redirect("/onboarding/telegram");
+}
+
+export async function generateTelegramCodeAction() {
+  await generateTelegramCode();
+  redirect("/onboarding/telegram");
+}
+
+export async function updateAccountAction(formData: FormData) {
+  await updateAccount({
+    name: String(formData.get("name") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+  });
+  redirect("/ustawienia?saved=1");
 }
