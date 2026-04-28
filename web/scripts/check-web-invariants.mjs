@@ -67,4 +67,14 @@ for (const route of [
   );
 }
 
+for (const route of [
+  "app/(app)/platnosci/page.tsx",
+  "app/(app)/ustawienia/page.tsx",
+  "app/(app)/import/page.tsx",
+  "app/(app)/instrukcja/page.tsx",
+  "app/(app)/faq/page.tsx",
+]) {
+  assert.ok(read(route).length > 200, `${route} must be implemented.`);
+}
+
 console.log("web invariants passed");
