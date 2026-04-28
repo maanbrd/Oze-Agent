@@ -14,6 +14,14 @@ Phase 0A zawiera:
   `/polityka-prywatnosci`
 - `/healthz` jako JSON healthcheck
 
+Phase 0B dodaje:
+
+- Supabase SSR Auth przez `@supabase/ssr`
+- realne formularze `/login` i `/rejestracja`
+- chroniony `/dashboard`
+- odświeżanie sesji w `proxy.ts`
+- migrację `users.auth_user_id` + trigger profilu + RLS baseline
+
 ## Getting Started
 
 Uruchom lokalnie:
@@ -24,12 +32,21 @@ npm install
 npm run dev
 ```
 
+Wymagane env dla auth:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
 Adresy:
 
 - `http://localhost:3000` — cinematic landing
 - `http://localhost:3000/healthz` — healthcheck JSON
-- `http://localhost:3000/rejestracja` — placeholder onboardingu
-- `http://localhost:3000/login` — placeholder logowania
+- `http://localhost:3000/rejestracja` — rejestracja Supabase Auth
+- `http://localhost:3000/login` — logowanie Supabase Auth
+- `http://localhost:3000/dashboard` — chroniony panel startowy
 
 ## Scripts
 
@@ -44,8 +61,9 @@ Turbopacka służy `npm run build:turbo`.
 
 ## Scope
 
-W Phase 0A web app nie integruje jeszcze Supabase, Stripe, Resend, Railway ani
-Google API. Bot w `../oze-agent/` pozostaje nietknięty.
+Web używa Supabase tylko do Auth/session cookies przez publishable/anon key.
+Dane biznesowe i Google API mają iść przez FastAPI. Bot w `../oze-agent/`
+pozostaje osobnym procesem.
 
 Landing używa animacji Midjourney dostarczonej przez usera:
 `public/media/hero-bg.mp4`. Pliki medialne trzymaj w `public/media/`.
