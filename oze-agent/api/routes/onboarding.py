@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import inspect
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -14,7 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from api.auth import AuthUser, get_current_auth_user
 from bot.config import Config
 from shared.database import get_supabase_client
+from shared.google_calendar import create_calendar
 from shared.google_auth import build_oauth_url
+from shared.google_drive import create_root_folder
+from shared.google_sheets import create_spreadsheet
 
 router = APIRouter()
 
@@ -168,6 +172,17 @@ def decode_oauth_state(state: str, max_age_seconds: int = 900) -> str:
     return user_id
 
 
+def _resource_name(payload: dict[str, Any], key: str, fallback: str) -> str:
+    value = str(payload.get(key) or "").strip()
+    return value[:120] if value else fallback
+
+
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 @router.get("/status")
 async def get_onboarding_status(auth_user: AuthUser = Depends(get_current_auth_user)):
     user = _get_user_for_auth(auth_user)
@@ -221,3 +236,78 @@ async def start_google_oauth(auth_user: AuthUser = Depends(get_current_auth_user
         )
     state = encode_oauth_state(user["id"])
     return {"url": build_oauth_url(user["id"], state=state)}
+
+
+@router.post("/resources")
+async def create_google_resources(
+    payload: dict[str, Any],
+    auth_user: AuthUser = Depends(get_current_auth_user),
+):
+    user = _get_user_for_auth(auth_user)
+    if not _has_payment(user):
+        raise HTTPException(
+            status_code=402,
+            detail="Payment is required before resource creation.",
+        )
+    if not _has_google_tokens(user):
+        raise HTTPException(
+            status_code=409,
+            detail="Google OAuth is required before resource creation.",
+        )
+
+    label = user.get("name") or user.get("email") or user["id"]
+    update_data: dict[str, Any] = {}
+    sheets_id = user.get("google_sheets_id")
+    calendar_id = user.get("google_calendar_id")
+    drive_folder_id = user.get("google_drive_folder_id")
+
+    if not sheets_id:
+        sheets_name = _resource_name(payload, "sheetsName", f"Agent-OZE CRM - {label}")
+        sheets_id = await _maybe_await(create_spreadsheet(user["id"], sheets_name))
+        if not sheets_id:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not create Google Sheets resource.",
+            )
+        update_data["google_sheets_id"] = sheets_id
+        update_data["google_sheets_name"] = sheets_name
+
+    if not calendar_id:
+        calendar_name = _resource_name(
+            payload,
+            "calendarName",
+            f"Agent-OZE - {label}",
+        )
+        calendar_id = await _maybe_await(create_calendar(user["id"], calendar_name))
+        if not calendar_id:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not create Google Calendar resource.",
+            )
+        update_data["google_calendar_id"] = calendar_id
+        update_data["google_calendar_name"] = calendar_name
+
+    if not drive_folder_id:
+        drive_folder_id = await _maybe_await(create_root_folder(user["id"]))
+        if not drive_folder_id:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not create Google Drive resource.",
+            )
+        update_data["google_drive_folder_id"] = drive_folder_id
+
+    if update_data:
+        update_data["updated_at"] = _now_iso()
+        get_supabase_client().table("users").update(update_data).eq(
+            "id", user["id"]
+        ).execute()
+        user.update(update_data)
+
+    return {
+        "resources": {
+            "sheetsId": sheets_id,
+            "calendarId": calendar_id,
+            "driveFolderId": drive_folder_id,
+        },
+        "nextStep": _next_step(user),
+    }

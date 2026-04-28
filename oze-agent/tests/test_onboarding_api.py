@@ -156,3 +156,52 @@ def test_oauth_state_roundtrip(monkeypatch):
     state = onboarding.encode_oauth_state("user-1")
 
     assert onboarding.decode_oauth_state(state) == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_create_google_resources_only_creates_missing(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "name": "Jan Test",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "google_refresh_token": "encrypted",
+                "google_sheets_id": "existing-sheet",
+                "google_sheets_name": "Existing Sheet",
+                "google_calendar_id": None,
+                "google_calendar_name": None,
+                "google_drive_folder_id": None,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+    monkeypatch.setattr(onboarding, "create_spreadsheet", pytest.fail, raising=False)
+    monkeypatch.setattr(
+        onboarding,
+        "create_calendar",
+        lambda user_id, name: "calendar-1",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        onboarding,
+        "create_root_folder",
+        lambda user_id: "drive-1",
+        raising=False,
+    )
+
+    result = await onboarding.create_google_resources(
+        {"calendarName": "Agent-OZE Calendar"},
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={}),
+    )
+
+    assert result["resources"]["sheetsId"] == "existing-sheet"
+    assert result["resources"]["calendarId"] == "calendar-1"
+    assert result["resources"]["driveFolderId"] == "drive-1"
+    assert fake.last_query.updated["google_calendar_id"] == "calendar-1"
