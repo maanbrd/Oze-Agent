@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 24.04.2026_
+_Last updated: 28.04.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -12,10 +12,12 @@ Jeśli dokument jest w `docs/archive/`, nie jest źródłem prawdy.
 
 ## 1. Aktualna decyzja strategiczna
 
-Poprzednia ścieżka łatania błędów jest zamknięta.
+Projekt prowadzi **dwa równoległe tracki**:
 
-Nie próbujemy już naprawiać obecnej warstwy zachowania błąd po błędzie.
-Obecna strategia to **selective rewrite**.
+1. **Bot track (`oze-agent/`)** — selective rewrite warstwy zachowania (intent routing, pending flow, confirmation cards, proactive scheduler). Poprzednia ścieżka łatania błędów zamknięta. Photo flow i multi-meeting odłożone poza pierwszą wersję.
+2. **Web app track (`web/`)** — Next.js 16 + Supabase Auth + Vercel (`oze-agent.vercel.app`). Phasing 0A → 0D → Phase 1+ wg `IMPLEMENTATION_PLAN.md` §Web App. Web jest read-only nad Google Sheets/Calendar — **nie wykonuje mutacji CRM**, R1 (confirmation before write) zostaje wyłącznie w Telegramie.
+
+Tracki są niezależne — bot rewrite nie blokuje web app i odwrotnie. Wspólne tylko: Supabase users (auth_user_id ↔ telegram_id), później FastAPI internal endpoints (Phase 0D + dalej).
 
 ### Zostaje
 

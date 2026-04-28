@@ -209,15 +209,25 @@ Do not claim behavior works unless it was tested or the limitation is clearly st
 
 ## Repository Map
 
-- `bot/` — Telegram bot handlers and user interaction
-- `api/` — FastAPI backend
-- `shared/` — shared business logic, wrappers, services
-- `tests/` — automated tests
+Monorepo with two parallel tracks:
+
+**Bot track** (`oze-agent/`) — Telegram bot + FastAPI on Railway:
+- `oze-agent/bot/` — Telegram bot handlers and user interaction
+- `oze-agent/api/` — FastAPI backend
+- `oze-agent/shared/` — shared business logic, wrappers, services
+- `oze-agent/tests/` — automated tests
+
+**Web track** (`web/`) — Next.js 16 web app on Vercel (`oze-agent.vercel.app`):
+- `web/app/` — App Router routes (`/`, `/rejestracja`, `/login`, `/dashboard`, `/healthz`, legal placeholders)
+- `web/components/landing.tsx` — cinematic landing v3
+- `web/lib/supabase/` — `@supabase/ssr` Auth client (publishable key only — server actions + middleware)
+- `web/CLAUDE.md` — 5 baseline rules + Phase 0B auth boundary (Supabase = session, dashboard data via FastAPI JWT)
+
+Shared:
 - `docs/` — active project documentation
 - `docs/archive/` — historical documents only
 
-Business logic should live in `shared/` where possible.
-Bot and API layers should call shared logic instead of duplicating it.
+Bot business logic lives in `oze-agent/shared/`. Bot and API layers should call shared logic instead of duplicating it. Web app **does not write CRM data** — Telegram remains the only mutation surface (R1).
 
 ---
 

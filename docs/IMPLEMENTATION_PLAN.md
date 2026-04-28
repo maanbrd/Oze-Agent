@@ -1,6 +1,22 @@
 # OZE-Agent — Implementation Plan
 
-_Last updated: 14.04.2026_
+_Last updated: 28.04.2026_
+
+This file owns the **bot track** phasing (selective behavior-layer rewrite). The **web app track** has its own multi-phase plan tracked separately at `~/.claude/plans/przeczytaj-oba-pliki-md-twinkling-oasis.md`; the snapshot below is current as of 28.04.2026.
+
+---
+
+## Web app track snapshot (28.04.2026)
+
+| Phase | Status | Output |
+|---|---|---|
+| **0A** Web bootstrap (Next.js 16 scaffold, landing, placeholder routes, `/healthz`) | ✅ DONE — PR #1 merged 28.04 | `web/` live on Vercel `oze-agent.vercel.app` |
+| **0B** Supabase Auth + RLS baseline | ✅ DONE — PR #2 + #3 merged 28.04 | `/rejestracja` → `auth.users` + `public.users` via `on_auth_user_created` trigger; `/dashboard` reads claims; signup verified live (with email confirmation off — see §config note) |
+| **0C** Stripe sandbox + onboarding wizard step 1-2 | ⏳ next | Stripe products + webhook idempotent + outbox + checkout step |
+| **0D** Railway billing service + Google OAuth + Telegram pairing | ⏳ later | Full 5-step onboarding wizard |
+| **1+** | not started | Read-only data layer, dashboard, klienci, kalendarz, płatności, landing polish |
+
+**Config note (28.04.2026):** Supabase Auth → Providers → Email → `Confirm email` is **OFF**. Reason: built-in SMTP free-tier hits `over_email_send_rate_limit` (~2/h) which rolls back signup. Custom SMTP (Resend) is part of Phase 7 of the master plan; until then, signup creates session immediately without confirmation email. Re-enable once Resend SMTP is wired in Supabase project.
 
 ---
 

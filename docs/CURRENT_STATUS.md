@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 25.04.2026_
+_Last updated: 28.04.2026_
 
 ---
 
@@ -69,6 +69,14 @@ Current photo code (and any batch/multi-meeting fragments) is legacy reference o
   through normal text path via `handle_text(text_override=...)`.
 - **Global `/cancel` command** — universal escape hatch for any pending flow
   (added in `48e4a76`).
+
+### Web app track (parallel to bot rewrite)
+
+- **Phase 0A — Web bootstrap (DONE 28.04.2026, PR #1)**: Next.js 16.2.4 scaffold under `web/`, cinematic landing v3 (`web/components/landing.tsx`), placeholder routes (`/rejestracja`, `/login`, `/regulamin`, `/polityka-prywatnosci`), `/healthz` Route Handler. Live on `oze-agent.vercel.app`.
+- **Phase 0B — Supabase Auth + RLS (DONE 28.04.2026, PR #2 + #3)**: `@supabase/ssr` server actions, `signup` / `login` / `logout` flows (`web/app/auth/actions.ts`), `auth.users` ↔ `public.users` linked via `on_auth_user_created` trigger + `auth_user_id` column, RLS policy `users_select_own_profile`, `/dashboard` page renders status panels (Auth+RLS gotowe / Subskrypcja czeka / Google czeka / Telegram czeka / Onboarding czeka).
+- **Live signup verified 28.04.2026** with `maanbrd977@gmail.com` — session cookie set, redirect to `/dashboard`.
+- **Config decision (28.04.2026):** Supabase Auth `Confirm email` toggle **OFF** for MVP. Built-in SMTP free-tier rate limit (`over_email_send_rate_limit` ~2/h) blocked signup with confirmation on. Re-enable once custom SMTP (Resend) configured in Supabase per master plan Phase 7.
+- **Next:** Phase 0C — Stripe sandbox + onboarding wizard step 1-2.
 
 ---
 

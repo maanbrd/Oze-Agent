@@ -1,12 +1,26 @@
 # OZE-Agent — Architecture
 
-_Last updated: 14.04.2026_
+_Last updated: 28.04.2026_
 
 ---
 
 ## Current State
 
-The current Python behavior layer is **legacy/reference**. We do not trust it as the behavior contract. We can recover stable fragments from it, but the rewrite starts from the `.md` specs.
+Two parallel deployment tracks share Supabase (auth + RLS) and Google APIs:
+
+| Track | Code | Hosting | Role |
+|---|---|---|---|
+| **Bot** (Telegram + FastAPI) | `oze-agent/` | Railway | The only mutation surface for CRM data (R1: confirm-before-write). Voice + text + future photo. |
+| **Web app** (Next.js 16) | `web/` | Vercel — `oze-agent.vercel.app` | Read-only dashboard, billing, onboarding wizard, settings. **No web chat in MVP.** |
+
+The current Python behavior layer is **legacy/reference**. Bot rewrite (selective) starts from the `.md` specs. Web app is greenfield.
+
+### Web app architecture (28.04.2026)
+
+- **Auth**: Supabase Auth via `@supabase/ssr` server actions (`web/lib/supabase/server.ts`). Publishable / anon key only on the client; service key never reaches Next.js (G1).
+- **Auth boundary**: Next.js owns sessions. Dashboard / business data goes through FastAPI (`oze-agent/api/`) via `Authorization: Bearer <Supabase JWT>`; FastAPI validates JWT against Supabase JWKS. RLS protects browser access; FastAPI uses service key + per-endpoint authorization on JWT subject.
+- **Routes live**: `/` landing, `/rejestracja` signup (server action), `/login`, `/dashboard` (account status panel), `/healthz` (Route Handler), `/regulamin`, `/polityka-prywatnosci`.
+- **Email confirmation**: currently OFF in Supabase (Auth → Providers → Email) for MVP. Built-in SMTP free-tier rate limit (~2/h) blocks signup with confirmation on. Custom SMTP (Resend) enabled in Phase 7 per `~/.claude/plans/przeczytaj-oba-pliki-md-twinkling-oasis.md`.
 
 ---
 
