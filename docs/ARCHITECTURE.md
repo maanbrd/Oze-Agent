@@ -21,6 +21,7 @@ The current Python behavior layer is **legacy/reference**. Bot rewrite (selectiv
 - **Auth boundary**: Next.js owns sessions. Dashboard / business data goes through FastAPI (`oze-agent/api/`) via `Authorization: Bearer <Supabase JWT>`; FastAPI validates JWT against Supabase JWKS. RLS protects browser access; FastAPI uses service key + per-endpoint authorization on JWT subject.
 - **Routes live**: `/` landing, `/rejestracja` signup (server action), `/login`, `/dashboard` (account status panel), `/healthz` (Route Handler), `/regulamin`, `/polityka-prywatnosci`.
 - **Email confirmation**: currently OFF in Supabase (Auth → Providers → Email) for MVP. Built-in SMTP free-tier rate limit (~2/h) blocks signup with confirmation on. Custom SMTP (Resend) enabled in Phase 7 per `~/.claude/plans/przeczytaj-oba-pliki-md-twinkling-oasis.md`.
+- **Billing boundary (Phase 0C)**: Next.js creates Stripe Checkout Sessions and verifies Stripe webhooks, but never stores `SUPABASE_SERVICE_KEY`. Vercel forwards verified Stripe events to FastAPI `/internal/billing/stripe-event` with HMAC (`BILLING_INTERNAL_SECRET`). FastAPI owns durable billing writes (`users`, `payment_history`, `webhook_log`, `billing_outbox`) and only activates access after paid Stripe events.
 
 ---
 

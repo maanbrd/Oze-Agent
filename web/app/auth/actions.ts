@@ -34,6 +34,12 @@ export async function signup(formData: FormData) {
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
   const terms = formData.get("terms") === "on";
+  const onboardingSurvey = {
+    region: value(formData, "region"),
+    specialty: value(formData, "specialty"),
+    referral_source: value(formData, "referralSource"),
+    experience: value(formData, "experience"),
+  };
 
   if (!terms) {
     redirect(encoded("/rejestracja", "Regulamin jest wymagany."));
@@ -53,6 +59,11 @@ export async function signup(formData: FormData) {
         consent_terms: true,
         consent_marketing: formData.get("marketing") === "on",
         consent_phone_contact: formData.get("phoneContact") === "on",
+        onboarding_survey: onboardingSurvey,
+        region: onboardingSurvey.region,
+        specialty: onboardingSurvey.specialty,
+        referral_source: onboardingSurvey.referral_source,
+        experience: onboardingSurvey.experience,
       },
     },
   });
@@ -65,7 +76,7 @@ export async function signup(formData: FormData) {
     redirect(encoded("/login", "Konto utworzone. Sprawdź email i zaloguj się."));
   }
 
-  redirect("/dashboard");
+  redirect("/onboarding/platnosc");
 }
 
 export async function logout() {

@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.routes.billing import router as billing_router
 from api.routes.dashboard import router as dashboard_router
 from api.routes.google_oauth import router as google_oauth_router
 from bot.config import Config
@@ -26,6 +27,7 @@ app.add_middleware(
 
 app.include_router(google_oauth_router, prefix="/auth")
 app.include_router(dashboard_router, prefix="/api")
+app.include_router(billing_router, prefix="/internal/billing")
 
 
 @app.get("/health")

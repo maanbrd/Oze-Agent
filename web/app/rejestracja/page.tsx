@@ -19,7 +19,7 @@ export default async function RegistrationPage({
   const { data } = await supabase.auth.getClaims();
 
   if (data?.claims) {
-    redirect("/dashboard");
+    redirect("/onboarding/platnosc");
   }
 
   return (
@@ -53,10 +53,7 @@ export default async function RegistrationPage({
               </div>
             </div>
 
-            <form
-              action={signup}
-              className="rounded-[8px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30"
-            >
+            <form action={signup} className="rounded-[8px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30">
               {params.message ? (
                 <p className="mb-5 rounded-[8px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-zinc-200">
                   {params.message}
@@ -75,6 +72,50 @@ export default async function RegistrationPage({
                 autoComplete="new-password"
                 minLength={8}
               />
+              <div className="mt-6 border-t border-white/10 pt-5">
+                <p className="text-sm font-semibold text-white">Krótka ankieta</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                  Pomaga ustawić onboarding pod teren, w którym pracujesz.
+                </p>
+                <SelectField
+                  label="Region działania"
+                  name="region"
+                  options={[
+                    "dolnośląskie",
+                    "kujawsko-pomorskie",
+                    "lubelskie",
+                    "lubuskie",
+                    "łódzkie",
+                    "małopolskie",
+                    "mazowieckie",
+                    "opolskie",
+                    "podkarpackie",
+                    "podlaskie",
+                    "pomorskie",
+                    "śląskie",
+                    "świętokrzyskie",
+                    "warmińsko-mazurskie",
+                    "wielkopolskie",
+                    "zachodniopomorskie",
+                    "cała Polska",
+                  ]}
+                />
+                <SelectField
+                  label="Branża"
+                  name="specialty"
+                  options={["PV", "Pompy ciepła", "PV + magazyn", "Wszystko"]}
+                />
+                <SelectField
+                  label="Skąd nas znasz"
+                  name="referralSource"
+                  options={["Facebook", "Polecenie", "Google", "Inne"]}
+                />
+                <SelectField
+                  label="Doświadczenie w OZE"
+                  name="experience"
+                  options={["do 1 roku", "1-3 lata", "3+ lata"]}
+                />
+              </div>
               <label className="mt-5 flex gap-3 text-sm leading-6 text-zinc-300">
                 <input required name="terms" type="checkbox" className="mt-1 h-4 w-4" />
                 <span>Akceptuję regulamin i politykę prywatności.</span>
@@ -91,7 +132,7 @@ export default async function RegistrationPage({
                 type="submit"
                 className="mt-7 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-6 py-3 text-sm font-semibold text-black shadow-[0_0_36px_rgba(61,255,122,0.22)] transition hover:bg-[#6DFF98]"
               >
-                Utwórz konto
+                Dalej: płatność
               </button>
               <p className="mt-5 text-sm leading-6 text-zinc-400">
                 Masz konto?{" "}
@@ -104,6 +145,34 @@ export default async function RegistrationPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  options,
+}: {
+  label: string;
+  name: string;
+  options: string[];
+}) {
+  return (
+    <label className="mt-4 block text-sm font-medium text-zinc-200">
+      {label}
+      <select
+        required
+        name={name}
+        className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+      >
+        <option value="">Wybierz</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
