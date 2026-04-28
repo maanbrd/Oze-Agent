@@ -17,8 +17,14 @@ Wyjątek: konfiguracja own konta (profil, ustawienia, płatności) — to operac
 Implementation guardrails (G1-G7) z głównego planu obowiązują, gdy będą wprowadzane Supabase/Stripe/Google integration:
 - G1: `SUPABASE_SERVICE_KEY` server-only (`import "server-only"` w `lib/supabase/admin.ts`)
 - G2: `/internal/google-token` z HMAC + allowlist + no-log + timeout + audit log + refresh-stays-Railway
-- G3: Stripe webhook idempotent + outbox + reconciler
+- G3: Payment webhook idempotent + outbox + reconciler (provider decision lives in backend/env docs)
 - G4: RLS testy zielone przed dashboardem
 - G5: `<DataFreshnessBadge>` "ostatnio odświeżone X min temu" obok danych z Sheets
 - G6: company extension to osobny milestone
 - G7: ujawnione sekrety → rotacja, log w `docs/SECRETS_AUDIT.md`
+
+Phase 0B auth boundary:
+- Next.js może używać Supabase tylko do Auth/session cookies przez publishable/anon key.
+- Dashboard/business data idą przez FastAPI po `Authorization: Bearer <Supabase JWT>`.
+- FastAPI waliduje Supabase JWT przez JWKS, z legacy `SUPABASE_JWT_SECRET` tylko jako fallback dla HS256.
+- RLS chroni browser access, ale FastAPI używa service key, więc każdy endpoint musi autoryzować po JWT subject.
