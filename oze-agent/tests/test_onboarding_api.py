@@ -205,3 +205,63 @@ async def test_create_google_resources_only_creates_missing(monkeypatch):
     assert result["resources"]["calendarId"] == "calendar-1"
     assert result["resources"]["driveFolderId"] == "drive-1"
     assert fake.last_query.updated["google_calendar_id"] == "calendar-1"
+
+
+@pytest.mark.asyncio
+async def test_generate_telegram_code_sets_expiry(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "google_refresh_token": "encrypted",
+                "google_sheets_id": "sheet-1",
+                "google_calendar_id": "cal-1",
+                "google_drive_folder_id": "drive-1",
+                "telegram_id": None,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+    monkeypatch.setattr(onboarding.secrets, "randbelow", lambda upper: 12345)
+
+    result = await onboarding.generate_telegram_code(
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
+    )
+
+    assert result["code"] == "112345"
+    assert result["paired"] is False
+    assert fake.last_query.updated["telegram_link_code"] == "112345"
+    assert fake.last_query.updated["telegram_link_code_expires"] is not None
+
+
+@pytest.mark.asyncio
+async def test_telegram_status_completed_when_telegram_id_exists(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "telegram_id": 123456,
+                "telegram_link_code": None,
+                "telegram_link_code_expires": None,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+
+    result = await onboarding.get_telegram_status(
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
+    )
+
+    assert result["paired"] is True
+    assert result["telegramId"] == 123456

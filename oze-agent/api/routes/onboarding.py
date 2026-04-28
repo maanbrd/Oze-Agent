@@ -7,7 +7,8 @@ import hashlib
 import hmac
 import inspect
 import json
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -310,4 +311,54 @@ async def create_google_resources(
             "driveFolderId": drive_folder_id,
         },
         "nextStep": _next_step(user),
+    }
+
+
+def _telegram_code() -> str:
+    return f"{100000 + secrets.randbelow(900000):06d}"
+
+
+@router.post("/telegram-code")
+async def generate_telegram_code(auth_user: AuthUser = Depends(get_current_auth_user)):
+    user = _get_user_for_auth(auth_user)
+    if not _has_payment(user) or not _has_google_tokens(user) or not _has_resources(user):
+        raise HTTPException(
+            status_code=409,
+            detail="Complete payment and Google setup before Telegram pairing.",
+        )
+    if user.get("telegram_id"):
+        return {
+            "paired": True,
+            "telegramId": user["telegram_id"],
+            "code": None,
+            "expiresAt": None,
+        }
+
+    code = _telegram_code()
+    expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=15)
+    get_supabase_client().table("users").update(
+        {
+            "telegram_link_code": code,
+            "telegram_link_code_expires": expires_at.isoformat(),
+            "updated_at": _now_iso(),
+        }
+    ).eq("id", user["id"]).execute()
+    return {
+        "paired": False,
+        "telegramId": None,
+        "code": code,
+        "expiresAt": expires_at.isoformat(),
+    }
+
+
+@router.get("/telegram-status")
+async def get_telegram_status(auth_user: AuthUser = Depends(get_current_auth_user)):
+    user = _get_user_for_auth(auth_user)
+    return {
+        "paired": bool(user.get("telegram_id")),
+        "telegramId": user.get("telegram_id"),
+        "code": None if user.get("telegram_id") else user.get("telegram_link_code"),
+        "expiresAt": None
+        if user.get("telegram_id")
+        else user.get("telegram_link_code_expires"),
     }
