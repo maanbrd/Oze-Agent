@@ -100,4 +100,17 @@ assert.match(
 );
 assert.doesNotMatch(appSource, /Przelewy24/i, "Web UI must not mention Przelewy24.");
 
+for (const route of [
+  "app/onboarding/google/page.tsx",
+  "app/onboarding/google/sukces/page.tsx",
+  "app/onboarding/zasoby/page.tsx",
+  "app/onboarding/telegram/page.tsx",
+]) {
+  assert.match(
+    read(route),
+    /onboarding|Google|Telegram|Sheets|Calendar|Drive/i,
+    `${route} must implement onboarding UI.`,
+  );
+}
+
 console.log("web invariants passed");

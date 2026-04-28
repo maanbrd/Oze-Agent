@@ -17,14 +17,14 @@ export default function PaymentSuccessPage() {
         </h1>
         <p className="mt-4 text-sm leading-7 text-zinc-300">
           Stripe wysłał potwierdzenie. Po zaksięgowaniu konto przejdzie na
-          aktywną subskrypcję i zobaczysz to w dashboardzie. Następny etap to
-          Google OAuth i Telegram.
+          aktywną subskrypcję. Następny etap to Google OAuth, zasoby Google i
+          Telegram.
         </p>
         <Link
-          href="/dashboard"
+          href="/onboarding/google"
           className="mt-7 inline-flex rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black"
         >
-          Sprawdź status
+          Przejdź do Google
         </Link>
       </section>
     </main>
