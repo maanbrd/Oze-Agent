@@ -62,7 +62,7 @@ export default async function RegistrationPage({
                   {params.message}
                 </p>
               ) : null}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 [&>label]:mt-0">
                 <Field label="Imię" name="firstName" autoComplete="given-name" />
                 <Field label="Nazwisko" name="lastName" autoComplete="family-name" />
               </div>
