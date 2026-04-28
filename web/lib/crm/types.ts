@@ -46,8 +46,12 @@ export type CrmEvent = {
   calendarUrl: string | null;
 };
 
+export type CrmSourceState = "live" | "demo" | "unavailable";
+
 export type CrmDashboardData = {
   fetchedAt: string;
+  source: CrmSourceState;
+  sourceMessage: string;
   clients: CrmClient[];
   events: CrmEvent[];
 };

@@ -20,6 +20,11 @@ export default async function CalendarPage() {
       </div>
 
       <CrmNotice />
+      <p className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
+        {data.source === "live"
+          ? "Źródło: Google Sheets i Calendar."
+          : data.sourceMessage}
+      </p>
 
       <section className="grid gap-4">
         {Object.entries(grouped).map(([day, events]) => (

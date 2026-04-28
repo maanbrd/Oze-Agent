@@ -113,4 +113,15 @@ for (const route of [
   );
 }
 
+const crmTypes = read("lib/crm/types.ts");
+const crmAdapters = read("lib/crm/adapters.ts");
+assert.match(crmTypes, /CrmSourceState/, "CRM DTOs must include source state.");
+assert.match(crmAdapters, /unavailable/, "CRM adapter must expose unavailable state.");
+assert.match(crmAdapters, /demo/, "CRM adapter must expose demo state.");
+assert.match(
+  crmAdapters,
+  /completed/,
+  "CRM adapter must consider onboarding completion before demo fallback.",
+);
+
 console.log("web invariants passed");

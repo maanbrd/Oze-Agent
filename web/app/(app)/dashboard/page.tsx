@@ -42,6 +42,11 @@ export default async function DashboardPage() {
       </div>
 
       <CrmNotice />
+      <p className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
+        {data.source === "live"
+          ? "Źródło: Google Sheets i Calendar."
+          : data.sourceMessage}
+      </p>
 
       <section className="grid gap-4 md:grid-cols-4">
         <Metric label="Klienci" value={data.clients.length} detail="z Google Sheets" />

@@ -17,13 +17,34 @@ function apiBaseUrl() {
   ).replace(/\/$/, "");
 }
 
+function unavailableData(message: string): CrmDashboardData {
+  return {
+    fetchedAt: new Date().toISOString(),
+    source: "unavailable",
+    sourceMessage: message,
+    clients: [],
+    events: [],
+  };
+}
+
+function demoData(): CrmDashboardData {
+  return {
+    ...mockCrmDashboardData,
+    source: "demo",
+    sourceMessage:
+      "Dane demo. Po onboardingu panel czyta CRM z Google Sheets i Calendar.",
+  };
+}
+
 export async function getCrmDashboardData(): Promise<CrmDashboardData> {
   const account = await getCurrentAccount();
   const baseUrl = apiBaseUrl();
 
   if (!account.authenticated || !account.accessToken || !baseUrl) {
-    return mockCrmDashboardData;
+    return demoData();
   }
+
+  const completed = Boolean(account.profile?.onboarding_completed);
 
   const response = await fetch(`${baseUrl}/api/dashboard/crm`, {
     headers: {
@@ -34,8 +55,17 @@ export async function getCrmDashboardData(): Promise<CrmDashboardData> {
   });
 
   if (!response.ok) {
-    return mockCrmDashboardData;
+    return completed
+      ? unavailableData(
+          "Nie udało się pobrać danych z Google. Otwórz Sheets lub Calendar bezpośrednio.",
+        )
+      : demoData();
   }
 
-  return (await response.json()) as CrmDashboardData;
+  const data = (await response.json()) as CrmDashboardData;
+  return {
+    ...data,
+    source: data.source ?? "live",
+    sourceMessage: data.sourceMessage ?? "Dane z Google Sheets i Calendar.",
+  };
 }

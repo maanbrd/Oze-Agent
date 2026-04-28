@@ -6,6 +6,9 @@ const driveBase = "https://drive.google.com/drive/folders/demo-drive";
 
 export const mockCrmDashboardData: CrmDashboardData = {
   fetchedAt: "2026-04-29T08:30:00+02:00",
+  source: "demo",
+  sourceMessage:
+    "Dane demo. Po onboardingu panel czyta CRM z Google Sheets i Calendar.",
   clients: [
     {
       id: "sheet-row-1",
