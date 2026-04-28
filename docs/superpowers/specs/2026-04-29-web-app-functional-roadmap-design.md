@@ -29,10 +29,12 @@ The first goal is a functional web app, not final marketing copy. Copy should be
 plain Polish and easy to replace later. Engineering should prioritize working
 flows, route structure, data boundaries, and payment/onboarding mechanics.
 
-The web app is not a chat surface and must not mutate CRM data. Telegram remains
-the place for adding clients, notes, meetings, and status changes. The web app
-can mutate system/account data: auth profile, billing state, onboarding state,
-Google connection metadata, Telegram pairing state, and user settings.
+The web app is not a chat surface and must not mutate CRM data. CRM edits happen
+in Google directly: Sheets for client rows and Calendar for meetings/actions.
+Every CRM page must make this clear with direct Google links instead of edit
+forms. The web app can mutate system/account data: auth profile, billing state,
+onboarding state, Google connection metadata, Telegram pairing state, and user
+settings.
 
 The first usable version should let a real user:
 
@@ -56,10 +58,11 @@ verifies them, then forwards a signed internal payload to FastAPI. FastAPI
 validates the HMAC, writes billing state to Supabase with the service key, and
 deduplicates by Stripe event ID.
 
-Read-only CRM pages should use a local adapter boundary. In early phases the
-adapter returns realistic Polish mock data. Later the same boundary calls FastAPI
-dashboard endpoints that read Google Sheets and Calendar. This keeps UI work
-moving without storing CRM source-of-truth data in Supabase.
+Read-only CRM pages use a local adapter boundary whose production target is
+FastAPI dashboard endpoints backed by Google Sheets and Google Calendar. Mock
+data is allowed only for demo/empty states or while a specific backend endpoint
+is not yet available, and it must stay isolated behind the same adapter. This
+keeps UI work moving without storing CRM source-of-truth data in Supabase.
 
 ## Phase Roadmap
 
@@ -94,17 +97,20 @@ Build the logged-in product shell:
 
 ### Phase 0E — Read-Only CRM Experience
 
-Build functional CRM pages with mock-backed adapters:
+Build functional CRM pages against read-only adapters that target Sheets and
+Calendar through FastAPI:
 
 - Dashboard KPIs, funnel, day plan, urgent clients, and data freshness badge.
-- Clients table with search, filters, sortable columns, and read-only side panel.
-- Calendar week/day/list view with event details and client links.
+- Clients table with search, filters, sortable columns, and read-only side panel
+  populated from Sheets rows.
+- Calendar week/day/list view with event details and client links populated from
+  Calendar events.
 - Payments page that reads local account/billing state.
 - Settings page for account and onboarding state, with CRM-editing features
   disabled if they are POST-MVP.
 
-The UI must make it clear that CRM edits happen through Telegram or Google
-direct links, not through web forms.
+The UI must make it clear that CRM edits happen in Sheets/Calendar or through
+direct Google links, not through web forms.
 
 ### Phase 0F — Onboarding Completion
 
@@ -142,8 +148,9 @@ CRM source-of-truth data stays in Google:
 - meetings/actions in Calendar
 - photos in Drive
 
-Mock CRM data in the frontend is acceptable during UI buildout, but it must be
-clearly isolated in mock/adapters so it can be replaced by FastAPI reads.
+Mock CRM data in the frontend is acceptable for demo/empty-state UI, but it must
+be clearly isolated in adapters. The logged-in CRM path should read Sheets and
+Calendar through FastAPI as soon as those endpoints exist.
 
 ## Error Handling
 
@@ -172,6 +179,7 @@ Frontend shell and CRM pages need tests or build-time verification focused on:
 - route rendering
 - protected redirects
 - no CRM mutation forms
+- logged-in CRM data path reads from Sheets and Calendar adapters
 - payment CTA visibility
 - mock adapter data shape
 
