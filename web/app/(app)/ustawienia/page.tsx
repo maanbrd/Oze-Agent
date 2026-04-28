@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { updateAccountAction } from "@/app/onboarding/actions";
 import { CrmNotice } from "@/components/crm-notice";
 import { getCurrentAccount } from "@/lib/api/account";
 
@@ -7,45 +9,69 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs font-semibold uppercase text-[#3DFF7A]">Ustawienia</p>
-        <h1 className="mt-2 text-3xl font-semibold text-white">Konto i integracje</h1>
-      </div>
+      <section>
+        <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+          Ustawienia
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-white">
+          Konto i integracje.
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-zinc-400">
+          Statusy, notatki, klienci i spotkania zostają w Google Sheets i
+          Calendar. Ten formularz zapisuje tylko dane konta.
+        </p>
+      </section>
 
       <CrmNotice />
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <Panel title="Profil">
-          <Line label="Email" value={profile?.email ?? account.email ?? "brak"} />
-          <Line label="Telefon" value={profile?.phone ?? "brak"} />
-          <Line label="Nazwa" value={profile?.name ?? "brak"} />
-        </Panel>
+      <form
+        action={updateAccountAction}
+        className="grid max-w-xl gap-4 rounded-[8px] border border-white/10 bg-white/[0.04] p-5"
+      >
+        <label className="text-sm text-zinc-300">
+          Nazwa konta
+          <input
+            name="name"
+            defaultValue={profile?.name ?? ""}
+            className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
+          />
+        </label>
+        <label className="text-sm text-zinc-300">
+          Telefon kontaktowy
+          <input
+            name="phone"
+            defaultValue={profile?.phone ?? ""}
+            className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
+          />
+        </label>
+        <button className="w-fit rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black">
+          Zapisz ustawienia konta
+        </button>
+      </form>
 
-        <Panel title="Integracje">
-          <Line label="Sheets" value={profile?.google_sheets_id ? "połączone" : "czeka"} />
-          <Line label="Calendar" value={profile?.google_calendar_id ? "połączone" : "czeka"} />
-          <Line label="Drive" value={profile?.google_drive_folder_id ? "połączone" : "czeka"} />
-          <Line label="Telegram" value={profile?.telegram_id ? "sparowany" : "czeka"} />
-        </Panel>
+      <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
+        <h2 className="text-sm font-semibold text-white">Profil</h2>
+        <div className="mt-4 space-y-3">
+          <Line label="Email" value={profile?.email ?? account.email ?? "brak"} />
+          <Line label="Nazwa" value={profile?.name ?? "brak"} />
+          <Line label="Telefon" value={profile?.phone ?? "brak"} />
+        </div>
       </section>
 
       <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
-        <h2 className="text-sm font-semibold text-white">CRM</h2>
+        <h2 className="text-sm font-semibold text-white">CRM i onboarding</h2>
         <p className="mt-3 text-sm leading-6 text-zinc-400">
           Statusy i kolumny zmieniasz w Google. Panel nie zapisuje zmian CRM.
-          Ta sekcja pokaże konfigurację po podpięciu odczytu z Sheets i Calendar.
+          Połączenie Google i Telegrama przechodzi przez onboarding.
         </p>
+        <Link
+          href="/onboarding/google"
+          className="mt-4 inline-flex rounded-full border border-[#3DFF7A]/40 px-4 py-2 text-sm font-semibold text-[#3DFF7A]"
+        >
+          Przejdź do onboardingu
+        </Link>
       </section>
     </div>
-  );
-}
-
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
-      <div className="mt-4 space-y-3">{children}</div>
-    </section>
   );
 }
 

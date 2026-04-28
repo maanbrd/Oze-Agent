@@ -124,4 +124,16 @@ assert.match(
   "CRM adapter must consider onboarding completion before demo fallback.",
 );
 
+const settingsPage = read("app/(app)/ustawienia/page.tsx");
+assert.match(
+  settingsPage,
+  /updateAccountAction/,
+  "Settings must use account-only update action.",
+);
+assert.doesNotMatch(
+  settingsPage,
+  /google_sheets_id|google_calendar_id|Status klienta|Notatki klienta/,
+  "Settings must not edit CRM fields.",
+);
+
 console.log("web invariants passed");
