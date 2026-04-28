@@ -98,7 +98,7 @@ def store_google_tokens(user_id: str, credentials: Credentials) -> None:
         logger.error("store_google_tokens: failed for user %s: %s", user_id, e)
 
 
-def build_oauth_url(user_id: str) -> str:
+def build_oauth_url(user_id: str, state: str | None = None) -> str:
     """Generate Google OAuth authorization URL.
 
     Uses plain OAuth2 without PKCE — correct for server-side web app flows.
@@ -110,7 +110,7 @@ def build_oauth_url(user_id: str) -> str:
         client_id=Config.GOOGLE_CLIENT_ID,
         scope=SCOPES,
         redirect_uri=Config.GOOGLE_REDIRECT_URI,
-        state=user_id,
+        state=state or user_id,
     )
     auth_url, _ = oauth.authorization_url(
         "https://accounts.google.com/o/oauth2/auth",

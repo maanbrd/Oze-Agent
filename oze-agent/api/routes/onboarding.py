@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.auth import AuthUser, get_current_auth_user
+from bot.config import Config
 from shared.database import get_supabase_client
+from shared.google_auth import build_oauth_url
 
 router = APIRouter()
 
@@ -110,6 +116,58 @@ def _status_payload(user: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _oauth_state_secret() -> str:
+    secret = Config.GOOGLE_OAUTH_STATE_SECRET or Config.BILLING_INTERNAL_SECRET
+    if not secret:
+        raise HTTPException(
+            status_code=500,
+            detail="OAuth state secret is not configured.",
+        )
+    return secret
+
+
+def encode_oauth_state(user_id: str) -> str:
+    payload = {
+        "user_id": user_id,
+        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    sig = hmac.new(
+        _oauth_state_secret().encode("utf-8"),
+        body.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{body}.{sig}"
+
+
+def decode_oauth_state(state: str, max_age_seconds: int = 900) -> str:
+    try:
+        body, sig = state.split(".", 1)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state.") from exc
+
+    expected = hmac.new(
+        _oauth_state_secret().encode("utf-8"),
+        body.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state signature.")
+
+    padded = body + "=" * (-len(body) % 4)
+    payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+    iat = int(payload.get("iat", 0))
+    now = int(datetime.now(tz=timezone.utc).timestamp())
+    if now - iat > max_age_seconds:
+        raise HTTPException(status_code=400, detail="OAuth state expired.")
+
+    user_id = payload.get("user_id")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(status_code=400, detail="OAuth state missing user.")
+    return user_id
+
+
 @router.get("/status")
 async def get_onboarding_status(auth_user: AuthUser = Depends(get_current_auth_user)):
     user = _get_user_for_auth(auth_user)
@@ -151,3 +209,15 @@ async def update_account(
     )
     updated = result.data[0] if result.data else {**user, **update_data}
     return {"profile": updated}
+
+
+@router.post("/google/oauth-url")
+async def start_google_oauth(auth_user: AuthUser = Depends(get_current_auth_user)):
+    user = _get_user_for_auth(auth_user)
+    if not _has_payment(user):
+        raise HTTPException(
+            status_code=402,
+            detail="Payment is required before Google OAuth.",
+        )
+    state = encode_oauth_state(user["id"])
+    return {"url": build_oauth_url(user["id"], state=state)}

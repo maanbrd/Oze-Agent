@@ -3,8 +3,10 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
+from api.routes.onboarding import decode_oauth_state
+from bot.config import Config
 from shared.google_auth import build_oauth_url, handle_oauth_callback
 
 logger = logging.getLogger(__name__)
@@ -45,15 +47,24 @@ async def get_oauth_url(user_id: str):
         raise HTTPException(status_code=500, detail="Nie udało się wygenerować URL autoryzacji.")
 
 
-@router.get("/google/callback", response_class=HTMLResponse)
+@router.get("/google/callback")
 async def google_callback(code: str, state: str):
     """Handle Google OAuth redirect. state = user_id."""
     try:
-        user = handle_oauth_callback(code=code, state=state)
+        user_id = decode_oauth_state(state)
+        user = handle_oauth_callback(code=code, state=user_id)
+        target = (Config.DASHBOARD_URL or "http://localhost:3000").rstrip("/")
         if not user:
-            logger.error("google_callback: handle_oauth_callback returned None for state=%s", state)
-            return HTMLResponse(content=_ERROR_HTML, status_code=400)
-        return HTMLResponse(content=_SUCCESS_HTML)
+            logger.error("google_callback: handle_oauth_callback returned None for user=%s", user_id)
+            return RedirectResponse(
+                f"{target}/onboarding/google?error=oauth_failed",
+                status_code=302,
+            )
+        return RedirectResponse(f"{target}/onboarding/google/sukces", status_code=302)
     except Exception as e:
         logger.error("google_callback: %s", e)
-        return HTMLResponse(content=_ERROR_HTML, status_code=500)
+        target = (Config.DASHBOARD_URL or "http://localhost:3000").rstrip("/")
+        return RedirectResponse(
+            f"{target}/onboarding/google?error=oauth_failed",
+            status_code=302,
+        )

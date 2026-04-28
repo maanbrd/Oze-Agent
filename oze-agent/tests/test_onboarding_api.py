@@ -103,3 +103,56 @@ async def test_update_account_allows_only_system_fields(monkeypatch):
     assert result["profile"]["name"] == "Jan Test"
     assert result["profile"]["phone"] == "600100200"
     assert "google_sheets_id" not in fake.last_query.updated
+
+
+@pytest.mark.asyncio
+async def test_google_oauth_url_uses_authenticated_user(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "active",
+                "activation_paid": True,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+    monkeypatch.setattr(
+        onboarding.Config,
+        "GOOGLE_OAUTH_STATE_SECRET",
+        "state-secret",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        onboarding,
+        "build_oauth_url",
+        lambda user_id, state=None: f"https://google.test?state={state}&user={user_id}",
+        raising=False,
+    )
+
+    result = await onboarding.start_google_oauth(
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
+    )
+
+    assert result["url"].startswith("https://google.test")
+    assert "user=user-1" in result["url"]
+    assert "auth-1" not in result["url"]
+
+
+def test_oauth_state_roundtrip(monkeypatch):
+    from api.routes import onboarding
+
+    monkeypatch.setattr(
+        onboarding.Config,
+        "GOOGLE_OAUTH_STATE_SECRET",
+        "state-secret",
+        raising=False,
+    )
+    state = onboarding.encode_oauth_state("user-1")
+
+    assert onboarding.decode_oauth_state(state) == "user-1"
