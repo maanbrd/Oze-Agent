@@ -1384,7 +1384,7 @@ function PricingSection() {
             color: "rgba(255,255,255,0.4)",
           }}
         >
-          Aktywacja 199 zł doliczona przy pierwszej płatności. BLIK, karta, przelew (Przelewy24).
+          Aktywacja 199 zł doliczona przy pierwszej płatności. Płatność obsługuje Stripe.
         </div>
       </div>
     </section>

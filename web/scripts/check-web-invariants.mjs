@@ -98,7 +98,11 @@ assert.match(
   /generateTelegramCode/,
   "Web must have Telegram code helper.",
 );
-assert.doesNotMatch(appSource, /Przelewy24/i, "Web UI must not mention Przelewy24.");
+assert.doesNotMatch(
+  appSource,
+  new RegExp("Przelewy" + "24", "i"),
+  "Web UI must not mention the retired payment provider.",
+);
 
 for (const route of [
   "app/onboarding/google/page.tsx",

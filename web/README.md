@@ -29,6 +29,14 @@ Phase 0C dodaje:
 - webhook Stripe w Next.js z weryfikacją podpisu
 - trwały zapis billing state przez FastAPI internal endpoint
 
+Phase 0F / Phase 1 dodaje:
+
+- Google OAuth z web app przez FastAPI
+- tworzenie zasobów Google: Sheets, Calendar, Drive
+- ekran parowania Telegrama krótkotrwałym kodem
+- read-only dashboard z jawnie oznaczonym źródłem danych CRM
+- ustawienia konta zapisujące wyłącznie dane systemowe, nie CRM
+
 ## Getting Started
 
 Uruchom lokalnie:
@@ -71,6 +79,9 @@ Adresy:
 - `http://localhost:3000/healthz` — healthcheck JSON
 - `http://localhost:3000/rejestracja` — rejestracja Supabase Auth
 - `http://localhost:3000/onboarding/platnosc` — wybór planu i Stripe Checkout
+- `http://localhost:3000/onboarding/google` — Google OAuth step
+- `http://localhost:3000/onboarding/zasoby` — Sheets/Calendar/Drive setup
+- `http://localhost:3000/onboarding/telegram` — Telegram pairing code
 - `http://localhost:3000/login` — logowanie Supabase Auth
 - `http://localhost:3000/dashboard` — chroniony panel startowy
 
@@ -99,6 +110,10 @@ podpisu wywołuje FastAPI `/internal/billing/stripe-event` z HMAC
 Current hosted Checkout is server-side, so no `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 is required in Phase 0C. Add it later only for Stripe Elements, Billing Portal,
 or client-side Stripe JS.
+
+Phase 0F/1 onboarding calls FastAPI `/api/onboarding/*` with the Supabase
+access token. FastAPI resolves `auth_user_id`, writes system setup fields with
+the service key, and keeps CRM data in Google.
 
 Landing używa animacji Midjourney dostarczonej przez usera:
 `public/media/hero-bg.mp4`. Pliki medialne trzymaj w `public/media/`.
