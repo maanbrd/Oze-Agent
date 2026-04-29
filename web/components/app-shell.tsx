@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { OnboardingGate } from "@/components/onboarding-gate";
 import type { CurrentAccount } from "@/lib/api/account";
+import type { OnboardingStatus } from "@/lib/api/onboarding";
 
 const navItems = [
   ["Dashboard", "/dashboard"],
@@ -31,9 +33,11 @@ function googleLinks(account: CurrentAccount) {
 
 export function AppShell({
   account,
+  onboardingStatus,
   children,
 }: {
   account: CurrentAccount;
+  onboardingStatus: OnboardingStatus | null;
   children: React.ReactNode;
 }) {
   const links = googleLinks(account);
@@ -79,7 +83,10 @@ export function AppShell({
               <div className="text-sm text-zinc-400">{email}</div>
             </div>
           </header>
-          <div className="px-5 py-6 lg:px-8">{children}</div>
+          <div className="px-5 py-6 lg:px-8">
+            <OnboardingGate status={onboardingStatus} />
+            {children}
+          </div>
         </section>
       </div>
 

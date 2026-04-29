@@ -140,4 +140,23 @@ assert.doesNotMatch(
   "Settings must not edit CRM fields.",
 );
 
+const onboardingGate = read("components/onboarding-gate.tsx");
+const appShell = read("components/app-shell.tsx");
+const appLayout = read("app/(app)/layout.tsx");
+assert.match(
+  onboardingGate,
+  /nextStep/,
+  "Onboarding gate must link to the next step.",
+);
+assert.match(
+  appShell,
+  /OnboardingGate/,
+  "App shell must render onboarding gate.",
+);
+assert.match(
+  appLayout,
+  /getOnboardingStatus/,
+  "Logged-in layout must fetch onboarding status.",
+);
+
 console.log("web invariants passed");
