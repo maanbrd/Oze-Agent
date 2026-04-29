@@ -66,6 +66,8 @@ Railway/FastAPI, Stripe sandbox, Google OAuth config, Telegram bot.
   mutation forms.
 - Local route smoke runs with:
   `cd web && npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000`.
+- Local FastAPI smoke runs with:
+  `cd oze-agent && PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`.
 
 **Do NOT:** enable live Stripe mode, create production prices, add CRM mutation
 forms to web, or treat build success as payment readiness.

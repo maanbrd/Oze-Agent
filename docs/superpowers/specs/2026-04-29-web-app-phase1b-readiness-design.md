@@ -61,6 +61,14 @@ Add a FastAPI checker:
 - command: `PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
 - loads `.env.local` / `.env` or an explicit `--env-file=<path>`.
 
+Add a FastAPI local smoke checker:
+
+- file: `oze-agent/scripts/smoke_phase1b_api.py`,
+- command:
+  `PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`,
+- checks `/health` and verifies protected onboarding/dashboard routes fail
+  closed without auth.
+
 Add a smoke report template:
 
 - file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
@@ -92,6 +100,7 @@ Local automated verification:
 - `cd web && npm run test:invariants && npm run lint && npm run build`,
 - `cd web && npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
+- `cd oze-agent && PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`,
 - `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`,
 - `cd oze-agent && PYTHONPATH=. pytest -q`.
 

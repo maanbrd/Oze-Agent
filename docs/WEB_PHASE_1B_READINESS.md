@@ -38,6 +38,8 @@ npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 cd oze-agent
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py --env-file=.env.local
+PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000
+PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000
 PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q
 PYTHONPATH=. pytest -q
 ```
@@ -54,6 +56,10 @@ webhook delivery unless a future plan adds Stripe CLI or a public tunnel.
 Run `npm run smoke:phase1b-local` while the local Next.js server is running. The
 script checks `/healthz`, public route rendering, anonymous protected redirects,
 onboarding gate wiring, and the static no-CRM-mutation boundary.
+
+Run `scripts/smoke_phase1b_api.py` while the local FastAPI server is running.
+The script checks `/health`, verifies onboarding/dashboard API routes fail
+closed without auth, and does not call Google, Stripe, or Supabase.
 
 ## Staging Services
 

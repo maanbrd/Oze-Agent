@@ -96,3 +96,18 @@
 - [x] Document how to run local route smoke against a running Next.js server.
 - [x] Run invariants and local smoke against a dev server.
 - [x] Commit the local route smoke automation.
+
+### Task 7: Local FastAPI Smoke Automation
+
+**Files:**
+- Create: `oze-agent/scripts/smoke_phase1b_api.py`
+- Create: `oze-agent/tests/test_phase1b_api_smoke.py`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/IMPLEMENTATION_PLAN.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+
+- [x] Add a failing pytest import for the API smoke helper.
+- [x] Implement `/health` and protected-route fail-closed smoke checks.
+- [x] Document how to run API smoke against a local FastAPI server.
+- [x] Run pytest and API smoke against a local FastAPI server.
+- [x] Commit the local FastAPI smoke automation.
