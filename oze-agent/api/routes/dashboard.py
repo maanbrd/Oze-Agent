@@ -122,6 +122,8 @@ async def get_dashboard_crm(auth_user: AuthUser = Depends(get_current_auth_user)
     if not user_result.data:
         return {
             "fetchedAt": datetime.now(tz=timezone.utc).isoformat(),
+            "source": "live",
+            "sourceMessage": "Dane z Google Sheets i Calendar.",
             "clients": [],
             "events": [],
         }
@@ -136,6 +138,8 @@ async def get_dashboard_crm(auth_user: AuthUser = Depends(get_current_auth_user)
 
     return {
         "fetchedAt": datetime.now(tz=timezone.utc).isoformat(),
+        "source": "live",
+        "sourceMessage": "Dane z Google Sheets i Calendar.",
         "clients": clients,
         "events": events,
     }

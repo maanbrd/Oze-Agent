@@ -72,3 +72,5 @@ async def test_dashboard_crm_uses_google_resource_ids(monkeypatch):
 
     assert result["clients"][0]["sheetsUrl"].startswith("https://docs.google.com")
     assert result["events"][0]["calendarUrl"].startswith("https://calendar.google.com")
+    assert result["source"] == "live"
+    assert "Google" in result["sourceMessage"]
