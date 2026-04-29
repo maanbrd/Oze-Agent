@@ -1,6 +1,14 @@
 # Web App Phase 1 Continuation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking. All checklist items below are now complete.
+
+_Status 29.04.2026: COMPLETED on `feat/web-phase-0c` and pushed to PR #5._
+
+Verification evidence:
+
+- `cd oze-agent && PYTHONPATH=. pytest tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q` -> 11 passed.
+- `cd oze-agent && PYTHONPATH=. pytest -q` -> 840 passed.
+- `cd web && npm run test:invariants && npm run lint && npm run build` -> pass.
 
 **Goal:** Continue the approved Phase 1 web app work by hardening onboarding gates, Google resource retries, live CRM metadata, and Telegram pairing instructions.
 
@@ -30,7 +38,7 @@
 - Modify: `oze-agent/tests/test_onboarding_api.py`
 - Modify: `oze-agent/api/routes/onboarding.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Add this test:
 
@@ -68,7 +76,7 @@ async def test_create_google_resources_persists_partial_success_before_later_fai
     assert fake.rows[0]["google_calendar_id"] == "calendar-1"
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -78,7 +86,7 @@ cd oze-agent && PYTHONPATH=. pytest tests/test_onboarding_api.py::test_create_go
 
 Expected: FAIL because the endpoint stores updates only after all resources are created.
 
-- [ ] **Step 3: Implement incremental persistence**
+- [x] **Step 3: Implement incremental persistence**
 
 In `oze-agent/api/routes/onboarding.py`, add:
 
@@ -94,7 +102,7 @@ def _persist_user_update(user: dict[str, Any], update_data: dict[str, Any]) -> N
 Then call `_persist_user_update(user, {...})` immediately after each successful
 Sheets, Calendar, and Drive creation.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run:
 
@@ -104,7 +112,7 @@ cd oze-agent && PYTHONPATH=. pytest tests/test_onboarding_api.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add oze-agent/tests/test_onboarding_api.py oze-agent/api/routes/onboarding.py
@@ -119,7 +127,7 @@ git commit -m "fix(api): persist partial google onboarding resources"
 - Modify: `oze-agent/tests/test_dashboard_api.py`
 - Modify: `oze-agent/api/routes/dashboard.py`
 
-- [ ] **Step 1: Write failing test assertion**
+- [x] **Step 1: Write failing test assertion**
 
 In `test_dashboard_crm_uses_google_resource_ids`, add:
 
@@ -128,7 +136,7 @@ assert result["source"] == "live"
 assert "Google" in result["sourceMessage"]
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -138,7 +146,7 @@ cd oze-agent && PYTHONPATH=. pytest tests/test_dashboard_api.py::test_dashboard_
 
 Expected: FAIL with missing `source`.
 
-- [ ] **Step 3: Implement source metadata**
+- [x] **Step 3: Implement source metadata**
 
 In every return from `get_dashboard_crm`, include:
 
@@ -147,7 +155,7 @@ In every return from `get_dashboard_crm`, include:
 "sourceMessage": "Dane z Google Sheets i Calendar.",
 ```
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run:
 
@@ -157,7 +165,7 @@ cd oze-agent && PYTHONPATH=. pytest tests/test_dashboard_api.py tests/test_onboa
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add oze-agent/tests/test_dashboard_api.py oze-agent/api/routes/dashboard.py
@@ -174,7 +182,7 @@ git commit -m "feat(api): return crm source metadata"
 - Modify: `web/app/(app)/layout.tsx`
 - Modify: `web/scripts/check-web-invariants.mjs`
 
-- [ ] **Step 1: Add failing invariant**
+- [x] **Step 1: Add failing invariant**
 
 Append:
 
@@ -187,7 +195,7 @@ assert.match(appShell, /OnboardingGate/, "App shell must render onboarding gate.
 assert.match(appLayout, /getOnboardingStatus/, "Logged-in layout must fetch onboarding status.");
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -197,7 +205,7 @@ cd web && npm run test:invariants
 
 Expected: FAIL because `components/onboarding-gate.tsx` is missing.
 
-- [ ] **Step 3: Add gate component**
+- [x] **Step 3: Add gate component**
 
 Create `web/components/onboarding-gate.tsx`:
 
@@ -220,7 +228,7 @@ export function OnboardingGate({ status }: { status: OnboardingStatus | null }) 
 }
 ```
 
-- [ ] **Step 4: Render gate in app shell**
+- [x] **Step 4: Render gate in app shell**
 
 Update `AppShell` props to accept `onboardingStatus` and render:
 
@@ -230,12 +238,12 @@ Update `AppShell` props to accept `onboardingStatus` and render:
 
 above `{children}`.
 
-- [ ] **Step 5: Fetch status in layout**
+- [x] **Step 5: Fetch status in layout**
 
 In `web/app/(app)/layout.tsx`, import `getOnboardingStatus`, fetch it after
 auth, and pass it to `AppShell`.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run:
 
@@ -245,7 +253,7 @@ cd web && npm run test:invariants && npm run lint && npm run build
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add web/components/onboarding-gate.tsx web/components/app-shell.tsx web/app/'(app)'/layout.tsx web/scripts/check-web-invariants.mjs
@@ -260,7 +268,7 @@ git commit -m "feat(web): add app onboarding gate"
 - Modify: `web/app/onboarding/telegram/page.tsx`
 - Modify: `web/scripts/check-web-invariants.mjs`
 
-- [ ] **Step 1: Add failing invariant**
+- [x] **Step 1: Add failing invariant**
 
 Append:
 
@@ -269,7 +277,7 @@ const telegramPage = read("app/onboarding/telegram/page.tsx");
 assert.match(telegramPage, /\\/start/, "Telegram onboarding must show /start code command.");
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -279,7 +287,7 @@ cd web && npm run test:invariants
 
 Expected: FAIL because the screen shows the code but not the exact command.
 
-- [ ] **Step 3: Update Telegram page**
+- [x] **Step 3: Update Telegram page**
 
 Render the command:
 
@@ -289,7 +297,7 @@ Render the command:
 </code>
 ```
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run:
 
@@ -299,7 +307,7 @@ cd web && npm run test:invariants && npm run lint && npm run build
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/app/onboarding/telegram/page.tsx web/scripts/check-web-invariants.mjs
@@ -313,7 +321,7 @@ git commit -m "feat(web): clarify telegram pairing command"
 **Files:**
 - Review all changed files.
 
-- [ ] **Step 1: Focused backend**
+- [x] **Step 1: Focused backend**
 
 Run:
 
@@ -323,7 +331,7 @@ cd oze-agent && PYTHONPATH=. pytest tests/test_onboarding_api.py tests/test_dash
 
 Expected: PASS.
 
-- [ ] **Step 2: Full backend**
+- [x] **Step 2: Full backend**
 
 Run:
 
@@ -333,7 +341,7 @@ cd oze-agent && PYTHONPATH=. pytest -q
 
 Expected: PASS.
 
-- [ ] **Step 3: Full web**
+- [x] **Step 3: Full web**
 
 Run:
 
@@ -343,7 +351,7 @@ cd web && npm run test:invariants && npm run lint && npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Push**
+- [x] **Step 4: Push**
 
 Run:
 

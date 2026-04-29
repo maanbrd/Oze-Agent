@@ -6,6 +6,10 @@ _Worktree: `/Users/mansoniasty/workflows/Agent-OZE-phase0c`_
 
 ## Decision
 
+Status 29.04.2026: the functional roadmap through Phase 0C/0D/0E/0F/Phase 1 is
+code-complete on `feat/web-phase-0c` / PR #5. The next phase is Phase 1B
+rollout/readiness, which proves the branch against real sandbox services.
+
 The active implementation track is now the web app. The Telegram agent is no
 longer the blocker for this phase after the recent memory fix made the agent
 substantially more usable. Remaining agent polish stays as a later lane and
@@ -68,6 +72,8 @@ keeps UI work moving without storing CRM source-of-truth data in Supabase.
 
 ### Phase 0C — Stripe Billing Foundation
 
+Status: code-complete on PR #5, rollout pending.
+
 Finish the existing Phase 0C worktree:
 
 - Supabase profile lookup and protected routes.
@@ -84,6 +90,8 @@ Stop immediately if any Stripe response says `livemode: true`.
 
 ### Phase 0D — Functional App Shell
 
+Status: code-complete on PR #5.
+
 Build the logged-in product shell:
 
 - Persistent sidebar and topbar after login.
@@ -96,6 +104,8 @@ Build the logged-in product shell:
   until Google resources exist.
 
 ### Phase 0E — Read-Only CRM Experience
+
+Status: code-complete on PR #5.
 
 Build functional CRM pages against read-only adapters that target Sheets and
 Calendar through FastAPI:
@@ -114,6 +124,8 @@ direct Google links, not through web forms.
 
 ### Phase 0F — Onboarding Completion
 
+Status: code-complete on PR #5, smoke pending.
+
 Add the remaining onboarding screens as functional flows:
 
 - Google OAuth status and connection entry point.
@@ -129,6 +141,18 @@ Add the remaining onboarding screens as functional flows:
 Keep a separate agent polish backlog. Known direction: the memory fix improved
 the agent heavily, but there is still behavior work left. That work should be
 planned separately after the web app has its functional spine.
+
+### Phase 1B — Rollout/Readiness
+
+This is the next web stage. It is not a new UI/copy phase. It validates deployed
+sandbox services:
+
+- Vercel + Railway env,
+- Supabase billing/onboarding migrations,
+- Stripe sandbox Checkout + webhook replay,
+- Google OAuth callback and resource creation,
+- Telegram `/start <code>` pairing,
+- browser smoke confirming no CRM mutation forms and correct source states.
 
 ## Data Boundaries
 

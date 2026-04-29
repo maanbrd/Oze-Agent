@@ -6,10 +6,14 @@ _Branch: `feat/web-phase-0c`_
 
 ## Decision
 
-Phase 0C already created the Stripe sandbox foundation, protected app shell,
-read-only CRM adapter boundary, initial CRM pages, secondary app routes, and a
-FastAPI read-only CRM endpoint. The next implementation pass should continue on
-that branch and turn the web app into a usable onboarding and dashboard product.
+Status 29.04.2026: this design has been implemented on `feat/web-phase-0c` /
+PR #5. Phase 0C/0D/0E/0F/Phase 1 are code-complete on the branch, but rollout
+is still gated by Phase 1B sandbox/deployment smokes.
+
+Phase 0C created the Stripe sandbox foundation, protected app shell, read-only
+CRM adapter boundary, initial CRM pages, secondary app routes, and a FastAPI
+read-only CRM endpoint. The follow-up implementation pass turned the web app
+into a usable onboarding and dashboard product.
 
 The recommended Phase 1 definition is accepted:
 
@@ -27,24 +31,25 @@ source-of-truth records stay in Google.
 
 ## Current Baseline
 
-Phase 0D and 0E are partly implemented in the current branch:
+Phase 0D and 0E are implemented in the current branch:
 
 - logged-in app shell exists,
 - `/dashboard`, `/klienci`, `/kalendarz`, `/platnosci`, `/ustawienia`,
   `/import`, `/instrukcja`, `/faq` exist,
-- CRM pages call a read-only adapter,
-- FastAPI exposes `/api/dashboard/crm`,
-- Stripe Checkout and webhook forwarding exist.
+- CRM pages call a read-only adapter and expose source states,
+- FastAPI exposes `/api/dashboard/crm` with source metadata,
+- Stripe Checkout and webhook forwarding exist,
+- FastAPI exposes `/api/onboarding/*` authenticated by Supabase JWT,
+- Google OAuth state is signed and redirects back to web onboarding,
+- resource creation is exposed as a controlled onboarding operation,
+- partial Google resource creation persists successful IDs before later failure,
+- Telegram pairing has a web/API flow and shows `/start <code>`,
+- completed accounts see live or unavailable CRM state rather than silent demo,
+- settings/account pages mutate only system account fields.
 
-The main missing parts are Phase 0F and the production-grade Phase 1 bridge:
-
-- no authenticated web endpoint for onboarding status,
-- old `/auth/google/url/{user_id}` uses path `user_id` rather than Supabase JWT,
-- Google OAuth success page is not routed back into the web onboarding flow,
-- resource creation is not exposed as a controlled onboarding operation,
-- Telegram pairing has schema fields but no web/API flow,
-- dashboard fallback to mock data is still too broad for a paid/onboarded user,
-- settings/account pages are mostly display-only.
+The main missing part is Phase 1B rollout/readiness: real sandbox env, deployed
+webhook, Supabase migrations, Stripe smoke/replay, Google OAuth/resource smoke,
+Telegram pairing smoke, and browser smoke.
 
 ## Product Rules
 

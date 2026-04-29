@@ -1,6 +1,6 @@
 # Current Project: OZE-Agent
 
-AI-powered sales assistant for B2C renewable energy salespeople in Poland. Telegram bot + FastAPI backend.
+AI-powered sales assistant for B2C renewable energy salespeople in Poland. Telegram bot + FastAPI backend + Next.js web app.
 
 Current project owner: Maan  
 User-facing language: Polish  
@@ -14,10 +14,17 @@ The previous bug-by-bug patching track is closed.
 
 Current strategy:
 
-**Selective rewrite of the behavior layer.**
+**Two parallel tracks: selective behavior-layer rewrite + functional web app.**
 
 The strongest part of this project is the documentation in `docs/`.
 The current Python behavior layer is useful as reference, but not trusted as the final behavior contract.
+
+The active web branch is `feat/web-phase-0c` / PR #5. It contains the Phase
+0C/0D/0E/0F/Phase 1 functional spine: Stripe sandbox billing boundary, logged-in
+app shell, read-only CRM pages, Google OAuth/resource onboarding, Telegram
+pairing, onboarding gate, CRM source states, and account-only settings. This is
+code-complete on the branch, but not live until the Stripe/Google/Supabase
+rollout checklist and browser smoke pass.
 
 ### Keep where stable
 
@@ -61,6 +68,7 @@ Then read task-specific docs:
 
 - Implementation roadmap / phasing / priorities:
   - `docs/IMPLEMENTATION_PLAN.md`
+  - `docs/STRIPE_PHASE_0C_ROLLOUT.md` for billing/live rollout gates
 
 - Multi-agent / subagent workflow rules:
   - `docs/AGENT_WORKFLOW.md`
@@ -218,16 +226,18 @@ Monorepo with two parallel tracks:
 - `oze-agent/tests/` — automated tests
 
 **Web track** (`web/`) — Next.js 16 web app on Vercel (`oze-agent.vercel.app`):
-- `web/app/` — App Router routes (`/`, `/rejestracja`, `/login`, `/dashboard`, `/healthz`, legal placeholders)
-- `web/components/landing.tsx` — cinematic landing v3
+- `web/app/` — App Router routes for public pages, auth, onboarding, Stripe webhooks, and logged-in app pages
+- `web/components/` — landing, app shell, read-only CRM notices, onboarding gate
+- `web/lib/api/` — server-side FastAPI clients using Supabase access tokens
+- `web/lib/crm/` — read-only CRM DTOs/adapters with live/demo/unavailable source states
 - `web/lib/supabase/` — `@supabase/ssr` Auth client (publishable key only — server actions + middleware)
-- `web/CLAUDE.md` — 5 baseline rules + Phase 0B auth boundary (Supabase = session, dashboard data via FastAPI JWT)
+- `web/CLAUDE.md` — web-specific rules: Polish UI, dark app shell, no chat, no CRM mutation forms, FastAPI data boundary
 
 Shared:
 - `docs/` — active project documentation
 - `docs/archive/` — historical documents only
 
-Bot business logic lives in `oze-agent/shared/`. Bot and API layers should call shared logic instead of duplicating it. Web app **does not write CRM data** — Telegram remains the only mutation surface (R1).
+Bot business logic lives in `oze-agent/shared/`. Bot and API layers should call shared logic instead of duplicating it. Web app **does not write CRM data** — CRM edits happen in Google Sheets/Calendar directly or through Telegram confirmation flows.
 
 ---
 

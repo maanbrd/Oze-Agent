@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 28.04.2026_
+_Last updated: 29.04.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -15,9 +15,9 @@ Jeśli dokument jest w `docs/archive/`, nie jest źródłem prawdy.
 Projekt prowadzi **dwa równoległe tracki**:
 
 1. **Bot track (`oze-agent/`)** — selective rewrite warstwy zachowania (intent routing, pending flow, confirmation cards, proactive scheduler). Poprzednia ścieżka łatania błędów zamknięta. Photo flow i multi-meeting odłożone poza pierwszą wersję.
-2. **Web app track (`web/`)** — Next.js 16 + Supabase Auth + Vercel (`oze-agent.vercel.app`). Phasing 0A → 0D → Phase 1+ wg `IMPLEMENTATION_PLAN.md` §Web App. Web jest read-only nad Google Sheets/Calendar — **nie wykonuje mutacji CRM**, R1 (confirmation before write) zostaje wyłącznie w Telegramie.
+2. **Web app track (`web/`)** — Next.js 16 + Supabase Auth + Stripe + Vercel (`oze-agent.vercel.app`). Active branch `feat/web-phase-0c` / PR #5 has the Phase 0C/0D/0E/0F/Phase 1 functional spine implemented and pushed: Stripe sandbox boundary, logged-in app shell, read-only CRM pages, Google OAuth/resource onboarding, Telegram pairing, onboarding gate, CRM source states, and account-only settings. It is **not live-complete** until the rollout/smoke checklist passes.
 
-Tracki są niezależne — bot rewrite nie blokuje web app i odwrotnie. Wspólne tylko: Supabase users (auth_user_id ↔ telegram_id), później FastAPI internal endpoints (Phase 0D + dalej).
+Tracki są niezależne — bot rewrite nie blokuje web app i odwrotnie. Wspólne punkty: Supabase users (`auth_user_id` ↔ `telegram_id`), FastAPI authenticated web endpoints, Stripe billing writes, Google OAuth/resource metadata.
 
 ### Zostaje
 
@@ -130,6 +130,22 @@ Dane systemowe żyją w Supabase:
 - techniczne metadane
 
 Nie mieszamy tych dwóch światów.
+
+### Web CRM boundary
+
+Web app może zmieniać wyłącznie dane systemowe użytkownika: auth/profile,
+billing, onboarding state, Google token/resource metadata, Telegram pairing
+state. Web app **nie tworzy ani nie edytuje** klientów, statusów, notatek,
+spotkań ani event contentu CRM.
+
+UI musi wyraźnie pokazywać, że edycja CRM idzie przez:
+
+- Google Sheets dla klientów,
+- Google Calendar dla spotkań/akcji,
+- Google Drive dla zdjęć,
+- Telegram dla potwierdzonych flow agenta.
+
+Strona może dawać bezpośrednie linki do Google, ale nie formularze mutujące CRM.
 
 ### Sheets schema
 
@@ -261,6 +277,7 @@ Czytaj:
 | `IMPLEMENTATION_PLAN.md` | ✅ Stworzony |
 | `TEST_PLAN_CURRENT.md` | ✅ Stworzony |
 | `AGENT_WORKFLOW.md` | ✅ Stworzony |
+| `STRIPE_PHASE_0C_ROLLOUT.md` | ✅ Aktywny rollout checklist dla Stripe sandbox / webhooków |
 | `INTENCJE_MVP.md` | ✅ Zsynchronizowany (dual-write, duplicate resolution, buttons, display) |
 | `agent_system_prompt.md` | ✅ Zsynchronizowany (button policies, display rules) |
 | `agent_behavior_spec_v5.md` | ✅ Zsynchronizowany (duplicate flow, show_client, Calendar sync) |
@@ -270,6 +287,14 @@ Czytaj:
 
 ## 8. Najbliższy krok
 
-Phase 1 z `IMPLEMENTATION_PLAN.md`: Infrastructure Audit.
+**Web Phase 1B rollout/readiness gate** na branchu `feat/web-phase-0c`:
 
-Sprawdzić wrappery → verdict per wrapper → potem kontynuować rewrite zgodnie z `IMPLEMENTATION_PLAN.md`.
+1. ustawić sandbox env dla Vercel/Railway/Supabase/Stripe/Google,
+2. uruchomić migracje billing/onboarding,
+3. przejść Stripe sandbox smoke + webhook replay,
+4. przejść Google OAuth/resource smoke,
+5. przejść Telegram `/start <code>` pairing smoke,
+6. dopiero wtedy oznaczyć web functional spine jako live-ready.
+
+Bot lane: manual Telegram smoke dla Phase 6 Morning Brief pozostaje osobnym
+torem i nie blokuje web rollout, jeśli nie dotyka wspólnych kontraktów.

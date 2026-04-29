@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+_Status 29.04.2026: superseded by completed implementation on
+`feat/web-phase-0c` / PR #5 plus the completed continuation plan
+`2026-04-29-web-app-phase1-continuation.md`. Next web plan should target Phase
+1B rollout/readiness, not rebuild the already implemented functional spine._
+
 **Goal:** Build the functional Agent-OZE web app spine: Stripe billing, protected app shell, read-only CRM pages backed by Sheets/Calendar adapters, and onboarding screens.
 
 **Architecture:** Next.js owns browser sessions, hosted Stripe Checkout creation, and the logged-in UI. FastAPI owns service-role Supabase writes and read-only dashboard endpoints that read Google Sheets and Calendar. CRM source-of-truth stays in Google; the web app shows direct Google links and never renders CRM mutation forms.

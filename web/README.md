@@ -37,6 +37,12 @@ Phase 0F / Phase 1 dodaje:
 - read-only dashboard z jawnie oznaczonym źródłem danych CRM
 - ustawienia konta zapisujące wyłącznie dane systemowe, nie CRM
 
+Stan na 29.04.2026: Phase 0C/0D/0E/0F/Phase 1 są code-complete na branchu
+`feat/web-phase-0c` / PR #5. Następny etap to Phase 1B rollout/readiness:
+sandbox env, migracje, Stripe smoke/replay, Google OAuth/resource smoke,
+Telegram pairing smoke i browser smoke. Nie oznaczaj web app jako live-ready
+tylko dlatego, że build przechodzi.
+
 ## Getting Started
 
 Uruchom lokalnie:
@@ -88,6 +94,7 @@ Adresy:
 ## Scripts
 
 ```bash
+npm run test:invariants
 npm run lint
 npm run build
 ```
@@ -114,6 +121,16 @@ or client-side Stripe JS.
 Phase 0F/1 onboarding calls FastAPI `/api/onboarding/*` with the Supabase
 access token. FastAPI resolves `auth_user_id`, writes system setup fields with
 the service key, and keeps CRM data in Google.
+
+Logged-in CRM pages call the read-only adapter in `lib/crm/adapters.ts`. Source
+states are explicit:
+
+- `live` — FastAPI returned Google-backed Sheets/Calendar data,
+- `demo` — account is unauthenticated or onboarding is incomplete,
+- `unavailable` — completed account could not fetch Google data.
+
+CRM edits must stay outside web forms. The UI points users to Google
+Sheets/Calendar links or Telegram flows.
 
 Landing używa animacji Midjourney dostarczonej przez usera:
 `public/media/hero-bg.mp4`. Pliki medialne trzymaj w `public/media/`.

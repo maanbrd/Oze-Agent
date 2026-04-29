@@ -8,6 +8,12 @@ Phase 0C stays **sandbox-only** until this checklist passes end to end. Code
 being green is not enough: billing needs sandbox keys, a public webhook URL, the
 Supabase migration, and a real Checkout smoke.
 
+Status 29.04.2026: implementation is code-complete on `feat/web-phase-0c` /
+PR #5, including Next.js webhook verification, FastAPI HMAC ingestion,
+idempotent billing writes, onboarding screens, and web invariants. This document
+now gates Phase 1B rollout/readiness; do not mark billing live-ready until the
+checks below are executed against deployed sandbox services.
+
 ---
 
 ## Stop conditions
@@ -118,10 +124,21 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
 
 8. **Review gate**
    - Run:
+     - `cd web && npm run test:invariants`
      - `cd web && npm run lint && npm run build`
      - `cd oze-agent && PYTHONPATH=. pytest -q`
    - Run an independent cold review focused only on payments, env, webhook retry
      behavior, and idempotency before merge/deploy.
+
+9. **Onboarding continuation smoke**
+   - From a paid sandbox user, continue to `/onboarding/google`.
+   - Complete Google OAuth and confirm redirect to `/onboarding/google/sukces`.
+   - Create/link Sheets, Calendar, and Drive from `/onboarding/zasoby`.
+   - Confirm created resource IDs persist in `users`.
+   - Open `/onboarding/telegram`, confirm it shows `/start <code>`, send that to
+     the bot, and confirm `telegram_id` links to the same user.
+   - Confirm `/dashboard`, `/klienci`, and `/kalendarz` show live or unavailable
+     CRM source state, never unlabeled demo data for a completed user.
 
 ---
 

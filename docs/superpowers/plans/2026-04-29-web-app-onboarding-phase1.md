@@ -2,7 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+_Status 29.04.2026: implemented on `feat/web-phase-0c` / PR #5, then hardened
+by `2026-04-29-web-app-phase1-continuation.md`. Remaining work is Phase 1B
+rollout/readiness smoke._
+
 **Goal:** Complete Phase 0D/0E/0F and Phase 1 for the web app: real onboarding state, Google OAuth/resource setup, Telegram pairing, safer live CRM data handling, and functional account settings without web CRM mutations.
+
+Historical note: the task checklist below is preserved as the original execution
+plan. The branch has since implemented and hardened this scope; see the status
+header above and the continuation plan for final verification evidence.
 
 **Architecture:** FastAPI owns trusted Supabase service-role writes and Google integration operations. Next.js owns server-rendered UI and calls FastAPI with the Supabase access token. CRM data remains read-only in the web app; Google Sheets/Calendar/Drive remain the CRM source of truth.
 
@@ -1558,8 +1566,8 @@ In `docs/CURRENT_STATUS.md`, update the web app track bullet for Phase 0F/Phase 
 In `docs/IMPLEMENTATION_PLAN.md`, update the web app snapshot table so Phase 0F/Phase 1 are named explicitly:
 
 ```markdown
-| **0F** Onboarding completion | 🔧 implementation branch | Google OAuth, resource setup, Telegram pairing |
-| **Phase 1** Operational web panel | 🔧 implementation branch | live CRM source states, account settings, read-only dashboard hardening |
+| **0F** Onboarding completion | ✅ code-complete on PR #5, smoke pending | Google OAuth, resource setup, Telegram pairing |
+| **Phase 1** Operational web panel | ✅ code-complete on PR #5, rollout pending | live CRM source states, account settings, read-only dashboard hardening |
 ```
 
 - [ ] **Step 4: Verify docs do not reintroduce Przelewy24**
