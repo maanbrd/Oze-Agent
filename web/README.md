@@ -106,6 +106,7 @@ Adresy:
 ```bash
 npm run check:phase1b-env
 npm run test:invariants
+npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 npm run lint
 npm run build
 ```

@@ -65,6 +65,13 @@ Add a smoke report template:
 
 - file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
 
+Add a local route smoke checker:
+
+- file: `web/scripts/smoke-phase1b-local.mjs`,
+- package script: `npm run smoke:phase1b-local`,
+- checks `/healthz`, public route rendering, anonymous protected redirects,
+  onboarding gate wiring, and no CRM mutation forms.
+
 ## Safety Rules
 
 Stop immediately if any Stripe response shows `livemode: true`.
@@ -83,6 +90,7 @@ Local automated verification:
 
 - `cd web && npm run check:phase1b-env`,
 - `cd web && npm run test:invariants && npm run lint && npm run build`,
+- `cd web && npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
 - `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`,
 - `cd oze-agent && PYTHONPATH=. pytest -q`.

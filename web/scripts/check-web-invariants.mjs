@@ -172,6 +172,11 @@ assert.equal(
   "node scripts/check-phase1b-env.mjs",
   "Web package must expose the Phase 1B env checker.",
 );
+assert.equal(
+  packageJson.scripts["smoke:phase1b-local"],
+  "node scripts/smoke-phase1b-local.mjs",
+  "Web package must expose the Phase 1B local smoke checker.",
+);
 
 const phase1bEnvChecker = read("scripts/check-phase1b-env.mjs");
 assert.match(
@@ -193,6 +198,23 @@ assert.match(
   phase1bEnvChecker,
   /STRIPE_WEBHOOK_SECRET/,
   "Phase 1B env checker must know staging webhook secret requirements.",
+);
+
+const phase1bLocalSmoke = read("scripts/smoke-phase1b-local.mjs");
+assert.match(
+  phase1bLocalSmoke,
+  /\/healthz/,
+  "Phase 1B local smoke must check the web health route.",
+);
+assert.match(
+  phase1bLocalSmoke,
+  /\/login\?next=\/dashboard/,
+  "Phase 1B local smoke must check protected app redirects.",
+);
+assert.match(
+  phase1bLocalSmoke,
+  /CRM mutation forms/,
+  "Phase 1B local smoke must check the no-CRM-mutation boundary.",
 );
 
 console.log("web invariants passed");

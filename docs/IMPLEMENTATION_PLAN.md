@@ -64,6 +64,8 @@ Railway/FastAPI, Stripe sandbox, Google OAuth config, Telegram bot.
   `telegram_id`.
 - Logged-in app pages show live/demo/unavailable source state and no CRM
   mutation forms.
+- Local route smoke runs with:
+  `cd web && npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000`.
 
 **Do NOT:** enable live Stripe mode, create production prices, add CRM mutation
 forms to web, or treat build success as payment readiness.

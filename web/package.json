@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:invariants": "node scripts/check-web-invariants.mjs",
-    "check:phase1b-env": "node scripts/check-phase1b-env.mjs"
+    "check:phase1b-env": "node scripts/check-phase1b-env.mjs",
+    "smoke:phase1b-local": "node scripts/smoke-phase1b-local.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

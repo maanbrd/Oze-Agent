@@ -79,3 +79,20 @@
 - [x] Update runbook/docs with explicit env-file usage.
 - [x] Run focused web/backend verification.
 - [x] Commit the local smoke env-file support.
+
+### Task 6: Local Route Smoke Automation
+
+**Files:**
+- Modify: `web/package.json`
+- Modify: `web/scripts/check-web-invariants.mjs`
+- Create: `web/scripts/smoke-phase1b-local.mjs`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/IMPLEMENTATION_PLAN.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+- Modify: `web/README.md`
+
+- [x] Add a failing invariant requiring `smoke:phase1b-local`.
+- [x] Implement local route smoke checks for `/healthz`, public pages, protected redirects, onboarding gate wiring, and no CRM mutation forms.
+- [x] Document how to run local route smoke against a running Next.js server.
+- [x] Run invariants and local smoke against a dev server.
+- [x] Commit the local route smoke automation.

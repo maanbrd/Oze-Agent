@@ -31,6 +31,7 @@ npm run check:phase1b-env -- --env-file=.env.local
 npm run test:invariants
 npm run lint
 npm run build
+npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 ```
 
 ```bash
@@ -49,6 +50,10 @@ shell.
 Local smoke confirms route behavior, protected redirects, onboarding gates, app
 shell rendering, and the no-CRM-mutation boundary. It does not confirm Stripe
 webhook delivery unless a future plan adds Stripe CLI or a public tunnel.
+
+Run `npm run smoke:phase1b-local` while the local Next.js server is running. The
+script checks `/healthz`, public route rendering, anonymous protected redirects,
+onboarding gate wiring, and the static no-CRM-mutation boundary.
 
 ## Staging Services
 
