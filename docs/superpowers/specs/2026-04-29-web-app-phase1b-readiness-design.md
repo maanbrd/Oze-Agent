@@ -69,6 +69,13 @@ Add a FastAPI local smoke checker:
 - checks `/health` and verifies protected onboarding/dashboard routes fail
   closed without auth.
 
+Add a Supabase migration preflight checker:
+
+- file: `oze-agent/scripts/check_phase1b_migrations.py`,
+- command: `PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`,
+- checks that Phase 1B auth/RLS and billing migration files contain the required
+  auth trigger, RLS policy, Stripe IDs, unique event indexes, and billing outbox.
+
 Add a smoke report template:
 
 - file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
@@ -100,6 +107,7 @@ Local automated verification:
 - `cd web && npm run test:invariants && npm run lint && npm run build`,
 - `cd web && npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
+- `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`,
 - `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`,
 - `cd oze-agent && PYTHONPATH=. pytest -q`.

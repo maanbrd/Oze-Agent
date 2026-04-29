@@ -111,3 +111,18 @@
 - [x] Document how to run API smoke against a local FastAPI server.
 - [x] Run pytest and API smoke against a local FastAPI server.
 - [x] Commit the local FastAPI smoke automation.
+
+### Task 8: Supabase Migration Preflight
+
+**Files:**
+- Create: `oze-agent/scripts/check_phase1b_migrations.py`
+- Create: `oze-agent/tests/test_phase1b_migrations.py`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/IMPLEMENTATION_PLAN.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+
+- [x] Add a failing pytest import for the migration preflight helper.
+- [x] Implement static checks for auth/RLS and billing/idempotency migration requirements.
+- [x] Document the migration preflight before applying Supabase migrations.
+- [x] Run pytest and the migration preflight command.
+- [x] Commit the migration preflight automation.

@@ -38,6 +38,7 @@ npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 cd oze-agent
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py --env-file=.env.local
+PYTHONPATH=. python3 scripts/check_phase1b_migrations.py
 PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000
 PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000
 PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q
@@ -110,6 +111,8 @@ Run:
 1. Apply Supabase migrations:
    - `oze-agent/supabase_migrations/20260428_web_auth_rls.sql`
    - `oze-agent/supabase_migrations/20260428_billing_stripe_0c.sql`
+   - preflight before applying:
+     `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`
 2. Create or verify Stripe test product and prices with the documented lookup
    keys.
 3. Create Stripe test webhook endpoint:

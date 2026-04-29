@@ -55,6 +55,8 @@ Railway/FastAPI, Stripe sandbox, Google OAuth config, Telegram bot.
 - Railway FastAPI runs as a separate API service with:
   `uvicorn api.main:app --host 0.0.0.0 --port $PORT`.
 - Supabase migrations applied for billing/onboarding fields.
+- Supabase migration preflight runs with:
+  `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`.
 - Checkout smoke updates `users`, `payment_history`, `webhook_log`,
   `billing_outbox`; webhook replay is idempotent.
 - Google OAuth starts from web, callback stores tokens, resource step creates or
