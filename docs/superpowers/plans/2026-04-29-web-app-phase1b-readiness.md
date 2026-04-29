@@ -197,3 +197,24 @@
 - [x] Run smoke report initializer tests, example command, and focused staging
       manifest plus smoke report tests.
 - [x] Commit the smoke report initializer.
+
+### Task 13: Smoke Report Validator
+
+**Files:**
+- Create: `oze-agent/scripts/validate_phase1b_smoke_report.py`
+- Create: `oze-agent/tests/test_phase1b_smoke_report_validate.py`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/STRIPE_PHASE_0C_ROLLOUT.md`
+
+- [x] Add failing tests for completed report validation, template placeholder
+      failure, required field failures, staging-only environment, HTTPS service
+      URLs, exact Railway command, Stripe test mode, duplicate event rows,
+      activation-only subscription `n/a`, secret rejection, issue handling, and
+      JSON output.
+- [x] Implement a non-mutating Markdown report validator with no external
+      Stripe, Supabase, Google, Vercel, or Railway calls.
+- [x] Add `--report` and `--json` CLI support.
+- [x] Document validator as the final local evidence gate after staging smoke.
+- [x] Run validator tests, template negative validation, and focused Phase 1B
+      report/manifest tests.
+- [x] Commit the smoke report validator.

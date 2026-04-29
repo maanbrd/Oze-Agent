@@ -174,6 +174,13 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Confirm `/dashboard`, `/klienci`, and `/kalendarz` show live or unavailable
      CRM source state, never unlabeled demo data for a completed user.
 
+11. **Validate final smoke evidence**
+   - Fill runtime IDs and results in the initialized Phase 1B smoke report.
+   - Run:
+     `cd oze-agent && PYTHONPATH=. python3 scripts/validate_phase1b_smoke_report.py --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md`
+   - Treat validator failure as a readiness blocker until the report evidence is
+     corrected or the smoke issue is fixed.
+
 ---
 
 ## Notes

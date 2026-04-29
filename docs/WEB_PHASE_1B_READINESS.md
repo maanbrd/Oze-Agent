@@ -162,5 +162,8 @@ Run:
 10. Pair Telegram with `/start <code>`.
 11. Open `/dashboard`, `/klienci`, and `/kalendarz`; completed users must see
     `live` or `unavailable`, never silent demo data.
+12. Validate the completed smoke report:
+    - `cd oze-agent && PYTHONPATH=. python3 scripts/validate_phase1b_smoke_report.py --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md`
 
-Record runtime IDs and results in the initialized smoke report.
+Record runtime IDs and results in the initialized smoke report before running
+the validator.
