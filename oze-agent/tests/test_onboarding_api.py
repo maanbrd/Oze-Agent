@@ -204,7 +204,43 @@ async def test_create_google_resources_only_creates_missing(monkeypatch):
     assert result["resources"]["sheetsId"] == "existing-sheet"
     assert result["resources"]["calendarId"] == "calendar-1"
     assert result["resources"]["driveFolderId"] == "drive-1"
-    assert fake.last_query.updated["google_calendar_id"] == "calendar-1"
+    assert fake.rows[0]["google_calendar_id"] == "calendar-1"
+    assert fake.rows[0]["google_drive_folder_id"] == "drive-1"
+
+
+@pytest.mark.asyncio
+async def test_create_google_resources_persists_partial_success_before_later_failure(monkeypatch):
+    from fastapi import HTTPException
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "name": "Jan Test",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "google_refresh_token": "encrypted",
+                "google_sheets_id": "existing-sheet",
+                "google_calendar_id": None,
+                "google_drive_folder_id": None,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+    monkeypatch.setattr(onboarding, "create_calendar", lambda user_id, name: "calendar-1")
+    monkeypatch.setattr(onboarding, "create_root_folder", lambda user_id: None)
+
+    with pytest.raises(HTTPException):
+        await onboarding.create_google_resources(
+            {"calendarName": "Agent-OZE Calendar"},
+            AuthUser(user_id="auth-1", email="jan@example.pl", claims={}),
+        )
+
+    assert fake.rows[0]["google_calendar_id"] == "calendar-1"
 
 
 @pytest.mark.asyncio

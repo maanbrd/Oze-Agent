@@ -184,6 +184,16 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _persist_user_update(user: dict[str, Any], update_data: dict[str, Any]) -> None:
+    if not update_data:
+        return
+    payload = {**update_data, "updated_at": _now_iso()}
+    get_supabase_client().table("users").update(payload).eq(
+        "id", user["id"]
+    ).execute()
+    user.update(payload)
+
+
 @router.get("/status")
 async def get_onboarding_status(auth_user: AuthUser = Depends(get_current_auth_user)):
     user = _get_user_for_auth(auth_user)
@@ -257,7 +267,6 @@ async def create_google_resources(
         )
 
     label = user.get("name") or user.get("email") or user["id"]
-    update_data: dict[str, Any] = {}
     sheets_id = user.get("google_sheets_id")
     calendar_id = user.get("google_calendar_id")
     drive_folder_id = user.get("google_drive_folder_id")
@@ -270,8 +279,10 @@ async def create_google_resources(
                 status_code=502,
                 detail="Could not create Google Sheets resource.",
             )
-        update_data["google_sheets_id"] = sheets_id
-        update_data["google_sheets_name"] = sheets_name
+        _persist_user_update(
+            user,
+            {"google_sheets_id": sheets_id, "google_sheets_name": sheets_name},
+        )
 
     if not calendar_id:
         calendar_name = _resource_name(
@@ -285,8 +296,13 @@ async def create_google_resources(
                 status_code=502,
                 detail="Could not create Google Calendar resource.",
             )
-        update_data["google_calendar_id"] = calendar_id
-        update_data["google_calendar_name"] = calendar_name
+        _persist_user_update(
+            user,
+            {
+                "google_calendar_id": calendar_id,
+                "google_calendar_name": calendar_name,
+            },
+        )
 
     if not drive_folder_id:
         drive_folder_id = await _maybe_await(create_root_folder(user["id"]))
@@ -295,14 +311,7 @@ async def create_google_resources(
                 status_code=502,
                 detail="Could not create Google Drive resource.",
             )
-        update_data["google_drive_folder_id"] = drive_folder_id
-
-    if update_data:
-        update_data["updated_at"] = _now_iso()
-        get_supabase_client().table("users").update(update_data).eq(
-            "id", user["id"]
-        ).execute()
-        user.update(update_data)
+        _persist_user_update(user, {"google_drive_folder_id": drive_folder_id})
 
     return {
         "resources": {
