@@ -99,6 +99,18 @@ Add a smoke report template:
 
 - file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
 
+Add a smoke report initializer:
+
+- file: `oze-agent/scripts/init_phase1b_smoke_report.py`,
+- command:
+  `PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`,
+- validates the staging manifest before rendering,
+- reads git branch and commit from the repo root,
+- fills only public run metadata, public URLs, lookup keys, smoke email, and
+  Google resource prefix,
+- leaves Supabase, Stripe, webhook, Google, and Telegram runtime IDs blank for
+  the smoke operator.
+
 Add a local route smoke checker:
 
 - file: `web/scripts/smoke-phase1b-local.mjs`,

@@ -76,17 +76,24 @@ closed without auth, and does not call Google, Stripe, or Supabase.
 ## Staging Services
 
 Before creating the Stripe webhook or smoke account, create a public-data-only
-copy of `docs/phase1b-staging-manifest.example.json` and run:
+copy of `docs/phase1b-staging-manifest.example.json`, validate it, and
+initialize the smoke report:
 
 ```bash
 cd oze-agent
 PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py \
   --manifest ../docs/phase1b-staging-manifest.example.json \
   --generate-smoke-id
+PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py \
+  --manifest ../docs/phase1b-staging-manifest.example.json \
+  --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md \
+  --operator Maan
 ```
 
 The manifest must not contain secrets such as `STRIPE_SECRET_KEY`, `whsec_...`,
 `SUPABASE_SERVICE_KEY`, or `BILLING_INTERNAL_SECRET`.
+The initializer fills only public staging fields and leaves runtime smoke IDs
+blank for the operator to record during the run.
 
 Vercel/web env:
 
@@ -139,8 +146,9 @@ Run:
      `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`
 2. Create or verify Stripe test product and prices with the documented lookup
    keys.
-3. Run staging manifest preflight and generate the smoke identity:
+3. Run staging manifest preflight and initialize the smoke report:
    - `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
+   - `cd oze-agent && PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`
 4. Create Stripe test webhook endpoint:
    - `https://<web-domain>/api/webhooks/stripe`
    - events listed in `docs/STRIPE_PHASE_0C_ROLLOUT.md`.
@@ -155,4 +163,4 @@ Run:
 11. Open `/dashboard`, `/klienci`, and `/kalendarz`; completed users must see
     `live` or `unavailable`, never silent demo data.
 
-Record the run in a copy of `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
+Record runtime IDs and results in the initialized smoke report.

@@ -111,15 +111,15 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Confirm `users`, `payment_history`, `webhook_log`, and `billing_outbox`
      have the Phase 0C fields/tables.
 
-5. **Run staging manifest preflight**
+5. **Run staging manifest preflight and initialize report**
    - Copy `docs/phase1b-staging-manifest.example.json` and fill it with public
      staging URLs and lookup keys only.
    - Do not put `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
      `SUPABASE_SERVICE_KEY`, or `BILLING_INTERNAL_SECRET` in the manifest.
    - Run:
      `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
-   - Use the generated smoke email and Google resource prefix in the smoke
-     report.
+   - Initialize the report before smoke:
+     `cd oze-agent && PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`
 
 6. **Create sandbox Stripe webhook endpoint**
    - URL: `https://<web-domain>/api/webhooks/stripe`

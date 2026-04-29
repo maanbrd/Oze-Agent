@@ -175,3 +175,25 @@
 - [x] Document manifest preflight before Stripe webhook creation and smoke account use.
 - [x] Run staging manifest tests, example manifest command, and focused Phase 1B readiness tests.
 - [x] Commit the staging manifest preflight.
+
+### Task 12: Smoke Report Initializer
+
+**Files:**
+- Create: `oze-agent/scripts/init_phase1b_smoke_report.py`
+- Create: `oze-agent/tests/test_phase1b_smoke_report_init.py`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/STRIPE_PHASE_0C_ROLLOUT.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+
+- [x] Add failing tests for report initialization, deterministic smoke identity,
+      public manifest fields, git branch/commit, operator fallback, secret
+      absence, existing output blocking, and invalid manifest blocking.
+- [x] Implement a non-mutating report initializer that validates the staging
+      manifest, reads git metadata, renders `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`,
+      and writes only to explicit `--output`.
+- [x] Add `--now`, `--operator`, `--environment`, and `--force` support.
+- [x] Document report initialization after manifest preflight and before staging
+      smoke.
+- [x] Run smoke report initializer tests, example command, and focused staging
+      manifest plus smoke report tests.
+- [x] Commit the smoke report initializer.
