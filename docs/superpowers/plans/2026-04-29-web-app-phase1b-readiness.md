@@ -139,3 +139,21 @@
 - [x] Add invariant coverage for the service-key guard.
 - [x] Run web env checker positive and negative checks.
 - [x] Commit the service-key guard.
+
+### Task 10: Local Readiness Orchestrator
+
+**Files:**
+- Create: `oze-agent/scripts/run_phase1b_local_readiness.py`
+- Create: `oze-agent/tests/test_phase1b_local_readiness.py`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/IMPLEMENTATION_PLAN.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+
+- [x] Add failing tests for `build_steps()`, optional smoke skipping, full backend inclusion, absolute env-file paths, and report redaction.
+- [x] Implement `build_steps()` separately from `run_steps()` so unit tests do not run real commands.
+- [x] Implement orchestrated web env, web invariant/lint/build, API env, migration preflight, focused backend tests, optional web smoke, optional API smoke, and optional full backend suite.
+- [x] Treat omitted smoke URLs as `skipped`; treat provided unreachable URLs as command failures.
+- [x] Redact env-file paths from commands and output in the Markdown report.
+- [x] Document the preferred local readiness command.
+- [x] Run orchestrator unit tests and a real orchestrator local preflight with temp env files.
+- [x] Commit the local readiness orchestrator.

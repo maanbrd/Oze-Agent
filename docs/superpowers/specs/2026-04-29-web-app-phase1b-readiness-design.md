@@ -76,6 +76,16 @@ Add a Supabase migration preflight checker:
 - checks that Phase 1B auth/RLS and billing migration files contain the required
   auth trigger, RLS policy, Stripe IDs, unique event indexes, and billing outbox.
 
+Add a local readiness orchestrator:
+
+- file: `oze-agent/scripts/run_phase1b_local_readiness.py`,
+- command:
+  `PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py --web-env-file=../web/.env.local --api-env-file=.env.local --report=../docs/phase1b-local-readiness-report.md`,
+- uses explicit `cwd` values for web (`../web`) and backend (`.`),
+- records omitted smoke URLs as `skipped`, but fails smoke when a provided URL
+  is unreachable,
+- redacts env-file paths and loaded env-file output from reports.
+
 Add a smoke report template:
 
 - file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
@@ -109,6 +119,7 @@ Local automated verification:
 - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`,
+- `cd oze-agent && PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py --web-env-file=../web/.env.local --api-env-file=.env.local`,
 - `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`,
 - `cd oze-agent && PYTHONPATH=. pytest -q`.
 

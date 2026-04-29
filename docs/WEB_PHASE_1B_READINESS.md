@@ -37,6 +37,10 @@ npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 
 ```bash
 cd oze-agent
+PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py \
+  --web-env-file=../web/.env.local \
+  --api-env-file=.env.local \
+  --report=../docs/phase1b-local-readiness-report.md
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py --env-file=.env.local
 PYTHONPATH=. python3 scripts/check_phase1b_migrations.py
@@ -50,6 +54,12 @@ Both env checkers load `.env.local` and `.env` from their current working
 directory when those files exist. Use `--env-file=<path>` to point at an
 explicit local or staging smoke env file without exporting every value in the
 shell.
+
+Use `scripts/run_phase1b_local_readiness.py` as the preferred local preflight.
+It orchestrates web checks, FastAPI checks, migration preflight, focused backend
+tests, and optional local smoke checks. If `--web-base-url` or `--api-base-url`
+is omitted, the matching smoke step is recorded as skipped. If a URL is provided
+and the server does not respond, that smoke step fails.
 
 Local smoke confirms route behavior, protected redirects, onboarding gates, app
 shell rendering, and the no-CRM-mutation boundary. It does not confirm Stripe
