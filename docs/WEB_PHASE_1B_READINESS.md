@@ -75,6 +75,19 @@ closed without auth, and does not call Google, Stripe, or Supabase.
 
 ## Staging Services
 
+Before creating the Stripe webhook or smoke account, create a public-data-only
+copy of `docs/phase1b-staging-manifest.example.json` and run:
+
+```bash
+cd oze-agent
+PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py \
+  --manifest ../docs/phase1b-staging-manifest.example.json \
+  --generate-smoke-id
+```
+
+The manifest must not contain secrets such as `STRIPE_SECRET_KEY`, `whsec_...`,
+`SUPABASE_SERVICE_KEY`, or `BILLING_INTERNAL_SECRET`.
+
 Vercel/web env:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -126,18 +139,20 @@ Run:
      `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`
 2. Create or verify Stripe test product and prices with the documented lookup
    keys.
-3. Create Stripe test webhook endpoint:
+3. Run staging manifest preflight and generate the smoke identity:
+   - `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
+4. Create Stripe test webhook endpoint:
    - `https://<web-domain>/api/webhooks/stripe`
    - events listed in `docs/STRIPE_PHASE_0C_ROLLOUT.md`.
-4. Sign up through `/rejestracja`.
-5. Pay through `/onboarding/platnosc` with Stripe test card
+5. Sign up through `/rejestracja`.
+6. Pay through `/onboarding/platnosc` with Stripe test card
    `4242 4242 4242 4242`.
-6. Verify Supabase billing state and one row per Stripe event ID.
-7. Replay the same Stripe event and confirm no duplicate rows with the same
+7. Verify Supabase billing state and one row per Stripe event ID.
+8. Replay the same Stripe event and confirm no duplicate rows with the same
    `stripe_event_id`.
-8. Complete Google OAuth and resource creation.
-9. Pair Telegram with `/start <code>`.
-10. Open `/dashboard`, `/klienci`, and `/kalendarz`; completed users must see
+9. Complete Google OAuth and resource creation.
+10. Pair Telegram with `/start <code>`.
+11. Open `/dashboard`, `/klienci`, and `/kalendarz`; completed users must see
     `live` or `unavailable`, never silent demo data.
 
 Record the run in a copy of `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.

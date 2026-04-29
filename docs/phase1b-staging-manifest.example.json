@@ -1,0 +1,14 @@
+{
+  "web_url": "https://agent-oze-preview.vercel.app",
+  "api_url": "https://agent-oze-api-staging.up.railway.app",
+  "supabase_url": "https://project-ref.supabase.co",
+  "railway_api_start_command": "uvicorn api.main:app --host 0.0.0.0 --port $PORT",
+  "stripe_mode": "test",
+  "stripe_lookup_keys": {
+    "activation": "agent_oze_activation_199",
+    "monthly": "agent_oze_monthly_49",
+    "yearly": "agent_oze_yearly_350"
+  },
+  "stripe_webhook_url": "https://agent-oze-preview.vercel.app/api/webhooks/stripe",
+  "smoke_email_domain": "staging.agent-oze.example"
+}

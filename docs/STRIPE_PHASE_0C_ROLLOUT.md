@@ -111,7 +111,17 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Confirm `users`, `payment_history`, `webhook_log`, and `billing_outbox`
      have the Phase 0C fields/tables.
 
-5. **Create sandbox Stripe webhook endpoint**
+5. **Run staging manifest preflight**
+   - Copy `docs/phase1b-staging-manifest.example.json` and fill it with public
+     staging URLs and lookup keys only.
+   - Do not put `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+     `SUPABASE_SERVICE_KEY`, or `BILLING_INTERNAL_SECRET` in the manifest.
+   - Run:
+     `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
+   - Use the generated smoke email and Google resource prefix in the smoke
+     report.
+
+6. **Create sandbox Stripe webhook endpoint**
    - URL: `https://<web-domain>/api/webhooks/stripe`
    - Minimum events:
      - `checkout.session.completed`
@@ -123,7 +133,7 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Copy `whsec_...` into Vercel as `STRIPE_WEBHOOK_SECRET`.
    - Redeploy/restart Vercel after setting `STRIPE_WEBHOOK_SECRET`.
 
-6. **Run sandbox payment smoke**
+7. **Run sandbox payment smoke**
    - Sign up through `/rejestracja`.
    - Continue to `/onboarding/platnosc`.
    - Pay with Stripe test card `4242 4242 4242 4242`.
@@ -140,13 +150,13 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
      - `billing_outbox` has one event.
    - Verify `/dashboard` shows active subscription.
 
-7. **Replay/idempotency check**
+8. **Replay/idempotency check**
    - Replay the Stripe webhook event from Dashboard or CLI.
    - Confirm the same `stripe_event_id` does not create duplicate
      `payment_history` or `billing_outbox` rows.
    - Confirm FastAPI logs show accepted HMAC and duplicate-safe processing.
 
-8. **Review gate**
+9. **Review gate**
    - Run:
      - `cd web && npm run test:invariants`
      - `cd web && npm run lint && npm run build`
@@ -154,7 +164,7 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Run an independent cold review focused only on payments, env, webhook retry
      behavior, and idempotency before merge/deploy.
 
-9. **Onboarding continuation smoke**
+10. **Onboarding continuation smoke**
    - From a paid sandbox user, continue to `/onboarding/google`.
    - Complete Google OAuth and confirm redirect to `/onboarding/google/sukces`.
    - Create/link Sheets, Calendar, and Drive from `/onboarding/zasoby`.

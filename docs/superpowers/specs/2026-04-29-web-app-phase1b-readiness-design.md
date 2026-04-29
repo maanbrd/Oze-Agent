@@ -86,6 +86,15 @@ Add a local readiness orchestrator:
   is unreachable,
 - redacts env-file paths and loaded env-file output from reports.
 
+Add a staging manifest preflight:
+
+- file: `oze-agent/scripts/check_phase1b_staging_manifest.py`,
+- example: `docs/phase1b-staging-manifest.example.json`,
+- command:
+  `PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`,
+- validates public staging URLs, Stripe test mode, lookup keys, webhook URL,
+  Railway API start command, smoke domain, and rejects secrets in the manifest.
+
 Add a smoke report template:
 
 - file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
@@ -120,6 +129,7 @@ Local automated verification:
 - `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`,
 - `cd oze-agent && PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py --web-env-file=../web/.env.local --api-env-file=.env.local`,
+- `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`,
 - `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`,
 - `cd oze-agent && PYTHONPATH=. pytest -q`.
 

@@ -157,3 +157,21 @@
 - [x] Document the preferred local readiness command.
 - [x] Run orchestrator unit tests and a real orchestrator local preflight with temp env files.
 - [x] Commit the local readiness orchestrator.
+
+### Task 11: Staging Manifest Preflight
+
+**Files:**
+- Create: `oze-agent/scripts/check_phase1b_staging_manifest.py`
+- Create: `oze-agent/tests/test_phase1b_staging_manifest.py`
+- Create: `docs/phase1b-staging-manifest.example.json`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/STRIPE_PHASE_0C_ROLLOUT.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+
+- [x] Add failing tests for valid manifest, live mode rejection, HTTPS-only URLs, distinct web/API origins, exact webhook URL, exact Railway start command, secret rejection, smoke domain validation, and deterministic smoke identity.
+- [x] Implement staging manifest validation with standard URL parsing and recursive secret detection.
+- [x] Add a public-data-only example staging manifest.
+- [x] Add `--generate-smoke-id` and deterministic `--now=YYYY-MM-DDTHH:MM` support using Europe/Warsaw.
+- [x] Document manifest preflight before Stripe webhook creation and smoke account use.
+- [x] Run staging manifest tests, example manifest command, and focused Phase 1B readiness tests.
+- [x] Commit the staging manifest preflight.
