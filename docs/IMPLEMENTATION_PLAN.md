@@ -19,7 +19,7 @@ under `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 | **0E** Read-only CRM experience | ✅ CODE COMPLETE on PR #5 | dashboard/clients/calendar pages, FastAPI CRM endpoint, source states, no CRM mutation forms |
 | **0F** Onboarding completion | ✅ CODE COMPLETE on PR #5, smoke pending | signed Google OAuth, Sheets/Calendar/Drive setup, Telegram pairing code |
 | **Phase 1** Operational web panel | ✅ CODE COMPLETE on PR #5, live-readiness pending | live CRM source metadata, account settings, app-wide onboarding status |
-| **Phase 1B** Rollout/readiness gate | NEXT | sandbox env, migrations, Stripe smoke/replay, Google OAuth/resource smoke, Telegram pairing smoke, browser smoke |
+| **Phase 1B** Rollout/readiness gate | NEXT | repo-local env tooling + local checks first, then staging sandbox env, migrations, Stripe smoke/replay, Google OAuth/resource smoke, Telegram pairing smoke, browser smoke |
 
 **Config note (28.04.2026):** Supabase Auth → Providers → Email → `Confirm email` is **OFF**. Reason: built-in SMTP free-tier hits `over_email_send_rate_limit` (~2/h) which rolls back signup. Custom SMTP (Resend) is part of Phase 7 of the master plan; until then, signup creates session immediately without confirmation email. Re-enable once Resend SMTP is wired in Supabase project.
 
@@ -39,10 +39,19 @@ Railway/FastAPI, Stripe sandbox, Google OAuth config, Telegram bot.
 
 **Output:** Deployment/smoke report and any follow-up fixes.
 
+**Runbook:** `docs/WEB_PHASE_1B_READINESS.md`
+
+**Smoke report template:** `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`
+
 **Checks:**
 
+- Local env checks:
+  - `cd web && npm run check:phase1b-env`
+  - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`
 - Stripe sandbox product/prices/webhook configured with no `livemode: true`.
 - Vercel and Railway env vars set and rotated if exposed.
+- Railway FastAPI runs as a separate API service with:
+  `uvicorn api.main:app --host 0.0.0.0 --port $PORT`.
 - Supabase migrations applied for billing/onboarding fields.
 - Checkout smoke updates `users`, `payment_history`, `webhook_log`,
   `billing_outbox`; webhook replay is idempotent.

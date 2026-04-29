@@ -1,0 +1,89 @@
+# Web App Phase 1B Readiness Design
+
+_Date: 29.04.2026_
+_Track: Web app Phase 1B_
+_Branch: `feat/web-phase-0c`_
+
+## Decision
+
+Phase 1B is a readiness gate for the code-complete web app spine. It does not
+add product features, CRM mutation UI, live Stripe mode, company accounts, or
+copy polish.
+
+The implementation adds repo-local readiness tooling and a runbook so the team
+can verify the web app first in a safe local setup and then against staging
+sandbox services.
+
+## Scope
+
+Local readiness proves configuration shape, builds, FastAPI route availability,
+protected route behavior, and web UI boundaries. It does not prove Stripe
+webhook delivery, because Stripe cannot deliver to localhost without Stripe CLI
+or a public tunnel.
+
+Staging readiness proves the full external flow:
+
+- Vercel web preview/staging,
+- separate Railway FastAPI service,
+- staging Supabase cloud,
+- Stripe test-mode Checkout and webhook replay,
+- Google OAuth and resource creation,
+- Telegram `/start <code>` pairing,
+- CRM pages showing explicit `live` or `unavailable` source states.
+
+## Architecture
+
+Next.js remains the browser/session and Stripe Checkout boundary. FastAPI remains
+the trusted boundary for service-role Supabase writes and Google operations.
+
+Vercel never receives `SUPABASE_SERVICE_KEY`. Vercel verifies Stripe webhook
+signatures and forwards normalized sandbox events to FastAPI with
+`BILLING_INTERNAL_SECRET` HMAC.
+
+Railway must run two separate services/processes for readiness:
+
+- bot service: `python -m bot.main`,
+- API service: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`.
+
+## Tooling
+
+Add a web checker:
+
+- file: `web/scripts/check-phase1b-env.mjs`,
+- package script: `npm run check:phase1b-env`,
+- default scope: `local`,
+- staging scope: `npm run check:phase1b-env -- --scope=staging`.
+
+Add a FastAPI checker:
+
+- file: `oze-agent/scripts/verify_phase1b_env.py`,
+- command: `PYTHONPATH=. python3 scripts/verify_phase1b_env.py`.
+
+Add a smoke report template:
+
+- file: `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
+
+## Safety Rules
+
+Stop immediately if any Stripe response shows `livemode: true`.
+
+Use a fresh smoke account per run:
+
+- email format: `phase1b+YYYYMMDD-HHMM@<staging-test-domain>`,
+- Google resource prefix: `P1B Smoke YYYY-MM-DD HHMM`.
+
+Record Supabase user ID, Stripe customer/session/subscription IDs, Stripe event
+IDs, Google resource IDs, and Telegram pairing result in the smoke report.
+
+## Verification
+
+Local automated verification:
+
+- `cd web && npm run check:phase1b-env`,
+- `cd web && npm run test:invariants && npm run lint && npm run build`,
+- `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
+- `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`,
+- `cd oze-agent && PYTHONPATH=. pytest -q`.
+
+Staging smoke follows `docs/WEB_PHASE_1B_READINESS.md`.
+

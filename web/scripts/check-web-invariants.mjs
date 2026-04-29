@@ -166,4 +166,23 @@ assert.match(
   "Telegram onboarding must show /start code command.",
 );
 
+const packageJson = JSON.parse(read("package.json"));
+assert.equal(
+  packageJson.scripts["check:phase1b-env"],
+  "node scripts/check-phase1b-env.mjs",
+  "Web package must expose the Phase 1B env checker.",
+);
+
+const phase1bEnvChecker = read("scripts/check-phase1b-env.mjs");
+assert.match(
+  phase1bEnvChecker,
+  /NEXT_PUBLIC_SUPABASE_URL/,
+  "Phase 1B env checker must require Supabase URL.",
+);
+assert.match(
+  phase1bEnvChecker,
+  /STRIPE_WEBHOOK_SECRET/,
+  "Phase 1B env checker must know staging webhook secret requirements.",
+);
+
 console.log("web invariants passed");

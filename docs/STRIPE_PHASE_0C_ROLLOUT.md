@@ -16,6 +16,26 @@ checks below are executed against deployed sandbox services.
 
 ---
 
+## Local vs staging readiness
+
+Local Phase 1B checks validate configuration, builds, FastAPI route behavior,
+protected web routes, onboarding gates, and the no-CRM-mutation boundary. They do
+**not** validate Stripe webhook delivery unless Stripe CLI or a public tunnel is
+added in a later plan.
+
+Full Checkout + webhook + replay readiness happens only against deployed
+staging/preview services:
+
+- Vercel web app at a public URL,
+- separate Railway FastAPI service exposing `/internal/billing/stripe-event`,
+- staging Supabase cloud,
+- Stripe test-mode webhook endpoint.
+
+Use `docs/WEB_PHASE_1B_READINESS.md` for the full Phase 1B runbook and
+`docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md` for run evidence.
+
+---
+
 ## Stop conditions
 
 Stop immediately if any Stripe API, MCP, or CLI response includes
@@ -62,6 +82,9 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
 
 1. **Deploy code to staging or preview**
    - Vercel preview/staging has the Phase 0C web code.
+   - Railway/FastAPI is a separate API service, not the Telegram bot service.
+   - Railway/FastAPI uses start command:
+     `uvicorn api.main:app --host 0.0.0.0 --port $PORT`.
    - Railway/FastAPI has `/internal/billing/stripe-event`.
    - Supabase Auth Phase 0B still signs users in.
 
@@ -119,7 +142,8 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
 
 7. **Replay/idempotency check**
    - Replay the Stripe webhook event from Dashboard or CLI.
-   - Confirm `payment_history` and `billing_outbox` are not duplicated.
+   - Confirm the same `stripe_event_id` does not create duplicate
+     `payment_history` or `billing_outbox` rows.
    - Confirm FastAPI logs show accepted HMAC and duplicate-safe processing.
 
 8. **Review gate**

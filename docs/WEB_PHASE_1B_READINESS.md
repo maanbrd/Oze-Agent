@@ -1,0 +1,112 @@
+# Web Phase 1B Readiness Runbook
+
+_Last updated: 29.04.2026_
+
+Phase 1B proves the code-complete web app against safe local checks first and
+then staging sandbox services. It is not a feature phase and does not enable live
+Stripe mode.
+
+## Stop Conditions
+
+Stop immediately if any Stripe API, dashboard, MCP, or CLI response shows
+`livemode: true`.
+
+Do not put `SUPABASE_SERVICE_KEY` in Vercel. FastAPI is the only service that
+uses the Supabase service key.
+
+Do not reuse the Telegram bot Railway service as the FastAPI API service. Phase
+1B requires a separate Railway API service.
+
+## Local Readiness
+
+Use staging Supabase cloud and Stripe test-mode values, but run Next.js and
+FastAPI locally.
+
+Commands:
+
+```bash
+cd web
+npm run check:phase1b-env
+npm run test:invariants
+npm run lint
+npm run build
+```
+
+```bash
+cd oze-agent
+PYTHONPATH=. python3 scripts/verify_phase1b_env.py
+PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q
+PYTHONPATH=. pytest -q
+```
+
+Local smoke confirms route behavior, protected redirects, onboarding gates, app
+shell rendering, and the no-CRM-mutation boundary. It does not confirm Stripe
+webhook delivery unless a future plan adds Stripe CLI or a public tunnel.
+
+## Staging Services
+
+Vercel/web env:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_API_BASE_URL=https://<railway-api>`
+- `NEXT_PUBLIC_APP_URL=https://<vercel-preview-or-staging>`
+- `FASTAPI_INTERNAL_BASE_URL=https://<railway-api>`
+- `BILLING_INTERNAL_SECRET=<same value as Railway API>`
+- `STRIPE_SECRET_KEY=sk_test_...`
+- `STRIPE_WEBHOOK_SECRET=whsec_...`
+- `STRIPE_PRICE_ACTIVATION=agent_oze_activation_199`
+- `STRIPE_PRICE_MONTHLY=agent_oze_monthly_49`
+- `STRIPE_PRICE_YEARLY=agent_oze_yearly_350`
+
+Railway FastAPI env:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `SUPABASE_JWT_SECRET`
+- `BILLING_INTERNAL_SECRET=<same value as Vercel>`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI=https://<railway-api>/auth/google/callback`
+- `GOOGLE_OAUTH_STATE_SECRET` or fallback `BILLING_INTERNAL_SECRET`
+- `ENCRYPTION_KEY`
+- `DASHBOARD_URL=https://<vercel-preview-or-staging>`
+
+Railway FastAPI start command:
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port $PORT
+```
+
+The bot service remains separate and keeps its bot start command.
+
+## Staging Smoke
+
+Use a fresh smoke account:
+
+- email: `phase1b+YYYYMMDD-HHMM@<staging-test-domain>`
+- Google resource prefix: `P1B Smoke YYYY-MM-DD HHMM`
+
+Run:
+
+1. Apply Supabase migrations:
+   - `oze-agent/supabase_migrations/20260428_web_auth_rls.sql`
+   - `oze-agent/supabase_migrations/20260428_billing_stripe_0c.sql`
+2. Create or verify Stripe test product and prices with the documented lookup
+   keys.
+3. Create Stripe test webhook endpoint:
+   - `https://<web-domain>/api/webhooks/stripe`
+   - events listed in `docs/STRIPE_PHASE_0C_ROLLOUT.md`.
+4. Sign up through `/rejestracja`.
+5. Pay through `/onboarding/platnosc` with Stripe test card
+   `4242 4242 4242 4242`.
+6. Verify Supabase billing state and one row per Stripe event ID.
+7. Replay the same Stripe event and confirm no duplicate rows with the same
+   `stripe_event_id`.
+8. Complete Google OAuth and resource creation.
+9. Pair Telegram with `/start <code>`.
+10. Open `/dashboard`, `/klienci`, and `/kalendarz`; completed users must see
+    `live` or `unavailable`, never silent demo data.
+
+Record the run in a copy of `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
+
