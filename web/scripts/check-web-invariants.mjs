@@ -159,4 +159,11 @@ assert.match(
   "Logged-in layout must fetch onboarding status.",
 );
 
+const telegramPage = read("app/onboarding/telegram/page.tsx");
+assert.match(
+  telegramPage,
+  /\/start/,
+  "Telegram onboarding must show /start code command.",
+);
+
 console.log("web invariants passed");
