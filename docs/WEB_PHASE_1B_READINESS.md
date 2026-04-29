@@ -12,7 +12,8 @@ Stop immediately if any Stripe API, dashboard, MCP, or CLI response shows
 `livemode: true`.
 
 Do not put `SUPABASE_SERVICE_KEY` in Vercel. FastAPI is the only service that
-uses the Supabase service key.
+uses the Supabase service key. The web env checker fails if
+`SUPABASE_SERVICE_KEY` is present.
 
 Do not reuse the Telegram bot Railway service as the FastAPI API service. Phase
 1B requires a separate Railway API service.

@@ -97,6 +97,12 @@ function phase1bEnvReport(selectedScope) {
   const warnings = [];
   const stripeKey = (process.env.STRIPE_SECRET_KEY ?? "").trim();
 
+  if (present("SUPABASE_SERVICE_KEY")) {
+    errors.push(
+      "SUPABASE_SERVICE_KEY must not be configured in the web/Vercel environment.",
+    );
+  }
+
   if (stripeKey.startsWith("sk_live_")) {
     errors.push("STRIPE_SECRET_KEY is live mode. Phase 1B must use test mode.");
   } else if (stripeKey && !stripeKey.startsWith("sk_test_")) {

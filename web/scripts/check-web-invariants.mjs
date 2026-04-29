@@ -199,6 +199,11 @@ assert.match(
   /STRIPE_WEBHOOK_SECRET/,
   "Phase 1B env checker must know staging webhook secret requirements.",
 );
+assert.match(
+  phase1bEnvChecker,
+  /SUPABASE_SERVICE_KEY must not be configured/,
+  "Phase 1B env checker must block Supabase service keys in web env.",
+);
 
 const phase1bLocalSmoke = read("scripts/smoke-phase1b-local.mjs");
 assert.match(

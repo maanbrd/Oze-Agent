@@ -126,3 +126,16 @@
 - [x] Document the migration preflight before applying Supabase migrations.
 - [x] Run pytest and the migration preflight command.
 - [x] Commit the migration preflight automation.
+
+### Task 9: Web Env Service-Key Guard
+
+**Files:**
+- Modify: `web/scripts/check-phase1b-env.mjs`
+- Modify: `web/scripts/check-web-invariants.mjs`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+
+- [x] Prove the web env checker currently accepts `SUPABASE_SERVICE_KEY`.
+- [x] Reject `SUPABASE_SERVICE_KEY` in web/Vercel env checks.
+- [x] Add invariant coverage for the service-key guard.
+- [x] Run web env checker positive and negative checks.
+- [x] Commit the service-key guard.
