@@ -48,6 +48,8 @@ Railway/FastAPI, Stripe sandbox, Google OAuth config, Telegram bot.
 - Local env checks:
   - `cd web && npm run check:phase1b-env`
   - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`
+  - both checkers load `.env.local` / `.env` or accept `--env-file=<path>`
+    for explicit smoke env files.
 - Stripe sandbox product/prices/webhook configured with no `livemode: true`.
 - Vercel and Railway env vars set and rotated if exposed.
 - Railway FastAPI runs as a separate API service with:

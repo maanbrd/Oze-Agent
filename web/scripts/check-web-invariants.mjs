@@ -181,6 +181,16 @@ assert.match(
 );
 assert.match(
   phase1bEnvChecker,
+  /--env-file/,
+  "Phase 1B env checker must support explicit env files for local readiness.",
+);
+assert.match(
+  phase1bEnvChecker,
+  /\.env\.local/,
+  "Phase 1B env checker must load local dotenv files.",
+);
+assert.match(
+  phase1bEnvChecker,
   /STRIPE_WEBHOOK_SECRET/,
   "Phase 1B env checker must know staging webhook secret requirements.",
 );

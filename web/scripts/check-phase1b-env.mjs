@@ -1,9 +1,65 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 const VALID_SCOPES = new Set(["local", "staging"]);
+const DEFAULT_ENV_FILES = [".env.local", ".env"];
 
 function argValue(name) {
   const prefix = `${name}=`;
   const match = process.argv.slice(2).find((arg) => arg.startsWith(prefix));
   return match ? match.slice(prefix.length) : null;
+}
+
+function unquote(value) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseEnvFile(path) {
+  const values = new Map();
+  const source = readFileSync(path, "utf8");
+
+  for (const rawLine of source.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const normalized = line.startsWith("export ") ? line.slice(7).trim() : line;
+    const separator = normalized.indexOf("=");
+    if (separator <= 0) continue;
+
+    const name = normalized.slice(0, separator).trim();
+    const value = normalized.slice(separator + 1);
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      values.set(name, unquote(value));
+    }
+  }
+
+  return values;
+}
+
+function loadEnvFile(path) {
+  const resolved = resolve(path);
+  for (const [name, value] of parseEnvFile(resolved)) {
+    if (process.env[name] === undefined) {
+      process.env[name] = value;
+    }
+  }
+  return resolved;
+}
+
+function loadEnvFiles() {
+  const explicitPath = argValue("--env-file");
+  if (explicitPath) {
+    return [loadEnvFile(explicitPath)];
+  }
+
+  return DEFAULT_ENV_FILES.filter((path) => existsSync(path)).map(loadEnvFile);
 }
 
 function scope() {
@@ -58,6 +114,9 @@ function phase1bEnvReport(selectedScope) {
 
 function printReport(report) {
   console.log(`Phase 1B web env scope: ${report.scope}`);
+  if (report.loadedEnvFiles.length) {
+    console.log(`Loaded env file(s): ${report.loadedEnvFiles.join(", ")}`);
+  }
   if (report.missing.length) {
     console.log(`Missing: ${report.missing.join(", ")}`);
   }
@@ -70,7 +129,9 @@ function printReport(report) {
 }
 
 try {
+  const loadedEnvFiles = loadEnvFiles();
   const report = phase1bEnvReport(scope());
+  report.loadedEnvFiles = loadedEnvFiles;
   printReport(report);
   if (report.missing.length || report.errors.length) {
     process.exit(1);

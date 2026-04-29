@@ -81,10 +81,12 @@ idempotency must be smoked before Phase 0C is marked live.
 
 Phase 1B readiness starts locally with `npm run check:phase1b-env`, but full
 Stripe webhook readiness requires deployed staging services. The local checker
-does not require `STRIPE_WEBHOOK_SECRET`; staging checks do:
+loads `.env.local` / `.env` when present and also accepts `--env-file=<path>`.
+It does not require `STRIPE_WEBHOOK_SECRET`; staging checks do:
 
 ```bash
 npm run check:phase1b-env -- --scope=staging
+npm run check:phase1b-env -- --env-file=.env.staging.local --scope=staging
 ```
 
 Adresy:

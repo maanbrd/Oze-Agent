@@ -52,12 +52,14 @@ Add a web checker:
 - file: `web/scripts/check-phase1b-env.mjs`,
 - package script: `npm run check:phase1b-env`,
 - default scope: `local`,
-- staging scope: `npm run check:phase1b-env -- --scope=staging`.
+- staging scope: `npm run check:phase1b-env -- --scope=staging`,
+- loads `.env.local` / `.env` or an explicit `--env-file=<path>`.
 
 Add a FastAPI checker:
 
 - file: `oze-agent/scripts/verify_phase1b_env.py`,
-- command: `PYTHONPATH=. python3 scripts/verify_phase1b_env.py`.
+- command: `PYTHONPATH=. python3 scripts/verify_phase1b_env.py`,
+- loads `.env.local` / `.env` or an explicit `--env-file=<path>`.
 
 Add a smoke report template:
 
@@ -86,4 +88,3 @@ Local automated verification:
 - `cd oze-agent && PYTHONPATH=. pytest -q`.
 
 Staging smoke follows `docs/WEB_PHASE_1B_READINESS.md`.
-

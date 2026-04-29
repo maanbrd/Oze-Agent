@@ -59,4 +59,23 @@
 - [x] Run `cd web && npm run lint && npm run build`.
 - [x] Run `cd oze-agent && PYTHONPATH=. pytest tests/test_verify_phase1b_env.py tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`.
 - [x] Run `cd oze-agent && PYTHONPATH=. pytest -q`.
-- [ ] Commit the completed Phase 1B readiness tooling/docs.
+- [x] Commit the completed Phase 1B readiness tooling/docs.
+
+### Task 5: Local Smoke Env File Support
+
+**Files:**
+- Modify: `web/scripts/check-phase1b-env.mjs`
+- Modify: `web/scripts/check-web-invariants.mjs`
+- Modify: `oze-agent/scripts/verify_phase1b_env.py`
+- Modify: `oze-agent/tests/test_verify_phase1b_env.py`
+- Modify: `docs/WEB_PHASE_1B_READINESS.md`
+- Modify: `docs/IMPLEMENTATION_PLAN.md`
+- Modify: `docs/superpowers/specs/2026-04-29-web-app-phase1b-readiness-design.md`
+- Modify: `web/README.md`
+
+- [x] Prove `web/scripts/check-phase1b-env.mjs --env-file=<path>` fails before implementation.
+- [x] Add FastAPI pytest coverage for merging env file values.
+- [x] Implement dotenv-style `--env-file` loading and default `.env.local` / `.env` loading for web and FastAPI checkers.
+- [x] Update runbook/docs with explicit env-file usage.
+- [x] Run focused web/backend verification.
+- [x] Commit the local smoke env-file support.

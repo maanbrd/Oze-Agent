@@ -27,6 +27,7 @@ Commands:
 ```bash
 cd web
 npm run check:phase1b-env
+npm run check:phase1b-env -- --env-file=.env.local
 npm run test:invariants
 npm run lint
 npm run build
@@ -35,9 +36,15 @@ npm run build
 ```bash
 cd oze-agent
 PYTHONPATH=. python3 scripts/verify_phase1b_env.py
+PYTHONPATH=. python3 scripts/verify_phase1b_env.py --env-file=.env.local
 PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q
 PYTHONPATH=. pytest -q
 ```
+
+Both env checkers load `.env.local` and `.env` from their current working
+directory when those files exist. Use `--env-file=<path>` to point at an
+explicit local or staging smoke env file without exporting every value in the
+shell.
 
 Local smoke confirms route behavior, protected redirects, onboarding gates, app
 shell rendering, and the no-CRM-mutation boundary. It does not confirm Stripe
@@ -109,4 +116,3 @@ Run:
     `live` or `unavailable`, never silent demo data.
 
 Record the run in a copy of `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`.
-
