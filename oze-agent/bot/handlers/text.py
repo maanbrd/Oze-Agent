@@ -366,6 +366,30 @@ def _normalize_street_address(address: str) -> str:
     return f"ul. {address}"
 
 
+_NOTE_PREFIX_RE = re.compile(
+    r"^\s*(?:dodaj|dopisz|zapisz)\s+notatk[ęe]\b|^\s*notatka\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _extract_note_from_compound_trigger(message_text: str) -> Optional[str]:
+    """Pull the note part from a compound 'add note + meeting' trigger.
+
+    Trigger shape: 'dodaj notatkę {client}, {city}: {action with time}'.
+    The colon separates client identification from the note content; the
+    content also drives meeting extraction (INTENCJE_MVP §4.3 compound).
+    Returns the post-colon text trimmed, or None for plain meeting triggers
+    that don't start with a notatka prefix.
+    """
+    if not _NOTE_PREFIX_RE.match(message_text):
+        return None
+    colon_idx = message_text.find(":")
+    if colon_idx == -1:
+        return None
+    note = message_text[colon_idx + 1:].strip()
+    return note or None
+
+
 def _extract_inline_client_facts(message_text: str) -> dict:
     """Extract obvious client facts from a meeting/detail reply without LLM.
 
@@ -826,6 +850,60 @@ async def _route_pending_flow(
         ))
         card = format_add_client_card(merged, missing)
         await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+        return True
+    elif flow_type == "add_client_duplicate":
+        # User clicked ➕ Dopisać on the dup card; bot asked "Co chcesz dopisać?".
+        # Parse the reply, merge into pending client_data so the eventual
+        # ✅ Zapisać commits the merged value via _confirm_add_client_duplicate.
+        telegram_id = update.effective_user.id
+        flow_data = flow.get("flow_data", {})
+        old_client_data = flow_data.get("client_data", {}) or {}
+
+        inline_facts = _extract_inline_client_facts(message_text)
+        if not inline_facts:
+            try:
+                headers = await get_sheet_headers(user["id"])
+                result = await extract_client_data(message_text, headers)
+                inline_facts = {
+                    k: v
+                    for k, v in _filter_invalid_products(
+                        result.get("client_data", {})
+                    ).items()
+                    if v
+                }
+            except Exception as e:
+                logger.warning(
+                    "add_client_duplicate augment LLM extract failed: %s", e
+                )
+                inline_facts = {}
+
+        if not inline_facts:
+            await update.effective_message.reply_text("Co chcesz dopisać?")
+            return True
+
+        # Don't let a stray name in the reply overwrite the resolved client.
+        inline_facts.pop("Imię i nazwisko", None)
+        merged = {**old_client_data, **inline_facts}
+
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
+            flow_data=payload_to_flow_data(AddClientDuplicatePayload(
+                client_data=merged,
+                duplicate_row=flow_data["duplicate_row"],
+                client_name=flow_data.get("client_name", ""),
+                city=flow_data.get("city", ""),
+            )),
+        ))
+
+        name = flow_data.get("client_name", "klient")
+        city = flow_data.get("city", "")
+        city_part = f" ({city})" if city else ""
+        new_field_summary = ", ".join(f"{k}: {v}" for k, v in inline_facts.items())
+        text = f"Zaktualizować {name}{city_part} o:\n{new_field_summary}?"
+        await update.effective_message.reply_text(
+            text, reply_markup=build_mutation_buttons("confirm")
+        )
         return True
     elif flow_type == "add_meeting":
         if _looks_like_intent_switch_reply(message_text):
@@ -1963,6 +2041,11 @@ async def handle_add_meeting(
     user_id = user["id"]
 
     today_str = date.today().isoformat()
+    # Compound add_note + add_meeting (INTENCJE_MVP §4.3): if the trigger
+    # starts with "dodaj notatkę X: ...", capture the post-colon text as
+    # note_text so handle_confirm can append it to column H after the
+    # meeting commits.
+    compound_note_text = _extract_note_from_compound_trigger(message_text)
     meeting_result = await extract_meeting_data(message_text, today_str)
     meetings = meeting_result.get("meetings", [])
 
@@ -2119,6 +2202,10 @@ async def handle_add_meeting(
                 client_row=enriched.get("client_row"),
                 current_status=enriched.get("current_status") or "",
                 ambiguous_client=enriched.get("ambiguous_client", False),
+                note_text=compound_note_text,
+                existing_notes=(
+                    (enriched.get("existing_client_data") or {}).get("Notatki", "")
+                ),
             )),
         ))
 
@@ -2693,6 +2780,35 @@ async def handle_confirm(
                 status_update=status_update,
                 client_updates=flow_data.get("client_updates") or None,
             )
+
+            # Compound add_note + add_meeting (INTENCJE_MVP §4.3): when the
+            # original trigger had a 'dodaj notatkę X: ...' prefix, write the
+            # note to column H after the meeting commits. Best-effort —
+            # meeting reply branches below are unchanged.
+            compound_note_text = flow_data.get("note_text") or None
+            compound_sync_row = (
+                (status_update.get("row") if status_update else None)
+                or enriched_client_row
+            )
+            if (
+                compound_note_text
+                and compound_sync_row
+                and result.success
+                and result.sheets_synced
+            ):
+                try:
+                    await commit_add_note(
+                        user_id,
+                        compound_sync_row,
+                        compound_note_text,
+                        flow_data.get("existing_notes", "") or "",
+                        date.today(),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "compound add_note after meeting failed for row=%s: %s",
+                        compound_sync_row, e,
+                    )
 
             if not result.success:
                 # Calendar failure — pipeline made no Sheets writes.

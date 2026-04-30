@@ -20,8 +20,13 @@ fi
 
 # Prefer the project venv's Python (3.13, matches prod runtime). Fall back
 # to system python3 if the venv is not present.
-if [[ -x ".venv/bin/python" ]]; then
-    exec ".venv/bin/python" -m tests_e2e.mcp_server "$@"
-else
-    exec python3 -m tests_e2e.mcp_server "$@"
-fi
+PY=".venv/bin/python"
+[[ -x "$PY" ]] || PY="python3"
+
+# Wrap with `railway run` so the MCP server inherits Supabase env
+# (SUPABASE_URL, SUPABASE_SERVICE_KEY, GOOGLE_*, etc.) from Railway prod.
+# Per CLAUDE.md (Phase 0.8 cleanup): production secrets live ONLY in
+# Railway env vars — not in tests_e2e/.env, which keeps only Telethon
+# credentials (TELEGRAM_E2E_*).
+exec railway run --service bot --environment production -- \
+    "$PY" -m tests_e2e.mcp_server "$@"

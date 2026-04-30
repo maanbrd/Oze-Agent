@@ -131,9 +131,12 @@ async def find_synthetic_events(
     out: list[dict] = []
     for e in events:
         title = e.get("title", "")
-        if not title.startswith(_SYNTHETIC_PREFIX):
+        # Bot creates events titled like "Spotkanie — E2E-Beta-...",
+        # "Telefon — E2E-Beta-...", "Wysłać ofertę — E2E-Beta-...",
+        # so use substring match, not prefix.
+        if _SYNTHETIC_PREFIX not in title:
             continue
-        if not include_fixtures and title.startswith(_FIXTURE_PREFIX):
+        if not include_fixtures and _FIXTURE_PREFIX in title:
             continue
         if run_id is not None and run_id not in title:
             continue

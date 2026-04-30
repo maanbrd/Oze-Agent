@@ -1235,7 +1235,9 @@ async def run_add_client_dup_dopisac_update_path(
 
         update_card = find_card_message(post_dopisac_replies)
         if update_card is None:
-            # Bot might commit directly or change UX — accept as known_drift.
+            # Bot might commit directly (legacy flow), or — current flow —
+            # ask "Co chcesz dopisać?" and wait for the user to send the
+            # extra field as plain text. Accept either path.
             if any(is_save_confirmation(m.text) for m in post_dopisac_replies):
                 result.add(
                     "post_dopisac_card_or_save",
@@ -1244,19 +1246,48 @@ async def run_add_client_dup_dopisac_update_path(
                     tag="known_drift",
                     doc_ref="agent_behavior_spec_v5.md duplicate-routing flow",
                 )
-                # Best-effort verify the row got updated.
                 await _verify_save_to_sheets(
                     harness, result, name, E2E_BETA_CITY,
                     expected_fields={"Email": "updated-"},
                     check_key="sheets_row_updated_with_new_email",
                 )
                 return result
-            result.add_blocker(
-                "post_dopisac_card_or_save",
-                f"no card and no save confirm after ➕ Dopisać; "
-                f"got {[m.text[:80] for m in post_dopisac_replies]}",
+
+            # Current 3-button flow: bot asks "Co chcesz dopisać?".
+            # Send the extra field as plain text → bot should produce
+            # an update card.
+            asked_what_to_add = any(
+                "Co chcesz dopisać" in m.text for m in post_dopisac_replies
             )
-            return result
+            result.add(
+                "bot_asked_what_to_add",
+                asked_what_to_add,
+                detail=(
+                    f"expected 'Co chcesz dopisać?' prompt; got "
+                    f"{[m.text[:80] for m in post_dopisac_replies]}"
+                ),
+            )
+            if not asked_what_to_add:
+                result.add_blocker(
+                    "post_dopisac_card_or_save",
+                    f"no card, no save confirm, no 'Co chcesz dopisać?' "
+                    f"prompt; got {[m.text[:80] for m in post_dopisac_replies]}",
+                )
+                return result
+
+            extra_text = f"email: {new_email}"
+            result.context["dopisac_text"] = extra_text
+            await harness.send(extra_text)
+            update_replies = await harness.collect_messages(duration_s=12.0)
+            result.context["update_reply_count"] = len(update_replies)
+            update_card = find_card_message(update_replies)
+            if update_card is None:
+                result.add_blocker(
+                    "update_card_after_text",
+                    f"no card after sending extra text; "
+                    f"got {[m.text[:80] for m in update_replies]}",
+                )
+                return result
         result.add("post_dopisac_update_card", True, detail=str(update_card.button_labels))
 
         save_label, final_confirm = await click_save_and_collect(harness, update_card)

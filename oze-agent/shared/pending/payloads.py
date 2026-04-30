@@ -72,6 +72,12 @@ class AddMeetingPayload:
     client_row: Optional[int] = None
     current_status: Optional[str] = None
     ambiguous_client: bool = False
+    # Compound add_note + add_meeting (INTENCJE_MVP §4.3): when the trigger
+    # is "dodaj notatkę X: zadzwonić ... o 10", the note text is captured
+    # here and appended to column H in handle_confirm after the meeting
+    # commits. None for plain meeting triggers without a notatka prefix.
+    note_text: Optional[str] = None
+    existing_notes: str = ""
 
 
 @dataclass

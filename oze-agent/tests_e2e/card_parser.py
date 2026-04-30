@@ -192,8 +192,14 @@ def parse_card(text: str, button_labels: list[str] | None = None) -> ParsedCard:
 # ── Convenience: detect cancel / not-found / vision-only / post-mvp markers ──
 
 CANCEL_TEXT_MARKERS = ("Anulowane", "🫡 Anulowane", "⚠️ Anulowane")
-NOT_FOUND_MARKERS = ("Nie znalazłem", "nie znalazłem")
-NOT_UNDERSTOOD_MARKERS = ("Nie zrozumiałem", "nie zrozumiałem")
+NOT_FOUND_MARKERS = (
+    "Nie znalazłem", "nie znalazłem",
+    "Nie mam", "nie mam",  # bot copy: 'Nie mam "X" w bazie.'
+)
+NOT_UNDERSTOOD_MARKERS = (
+    "Nie zrozumiałem", "nie zrozumiałem",
+    "Co chcesz zrobić",  # bot copy for gibberish — graceful "what do you want to do?"
+)
 POST_MVP_MARKERS = ("post-MVP", "post mvp", "post-mvp")
 VISION_ONLY_MARKERS = ("vision-only", "vision only", "poza aktualnym MVP scope")
 PAST_DATE_MARKERS = ("przeszłości", "Data ", "podaj datę przyszłą")
