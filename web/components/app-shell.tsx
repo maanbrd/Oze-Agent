@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoutButton } from "@/components/logout-button";
 import { OnboardingGate } from "@/components/onboarding-gate";
 import type { CurrentAccount } from "@/lib/api/account";
 import type { OnboardingStatus } from "@/lib/api/onboarding";
@@ -86,7 +87,10 @@ export function AppShell({
                   className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-2.5 text-sm normal-case text-white outline-none focus:border-[#3DFF7A]/70"
                 />
               </label>
-              <div className="text-sm text-zinc-400">{email}</div>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="truncate text-sm text-zinc-400">{email}</span>
+                <LogoutButton />
+              </div>
             </div>
           </header>
           <div className="px-5 py-6 lg:px-8">

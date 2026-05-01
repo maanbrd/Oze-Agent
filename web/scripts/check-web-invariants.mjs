@@ -58,6 +58,22 @@ const componentFiles = walk("components").filter((file) => file.endsWith(".tsx")
 const appAndComponentSource = [...appFiles, ...componentFiles]
   .map((file) => read(file))
   .join("\n");
+const logoutButton = read("components/logout-button.tsx");
+assert.match(
+  logoutButton,
+  /logout/,
+  "Logged-in UI must expose the logout server action.",
+);
+assert.match(
+  read("components/app-shell.tsx"),
+  /LogoutButton/,
+  "App shell must render a logout button for authenticated pages.",
+);
+assert.match(
+  read("app/onboarding/layout.tsx"),
+  /LogoutButton/,
+  "Onboarding pages must render a logout button while a user is mid-flow.",
+);
 assert.match(
   appSource,
   /CRM|Sheets|Calendar|Google/,
