@@ -1,7 +1,7 @@
 """Validate a completed Phase 1B smoke report.
 
 Run from `oze-agent/`:
-    PYTHONPATH=. python3 scripts/validate_phase1b_smoke_report.py \
+    PYTHONPATH=. .venv/bin/python scripts/validate_phase1b_smoke_report.py \
       --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md
 """
 
@@ -86,6 +86,27 @@ def _require_https_url(label: str, value: str | None, errors: list[str]) -> None
         errors.append(f"{label} must be an https URL.")
 
 
+def _require_id_or_na_with_explanation(
+    label: str,
+    value: str | None,
+    prefix: str,
+    explanation_terms: tuple[str, ...],
+    errors: list[str],
+) -> None:
+    if value is None or not value.strip():
+        errors.append(f"{label} is required.")
+        return
+    normalized = value.strip().lower()
+    if normalized.startswith(f"{prefix.lower()}_"):
+        return
+    if normalized.startswith("n/a") and all(term in normalized for term in explanation_terms):
+        return
+    errors.append(
+        f"{label} must be a `{prefix}_...` ID or explicit `n/a` with "
+        f"{' + '.join(explanation_terms)} explanation."
+    )
+
+
 def _is_empty_ok(value: str | None) -> bool:
     if value is None:
         return True
@@ -104,6 +125,9 @@ def _validate_global_text(text: str, errors: list[str]) -> None:
     for pattern in SECRET_PATTERNS:
         if pattern.lower() in lower_text:
             errors.append(f"Report contains secret-looking value `{pattern}`.")
+
+    if "not applied to staging" in lower_text:
+        errors.append("Report says a required item is not applied to staging.")
 
 
 def _validate_metadata(text: str, errors: list[str]) -> None:
@@ -127,17 +151,20 @@ def _validate_smoke_account(text: str, errors: list[str]) -> None:
     }
     _require_filled(fields, errors)
     email = fields["Email"] or ""
-    if email and not re.fullmatch(r"phase1b\+\d{8}-\d{4}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", email):
-        errors.append("Email must use phase1b+YYYYMMDD-HHMM@domain format.")
+    if email and not re.fullmatch(
+        r"phase1b\+(?:\d{8}-\d{4}|\d{13})@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+        email,
+    ):
+        errors.append("Email must use phase1b+YYYYMMDD-HHMM@domain or phase1b+timestamp@domain format.")
 
 
 def _validate_local_readiness(text: str, errors: list[str]) -> None:
     commands = [
         "`cd web && npm run check:phase1b-env`",
         "`cd web && npm run test:invariants && npm run lint && npm run build`",
-        "`cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`",
-        "`cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`",
-        "`cd oze-agent && PYTHONPATH=. pytest -q`",
+        "`cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/verify_phase1b_env.py`",
+        "`cd oze-agent && PYTHONPATH=. .venv/bin/python -m pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`",
+        "`cd oze-agent && PYTHONPATH=. .venv/bin/python -m pytest -q`",
     ]
     _require_filled({command.strip("`"): _field_value(text, command) for command in commands}, errors)
 
@@ -162,11 +189,17 @@ def _validate_stripe(text: str, errors: list[str]) -> None:
         "Product ID": _field_value(text, "Product ID"),
         "Checkout Session ID": _field_value(text, "Checkout Session ID"),
         "Customer ID": _field_value(text, "Customer ID"),
-        "Invoice ID": _field_value(text, "Invoice ID"),
         "Webhook event IDs": _field_value(text, "Webhook event IDs"),
         "Replay event ID": _field_value(text, "Replay event ID"),
     }
     _require_filled(required, errors)
+    _require_id_or_na_with_explanation(
+        "Invoice ID",
+        _field_value(text, "Invoice ID"),
+        "in",
+        ("activation-only", "no-invoice"),
+        errors,
+    )
 
     for label, expected in EXPECTED_LOOKUP_KEYS.items():
         if _field_value(text, label) != expected:

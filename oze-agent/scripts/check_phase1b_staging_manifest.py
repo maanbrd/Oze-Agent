@@ -1,7 +1,7 @@
 """Validate the public Phase 1B staging smoke manifest.
 
 Run from `oze-agent/`:
-    PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py \
+    PYTHONPATH=. .venv/bin/python scripts/check_phase1b_staging_manifest.py \
       --manifest ../docs/phase1b-staging-manifest.example.json
 """
 

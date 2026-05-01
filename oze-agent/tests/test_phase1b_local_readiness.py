@@ -2,10 +2,12 @@ from pathlib import Path
 
 from scripts.run_phase1b_local_readiness import (
     ReadinessConfig,
+    Step,
     StepResult,
     build_steps,
     redact_command,
     render_markdown_report,
+    run_steps,
 )
 
 
@@ -28,6 +30,9 @@ def test_orchestrator_builds_static_checks_without_smoke_urls(tmp_path):
 
     names = [step.name for step in steps]
 
+    assert "python runtime" in names
+    assert names[0] == "python runtime"
+    assert "web unit tests" in names
     assert "web smoke" in names
     assert "api smoke" in names
     assert next(step for step in steps if step.name == "web smoke").skip_reason
@@ -67,6 +72,40 @@ def test_orchestrator_resolves_env_files_to_absolute_paths(tmp_path):
 
     assert f"--env-file={web_env.resolve()}" in web_env_step.command
     assert f"--env-file={api_env.resolve()}" in api_env_step.command
+
+
+def test_orchestrator_checks_python_runtime_before_backend_steps(tmp_path):
+    steps = build_steps(_config(tmp_path))
+
+    names = [step.name for step in steps]
+    runtime_index = names.index("python runtime")
+
+    assert runtime_index < names.index("api env")
+    assert names.index("web unit tests") < names.index("web lint")
+    assert "3, 13" in " ".join(steps[runtime_index].command)
+    assert steps[runtime_index].stop_on_failure is True
+
+
+def test_orchestrator_stops_after_critical_failure(tmp_path):
+    steps = [
+        Step(
+            name="critical",
+            command=["/bin/sh", "-c", "echo bad; exit 7"],
+            cwd=tmp_path,
+            stop_on_failure=True,
+        ),
+        Step(
+            name="after",
+            command=["/bin/sh", "-c", "echo should-not-run"],
+            cwd=tmp_path,
+        ),
+    ]
+
+    results = run_steps(steps)
+
+    assert [result.name for result in results] == ["critical"]
+    assert results[0].status == "failed"
+    assert results[0].exit_code == 7
 
 
 def test_orchestrator_redacts_env_file_arguments(tmp_path):

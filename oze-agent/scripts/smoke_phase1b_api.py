@@ -1,7 +1,7 @@
 """Run local Phase 1B FastAPI route smoke checks.
 
 Run from `oze-agent/` while the API server is running:
-    PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000
+    PYTHONPATH=. .venv/bin/python scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000
 """
 
 from __future__ import annotations

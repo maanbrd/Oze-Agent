@@ -1,7 +1,7 @@
 """Run the Phase 1B local readiness gate.
 
 Run from `oze-agent/`:
-    PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py
+    PYTHONPATH=. .venv/bin/python scripts/run_phase1b_local_readiness.py
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ FOCUSED_BACKEND_TESTS = [
     "tests/test_api_auth.py",
 ]
 
+REQUIRED_PYTHON_VERSION = (3, 13)
+
 
 @dataclass(frozen=True)
 class ReadinessConfig:
@@ -47,6 +49,7 @@ class Step:
     cwd: Path
     env: dict[str, str] = field(default_factory=dict)
     skip_reason: str | None = None
+    stop_on_failure: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,22 @@ def _pythonpath_env() -> dict[str, str]:
     return {"PYTHONPATH": "."}
 
 
+def _python_runtime_check_command() -> list[str]:
+    required_major, required_minor = REQUIRED_PYTHON_VERSION
+    return [
+        sys.executable,
+        "-c",
+        (
+            "import sys; "
+            f"required = ({required_major}, {required_minor}); "
+            "current = sys.version_info[:2]; "
+            "print(f'Python {sys.version.split()[0]}'); "
+            "raise SystemExit(0 if current == required else "
+            "f'Phase 1B backend checks require Python {required[0]}.{required[1]}, got {current[0]}.{current[1]}')"
+        ),
+    ]
+
+
 def build_steps(config: ReadinessConfig) -> list[Step]:
     web_env_args = []
     if config.web_env_file:
@@ -81,6 +100,12 @@ def build_steps(config: ReadinessConfig) -> list[Step]:
 
     steps = [
         Step(
+            name="python runtime",
+            command=_python_runtime_check_command(),
+            cwd=config.oze_agent_dir,
+            stop_on_failure=True,
+        ),
+        Step(
             name="web env",
             command=["npm", "run", "check:phase1b-env", *web_env_args],
             cwd=config.web_dir,
@@ -88,6 +113,11 @@ def build_steps(config: ReadinessConfig) -> list[Step]:
         Step(
             name="web invariants",
             command=["npm", "run", "test:invariants"],
+            cwd=config.web_dir,
+        ),
+        Step(
+            name="web unit tests",
+            command=["npm", "run", "test:web-units"],
             cwd=config.web_dir,
         ),
         Step(name="web lint", command=["npm", "run", "lint"], cwd=config.web_dir),
@@ -239,6 +269,8 @@ def run_steps(steps: list[Step]) -> list[StepResult]:
                 output=completed.stdout,
             )
         )
+        if completed.returncode != 0 and step.stop_on_failure:
+            break
 
     return results
 

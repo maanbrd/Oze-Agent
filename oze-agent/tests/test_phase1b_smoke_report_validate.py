@@ -23,9 +23,9 @@ _Environment: staging_
 
 - `cd web && npm run check:phase1b-env`: pass
 - `cd web && npm run test:invariants && npm run lint && npm run build`: pass
-- `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`: pass
-- `cd oze-agent && PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`: pass
-- `cd oze-agent && PYTHONPATH=. pytest -q`: pass
+- `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/verify_phase1b_env.py`: pass
+- `cd oze-agent && PYTHONPATH=. .venv/bin/python -m pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q`: pass
+- `cd oze-agent && PYTHONPATH=. .venv/bin/python -m pytest -q`: pass
 
 ## Staging Services
 
@@ -98,6 +98,17 @@ def test_valid_completed_report_passes():
     assert result.warnings == []
 
 
+def test_accepts_timestamp_smoke_email_format():
+    report = _completed_report().replace(
+        "phase1b+20260429-1234@staging.agent-oze.example",
+        "phase1b+1777628027119@agent-oze.test",
+    )
+
+    result = validate_report_text(report)
+
+    assert result.ok
+
+
 def test_template_report_fails_with_placeholders():
     template = open("../docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md", encoding="utf-8").read()
 
@@ -113,6 +124,36 @@ def test_rejects_empty_required_fields():
     result = validate_report_text(report)
 
     assert any("Customer ID" in error for error in result.errors)
+
+
+def test_rejects_invoice_placeholder_evidence():
+    report = _completed_report().replace(
+        "- Invoice ID: in_123",
+        "- Invoice ID: pending Stripe dashboard lookup",
+    )
+
+    result = validate_report_text(report)
+
+    assert any("Invoice ID" in error for error in result.errors)
+
+
+def test_allows_invoice_na_with_activation_only_note():
+    report = _completed_report().replace(
+        "- Invoice ID: in_123",
+        "- Invoice ID: n/a - activation-only no-invoice smoke",
+    )
+
+    result = validate_report_text(report)
+
+    assert result.ok
+
+
+def test_rejects_not_applied_to_staging_admission():
+    report = _completed_report() + "\n- Prepared but not applied to staging: migration.sql\n"
+
+    result = validate_report_text(report)
+
+    assert any("not applied to staging" in error for error in result.errors)
 
 
 def test_rejects_empty_local_readiness_results():

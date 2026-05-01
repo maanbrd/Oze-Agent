@@ -114,18 +114,29 @@ class _FakeSupabase:
     def __init__(self):
         self.current_table = None
         self.updates = []
+        self.inserts = []
         self.filters = []
 
     def table(self, name):
         self.current_table = name
         return self
 
+    def select(self, _fields):
+        return self
+
     def update(self, data):
         self.updates.append((self.current_table, data))
         return self
 
+    def insert(self, data):
+        self.inserts.append((self.current_table, data))
+        return self
+
     def eq(self, key, value):
         self.filters.append((self.current_table, key, value))
+        return self
+
+    def limit(self, _count):
         return self
 
     def execute(self):
@@ -207,3 +218,61 @@ def test_checkout_paid_requires_user_metadata(monkeypatch):
         )
 
     assert exc.value.status_code == 422
+
+
+def test_invoice_paid_resolves_parent_subscription_details(monkeypatch):
+    from api.routes import billing
+
+    fake_db = _FakeSupabase()
+    marked = []
+
+    monkeypatch.setattr(billing, "_get_existing_log", lambda event_id: None)
+    monkeypatch.setattr(billing, "_insert_log", lambda payload: "log-1")
+    monkeypatch.setattr(billing, "_mark_log_processed", lambda log_id: marked.append(log_id))
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake_db)
+
+    result = billing.process_stripe_event(
+        {
+            "id": "evt_invoice",
+            "type": "invoice.payment_succeeded",
+            "object": {
+                "object": "invoice",
+                "id": "in_1",
+                "customer": "cus_1",
+                "subscription": None,
+                "amount_paid": 24800,
+                "currency": "pln",
+                "metadata": {},
+                "parent": {
+                    "type": "subscription_details",
+                    "subscription_details": {
+                        "subscription": "sub_1",
+                        "metadata": {
+                            "user_id": "user-1",
+                            "plan": "monthly",
+                        },
+                    },
+                },
+            },
+        }
+    )
+
+    assert result["processed"] is True
+    assert result["user_id"] == "user-1"
+    assert ("users", "id", "user-1") in fake_db.filters
+    assert fake_db.updates[0][1]["subscription_status"] == "active"
+    assert fake_db.updates[0][1]["stripe_subscription_id"] == "sub_1"
+
+    payment_insert = next(
+        data for table, data in fake_db.inserts if table == "payment_history"
+    )
+    assert payment_insert["stripe_event_id"] == "evt_invoice"
+    assert payment_insert["stripe_invoice_id"] == "in_1"
+    assert payment_insert["stripe_subscription_id"] == "sub_1"
+    assert payment_insert["amount_pln"] == 248.0
+    assert payment_insert["type"] == "stripe_invoice"
+
+    outbox_insert = next(data for table, data in fake_db.inserts if table == "billing_outbox")
+    assert outbox_insert["stripe_event_id"] == "evt_invoice"
+    assert outbox_insert["event_type"] == "billing_invoice_paid"
+    assert marked == ["log-1"]

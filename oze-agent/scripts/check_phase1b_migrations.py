@@ -1,7 +1,7 @@
 """Verify Phase 1B Supabase migration files before staging rollout.
 
 Run from `oze-agent/`:
-    PYTHONPATH=. python3 scripts/check_phase1b_migrations.py
+    PYTHONPATH=. .venv/bin/python scripts/check_phase1b_migrations.py
 """
 
 from __future__ import annotations
@@ -39,6 +39,14 @@ REQUIRED_MIGRATION_TOKENS: dict[str, list[str]] = {
         "TEXT UNIQUE NOT NULL",
         "CREATE TABLE IF NOT EXISTS",
         "ENABLE ROW LEVEL SECURITY",
+    ],
+    "20260501_web_auth_function_hardening.sql": [
+        "handle_new_auth_user",
+        "REVOKE ALL ON FUNCTION",
+        "FROM PUBLIC",
+        "REVOKE EXECUTE ON FUNCTION",
+        "FROM anon",
+        "FROM authenticated",
     ],
 }
 

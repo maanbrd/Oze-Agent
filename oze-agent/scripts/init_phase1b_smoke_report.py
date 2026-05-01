@@ -1,7 +1,7 @@
 """Initialize a Phase 1B staging smoke report from a validated manifest.
 
 Run from `oze-agent/`:
-    PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py \
+    PYTHONPATH=. .venv/bin/python scripts/init_phase1b_smoke_report.py \
       --manifest ../docs/phase1b-staging-manifest.example.json \
       --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md
 """

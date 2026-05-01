@@ -20,8 +20,13 @@ def test_phase1b_migration_checker_reports_missing_tokens(tmp_path):
         "CREATE TABLE IF NOT EXISTS public.billing_outbox (id UUID);",
         encoding="utf-8",
     )
+    (migration_dir / "20260501_web_auth_function_hardening.sql").write_text(
+        "REVOKE EXECUTE ON FUNCTION public.handle_new_auth_user() FROM anon;",
+        encoding="utf-8",
+    )
 
     missing = collect_missing_migration_requirements(migration_dir)
 
     assert any("users_select_own_profile" in item for item in missing)
     assert any("idx_payment_history_stripe_event_id" in item for item in missing)
+    assert any("FROM authenticated" in item for item in missing)

@@ -95,8 +95,7 @@ def _subscription_status(stripe_status: str | None, deleted: bool = False) -> st
 
 
 def _metadata_user_id(stripe_object: dict[str, Any]) -> str | None:
-    metadata = stripe_object.get("metadata")
-    if isinstance(metadata, dict):
+    for metadata in _metadata_sources(stripe_object):
         user_id = metadata.get("user_id")
         if isinstance(user_id, str) and user_id:
             return user_id
@@ -104,8 +103,7 @@ def _metadata_user_id(stripe_object: dict[str, Any]) -> str | None:
 
 
 def _metadata_plan(stripe_object: dict[str, Any]) -> str | None:
-    metadata = stripe_object.get("metadata")
-    if isinstance(metadata, dict):
+    for metadata in _metadata_sources(stripe_object):
         plan = metadata.get("plan")
         if plan in {"monthly", "yearly"}:
             return plan
@@ -117,6 +115,70 @@ def _stripe_id(value: Any) -> str | None:
         return value
     if isinstance(value, dict) and isinstance(value.get("id"), str):
         return value["id"]
+    return None
+
+
+def _metadata_sources(stripe_object: dict[str, Any]) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+
+    metadata = stripe_object.get("metadata")
+    if isinstance(metadata, dict):
+        sources.append(metadata)
+
+    parent = stripe_object.get("parent")
+    if isinstance(parent, dict):
+        subscription_details = parent.get("subscription_details")
+        if isinstance(subscription_details, dict):
+            parent_metadata = subscription_details.get("metadata")
+            if isinstance(parent_metadata, dict):
+                sources.append(parent_metadata)
+
+    return sources
+
+
+def _parent_subscription_id(parent: Any) -> str | None:
+    if not isinstance(parent, dict):
+        return None
+
+    for details_key in (
+        "subscription_details",
+        "invoice_item_details",
+        "subscription_item_details",
+    ):
+        details = parent.get(details_key)
+        if isinstance(details, dict):
+            subscription_id = _stripe_id(details.get("subscription"))
+            if subscription_id:
+                return subscription_id
+
+    return None
+
+
+def _subscription_id(stripe_object: dict[str, Any]) -> str | None:
+    if stripe_object.get("object") == "subscription":
+        return _stripe_id(stripe_object)
+
+    direct_subscription_id = _stripe_id(stripe_object.get("subscription"))
+    if direct_subscription_id:
+        return direct_subscription_id
+
+    parent_subscription_id = _parent_subscription_id(stripe_object.get("parent"))
+    if parent_subscription_id:
+        return parent_subscription_id
+
+    lines = stripe_object.get("lines")
+    line_items = lines.get("data") if isinstance(lines, dict) else None
+    if isinstance(line_items, list):
+        for line_item in line_items:
+            if not isinstance(line_item, dict):
+                continue
+            line_subscription_id = _stripe_id(line_item.get("subscription"))
+            if line_subscription_id:
+                return line_subscription_id
+            line_parent_subscription_id = _parent_subscription_id(line_item.get("parent"))
+            if line_parent_subscription_id:
+                return line_parent_subscription_id
+
     return None
 
 
@@ -138,7 +200,7 @@ def _find_user_id_by_subscription(subscription_id: str | None) -> str | None:
 
 def _find_user_id(stripe_object: dict[str, Any]) -> str | None:
     return _metadata_user_id(stripe_object) or _find_user_id_by_subscription(
-        _stripe_id(stripe_object.get("subscription")) or _stripe_id(stripe_object)
+        _subscription_id(stripe_object)
     )
 
 
@@ -239,7 +301,7 @@ def _insert_payment_history(
             "stripe_invoice_id": _stripe_id(stripe_object)
             if stripe_object.get("object") == "invoice"
             else None,
-            "stripe_subscription_id": _stripe_id(stripe_object.get("subscription")),
+            "stripe_subscription_id": _subscription_id(stripe_object),
             "stripe_customer_id": _stripe_id(stripe_object.get("customer")),
             "currency": stripe_object.get("currency"),
         }
@@ -278,7 +340,7 @@ def _handle_invoice(payload: dict[str, Any], stripe_object: dict[str, Any], paid
     update_data = {
         "subscription_status": "active" if paid else "past_due",
         "stripe_customer_id": _stripe_id(stripe_object.get("customer")),
-        "stripe_subscription_id": _stripe_id(stripe_object.get("subscription")),
+        "stripe_subscription_id": _subscription_id(stripe_object),
         "subscription_current_period_end": _iso_from_stripe_timestamp(
             stripe_object.get("period_end")
         ),

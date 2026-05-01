@@ -1,7 +1,7 @@
 """Verify FastAPI environment needed for Phase 1B readiness.
 
 Run from `oze-agent/`:
-    PYTHONPATH=. python3 scripts/verify_phase1b_env.py
+    PYTHONPATH=. .venv/bin/python scripts/verify_phase1b_env.py
 """
 
 from __future__ import annotations
