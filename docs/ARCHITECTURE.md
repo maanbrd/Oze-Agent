@@ -1,12 +1,30 @@
 # OZE-Agent — Architecture
 
-_Last updated: 14.04.2026_
+_Last updated: 29.04.2026_
 
 ---
 
 ## Current State
 
-The current Python behavior layer is **legacy/reference**. We do not trust it as the behavior contract. We can recover stable fragments from it, but the rewrite starts from the `.md` specs.
+Two parallel deployment tracks share Supabase (auth + RLS) and Google APIs:
+
+| Track | Code | Hosting | Role |
+|---|---|---|---|
+| **Bot** (Telegram + FastAPI) | `oze-agent/` | Railway | The only mutation surface for CRM data (R1: confirm-before-write). Voice + text + future photo. |
+| **Web app** (Next.js 16) | `web/` | Vercel — `oze-agent.vercel.app` | Read-only dashboard, billing, onboarding wizard, settings. **No web chat in MVP.** |
+
+The current Python behavior layer is **legacy/reference**. Bot rewrite (selective) starts from the `.md` specs. Web app is greenfield.
+
+### Web app architecture (29.04.2026)
+
+- **Auth**: Supabase Auth via `@supabase/ssr` server actions (`web/lib/supabase/server.ts`). Publishable / anon key only on the client; service key never reaches Next.js (G1).
+- **Auth boundary**: Next.js owns sessions. Dashboard / business data goes through FastAPI (`oze-agent/api/`) via `Authorization: Bearer <Supabase JWT>`; FastAPI validates JWT against Supabase JWKS. RLS protects browser access; FastAPI uses service key + per-endpoint authorization on JWT subject.
+- **Routes implemented on `feat/web-phase-0c`**: `/` landing, `/rejestracja`, `/login`, `/healthz`, legal pages, `/onboarding/platnosc`, `/onboarding/google`, `/onboarding/google/sukces`, `/onboarding/zasoby`, `/onboarding/telegram`, and logged-in app routes `/dashboard`, `/klienci`, `/kalendarz`, `/platnosci`, `/ustawienia`, `/import`, `/instrukcja`, `/faq`.
+- **Email confirmation**: currently OFF in Supabase (Auth → Providers → Email) for MVP. Built-in SMTP free-tier rate limit (~2/h) blocks signup with confirmation on. Custom SMTP (Resend) enabled in Phase 7 per `~/.claude/plans/przeczytaj-oba-pliki-md-twinkling-oasis.md`.
+- **Billing boundary (Phase 0C)**: Next.js creates Stripe Checkout Sessions and verifies Stripe webhooks, but never stores `SUPABASE_SERVICE_KEY`. Vercel forwards verified Stripe events to FastAPI `/internal/billing/stripe-event` with HMAC (`BILLING_INTERNAL_SECRET`). FastAPI owns durable billing writes (`users`, `payment_history`, `webhook_log`, `billing_outbox`) and only activates access after paid Stripe events.
+- **Onboarding boundary (Phase 0F/1)**: Next.js calls FastAPI `/api/onboarding/*` server-side with the Supabase access token. FastAPI resolves `public.users.auth_user_id`, creates/stores system setup metadata, and owns Google operations. Signed OAuth state prevents trusting a public path `user_id`.
+- **CRM dashboard boundary (Phase 1)**: Next.js reads CRM data through `web/lib/crm/adapters.ts`, which targets FastAPI `/api/dashboard/crm`. FastAPI reads Google Sheets and Calendar via existing wrappers and returns DTOs plus `source/sourceMessage`. The frontend exposes `live`, `demo`, and `unavailable` source states. Completed users must not silently receive demo CRM as if it were live.
+- **CRM mutation boundary**: the web app has no CRM mutation forms. It may show direct Google Sheets/Calendar/Drive links. CRM edits happen in Google directly or through Telegram confirmation flows.
 
 ---
 
@@ -108,6 +126,34 @@ bot/
 └─────────────────────────────────┘
 ```
 
+### Web Boundary Diagram
+
+```
+┌─────────────────────────────────┐
+│        Browser / Next UI         │  web/app/, web/components/
+│  auth, onboarding, read-only CRM │
+└──────────────┬──────────────────┘
+               │ Supabase session cookie / access token
+               ▼
+┌─────────────────────────────────┐
+│        Next.js Server            │  web/lib/api/*, server actions
+│  Stripe Checkout + webhook verify│
+└──────────────┬──────────────────┘
+               │ Bearer Supabase JWT / HMAC internal billing
+               ▼
+┌─────────────────────────────────┐
+│          FastAPI                 │  api/routes/*
+│  service-role writes + Google ops│
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│ Supabase system data + Google CRM│
+│ users/billing/onboarding + Sheets│
+│ Calendar/Drive                  │
+└─────────────────────────────────┘
+```
+
 ---
 
 ## Design Principles
@@ -122,3 +168,5 @@ bot/
 8. **Mutations are atomic pipelines** — Sheets → Calendar → response, with error handling
 9. **Unified 3-button mutation cards** — all mutation intents (`add_client`, `add_note`, `change_status`, `add_meeting`) use the same pattern: `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`. `❌ Anulować` is one-click.
 10. **Duplicate resolution is explicit** — a first name + last name + city match routes through `[Nowy]` / `[Aktualizuj]` before any mutation card. No default merge.
+11. **Web app is read-only for CRM** — account/billing/onboarding mutations are allowed; CRM rows/events/notes/statuses are not mutated from web.
+12. **Operational UI states are explicit** — web CRM must label live/demo/unavailable data sources and show direct Google links where edits happen.

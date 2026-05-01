@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { safeLocalPath } from "@/lib/routes";
 import { createClient } from "@/lib/supabase/server";
 
 function value(formData: FormData, key: string) {
@@ -12,19 +13,24 @@ function encoded(path: string, message: string) {
   return `${path}?${params.toString()}`;
 }
 
+function encodedWithNext(path: string, message: string, next: string) {
+  const params = new URLSearchParams({ message, next });
+  return `${path}?${params.toString()}`;
+}
+
 export async function login(formData: FormData) {
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
-  const next = value(formData, "next") || "/dashboard";
+  const next = safeLocalPath(value(formData, "next"));
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(encoded("/login", "Nie udało się zalogować. Sprawdź email i hasło."));
+    redirect(encodedWithNext("/login", "Nie udało się zalogować. Sprawdź email i hasło.", next));
   }
 
-  redirect(next.startsWith("/") ? next : "/dashboard");
+  redirect(next);
 }
 
 export async function signup(formData: FormData) {
@@ -34,6 +40,12 @@ export async function signup(formData: FormData) {
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
   const terms = formData.get("terms") === "on";
+  const onboardingSurvey = {
+    region: value(formData, "region"),
+    specialty: value(formData, "specialty"),
+    referral_source: value(formData, "referralSource"),
+    experience: value(formData, "experience"),
+  };
 
   if (!terms) {
     redirect(encoded("/rejestracja", "Regulamin jest wymagany."));
@@ -53,6 +65,11 @@ export async function signup(formData: FormData) {
         consent_terms: true,
         consent_marketing: formData.get("marketing") === "on",
         consent_phone_contact: formData.get("phoneContact") === "on",
+        onboarding_survey: onboardingSurvey,
+        region: onboardingSurvey.region,
+        specialty: onboardingSurvey.specialty,
+        referral_source: onboardingSurvey.referral_source,
+        experience: onboardingSurvey.experience,
       },
     },
   });
@@ -65,7 +82,7 @@ export async function signup(formData: FormData) {
     redirect(encoded("/login", "Konto utworzone. Sprawdź email i zaloguj się."));
   }
 
-  redirect("/dashboard");
+  redirect("/onboarding/platnosc");
 }
 
 export async function logout() {

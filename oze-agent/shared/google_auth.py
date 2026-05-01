@@ -87,18 +87,20 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
 
 def store_google_tokens(user_id: str, credentials: Credentials) -> None:
     """Encrypt and store Google tokens in Supabase users table."""
-    try:
-        data = {
-            "google_access_token": encrypt_token(credentials.token),
-            "google_refresh_token": encrypt_token(credentials.refresh_token),
-            "google_token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
-        }
-        update_user(user_id, data)
-    except Exception as e:
-        logger.error("store_google_tokens: failed for user %s: %s", user_id, e)
+    if not credentials.refresh_token:
+        raise ValueError("Google OAuth did not return a refresh token.")
+
+    data = {
+        "google_access_token": encrypt_token(credentials.token),
+        "google_refresh_token": encrypt_token(credentials.refresh_token),
+        "google_token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
+    }
+    updated = update_user(user_id, data)
+    if not updated:
+        raise RuntimeError("Google token update failed to persist.")
 
 
-def build_oauth_url(user_id: str) -> str:
+def build_oauth_url(user_id: str, state: str | None = None) -> str:
     """Generate Google OAuth authorization URL.
 
     Uses plain OAuth2 without PKCE — correct for server-side web app flows.
@@ -110,11 +112,12 @@ def build_oauth_url(user_id: str) -> str:
         client_id=Config.GOOGLE_CLIENT_ID,
         scope=SCOPES,
         redirect_uri=Config.GOOGLE_REDIRECT_URI,
-        state=user_id,
+        state=state or user_id,
     )
     auth_url, _ = oauth.authorization_url(
         "https://accounts.google.com/o/oauth2/auth",
         access_type="offline",
+        prompt="consent",
     )
     return auth_url
 

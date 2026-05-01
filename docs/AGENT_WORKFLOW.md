@@ -1,6 +1,6 @@
 # OZE-Agent — Multi-Agent Workflow
 
-_Last updated: 14.04.2026_
+_Last updated: 29.04.2026_
 
 ---
 
@@ -96,6 +96,30 @@ If a test fails → Builder fixes → Tester retests → Reviewer re-reviews.
 
 If a spec contradiction is found → Spec Guardian resolves → workflow restarts from affected phase.
 
+## Superpowers Workflow Overlay
+
+For implementation work in this repo, use the repo-local `superpowers/` skills
+in addition to the role sequence above.
+
+Required gates for multi-phase work:
+
+1. `using-superpowers`
+2. `brainstorming`
+3. written design/spec in `docs/superpowers/specs/`
+4. `writing-plans` with checklist plan in `docs/superpowers/plans/`
+5. `using-git-worktrees` for an isolated implementation worktree when the
+   current worktree has user-owned changes or the plan is multi-phase
+6. `test-driven-development` or static invariants before production changes
+7. `executing-plans` / `subagent-driven-development` only when tasks are safely
+   separable
+8. `verification-before-completion`
+9. intentional development commit and push/PR update
+
+Current web example: `feat/web-phase-0c` / PR #5 implemented Phase
+0C/0D/0E/0F/Phase 1 in isolated worktree
+`/Users/mansoniasty/workflows/Agent-OZE-phase0c`, with RED/GREEN tests and web
+invariants before commits.
+
 ---
 
 ## Maan Approves
@@ -105,6 +129,8 @@ If a spec contradiction is found → Spec Guardian resolves → workflow restart
 - Removal of large code sections
 - Starting rewrite of a major module
 - Moving to the next implementation phase
+- Marking a web phase live-ready after code complete; Phase 1B rollout/smoke
+  evidence is required first
 
 No agent role proceeds past a phase boundary without Maan's explicit go.
 

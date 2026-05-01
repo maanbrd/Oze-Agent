@@ -110,12 +110,34 @@ async def _handle_linking_code(
         )
         return
 
+    existing_user = get_user_by_telegram_id(telegram_id)
+    if existing_user and existing_user.get("id") != user["id"]:
+        logger.warning(
+            "start_command linking: telegram_id=%s already linked to user_id=%s",
+            telegram_id,
+            existing_user.get("id"),
+        )
+        await update.message.reply_text(
+            "❌ To konto Telegram jest już połączone z innym użytkownikiem."
+        )
+        return
+
     # Link the account
-    update_user(user["id"], {
+    updated_user = update_user(user["id"], {
         "telegram_id": telegram_id,
         "telegram_link_code": None,
         "telegram_link_code_expires": None,
     })
+    if not updated_user:
+        logger.error(
+            "start_command linking: DB update failed for user_id=%s telegram_id=%s",
+            user["id"],
+            telegram_id,
+        )
+        await update.message.reply_text(
+            "❌ Nie udało się połączyć konta Telegram. Wygeneruj nowy kod albo skontaktuj się z pomocą."
+        )
+        return
 
     logger.info("Linked telegram_id=%s to user_id=%s", telegram_id, user["id"])
     await update.message.reply_text(_WELCOME_MESSAGE)

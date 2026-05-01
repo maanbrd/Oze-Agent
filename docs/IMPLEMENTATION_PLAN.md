@@ -1,6 +1,80 @@
 # OZE-Agent — Implementation Plan
 
-_Last updated: 14.04.2026_
+_Last updated: 29.04.2026_
+
+This file owns the **bot track** phasing (selective behavior-layer rewrite) and
+the current **web app track** snapshot. Detailed web Superpowers specs/plans live
+under `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+
+---
+
+## Web app track snapshot (29.04.2026)
+
+| Phase | Status | Output |
+|---|---|---|
+| **0A** Web bootstrap (Next.js 16 scaffold, landing, placeholder routes, `/healthz`) | ✅ DONE — PR #1 merged 28.04 | `web/` live on Vercel `oze-agent.vercel.app` |
+| **0B** Supabase Auth + RLS baseline | ✅ DONE — PR #2 + #3 merged 28.04 | `/rejestracja` → `auth.users` + `public.users` via `on_auth_user_created` trigger; `/dashboard` reads claims; signup verified live (with email confirmation off — see §config note) |
+| **0C** Stripe sandbox + onboarding wizard step 1-2 | ✅ CODE COMPLETE on `feat/web-phase-0c` / PR #5, rollout pending | Stripe Checkout sandbox, verified webhook -> FastAPI HMAC boundary, idempotent billing writes + outbox, onboarding steps 1-2 |
+| **0D** Functional app shell | ✅ CODE COMPLETE on PR #5 | logged-in shell, app routes, Google link buttons, onboarding gate |
+| **0E** Read-only CRM experience | ✅ CODE COMPLETE on PR #5 | dashboard/clients/calendar pages, FastAPI CRM endpoint, source states, no CRM mutation forms |
+| **0F** Onboarding completion | ✅ CODE COMPLETE on PR #5, smoke pending | signed Google OAuth, Sheets/Calendar/Drive setup, Telegram pairing code |
+| **Phase 1** Operational web panel | ✅ CODE COMPLETE on PR #5, live-readiness pending | live CRM source metadata, account settings, app-wide onboarding status |
+| **Phase 1B** Rollout/readiness gate | NEXT | repo-local env tooling + local checks first, then staging sandbox env, migrations, Stripe smoke/replay, Google OAuth/resource smoke, Telegram pairing smoke, browser smoke |
+
+**Config note (28.04.2026):** Supabase Auth → Providers → Email → `Confirm email` is **OFF**. Reason: built-in SMTP free-tier hits `over_email_send_rate_limit` (~2/h) which rolls back signup. Custom SMTP (Resend) is part of Phase 7 of the master plan; until then, signup creates session immediately without confirmation email. Re-enable once Resend SMTP is wired in Supabase project.
+
+**Workflow note (29.04.2026):** Web work in PR #5 followed the repo-local
+Superpowers sequence: brainstorming -> written design/spec -> implementation
+plan -> isolated worktree -> TDD/invariants -> verification -> intentional
+development commits. Continue this workflow for Phase 1B and later web phases.
+
+### Web Phase 1B — Rollout/readiness gate
+
+**Goal:** Prove the code-complete web functional spine works with real sandbox
+services before marking it live-ready.
+
+**Input:** PR #5 branch `feat/web-phase-0c`,
+`docs/STRIPE_PHASE_0C_ROLLOUT.md`, Supabase project, Vercel preview/staging,
+Railway/FastAPI, Stripe sandbox, Google OAuth config, Telegram bot.
+
+**Output:** Deployment/smoke report and any follow-up fixes.
+
+**Runbook:** `docs/WEB_PHASE_1B_READINESS.md`
+
+**Smoke report template:** `docs/PHASE1B_SMOKE_REPORT_TEMPLATE.md`
+
+**Checks:**
+
+- Local env checks:
+  - `cd web && npm run check:phase1b-env`
+  - `cd oze-agent && PYTHONPATH=. python3 scripts/verify_phase1b_env.py`
+  - both checkers load `.env.local` / `.env` or accept `--env-file=<path>`
+    for explicit smoke env files.
+- Stripe sandbox product/prices/webhook configured with no `livemode: true`.
+- Vercel and Railway env vars set and rotated if exposed.
+- Railway FastAPI runs as a separate API service with:
+  `uvicorn api.main:app --host 0.0.0.0 --port $PORT`.
+- Supabase migrations applied for billing/onboarding fields.
+- Supabase migration preflight runs with:
+  `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`.
+- Checkout smoke updates `users`, `payment_history`, `webhook_log`,
+  `billing_outbox`; webhook replay is idempotent.
+- Google OAuth starts from web, callback stores tokens, resource step creates or
+  links Sheets/Calendar/Drive.
+- Partial resource retry is safe; already-created resource IDs persist.
+- Telegram page shows `/start <code>`; bot consumes code and links
+  `telegram_id`.
+- Logged-in app pages show live/demo/unavailable source state and no CRM
+  mutation forms.
+- Local route smoke runs with:
+  `cd web && npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000`.
+- Local FastAPI smoke runs with:
+  `cd oze-agent && PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000`.
+- Preferred local orchestrator:
+  `cd oze-agent && PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py --web-env-file=../web/.env.local --api-env-file=.env.local --report=../docs/phase1b-local-readiness-report.md`.
+
+**Do NOT:** enable live Stripe mode, create production prices, add CRM mutation
+forms to web, or treat build success as payment readiness.
 
 ---
 

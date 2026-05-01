@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 25.04.2026_
+_Last updated: 29.04.2026_
 
 ---
 
@@ -8,11 +8,15 @@ _Last updated: 25.04.2026_
 
 Previous bug-by-bug patching track is closed.
 
-Current strategy: **selective rewrite of the behavior layer**.
+Current strategy: **selective rewrite of the behavior layer + web app functional spine**.
 
 The Python behavior layer is legacy/reference — not trusted as behavior contract.
 The `.md` documentation is the primary project asset.
 We do not delete infrastructure blindly.
+
+The current active delivery branch is `feat/web-phase-0c` / PR #5. It uses the
+Superpowers workflow: brainstorming -> written spec -> implementation plan ->
+isolated worktree -> TDD implementation -> verification -> development commits.
 
 ## Current Implementation Status
 
@@ -70,6 +74,19 @@ Current photo code (and any batch/multi-meeting fragments) is legacy reference o
 - **Global `/cancel` command** — universal escape hatch for any pending flow
   (added in `48e4a76`).
 
+### Web app track (parallel to bot rewrite)
+
+- **Phase 0A — Web bootstrap (DONE 28.04.2026, PR #1)**: Next.js 16.2.4 scaffold under `web/`, cinematic landing v3 (`web/components/landing.tsx`), placeholder routes (`/rejestracja`, `/login`, `/regulamin`, `/polityka-prywatnosci`), `/healthz` Route Handler. Live on `oze-agent.vercel.app`.
+- **Phase 0B — Supabase Auth + RLS (DONE 28.04.2026, PR #2 + #3)**: `@supabase/ssr` server actions, `signup` / `login` / `logout` flows (`web/app/auth/actions.ts`), `auth.users` ↔ `public.users` linked via `on_auth_user_created` trigger + `auth_user_id` column, RLS policy `users_select_own_profile`, `/dashboard` page renders status panels (Auth+RLS gotowe / Subskrypcja czeka / Google czeka / Telegram czeka / Onboarding czeka).
+- **Live signup verified 28.04.2026** with `maanbrd977@gmail.com` — session cookie set, redirect to `/dashboard`.
+- **Config decision (28.04.2026):** Supabase Auth `Confirm email` toggle **OFF** for MVP. Built-in SMTP free-tier rate limit (`over_email_send_rate_limit` ~2/h) blocked signup with confirmation on. Re-enable once custom SMTP (Resend) configured in Supabase per master plan Phase 7.
+- **Phase 0C/0D/0E/0F/Phase 1 — Web app functional spine (CODE COMPLETE ON BRANCH 29.04.2026, PR #5):** `/rejestracja` collects account + survey and sends users to `/onboarding/platnosc`; Stripe Checkout uses activation + monthly/yearly plan; Stripe webhook is verified in Next.js, then forwarded to FastAPI with HMAC. FastAPI owns durable billing writes and idempotency (`users`, `payment_history`, `webhook_log`, `billing_outbox`). The branch adds authenticated onboarding status, signed Google OAuth start/callback, Google resource setup (Sheets/Calendar/Drive), partial-safe resource persistence, Telegram pairing-code API, `/start <code>` instructions, onboarding screens, app-wide onboarding gate, live/demo/unavailable CRM source states, CRM source metadata from FastAPI, read-only CRM pages, and account-only settings. UI clearly states that CRM edits happen through Google Sheets/Calendar links or Telegram, not web mutation forms.
+- **Verification 29.04.2026 on `feat/web-phase-0c`:**
+  - `cd oze-agent && PYTHONPATH=. pytest tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q` -> 11 passed.
+  - `cd oze-agent && PYTHONPATH=. pytest -q` -> 840 passed.
+  - `cd web && npm run test:invariants && npm run lint && npm run build` -> pass.
+- **Not live-ready yet:** rollout checklist in `docs/STRIPE_PHASE_0C_ROLLOUT.md` still needs sandbox env, migration, deployed webhook, Stripe smoke/replay, Google OAuth/resource smoke, and Telegram pairing smoke.
+
 ---
 
 ## Next Steps
@@ -90,7 +107,8 @@ Current photo code (and any batch/multi-meeting fragments) is legacy reference o
 9. Phase 3 — Intent Router Rewrite — done
 10. Phase 4 — Pending Flow + Confirmation Cards — done
 11. Phase 5 — Mutation Pipeline — done (commits `2603add`, `210523a` on `origin/develop`)
-12. Phase 6 — Proactive Scheduler / Morning Brief — done in code (scope: morning brief only, see `IMPLEMENTATION_PLAN.md` Phase 6). P6-RCF Codex review fixes applied. **Next:** manual Telegram smoke (MB-1..MB-9) + prod deploy.
+12. Phase 6 — Proactive Scheduler / Morning Brief — done in code (scope: morning brief only, see `IMPLEMENTATION_PLAN.md` Phase 6). P6-RCF Codex review fixes applied. **Bot next:** manual Telegram smoke (MB-1..MB-9) + prod deploy.
+13. Web Phase 0C/0D/0E/0F/Phase 1 functional spine — code complete on `feat/web-phase-0c`, PR #5. **Web next:** Phase 1B rollout/readiness gate: sandbox env, migrations, deployed webhook, Stripe smoke/replay, Google OAuth/resource smoke, Telegram pairing smoke.
 
 ---
 
@@ -103,11 +121,34 @@ Current photo code (and any batch/multi-meeting fragments) is legacy reference o
 
 Housekeeping / security items z Phase 1 audit (~32) — osobny backlog, obsługiwane w miarę implementacji Phase 3-7.
 
-## Phase 3 — Intent Router Rewrite — next
+## Phase 3 — Intent Router Rewrite — done
 
 Per `docs/IMPLEMENTATION_PLAN.md` Phase 3. Klasyfikator 6 MVP intentów + `general_question` z strukturalnym JSON output. Rozróżnia POST-MVP roadmap / vision-only / NIEPLANOWANE z odpowiednio różnymi reply templates.
 
 Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, D6 30-min history window) są wejściem dla Phase 3.
+
+## Web Phase 1B — rollout/readiness gate — next
+
+This is the next web stage after the code-complete functional spine in PR #5.
+It is an environment/deployment/smoke phase, not a new feature phase.
+
+Required before marking web app live-ready:
+
+- Vercel env: Supabase publishable URL/key, FastAPI base URL, Stripe test key,
+  webhook secret, Stripe lookup keys, app URL.
+- Railway/FastAPI env: `BILLING_INTERNAL_SECRET`, Supabase service key, Google
+  OAuth state secret, dashboard URL, Google OAuth callback config.
+- Supabase migrations: billing Phase 0C fields/tables and onboarding fields.
+- Stripe sandbox product/prices + webhook endpoint.
+- Stripe Checkout smoke with test card and webhook replay/idempotency check.
+- Google OAuth smoke from `/onboarding/google` through callback to
+  `/onboarding/google/sukces`.
+- Resource setup smoke: Sheets/Calendar/Drive IDs persist and retry safely after
+  partial failure.
+- Telegram pairing smoke: web shows `/start <code>`, bot consumes code, user row
+  receives `telegram_id`, onboarding completes.
+- Browser smoke across `/dashboard`, `/klienci`, `/kalendarz`, `/platnosci`,
+  `/ustawienia`: no CRM mutation forms, source states visible, Google links work.
 
 ---
 
@@ -157,7 +198,7 @@ End state: 801 testów zielony (0 xfailed). Voice end-to-end zweryfikowany na Ra
 
 ## Phase 4 — Known follow-ups
 
-**Next concrete slice (16.04.2026):** typed-pending **disambiguation / duplicate UX** (see first follow-up below). After F7b parking, this is the next active work per `docs/IMPLEMENTATION_PLAN.md` Phase 4, not more auto-cancel / card-rendering polish (those are largely covered by `a1ec65c`, `cd4a648`, earlier commits). Do not start a new slice until disambiguation typed-pending is completed.
+**Bot follow-up queue (recorded 16.04.2026):** typed-pending **disambiguation / duplicate UX** remains the next bot behavior slice when the bot lane resumes. It is no longer the active project-wide next step while web Phase 1B rollout is in progress.
 
 ### duplicate UX: same full name across multiple cities needs disambiguation
 

@@ -25,6 +25,7 @@ CREATE TABLE users (
     google_calendar_id TEXT,
     google_calendar_name TEXT,
     google_drive_folder_id TEXT,
+    onboarding_survey JSONB DEFAULT '{}',
     morning_brief_hour INTEGER DEFAULT 7,
     reminder_minutes_before INTEGER DEFAULT 60,
     default_meeting_duration INTEGER DEFAULT 60,
@@ -34,7 +35,11 @@ CREATE TABLE users (
     subscription_status TEXT DEFAULT 'pending_payment',
     subscription_plan TEXT,
     subscription_expires_at TIMESTAMPTZ,
+    subscription_current_period_end TIMESTAMPTZ,
     activation_paid BOOLEAN DEFAULT FALSE,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    stripe_checkout_session_id TEXT,
     promo_code_used TEXT,
     consent_terms BOOLEAN DEFAULT FALSE,
     consent_marketing BOOLEAN DEFAULT FALSE,
@@ -115,6 +120,12 @@ CREATE TABLE payment_history (
     type TEXT NOT NULL,
     status TEXT NOT NULL,
     przelewy24_order_id TEXT UNIQUE,
+    stripe_event_id TEXT UNIQUE,
+    stripe_checkout_session_id TEXT,
+    stripe_invoice_id TEXT,
+    stripe_subscription_id TEXT,
+    stripe_customer_id TEXT,
+    currency TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -122,9 +133,23 @@ CREATE TABLE webhook_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source TEXT NOT NULL,
     payload JSONB NOT NULL,
+    stripe_event_id TEXT UNIQUE,
+    stripe_event_type TEXT,
     processed BOOLEAN DEFAULT FALSE,
     duplicate BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+CREATE TABLE billing_outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    stripe_event_id TEXT UNIQUE NOT NULL,
+    event_type TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
 );
 
 CREATE TABLE admin_broadcasts (
@@ -153,6 +178,8 @@ CREATE TABLE daily_interaction_counts (
 -- ============================================================
 
 CREATE INDEX idx_users_telegram_id ON users(telegram_id);
+CREATE INDEX idx_users_stripe_customer_id ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
+CREATE INDEX idx_users_stripe_subscription_id ON users(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
 CREATE INDEX idx_conversation_history_telegram_id ON conversation_history(telegram_id, created_at DESC);
 CREATE INDEX idx_interaction_log_telegram_id ON interaction_log(telegram_id, created_at DESC);
 CREATE INDEX idx_pending_followups_status ON pending_followups(status, event_end_time);
@@ -175,6 +202,7 @@ ALTER TABLE interaction_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_habits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_outbox ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_interaction_counts ENABLE ROW LEVEL SECURITY;
 
