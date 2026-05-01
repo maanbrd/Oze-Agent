@@ -1,6 +1,7 @@
 import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { normalizeFastApiBaseUrl } from "@/lib/api/base-url";
 import { getStripe } from "@/lib/stripe/server";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ const FORWARDED_EVENTS = new Set([
   "customer.subscription.updated",
   "customer.subscription.deleted",
 ]);
+const FASTAPI_FORWARD_TIMEOUT_MS = 8000;
 
 function requireWebhookEnv() {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -28,7 +30,7 @@ function requireWebhookEnv() {
   return {
     webhookSecret,
     billingSecret,
-    fastapiBaseUrl: fastapiBaseUrl.replace(/\/$/, ""),
+    fastapiBaseUrl: normalizeFastApiBaseUrl(fastapiBaseUrl),
   };
 }
 
@@ -46,6 +48,26 @@ function normalizeEvent(event: Stripe.Event) {
     livemode: event.livemode,
     object: event.data.object,
   };
+}
+
+async function forwardToFastApi(
+  url: string,
+  body: string,
+  headers: HeadersInit,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FASTAPI_FORWARD_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function POST(request: Request) {
@@ -96,19 +118,24 @@ export async function POST(request: Request) {
     env.billingSecret,
   );
 
-  const response = await fetch(
-    `${env.fastapiBaseUrl}/internal/billing/stripe-event`,
-    {
-      method: "POST",
-      headers: {
+  let response: Response;
+  try {
+    response = await forwardToFastApi(
+      `${env.fastapiBaseUrl}/internal/billing/stripe-event`,
+      body,
+      {
         "Content-Type": "application/json",
         "X-OZE-Timestamp": timestamp,
         "X-OZE-Signature": `sha256=${internalSignature}`,
       },
-      body,
-      cache: "no-store",
-    },
-  );
+    );
+  } catch (error) {
+    console.error("FastAPI billing webhook request failed", error);
+    return NextResponse.json(
+      { error: "Billing write unavailable" },
+      { status: 502 },
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

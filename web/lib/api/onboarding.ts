@@ -1,5 +1,6 @@
 import "server-only";
 
+import { fastApiBaseUrl } from "@/lib/api/base-url";
 import { getCurrentAccount } from "@/lib/api/account";
 
 export type OnboardingStatus = {
@@ -22,17 +23,26 @@ export type TelegramPairingStatus = {
   expiresAt: string | null;
 };
 
-function apiBaseUrl() {
-  return (
-    process.env.FASTAPI_INTERNAL_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    ""
-  ).replace(/\/$/, "");
+const FASTAPI_ONBOARDING_TIMEOUT_MS = 8000;
+
+async function fetchOnboarding(url: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FASTAPI_ONBOARDING_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function authedFetch(path: string, init: RequestInit = {}) {
   const account = await getCurrentAccount();
-  const baseUrl = apiBaseUrl();
+  const baseUrl = fastApiBaseUrl();
 
   if (!account.authenticated || !account.accessToken) {
     throw new Error("Brak aktywnej sesji.");
@@ -46,10 +56,9 @@ async function authedFetch(path: string, init: RequestInit = {}) {
   headers.set("Authorization", `Bearer ${account.accessToken}`);
   headers.set("Content-Type", "application/json");
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await fetchOnboarding(`${baseUrl}${path}`, {
     ...init,
     headers,
-    cache: "no-store",
   });
 
   if (!response.ok) {

@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentAccount } from "@/lib/api/account";
 
 export const metadata: Metadata = {
   title: "Płatność anulowana | Agent-OZE",
 };
 
-export default function PaymentCanceledPage() {
+export default async function PaymentCanceledPage() {
+  const account = await getCurrentAccount();
+
+  if (!account.authenticated) {
+    redirect("/login?next=/onboarding/platnosc");
+  }
+
   return (
     <main className="grid min-h-screen place-items-center bg-[#050607] px-5 text-zinc-100">
       <section className="w-full max-w-2xl rounded-[8px] border border-white/10 bg-white/[0.04] p-8">

@@ -77,7 +77,7 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
     <a
       href={href}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       className="rounded-full border border-[#3DFF7A]/30 px-3 py-1 text-xs font-semibold text-[#3DFF7A]"
     >
       {children}

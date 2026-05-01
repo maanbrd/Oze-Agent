@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { login } from "@/app/auth/actions";
+import { safeLocalPath } from "@/lib/routes";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -17,9 +18,10 @@ export default async function LoginPage({
   const params = await searchParams;
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
+  const nextPath = safeLocalPath(params.next);
 
   if (data?.claims) {
-    redirect(params.next && params.next.startsWith("/") ? params.next : "/dashboard");
+    redirect(nextPath);
   }
 
   return (
@@ -51,7 +53,7 @@ export default async function LoginPage({
                   {params.message}
                 </p>
               ) : null}
-              <input type="hidden" name="next" value={params.next ?? "/dashboard"} />
+              <input type="hidden" name="next" value={nextPath} />
               <label className="block text-sm font-medium text-zinc-200">
                 Email
                 <input

@@ -13,6 +13,7 @@ import {
   requireStripeEnv,
   resolveStripePriceId,
 } from "@/lib/stripe/server";
+import { trustedExternalUrl } from "@/lib/routes";
 
 type BillingPlan = "monthly" | "yearly";
 
@@ -96,31 +97,91 @@ export async function createCheckoutSession(formData: FormData) {
     redirect(encoded("/onboarding/platnosc", "Stripe nie zwrócił linku."));
   }
 
-  redirect(checkoutUrl);
+  const trustedCheckoutUrl = trustedExternalUrl(checkoutUrl, [
+    "https://checkout.stripe.com",
+  ]);
+  if (!trustedCheckoutUrl) {
+    redirect(
+      encoded(
+        "/onboarding/platnosc",
+        "Stripe zwrócił nieoczekiwany adres checkoutu.",
+      ),
+    );
+  }
+
+  redirect(trustedCheckoutUrl);
 }
 
 export async function startGoogleOAuthAction() {
-  const url = await startGoogleOAuth();
-  redirect(url);
+  let url: string;
+  try {
+    url = await startGoogleOAuth();
+  } catch (error) {
+    console.error("startGoogleOAuthAction failed", error);
+    redirect(
+      encoded(
+        "/onboarding/google",
+        "Nie udało się uruchomić autoryzacji Google. Spróbuj ponownie.",
+      ),
+    );
+  }
+  const trustedGoogleUrl = trustedExternalUrl(url, [
+    "https://accounts.google.com",
+  ]);
+  if (!trustedGoogleUrl) {
+    redirect(
+      encoded(
+        "/onboarding/google",
+        "Google zwrócił nieoczekiwany adres autoryzacji.",
+      ),
+    );
+  }
+
+  redirect(trustedGoogleUrl);
 }
 
 export async function createGoogleResourcesAction(formData: FormData) {
-  await createGoogleResources({
-    sheetsName: String(formData.get("sheetsName") ?? ""),
-    calendarName: String(formData.get("calendarName") ?? ""),
-  });
+  try {
+    await createGoogleResources({
+      sheetsName: String(formData.get("sheetsName") ?? ""),
+      calendarName: String(formData.get("calendarName") ?? ""),
+    });
+  } catch (error) {
+    console.error("createGoogleResourcesAction failed", error);
+    redirect(
+      encoded(
+        "/onboarding/zasoby",
+        "Nie udało się utworzyć zasobów Google. Sprawdź połączenie Google i spróbuj ponownie.",
+      ),
+    );
+  }
   redirect("/onboarding/telegram");
 }
 
 export async function generateTelegramCodeAction() {
-  await generateTelegramCode();
+  try {
+    await generateTelegramCode();
+  } catch (error) {
+    console.error("generateTelegramCodeAction failed", error);
+    redirect(
+      encoded(
+        "/onboarding/telegram",
+        "Nie udało się wygenerować kodu Telegram. Dokończ płatność i Google, a potem spróbuj ponownie.",
+      ),
+    );
+  }
   redirect("/onboarding/telegram");
 }
 
 export async function updateAccountAction(formData: FormData) {
-  await updateAccount({
-    name: String(formData.get("name") ?? ""),
-    phone: String(formData.get("phone") ?? ""),
-  });
+  try {
+    await updateAccount({
+      name: String(formData.get("name") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+    });
+  } catch (error) {
+    console.error("updateAccountAction failed", error);
+    redirect(encoded("/ustawienia", "Nie udało się zapisać ustawień konta."));
+  }
   redirect("/ustawienia?saved=1");
 }

@@ -64,7 +64,17 @@ export default async function PaymentStepPage({
               </p>
             ) : null}
 
-            {isActive ? (
+            {!account.profile ? (
+              <div className="mt-8 rounded-[8px] border border-amber-300/20 bg-amber-300/10 p-5">
+                <p className="text-sm font-semibold text-white">
+                  Profil konta nie jest jeszcze gotowy.
+                </p>
+                <p className="mt-2 text-sm leading-6 text-zinc-300">
+                  Odśwież stronę za chwilę. Jeśli komunikat wróci, sprawdź
+                  konfigurację API konta przed uruchomieniem płatności.
+                </p>
+              </div>
+            ) : isActive ? (
               <div className="mt-8 rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 p-5">
                 <p className="text-sm font-semibold text-white">
                   Subskrypcja aktywna.

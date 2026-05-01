@@ -74,6 +74,40 @@ function present(name) {
   return Boolean((process.env[name] ?? "").trim());
 }
 
+function envValue(name) {
+  return (process.env[name] ?? "").trim();
+}
+
+function parseUrl(name, errors) {
+  const value = envValue(name);
+  if (!value) return null;
+  try {
+    return new URL(value);
+  } catch {
+    errors.push(`${name} must be a valid URL.`);
+    return null;
+  }
+}
+
+function validateUrlConfig(selectedScope, errors) {
+  for (const name of [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_API_BASE_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "FASTAPI_INTERNAL_BASE_URL",
+  ]) {
+    const url = parseUrl(name, errors);
+    if (!url) continue;
+
+    if (!["http:", "https:"].includes(url.protocol)) {
+      errors.push(`${name} must use http or https.`);
+    }
+    if (selectedScope === "staging" && url.protocol !== "https:") {
+      errors.push(`${name} must use https in staging.`);
+    }
+  }
+}
+
 function phase1bEnvReport(selectedScope) {
   const required = [
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -102,6 +136,8 @@ function phase1bEnvReport(selectedScope) {
       "SUPABASE_SERVICE_KEY must not be configured in the web/Vercel environment.",
     );
   }
+
+  validateUrlConfig(selectedScope, errors);
 
   if (stripeKey.startsWith("sk_live_")) {
     errors.push("STRIPE_SECRET_KEY is live mode. Phase 1B must use test mode.");

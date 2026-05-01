@@ -3,7 +3,12 @@ import { updateAccountAction } from "@/app/onboarding/actions";
 import { CrmNotice } from "@/components/crm-notice";
 import { getCurrentAccount } from "@/lib/api/account";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string; saved?: string }>;
+}) {
+  const params = await searchParams;
   const account = await getCurrentAccount();
   const profile = account.profile;
 
@@ -23,6 +28,17 @@ export default async function SettingsPage() {
       </section>
 
       <CrmNotice />
+
+      {params.message ? (
+        <p className="max-w-xl rounded-[8px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-zinc-200">
+          {params.message}
+        </p>
+      ) : null}
+      {params.saved ? (
+        <p className="max-w-xl rounded-[8px] border border-[#3DFF7A]/20 bg-[#3DFF7A]/10 px-4 py-3 text-sm leading-6 text-zinc-200">
+          Ustawienia konta zapisane.
+        </p>
+      ) : null}
 
       <form
         action={updateAccountAction}

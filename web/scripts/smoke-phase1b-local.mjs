@@ -36,6 +36,18 @@ function locationPath(location, baseUrl) {
   return `${parsed.pathname}${parsed.search}`;
 }
 
+function locationsMatch(actualLocation, expectedLocation, baseUrl) {
+  if (actualLocation === expectedLocation) return true;
+  if (!actualLocation || !expectedLocation) return false;
+
+  const actual = new URL(actualLocation, baseUrl);
+  const expected = new URL(expectedLocation, baseUrl);
+  return (
+    actual.pathname === expected.pathname &&
+    actual.searchParams.toString() === expected.searchParams.toString()
+  );
+}
+
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
@@ -89,6 +101,18 @@ class SmokeRunner {
     this.assert(pattern.test(text), `${path} did not include ${pattern}.`);
   }
 
+  async expectHtmlChecks(path, checks) {
+    const response = await this.request(path);
+    const text = await response.text();
+    this.assert(
+      response.status === 200,
+      `${path} returned ${response.status}, expected 200.`,
+    );
+    for (const [label, pattern] of checks) {
+      this.assert(pattern.test(text), `${path} missing ${label}.`);
+    }
+  }
+
   async expectRedirect(path, expectedLocation) {
     const response = await this.request(path);
     const actualLocation = locationPath(
@@ -100,7 +124,7 @@ class SmokeRunner {
       `${path} returned ${response.status}, expected redirect.`,
     );
     this.assert(
-      actualLocation === expectedLocation,
+      locationsMatch(actualLocation, expectedLocation, this.baseUrl),
       `${path} redirected to ${actualLocation || "empty location"}, expected ${expectedLocation}.`,
     );
   }
@@ -137,6 +161,15 @@ async function run() {
       data.service === "agent-oze-web",
       "/healthz did not identify the web service.",
     );
+    smoke.assert(data.phase === "1B", "/healthz did not identify Phase 1B.");
+    smoke.assert(
+      data.readiness === "phase1b-web",
+      "/healthz did not identify Phase 1B web readiness.",
+    );
+    smoke.assert(
+      !Number.isNaN(Date.parse(data.timestamp)),
+      "/healthz timestamp is not parseable.",
+    );
   });
 
   await smoke.check("public landing renders", async () => {
@@ -147,26 +180,91 @@ async function run() {
     await smoke.expectHtml("/login", /Logowanie/);
   });
 
+  await smoke.check("login form preserves safe next target", async () => {
+    await smoke.expectHtmlChecks("/login?next=/onboarding/telegram", [
+      ["email field", /name="email"/],
+      ["password field", /name="password"/],
+      ["next hidden field", /name="next"\s+value="\/onboarding\/telegram"/],
+      ["submit button", /Zaloguj się/],
+    ]);
+  });
+
+  await smoke.check("login form rejects external next target", async () => {
+    await smoke.expectHtmlChecks("/login?next=//example.com/phish", [
+      ["safe fallback next field", /name="next"\s+value="\/dashboard"/],
+    ]);
+  });
+
   await smoke.check("registration page renders", async () => {
     await smoke.expectHtml("/rejestracja", /Rejestracja/);
   });
 
-  await smoke.check("dashboard redirects anonymous users", async () => {
-    await smoke.expectRedirect("/dashboard", "/login?next=/dashboard");
+  await smoke.check("registration form has required onboarding fields", async () => {
+    await smoke.expectHtmlChecks("/rejestracja", [
+      ["first name field", /name="firstName"/],
+      ["last name field", /name="lastName"/],
+      ["email field", /name="email"/],
+      ["phone field", /name="phone"/],
+      ["password field", /name="password"/],
+      ["region select", /name="region"/],
+      ["specialty select", /name="specialty"/],
+      ["referral source select", /name="referralSource"/],
+      ["experience select", /name="experience"/],
+      ["terms checkbox", /type="checkbox"[^>]*name="terms"/],
+      ["payment submit", /Dalej: płatność/],
+    ]);
   });
 
-  await smoke.check("clients redirects anonymous users", async () => {
-    await smoke.expectRedirect("/klienci", "/login?next=/dashboard");
-  });
-
-  await smoke.check("calendar redirects anonymous users", async () => {
-    await smoke.expectRedirect("/kalendarz", "/login?next=/dashboard");
+  await smoke.check("app routes redirect anonymous users", async () => {
+    for (const route of [
+      "/dashboard",
+      "/klienci",
+      "/kalendarz",
+      "/platnosci",
+      "/ustawienia",
+      "/import",
+      "/instrukcja",
+      "/faq",
+    ]) {
+      await smoke.expectRedirect(route, "/login?next=/dashboard");
+    }
   });
 
   await smoke.check("payment step redirects anonymous users", async () => {
     await smoke.expectRedirect(
       "/onboarding/platnosc",
       "/login?next=/onboarding/platnosc",
+    );
+  });
+
+  await smoke.check("payment return pages redirect anonymous users", async () => {
+    for (const route of ["/onboarding/sukces", "/onboarding/anulowano"]) {
+      await smoke.expectRedirect(route, "/login?next=/onboarding/platnosc");
+    }
+  });
+
+  await smoke.check("google onboarding redirects anonymous users", async () => {
+    await smoke.expectRedirect(
+      "/onboarding/google",
+      "/login?next=/onboarding/google",
+    );
+    await smoke.expectRedirect(
+      "/onboarding/google/sukces",
+      "/login?next=/onboarding/google/sukces",
+    );
+  });
+
+  await smoke.check("resources onboarding redirects anonymous users", async () => {
+    await smoke.expectRedirect(
+      "/onboarding/zasoby",
+      "/login?next=/onboarding/zasoby",
+    );
+  });
+
+  await smoke.check("telegram onboarding redirects anonymous users", async () => {
+    await smoke.expectRedirect(
+      "/onboarding/telegram",
+      "/login?next=/onboarding/telegram",
     );
   });
 

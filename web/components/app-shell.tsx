@@ -16,17 +16,23 @@ const navItems = [
 
 function googleLinks(account: CurrentAccount) {
   const profile = account.profile;
+  const sheetsId = profile?.google_sheets_id
+    ? encodeURIComponent(profile.google_sheets_id)
+    : null;
+  const calendarId = profile?.google_calendar_id
+    ? encodeURIComponent(profile.google_calendar_id)
+    : null;
+  const driveFolderId = profile?.google_drive_folder_id
+    ? encodeURIComponent(profile.google_drive_folder_id)
+    : null;
+
   return {
-    sheets: profile?.google_sheets_id
-      ? `https://docs.google.com/spreadsheets/d/${profile.google_sheets_id}`
+    sheets: sheetsId ? `https://docs.google.com/spreadsheets/d/${sheetsId}` : null,
+    calendar: calendarId
+      ? `https://calendar.google.com/calendar/u/0/r?cid=${calendarId}`
       : null,
-    calendar: profile?.google_calendar_id
-      ? `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(
-          profile.google_calendar_id,
-        )}`
-      : null,
-    drive: profile?.google_drive_folder_id
-      ? `https://drive.google.com/drive/folders/${profile.google_drive_folder_id}`
+    drive: driveFolderId
+      ? `https://drive.google.com/drive/folders/${driveFolderId}`
       : null,
   };
 }
@@ -112,7 +118,7 @@ function GoogleFab({ label, href }: { label: string; href: string | null }) {
     <a
       href={href}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       className="rounded-full border border-[#3DFF7A]/30 bg-[#3DFF7A]/15 px-4 py-2 text-xs font-semibold text-[#3DFF7A] shadow-[0_0_24px_rgba(61,255,122,0.14)]"
     >
       {label}

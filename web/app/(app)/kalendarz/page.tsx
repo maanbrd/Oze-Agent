@@ -2,6 +2,11 @@ import { CrmNotice } from "@/components/crm-notice";
 import { DataFreshnessBadge } from "@/components/data-freshness-badge";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
 import type { CrmEvent } from "@/lib/crm/types";
+import {
+  formatWarsawDayLabel,
+  formatWarsawTime,
+  warsawDateKeyFromIso,
+} from "@/lib/dates";
 
 export default async function CalendarPage() {
   const data = await getCrmDashboardData();
@@ -32,25 +37,7 @@ export default async function CalendarPage() {
             <h2 className="text-sm font-semibold text-white">{formatDay(day)}</h2>
             <div className="mt-4 grid gap-3">
               {events.map((event) => (
-                <a
-                  key={event.id}
-                  href={event.calendarUrl ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-[8px] border border-white/10 bg-black/20 p-4 hover:border-[#3DFF7A]/40"
-                >
-                  <span className="text-sm font-semibold text-white">
-                    {formatTime(event.startsAt)} · {event.clientName}
-                  </span>
-                  <span className="mt-1 block text-sm text-zinc-400">
-                    {event.title}
-                  </span>
-                  {event.location ? (
-                    <span className="mt-2 block text-xs text-zinc-500">
-                      {event.location}
-                    </span>
-                  ) : null}
-                </a>
+                <CalendarEventItem key={event.id} event={event} />
               ))}
             </div>
           </div>
@@ -60,26 +47,52 @@ export default async function CalendarPage() {
   );
 }
 
+function CalendarEventItem({ event }: { event: CrmEvent }) {
+  const content = (
+    <>
+      <span className="text-sm font-semibold text-white">
+        {formatTime(event.startsAt)} · {event.clientName}
+      </span>
+      <span className="mt-1 block text-sm text-zinc-400">
+        {event.title}
+      </span>
+      {event.location ? (
+        <span className="mt-2 block text-xs text-zinc-500">
+          {event.location}
+        </span>
+      ) : null}
+    </>
+  );
+  const className = "rounded-[8px] border border-white/10 bg-black/20 p-4";
+
+  if (!event.calendarUrl) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <a
+      href={event.calendarUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${className} hover:border-[#3DFF7A]/40`}
+    >
+      {content}
+    </a>
+  );
+}
+
 function groupByDay(events: CrmEvent[]) {
   return events.reduce<Record<string, CrmEvent[]>>((groups, event) => {
-    const day = event.startsAt.slice(0, 10);
+    const day = warsawDateKeyFromIso(event.startsAt) ?? event.startsAt.slice(0, 10);
     groups[day] = [...(groups[day] ?? []), event];
     return groups;
   }, {});
 }
 
 function formatDay(day: string) {
-  return new Date(`${day}T12:00:00+02:00`).toLocaleDateString("pl-PL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    weekday: "long",
-  });
+  return formatWarsawDayLabel(day);
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("pl-PL", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatWarsawTime(value);
 }

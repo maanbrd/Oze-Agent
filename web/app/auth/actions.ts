@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { safeLocalPath } from "@/lib/routes";
 import { createClient } from "@/lib/supabase/server";
 
 function value(formData: FormData, key: string) {
@@ -12,19 +13,24 @@ function encoded(path: string, message: string) {
   return `${path}?${params.toString()}`;
 }
 
+function encodedWithNext(path: string, message: string, next: string) {
+  const params = new URLSearchParams({ message, next });
+  return `${path}?${params.toString()}`;
+}
+
 export async function login(formData: FormData) {
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
-  const next = value(formData, "next") || "/dashboard";
+  const next = safeLocalPath(value(formData, "next"));
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(encoded("/login", "Nie udało się zalogować. Sprawdź email i hasło."));
+    redirect(encodedWithNext("/login", "Nie udało się zalogować. Sprawdź email i hasło.", next));
   }
 
-  redirect(next.startsWith("/") ? next : "/dashboard");
+  redirect(next);
 }
 
 export async function signup(formData: FormData) {

@@ -1,7 +1,14 @@
 import { createGoogleResourcesAction } from "@/app/onboarding/actions";
+import { requireCurrentAccount } from "@/lib/api/account";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
 
-export default async function ResourcesPage() {
+export default async function ResourcesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string }>;
+}) {
+  const params = await searchParams;
+  await requireCurrentAccount("/onboarding/zasoby");
   const status = await getOnboardingStatus();
   const profile = status?.profile;
   const defaultName = String(
@@ -19,6 +26,11 @@ export default async function ResourcesPage() {
           Tworzymy brakujące zasoby systemowe. Dane CRM nadal edytujesz w Sheets
           i Calendar.
         </p>
+        {params.message ? (
+          <p className="mt-5 rounded-[8px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm">
+            {params.message}
+          </p>
+        ) : null}
         <form action={createGoogleResourcesAction} className="mt-6 grid gap-4">
           <label className="text-sm text-zinc-300">
             Nazwa arkusza Sheets

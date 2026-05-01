@@ -1,7 +1,8 @@
 import { CrmNotice } from "@/components/crm-notice";
 import { DataFreshnessBadge } from "@/components/data-freshness-badge";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
-import type { CrmClient, FunnelStatus } from "@/lib/crm/types";
+import type { CrmClient, CrmEvent, FunnelStatus } from "@/lib/crm/types";
+import { formatWarsawTime, warsawDateKey, warsawDateKeyFromIso } from "@/lib/dates";
 
 const statuses: FunnelStatus[] = [
   "Nowy lead",
@@ -15,14 +16,24 @@ const statuses: FunnelStatus[] = [
   "Odrzucone",
 ];
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ onboarding?: string }>;
+}) {
+  const params = await searchParams;
+  const onboardingComplete = params?.onboarding === "complete";
   const data = await getCrmDashboardData();
-  const todayKey = "2026-04-29";
+  const todayKey = warsawDateKey();
   const todayEvents = data.events.filter((event) =>
-    event.startsAt.startsWith(todayKey),
+    warsawDateKeyFromIso(event.startsAt) === todayKey,
   );
   const urgentClients = data.clients
-    .filter((client) => client.nextActionAt && client.nextActionAt <= `${todayKey}T23:59:59+02:00`)
+    .filter((client) => {
+      if (!client.nextActionAt) return false;
+      const nextActionDay = warsawDateKeyFromIso(client.nextActionAt);
+      return Boolean(nextActionDay && nextActionDay <= todayKey);
+    })
     .slice(0, 5);
   const signed = data.clients.filter((client) => client.status === "Podpisane");
   const offers = data.clients.filter((client) => client.status === "Oferta wysłana");
@@ -40,6 +51,12 @@ export default async function DashboardPage() {
         </div>
         <DataFreshnessBadge fetchedAt={data.fetchedAt} />
       </div>
+
+      {onboardingComplete ? (
+        <p className="rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 px-4 py-3 text-sm font-semibold text-white">
+          Rejestracja ukończona. Konto, płatność, Google i Telegram są połączone.
+        </p>
+      ) : null}
 
       <CrmNotice />
       <p className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
@@ -79,20 +96,7 @@ export default async function DashboardPage() {
         <Panel title="Dziś z Calendar">
           <div className="space-y-3">
             {todayEvents.length ? (
-              todayEvents.map((event) => (
-                <a
-                  key={event.id}
-                  href={event.calendarUrl ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-[8px] border border-white/10 bg-black/20 p-4 text-sm hover:border-[#3DFF7A]/40"
-                >
-                  <span className="font-semibold text-white">
-                    {formatTime(event.startsAt)} · {event.clientName}
-                  </span>
-                  <span className="mt-1 block text-zinc-400">{event.title}</span>
-                </a>
-              ))
+              todayEvents.map((event) => <TodayEvent key={event.id} event={event} />)
             ) : (
               <p className="text-sm text-zinc-500">Dziś bez spotkań w Calendar.</p>
             )}
@@ -108,6 +112,33 @@ export default async function DashboardPage() {
         </div>
       </Panel>
     </div>
+  );
+}
+
+function TodayEvent({ event }: { event: CrmEvent }) {
+  const content = (
+    <>
+      <span className="font-semibold text-white">
+        {formatTime(event.startsAt)} · {event.clientName}
+      </span>
+      <span className="mt-1 block text-zinc-400">{event.title}</span>
+    </>
+  );
+  const className = "block rounded-[8px] border border-white/10 bg-black/20 p-4 text-sm";
+
+  if (!event.calendarUrl) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <a
+      href={event.calendarUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${className} hover:border-[#3DFF7A]/40`}
+    >
+      {content}
+    </a>
   );
 }
 
@@ -165,7 +196,7 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
     <a
       href={href}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       className="rounded-full border border-[#3DFF7A]/30 px-3 py-1 font-semibold text-[#3DFF7A]"
     >
       {children}
@@ -174,8 +205,5 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("pl-PL", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatWarsawTime(value);
 }
