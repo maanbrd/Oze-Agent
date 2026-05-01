@@ -106,8 +106,10 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
      - existing `SUPABASE_URL`
      - existing `SUPABASE_SERVICE_KEY`
 
-4. **Run Supabase migration**
+4. **Run Supabase migrations**
+   - Run `oze-agent/supabase_migrations/20260428_web_auth_rls.sql`.
    - Run `oze-agent/supabase_migrations/20260428_billing_stripe_0c.sql`.
+   - Run `oze-agent/supabase_migrations/20260501_web_auth_function_hardening.sql`.
    - Confirm `users`, `payment_history`, `webhook_log`, and `billing_outbox`
      have the Phase 0C fields/tables.
 
@@ -117,9 +119,9 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Do not put `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
      `SUPABASE_SERVICE_KEY`, or `BILLING_INTERNAL_SECRET` in the manifest.
    - Run:
-     `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
+     `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
    - Initialize the report before smoke:
-     `cd oze-agent && PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`
+     `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`
 
 6. **Create sandbox Stripe webhook endpoint**
    - URL: `https://<web-domain>/api/webhooks/stripe`
@@ -160,7 +162,7 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
    - Run:
      - `cd web && npm run test:invariants`
      - `cd web && npm run lint && npm run build`
-     - `cd oze-agent && PYTHONPATH=. pytest -q`
+     - `cd oze-agent && PYTHONPATH=. .venv/bin/python -m pytest -q`
    - Run an independent cold review focused only on payments, env, webhook retry
      behavior, and idempotency before merge/deploy.
 
@@ -177,7 +179,7 @@ or through a Stripe API/CLI path that supports lookup-key transfer.
 11. **Validate final smoke evidence**
    - Fill runtime IDs and results in the initialized Phase 1B smoke report.
    - Run:
-     `cd oze-agent && PYTHONPATH=. python3 scripts/validate_phase1b_smoke_report.py --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md`
+     `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/validate_phase1b_smoke_report.py --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md`
    - Treat validator failure as a readiness blocker until the report evidence is
      corrected or the smoke issue is fixed.
 

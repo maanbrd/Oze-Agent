@@ -23,6 +23,11 @@ Do not reuse the Telegram bot Railway service as the FastAPI API service. Phase
 Use staging Supabase cloud and Stripe test-mode values, but run Next.js and
 FastAPI locally.
 
+Backend commands must run on Python 3.13, matching `oze-agent/runtime.txt`.
+Prefer the project virtualenv interpreter, for example `.venv/bin/python`.
+The local readiness orchestrator fails fast when it is launched with a different
+Python minor version.
+
 Commands:
 
 ```bash
@@ -37,23 +42,31 @@ npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 
 ```bash
 cd oze-agent
-PYTHONPATH=. python3 scripts/run_phase1b_local_readiness.py \
+PYTHONPATH=. .venv/bin/python scripts/run_phase1b_local_readiness.py \
   --web-env-file=../web/.env.local \
   --api-env-file=.env.local \
   --report=../docs/phase1b-local-readiness-report.md
-PYTHONPATH=. python3 scripts/verify_phase1b_env.py
-PYTHONPATH=. python3 scripts/verify_phase1b_env.py --env-file=.env.local
-PYTHONPATH=. python3 scripts/check_phase1b_migrations.py
-PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000
-PYTHONPATH=. python3 scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000
-PYTHONPATH=. pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q
-PYTHONPATH=. pytest -q
+PYTHONPATH=. .venv/bin/python scripts/verify_phase1b_env.py
+PYTHONPATH=. .venv/bin/python scripts/verify_phase1b_env.py --env-file=.env.local
+PYTHONPATH=. .venv/bin/python scripts/check_phase1b_migrations.py
+PYTHONPATH=. .venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+PYTHONPATH=. .venv/bin/python scripts/smoke_phase1b_api.py --base-url=http://127.0.0.1:8000
+PYTHONPATH=. .venv/bin/python -m pytest tests/test_billing.py tests/test_onboarding_api.py tests/test_dashboard_api.py tests/test_api_auth.py -q
+PYTHONPATH=. .venv/bin/python -m pytest -q
 ```
 
 Both env checkers load `.env.local` and `.env` from their current working
 directory when those files exist. Use `--env-file=<path>` to point at an
 explicit local or staging smoke env file without exporting every value in the
 shell.
+
+For staging scope, the web checker also validates that Supabase, API, app, and
+FastAPI base URLs are syntactically valid and use `https://`:
+
+```bash
+cd web
+npm run check:phase1b-env -- --scope=staging
+```
 
 Use `scripts/run_phase1b_local_readiness.py` as the preferred local preflight.
 It orchestrates web checks, FastAPI checks, migration preflight, focused backend
@@ -67,7 +80,8 @@ webhook delivery unless a future plan adds Stripe CLI or a public tunnel.
 
 Run `npm run smoke:phase1b-local` while the local Next.js server is running. The
 script checks `/healthz`, public route rendering, anonymous protected redirects,
-onboarding gate wiring, and the static no-CRM-mutation boundary.
+payment and Google return-page auth redirects, onboarding gate wiring, and the
+static no-CRM-mutation boundary.
 
 Run `scripts/smoke_phase1b_api.py` while the local FastAPI server is running.
 The script checks `/health`, verifies onboarding/dashboard API routes fail
@@ -81,10 +95,10 @@ initialize the smoke report:
 
 ```bash
 cd oze-agent
-PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py \
+PYTHONPATH=. .venv/bin/python scripts/check_phase1b_staging_manifest.py \
   --manifest ../docs/phase1b-staging-manifest.example.json \
   --generate-smoke-id
-PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py \
+PYTHONPATH=. .venv/bin/python scripts/init_phase1b_smoke_report.py \
   --manifest ../docs/phase1b-staging-manifest.example.json \
   --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md \
   --operator Maan
@@ -142,13 +156,14 @@ Run:
 1. Apply Supabase migrations:
    - `oze-agent/supabase_migrations/20260428_web_auth_rls.sql`
    - `oze-agent/supabase_migrations/20260428_billing_stripe_0c.sql`
+   - `oze-agent/supabase_migrations/20260501_web_auth_function_hardening.sql`
    - preflight before applying:
-     `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_migrations.py`
+     `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/check_phase1b_migrations.py`
 2. Create or verify Stripe test product and prices with the documented lookup
    keys.
 3. Run staging manifest preflight and initialize the smoke report:
-   - `cd oze-agent && PYTHONPATH=. python3 scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
-   - `cd oze-agent && PYTHONPATH=. python3 scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`
+   - `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/check_phase1b_staging_manifest.py --manifest ../docs/phase1b-staging-manifest.example.json --generate-smoke-id`
+   - `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/init_phase1b_smoke_report.py --manifest ../docs/phase1b-staging-manifest.example.json --output ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md --operator Maan`
 4. Create Stripe test webhook endpoint:
    - `https://<web-domain>/api/webhooks/stripe`
    - events listed in `docs/STRIPE_PHASE_0C_ROLLOUT.md`.
@@ -163,7 +178,7 @@ Run:
 11. Open `/dashboard`, `/klienci`, and `/kalendarz`; completed users must see
     `live` or `unavailable`, never silent demo data.
 12. Validate the completed smoke report:
-    - `cd oze-agent && PYTHONPATH=. python3 scripts/validate_phase1b_smoke_report.py --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md`
+    - `cd oze-agent && PYTHONPATH=. .venv/bin/python scripts/validate_phase1b_smoke_report.py --report ../docs/phase1b-smoke-report-YYYYMMDD-HHMM.md`
 
 Record runtime IDs and results in the initialized smoke report before running
 the validator.
