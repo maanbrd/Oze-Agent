@@ -304,6 +304,77 @@ def delete_pending_flow(telegram_id: int) -> None:
         logger.error("delete_pending_flow(%s): %s", telegram_id, e)
 
 
+# ── Active photo upload sessions ─────────────────────────────────────────────
+
+
+def save_active_photo_session(
+    telegram_id: int,
+    user_id: str,
+    client_row: int,
+    folder_id: str,
+    folder_link: str,
+    display_label: str,
+    expires_at: datetime,
+) -> bool:
+    """Upsert the 15-minute same-client photo upload session."""
+    try:
+        get_supabase_client().table("photo_upload_sessions").upsert(
+            {
+                "telegram_id": telegram_id,
+                "user_id": user_id,
+                "client_row": client_row,
+                "folder_id": folder_id,
+                "folder_link": folder_link,
+                "display_label": display_label,
+                "expires_at": expires_at.isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error("save_active_photo_session(%s): %s", telegram_id, e)
+        return False
+
+
+def get_active_photo_session(telegram_id: int) -> Optional[dict]:
+    """Return a non-expired active photo session, or None."""
+    try:
+        result = (
+            get_supabase_client()
+            .table("photo_upload_sessions")
+            .select("*")
+            .eq("telegram_id", telegram_id)
+            .single()
+            .execute()
+        )
+        session = result.data
+        if not session:
+            return None
+
+        expires_raw = session.get("expires_at")
+        if expires_raw:
+            expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= datetime.now(timezone.utc):
+                delete_active_photo_session(telegram_id)
+                return None
+        return session
+    except Exception as e:
+        logger.debug("get_active_photo_session(%s): %s", telegram_id, e)
+        return None
+
+
+def delete_active_photo_session(telegram_id: int) -> None:
+    """Clear active photo upload session for this user."""
+    try:
+        get_supabase_client().table("photo_upload_sessions").delete().eq(
+            "telegram_id", telegram_id
+        ).execute()
+    except Exception as e:
+        logger.error("delete_active_photo_session(%s): %s", telegram_id, e)
+
+
 # ── Pending follow-ups ────────────────────────────────────────────────────────
 
 

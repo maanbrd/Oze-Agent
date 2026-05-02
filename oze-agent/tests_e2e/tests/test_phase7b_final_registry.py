@@ -168,9 +168,9 @@ def test_all_phase7b_final_new_scenarios_have_descriptions():
 
 
 def test_total_scenario_count_after_phase7b_final():
-    """Plan target: 48 scenarios (16 from 7A + 10 from 7B.1 + 22 from 7B-final)."""
-    assert len(SCENARIOS) == 48, (
-        f"expected 48 total scenarios after 7B-final; got {len(SCENARIOS)}: "
+    """Plan target plus opt-in photo flow smoke scenario."""
+    assert len(SCENARIOS) == 49, (
+        f"expected 49 total scenarios after adding photo_flow_smoke; got {len(SCENARIOS)}: "
         f"{sorted(SCENARIOS.keys())}"
     )
 

@@ -18,7 +18,11 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.utils.conversation_reply import reply_text
-from shared.database import delete_pending_flow, get_pending_flow
+from shared.database import (
+    delete_active_photo_session,
+    delete_pending_flow,
+    get_pending_flow,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +34,7 @@ async def handle_cancel_command(update: Update, context: ContextTypes.DEFAULT_TY
 
     telegram_id = update.effective_user.id
     flow = get_pending_flow(telegram_id)
+    delete_active_photo_session(telegram_id)
 
     if flow:
         flow_type = flow.get("flow_type", "unknown")

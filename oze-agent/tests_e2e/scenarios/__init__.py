@@ -13,6 +13,7 @@ from tests_e2e.scenarios import (  # noqa: F401  (registration side effect)
     error_paths,
     mutating_core,
     notes,
+    photo_flow,
     polish_edge,
     read_only,
     routing,

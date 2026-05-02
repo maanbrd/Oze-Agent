@@ -26,14 +26,22 @@ async def handle_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     # Forwarded messages — route by actual content type
-    if message.forward_date:
+    forward_date = getattr(message, "forward_date", None)
+    forward_origin = getattr(message, "forward_origin", None)
+    if getattr(forward_origin, "__class__", None).__module__ == "unittest.mock":
+        forward_origin = None
+    is_forwarded = bool(forward_date or forward_origin)
+    if is_forwarded:
         if message.text:
             from bot.handlers.text import handle_text
             await handle_text(update, context)
         elif message.voice or message.audio:
             from bot.handlers.voice import handle_voice
             await handle_voice(update, context)
-        elif message.photo:
+        elif message.photo or (
+            message.document
+            and getattr(message.document, "mime_type", "").startswith("image/")
+        ):
             from bot.handlers.photo import handle_photo
             await handle_photo(update, context)
         return

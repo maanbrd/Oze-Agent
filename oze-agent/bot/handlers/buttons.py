@@ -129,6 +129,16 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     elif action == "select_client":
         await _handle_select_client(query, context, user, value)
 
+    elif action == "photo_select_client":
+        from bot.handlers.photo import handle_photo_select_client
+
+        await handle_photo_select_client(query, telegram_id, value)
+
+    elif action == "photo_add_client":
+        from bot.handlers.photo import start_photo_add_client
+
+        await start_photo_add_client(query, telegram_id)
+
     elif action == "edit":
         await _handle_edit_choice(query, telegram_id, user["id"], value)
 

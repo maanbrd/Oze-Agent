@@ -34,9 +34,11 @@ async def test_cancel_with_active_add_client_pending():
     update = _make_update()
     fake_flow = {"flow_type": "add_client", "flow_data": {"client_data": {"name": "Jan"}}}
     with patch("bot.handlers.cancel.get_pending_flow", return_value=fake_flow), \
-         patch("bot.handlers.cancel.delete_pending_flow") as mock_delete:
+         patch("bot.handlers.cancel.delete_pending_flow") as mock_delete, \
+         patch("bot.handlers.cancel.delete_active_photo_session", create=True) as mock_delete_session:
         await handle_cancel_command(update, MagicMock())
     mock_delete.assert_called_once_with(12345)
+    mock_delete_session.assert_called_once_with(12345)
     update.effective_message.reply_text.assert_awaited_once_with("❌ Anulowane.")
 
 
@@ -47,9 +49,11 @@ async def test_cancel_with_active_add_client_pending():
 async def test_cancel_without_pending():
     update = _make_update()
     with patch("bot.handlers.cancel.get_pending_flow", return_value=None), \
-         patch("bot.handlers.cancel.delete_pending_flow") as mock_delete:
+         patch("bot.handlers.cancel.delete_pending_flow") as mock_delete, \
+         patch("bot.handlers.cancel.delete_active_photo_session", create=True) as mock_delete_session:
         await handle_cancel_command(update, MagicMock())
     mock_delete.assert_not_called()
+    mock_delete_session.assert_called_once_with(12345)
     update.effective_message.reply_text.assert_awaited_once_with(
         "Nie ma żadnej aktywnej operacji do anulowania."
     )

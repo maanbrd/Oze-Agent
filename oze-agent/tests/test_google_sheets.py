@@ -20,10 +20,15 @@ class _ValuesService:
         self.get_result = get_result if get_result is not None else {"values": []}
         self.get_error = get_error
         self.get_kwargs = None
+        self.batch_update_kwargs = None
 
     def get(self, **kwargs):
         self.get_kwargs = kwargs
         return _Execute(self.get_result, self.get_error)
+
+    def batchUpdate(self, **kwargs):
+        self.batch_update_kwargs = kwargs
+        return _Execute({"updatedCells": 2})
 
 
 class _SpreadsheetsService:
@@ -215,3 +220,55 @@ async def test_get_all_clients_or_raise_returns_rows_for_valid_sheet():
         result = await get_all_clients_or_raise("user-1")
 
     assert result == [{"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2}]
+
+
+@pytest.mark.asyncio
+async def test_update_client_photo_metadata_does_not_touch_last_contact():
+    headers = [
+        "Imię i nazwisko",
+        "Telefon",
+        "Email",
+        "Miasto",
+        "Adres",
+        "Status",
+        "Produkt",
+        "Notatki",
+        "Data pierwszego kontaktu",
+        "Data ostatniego kontaktu",
+        "Następny krok",
+        "Data następnego kroku",
+        "Źródło pozyskania",
+        "Zdjęcia",
+        "Link do zdjęć",
+        "ID wydarzenia Kalendarz",
+    ]
+    values = _ValuesService()
+
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets.get_sheet_headers",
+        new=AsyncMock(return_value=headers),
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=_SheetsService(values),
+    ):
+        from shared.google_sheets import update_client_photo_metadata
+
+        ok = await update_client_photo_metadata(
+            "user-1",
+            row_number=12,
+            photo_count=4,
+            folder_link="https://drive.google.com/drive/folders/folder-1",
+        )
+
+    assert ok is True
+    data = values.batch_update_kwargs["body"]["data"]
+    assert data == [
+        {"range": "N12", "values": [[4]]},
+        {
+            "range": "O12",
+            "values": [["https://drive.google.com/drive/folders/folder-1"]],
+        },
+    ]

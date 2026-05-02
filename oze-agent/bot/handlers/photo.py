@@ -1,32 +1,213 @@
-"""Photo handler — assign client photos to Google Drive."""
+"""Photo handler — assign client photos to Google Drive with R1 confirmation."""
+
+from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.text import _run_guards
-from bot.utils.conversation_reply import reply_markdown_v2, reply_text
-from bot.utils.telegram_helpers import is_private_chat, send_processing_stage
-from shared.database import delete_pending_flow, get_pending_flow, save_pending_flow
+from bot.utils.conversation_reply import edit_message_text, reply_markdown_v2, reply_text
+from bot.utils.telegram_helpers import (
+    build_choice_buttons,
+    build_mutation_buttons,
+    is_private_chat,
+    send_processing_stage,
+)
+from shared.database import (
+    get_active_photo_session,
+    get_pending_flow,
+    save_active_photo_session,
+    save_pending_flow,
+)
 from shared.formatting import format_error
-from shared.google_drive import get_or_create_client_folder, upload_photo
-from shared.google_sheets import search_clients, update_client
+from shared.google_drive import (
+    count_photos_in_folder,
+    get_or_create_client_photo_folder,
+    upload_photo,
+)
+from shared.google_sheets import get_all_clients, update_client_photo_metadata
+from shared.search import normalize_polish
 
 logger = logging.getLogger(__name__)
 
+PHOTO_SESSION_MINUTES = 15
+PHOTO_FLOW_TYPE = "photo_upload"
+PHOTO_ADD_CLIENT_FLOW_TYPE = "photo_add_client"
+
+
+def _client_label(client: dict) -> str:
+    parts = [
+        client.get("Imię i nazwisko", ""),
+        client.get("Miasto", client.get("Miejscowość", "")),
+        client.get("Adres", ""),
+    ]
+    return ", ".join(part.strip() for part in parts if part and part.strip())
+
+
+def _photo_count(value: object) -> int:
+    try:
+        return int(str(value or "0").strip())
+    except ValueError:
+        return 0
+
+
+def _file_id_from_update(update: Update) -> Optional[str]:
+    message = update.effective_message
+    if not message:
+        return None
+    if getattr(message, "photo", None):
+        return message.photo[-1].file_id
+    document = getattr(message, "document", None)
+    mime_type = getattr(document, "mime_type", "") if document else ""
+    if document and mime_type.startswith("image/"):
+        return document.file_id
+    return None
+
+
+def _caption_from_update(update: Update) -> str:
+    message = update.effective_message
+    return (getattr(message, "caption", "") or "").strip() if message else ""
+
+
+def _explicit_target_query(text: str) -> Optional[str]:
+    """Return target query only for explicit client-switch captions."""
+    patterns = [
+        r"^\s*(?:zdjęcia|zdjecia|zdjęcie|zdjecie)\s+do\s+(.+)$",
+        r"^\s*do\s+klienta\s+(.+)$",
+        r"^\s*dla\s+klienta\s+(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.match(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _client_matches_text(client: dict, text: str) -> bool:
+    norm_text = normalize_polish(text)
+    norm_name = normalize_polish(client.get("Imię i nazwisko", ""))
+    norm_city = normalize_polish(client.get("Miasto", client.get("Miejscowość", "")))
+    if not norm_name or not norm_city:
+        return False
+    text_tokens = norm_text.split()
+    name_tokens = [token for token in norm_name.split() if len(token) > 1]
+    city_tokens = [token for token in norm_city.split() if len(token) > 1]
+    return all(token in text_tokens for token in name_tokens + city_tokens)
+
+
+async def _resolve_clients_from_text(user_id: str, text: str) -> list[dict]:
+    if not text.strip():
+        return []
+    clients = await get_all_clients(user_id)
+    return [client for client in clients if _client_matches_text(client, text)]
+
+
+def _confirmation_text(client: dict) -> str:
+    return (
+        f"📸 Zapisać zdjęcie do folderu: {_client_label(client)}?\n"
+        "Po zapisie: Przez 15 minut kolejne zdjęcia bez opisu wrzucę do tego klienta. "
+        "Żeby zmienić klienta, napisz w opisie zdjęcia: zdjęcia do [imię nazwisko miasto]."
+    )
+
+
+def _pending_payload(file_id: str, caption: str, client: dict) -> dict:
+    return {
+        "file_id": file_id,
+        "caption": caption,
+        "client_row": client.get("_row"),
+        "client": {
+            "_row": client.get("_row"),
+            "Imię i nazwisko": client.get("Imię i nazwisko", ""),
+            "Miasto": client.get("Miasto", client.get("Miejscowość", "")),
+            "Adres": client.get("Adres", ""),
+            "Zdjęcia": client.get("Zdjęcia", ""),
+            "Link do zdjęć": client.get("Link do zdjęć", ""),
+        },
+    }
+
+
+async def _show_confirmation(update: Update, file_id: str, caption: str, client: dict) -> None:
+    save_pending_flow(
+        update.effective_user.id,
+        PHOTO_FLOW_TYPE,
+        _pending_payload(file_id, caption, client),
+    )
+    await reply_text(
+        update,
+        _confirmation_text(client),
+        reply_markup=build_mutation_buttons("confirm"),
+    )
+
+
+async def _show_multi_match(update: Update, file_id: str, caption: str, clients: list[dict]) -> None:
+    save_pending_flow(
+        update.effective_user.id,
+        PHOTO_FLOW_TYPE,
+        {
+            "file_id": file_id,
+            "caption": caption,
+            "candidates": [
+                {
+                    "_row": client.get("_row"),
+                    "Imię i nazwisko": client.get("Imię i nazwisko", ""),
+                    "Miasto": client.get("Miasto", client.get("Miejscowość", "")),
+                    "Adres": client.get("Adres", ""),
+                    "Zdjęcia": client.get("Zdjęcia", ""),
+                    "Link do zdjęć": client.get("Link do zdjęć", ""),
+                }
+                for client in clients
+            ],
+        },
+    )
+    lines = [f"Mam {len(clients)} klientów:"]
+    options = []
+    for idx, client in enumerate(clients[:10], start=1):
+        label = f"{idx}. {_client_label(client)}"
+        lines.append(label)
+        options.append((label, f"photo_select_client:{client.get('_row')}"))
+    lines.append("Którego?")
+    await reply_text(update, "\n".join(lines), reply_markup=build_choice_buttons(options))
+
+
+async def _show_not_found(update: Update, file_id: str, caption: str, query: str) -> None:
+    save_pending_flow(
+        update.effective_user.id,
+        PHOTO_FLOW_TYPE,
+        {"file_id": file_id, "caption": caption, "query": query},
+    )
+    await reply_text(
+        update,
+        f"Nie znalazłem klienta: {query}.\nDodać klienta i podpiąć to zdjęcie?",
+        reply_markup=InlineKeyboardMarkup.from_column([
+            InlineKeyboardButton("➕ Dodać klienta", callback_data="photo_add_client:confirm"),
+            InlineKeyboardButton("❌ Anulować", callback_data="cancel:confirm"),
+        ]),
+    )
+
+
+async def _resolve_and_prompt(
+    update: Update,
+    user_id: str,
+    file_id: str,
+    caption: str,
+    query: str,
+) -> None:
+    clients = await _resolve_clients_from_text(user_id, query)
+    if len(clients) == 1:
+        await _show_confirmation(update, file_id, caption, clients[0])
+    elif len(clients) > 1:
+        await _show_multi_match(update, file_id, caption, clients)
+    else:
+        await _show_not_found(update, file_id, caption, query)
+
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle photo messages — assign to a client folder in Google Drive.
-
-    Flow:
-    1. Standard guards.
-    2. Download highest-resolution photo.
-    3. Check for existing photo flow (batch upload in progress).
-    4. If no flow: ask which client.
-    5. If flow exists: upload, update Sheets link, confirm.
-    """
+    """Handle Telegram photos and image documents."""
     if not await is_private_chat(update):
         return
 
@@ -36,91 +217,344 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     telegram_id = update.effective_user.id
     user_id = user["id"]
-
-    # Download highest resolution photo
-    try:
-        photo = update.message.photo[-1]
-        file = await context.bot.get_file(photo.file_id)
-        photo_bytes = await file.download_as_bytearray()
-    except Exception as e:
-        logger.error("handle_photo: download failed for %s: %s", telegram_id, e)
-        await reply_text(update, "❌ Nie udało się pobrać zdjęcia. Spróbuj ponownie.")
+    file_id = _file_id_from_update(update)
+    caption = _caption_from_update(update)
+    if not file_id:
+        await reply_text(update, "❌ Nie udało się odczytać zdjęcia.")
         return
 
-    # Check for active photo flow
-    flow = get_pending_flow(telegram_id)
-    if flow and flow.get("flow_type") == "assign_photo":
-        await _upload_to_client(update, context, user, flow, bytes(photo_bytes))
-        return
+    session = get_active_photo_session(telegram_id)
+    explicit_query = _explicit_target_query(caption) if caption else None
 
-    # No active flow — ask which client
-    caption = update.message.caption or ""
-    if caption:
-        # Caption may contain client name — try to find them
-        results = await search_clients(user_id, caption)
-        if results and len(results) == 1:
-            client = results[0]
-            save_pending_flow(telegram_id, "assign_photo", {
-                "client_name": client.get("Imię i nazwisko", ""),
-                "city": client.get("Miasto", client.get("Miejscowość", "")),
-                "row": client.get("_row"),
-                "photo_bytes": list(bytes(photo_bytes)),  # store as list for JSON serialization
-            })
-            await _upload_to_client(update, context, user, get_pending_flow(telegram_id), bytes(photo_bytes))
+    if session and caption and not explicit_query and len(caption.split()) >= 3:
+        caption_clients = await _resolve_clients_from_text(user_id, caption)
+        if len(caption_clients) == 1:
+            await _show_confirmation(update, file_id, caption, caption_clients[0])
+            return
+        if len(caption_clients) > 1:
+            await _show_multi_match(update, file_id, caption, caption_clients)
             return
 
-    # Ask user which client
-    save_pending_flow(telegram_id, "assign_photo_pending", {
-        "photo_bytes": list(bytes(photo_bytes)),
-    })
-    await reply_text(update,
-        "📸 Do którego klienta przypisać to zdjęcie?\n"
-        "Podaj imię i miejscowość klienta."
+    if session and not explicit_query:
+        ok = await upload_photo_for_session(context, user_id, session, file_id, caption)
+        if ok:
+            await reply_text(
+                update,
+                f"📸 Dodane do: {session.get('display_label', 'tego klienta')}.",
+            )
+        else:
+            await reply_markdown_v2(update, format_error("drive_down"))
+        return
+
+    if explicit_query:
+        await _resolve_and_prompt(update, user_id, file_id, caption, explicit_query)
+        return
+
+    if caption:
+        clients = await _resolve_clients_from_text(user_id, caption)
+        if len(clients) == 1:
+            await _show_confirmation(update, file_id, caption, clients[0])
+            return
+        if len(clients) > 1:
+            await _show_multi_match(update, file_id, caption, clients)
+            return
+
+    save_pending_flow(telegram_id, PHOTO_FLOW_TYPE, {"file_id": file_id, "caption": caption})
+    await reply_text(
+        update,
+        "📸 Do którego klienta przypisać zdjęcie?\nPodaj imię, nazwisko i miasto.",
     )
 
 
-async def _upload_to_client(
+async def handle_photo_text_reply(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     user: dict,
-    flow: dict,
-    photo_bytes: bytes,
-) -> None:
-    """Upload photo to the client's Drive folder and update Sheets."""
-    user_id = user["id"]
-    telegram_id = update.effective_user.id
+    flow_data: dict,
+    message_text: str,
+) -> bool:
+    """Resolve a text reply for the first-photo assignment flow."""
+    file_id = flow_data.get("file_id")
+    if not file_id:
+        await reply_markdown_v2(update, format_error("timeout"))
+        return True
+
+    if flow_data.get("client_row"):
+        client = dict(flow_data.get("client") or {})
+        await _show_confirmation(update, file_id, message_text.strip(), client)
+        return True
+
+    await _resolve_and_prompt(
+        update,
+        user["id"],
+        file_id,
+        flow_data.get("caption", ""),
+        message_text.strip(),
+    )
+    return True
+
+
+async def handle_photo_select_client(query, telegram_id: int, row_str: str) -> None:
+    """Resume photo confirmation after multi-match selection."""
+    flow = get_pending_flow(telegram_id)
+    if not flow or flow.get("flow_type") != PHOTO_FLOW_TYPE:
+        await edit_message_text(query, "Brak aktywnego zdjęcia.")
+        return
     flow_data = flow.get("flow_data", {})
+    row = int(row_str)
+    candidates = flow_data.get("candidates", [])
+    selected = next((client for client in candidates if client.get("_row") == row), None)
+    if not selected:
+        await edit_message_text(query, "Nie znalazłem tego klienta na liście.")
+        return
+    save_pending_flow(
+        telegram_id,
+        PHOTO_FLOW_TYPE,
+        _pending_payload(flow_data["file_id"], flow_data.get("caption", ""), selected),
+    )
+    await edit_message_text(
+        query,
+        _confirmation_text(selected),
+        reply_markup=build_mutation_buttons("confirm"),
+    )
 
-    client_name = flow_data.get("client_name", "")
-    city = flow_data.get("city", "")
-    row = flow_data.get("row")
 
-    await send_processing_stage(context, telegram_id, "uploading")
+async def start_photo_add_client(query, telegram_id: int) -> None:
+    """Switch a not-found photo flow into add-client-with-photo input mode."""
+    flow = get_pending_flow(telegram_id)
+    if not flow or flow.get("flow_type") != PHOTO_FLOW_TYPE:
+        await edit_message_text(query, "Brak aktywnego zdjęcia.")
+        return
+    flow_data = flow.get("flow_data", {})
+    save_pending_flow(
+        telegram_id,
+        PHOTO_ADD_CLIENT_FLOW_TYPE,
+        {
+            "file_id": flow_data.get("file_id"),
+            "caption": flow_data.get("caption", ""),
+            "query": flow_data.get("query", ""),
+        },
+    )
+    await edit_message_text(
+        query,
+        "Podaj dane klienta: imię, nazwisko, miasto, adres, telefon, produkt.",
+    )
 
-    try:
-        folder_id = await get_or_create_client_folder(user_id, client_name, city)
-        if not folder_id:
-            await reply_markdown_v2(update, format_error("drive_down"))
-            return
 
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = f"{client_name}_{timestamp}.jpg"
+async def _download_photo_bytes(context: ContextTypes.DEFAULT_TYPE, file_id: str) -> bytes:
+    telegram_file = await context.bot.get_file(file_id)
+    return bytes(await telegram_file.download_as_bytearray())
 
-        link = await upload_photo(user_id, folder_id, photo_bytes, filename)
-        if not link:
-            await reply_markdown_v2(update, format_error("drive_down"))
-            return
 
-        # Update Sheets "Zdjęcia" column if we have the row number
-        if row:
-            await update_client(user_id, row, {"Zdjęcia": link})
+def _photo_filename(client: dict) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", client.get("Imię i nazwisko", "klient")).strip("_")
+    return f"{safe_name or 'klient'}_{timestamp}.jpg"
 
-        await reply_text(update,
-            f"📸 Zdjęcie dodane do klienta *{client_name}*\\.",
-            parse_mode="MarkdownV2",
+
+async def _upload_to_folder_and_update_sheets(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: str,
+    client_row: int,
+    client: dict,
+    file_id: str,
+    caption: str,
+    folder: dict,
+) -> bool:
+    photo_bytes = await _download_photo_bytes(context, file_id)
+    link = await upload_photo(
+        user_id,
+        folder["id"],
+        photo_bytes,
+        _photo_filename(client),
+        description=caption,
+    )
+    if not link:
+        return False
+
+    drive_count = await count_photos_in_folder(user_id, folder["id"])
+    next_count = drive_count if drive_count is not None else _photo_count(client.get("Zdjęcia")) + 1
+    folder_web_link = folder.get("webViewLink", "")
+    return await update_client_photo_metadata(
+        user_id,
+        client_row,
+        next_count,
+        folder_web_link,
+    )
+
+
+async def upload_photo_for_session(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: str,
+    session: dict,
+    file_id: str,
+    caption: str,
+) -> bool:
+    """Upload directly into an already confirmed active photo session."""
+    clients = await get_all_clients(user_id)
+    client = next(
+        (row for row in clients if int(row.get("_row", 0) or 0) == int(session["client_row"])),
+        {
+            "_row": session.get("client_row"),
+            "Zdjęcia": "",
+            "Link do zdjęć": session.get("folder_link", ""),
+        },
+    )
+    client = dict(client)
+    client["Link do zdjęć"] = client.get("Link do zdjęć") or session.get("folder_link", "")
+    return await upload_photo_for_client(
+        context,
+        user_id,
+        int(session["client_row"]),
+        client,
+        file_id,
+        caption,
+        telegram_id=int(session["telegram_id"]),
+        folder_id=session.get("folder_id"),
+        folder_link=session.get("folder_link"),
+        display_label=session.get("display_label", ""),
+        refresh_session=True,
+    )
+
+
+async def upload_photo_for_client(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: str,
+    client_row: int,
+    client: dict,
+    file_id: str,
+    caption: str = "",
+    *,
+    telegram_id: int | None = None,
+    folder_id: str | None = None,
+    folder_link: str | None = None,
+    display_label: str | None = None,
+    refresh_session: bool = True,
+) -> bool:
+    """Download Telegram file, upload to Drive, update Sheets N/O, and session."""
+    if folder_id and folder_link:
+        folder = {"id": folder_id, "webViewLink": folder_link}
+    else:
+        folder = await get_or_create_client_photo_folder(user_id, client)
+    if not folder:
+        return False
+
+    ok = await _upload_to_folder_and_update_sheets(
+        context,
+        user_id,
+        client_row,
+        client,
+        file_id,
+        caption,
+        folder,
+    )
+    if not ok:
+        return False
+
+    if refresh_session and telegram_id is not None:
+        save_active_photo_session(
+            telegram_id=telegram_id,
+            user_id=user_id,
+            client_row=client_row,
+            folder_id=folder["id"],
+            folder_link=folder.get("webViewLink", ""),
+            display_label=display_label or _client_label(client),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=PHOTO_SESSION_MINUTES),
         )
-    except Exception as e:
-        logger.error("_upload_to_client(%s): %s", telegram_id, e)
+    return True
+
+
+async def confirm_photo_upload(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    flow_data: dict,
+) -> bool:
+    """Commit first confirmed photo upload and open the active session."""
+    client = dict(flow_data.get("client") or {})
+    client_row = flow_data.get("client_row")
+    file_id = flow_data.get("file_id")
+    if not client_row or not file_id:
+        await reply_markdown_v2(update, format_error("timeout"))
+        return False
+
+    await send_processing_stage(context, update.effective_user.id, "uploading")
+    folder = await get_or_create_client_photo_folder(user["id"], client)
+    if not folder:
         await reply_markdown_v2(update, format_error("drive_down"))
-    finally:
-        delete_pending_flow(telegram_id)
+        return False
+
+    ok = await _upload_to_folder_and_update_sheets(
+        context,
+        user["id"],
+        int(client_row),
+        client,
+        file_id,
+        flow_data.get("caption", ""),
+        folder,
+    )
+    if not ok:
+        await reply_markdown_v2(update, format_error("drive_down"))
+        return False
+
+    session_saved = save_active_photo_session(
+        update.effective_user.id,
+        user["id"],
+        int(client_row),
+        folder["id"],
+        folder.get("webViewLink", ""),
+        _client_label(client),
+        datetime.now(timezone.utc) + timedelta(minutes=PHOTO_SESSION_MINUTES),
+    )
+    if session_saved:
+        await reply_text(
+            update,
+            f"📸 Dodane do: {_client_label(client)}. "
+            "Przez 15 minut kolejne zdjęcia bez opisu wrzucę do tego klienta. "
+            "Żeby zmienić klienta, napisz w opisie: zdjęcia do [imię nazwisko miasto].",
+        )
+    else:
+        await reply_text(
+            update,
+            "📸 Zdjęcie dodane, ale nie udało się otworzyć sesji kolejnych zdjęć. "
+            "Kolejne zdjęcie wyślij z opisem klienta.",
+        )
+    return False
+
+
+async def complete_photo_after_add_client(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: str,
+    client_row: int,
+    client_data: dict,
+    photo_data: dict,
+) -> tuple[bool, bool, str]:
+    """Upload the carried first photo after add_client creates the Sheets row."""
+    client = dict(client_data)
+    client["_row"] = client_row
+    label = _client_label(client)
+    folder = await get_or_create_client_photo_folder(user_id, client)
+    if not folder:
+        return False, False, label
+    ok = await _upload_to_folder_and_update_sheets(
+        context,
+        user_id,
+        client_row,
+        client,
+        photo_data.get("file_id", ""),
+        photo_data.get("caption", ""),
+        folder,
+    )
+    if not ok:
+        return False, False, label
+    session_saved = save_active_photo_session(
+        update.effective_user.id,
+        user_id,
+        client_row,
+        folder["id"],
+        folder.get("webViewLink", ""),
+        label,
+        datetime.now(timezone.utc) + timedelta(minutes=PHOTO_SESSION_MINUTES),
+    )
+    return True, session_saved, label

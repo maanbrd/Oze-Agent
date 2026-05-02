@@ -382,6 +382,65 @@ async def update_client(user_id: str, row_number: int, updates: dict) -> bool:
         return False
 
 
+async def update_client_photo_metadata(
+    user_id: str,
+    row_number: int,
+    photo_count: int,
+    folder_link: str,
+) -> bool:
+    """Update only photo metadata columns N/O for a client row.
+
+    Unlike update_client(), this helper deliberately does not touch
+    "Data ostatniego kontaktu" because uploading documentation photos is not
+    a client contact event.
+    """
+    try:
+        user = get_user_by_id(user_id)
+        if not user or not user.get("google_sheets_id"):
+            return False
+        spreadsheet_id = user["google_sheets_id"]
+
+        headers = await get_sheet_headers(user_id)
+        if not headers:
+            return False
+
+        updates = {
+            "Zdjęcia": photo_count,
+            "Link do zdjęć": folder_link,
+        }
+
+        def _update():
+            service = _get_sheets_service_sync(user_id)
+            if not service:
+                return False
+            data = []
+            for col_name, value in updates.items():
+                if col_name in headers:
+                    col_idx = headers.index(col_name)
+                    col_letter = chr(ord("A") + col_idx)
+                    data.append({
+                        "range": f"{col_letter}{row_number}",
+                        "values": [[value]],
+                    })
+            if not data:
+                return False
+            service.spreadsheets().values().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"valueInputOption": "USER_ENTERED", "data": data},
+            ).execute()
+            return True
+
+        return await asyncio.to_thread(_update)
+    except Exception as e:
+        logger.error(
+            "update_client_photo_metadata(%s, row=%s): %s",
+            user_id,
+            row_number,
+            e,
+        )
+        return False
+
+
 async def delete_client(user_id: str, row_number: int) -> bool:
     """Delete an entire row from the spreadsheet."""
     try:

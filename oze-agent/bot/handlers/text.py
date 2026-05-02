@@ -723,6 +723,79 @@ async def _route_pending_flow(
     elif is_no:
         await handle_cancel_flow(update, context, user, {}, message_text)
         return True
+    elif flow_type == "photo_upload":
+        from bot.handlers.photo import handle_photo_text_reply
+
+        return await handle_photo_text_reply(
+            update,
+            context,
+            user,
+            flow.get("flow_data", {}),
+            message_text,
+        )
+    elif flow_type == "photo_add_client":
+        telegram_id = update.effective_user.id
+        user_id = user["id"]
+        flow_data = flow.get("flow_data", {})
+        photo_upload = {
+            "file_id": flow_data.get("file_id"),
+            "caption": flow_data.get("caption", ""),
+        }
+        if not photo_upload["file_id"]:
+            delete_pending_flow(telegram_id)
+            await reply_markdown_v2(update, format_error("timeout"))
+            return True
+
+        headers = await get_sheet_headers(user_id)
+        result = await extract_client_data(message_text, headers)
+        client_data = {
+            k: v
+            for k, v in _filter_invalid_products(result.get("client_data", {})).items()
+            if v
+        }
+
+        if not client_data:
+            await reply_text(
+                update,
+                "Podaj dane klienta: imię, nazwisko, miasto, adres, telefon, produkt.",
+            )
+            return True
+
+        all_clients = await get_all_clients(user_id)
+        name = client_data.get("Imię i nazwisko", "")
+        city = client_data.get("Miasto", "")
+        duplicate = detect_potential_duplicate(name, city, all_clients) if name else None
+        if duplicate:
+            from bot.handlers.photo import _show_confirmation
+
+            await _show_confirmation(
+                update,
+                photo_upload["file_id"],
+                photo_upload.get("caption", ""),
+                duplicate,
+            )
+            return True
+
+        sheet_columns = user.get("sheet_columns") or headers
+        missing = [
+            col for col in sheet_columns
+            if col and not client_data.get(col) and col not in SYSTEM_FIELDS
+        ]
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT,
+            flow_data=payload_to_flow_data(AddClientPayload(
+                client_data=client_data,
+                photo_upload=photo_upload,
+            )),
+        ))
+        card = format_add_client_card(client_data, missing)
+        await reply_text(
+            update,
+            f"{card}\n📸 Zapis obejmie też pierwsze zdjęcie.",
+            reply_markup=build_mutation_buttons("confirm"),
+        )
+        return True
     elif flow_type == "add_client":
         # If the message starts with a search/action verb, auto-cancel and re-process
         _search_prefixes = (
@@ -2501,13 +2574,45 @@ async def handle_change_status(
 # slice's scope.
 
 
-async def _confirm_add_client(update, telegram_id, user_id, flow_data) -> bool:
+async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) -> bool:
     remaining = flow_data.get("_offer_remaining", [])
     result = await commit_add_client(user_id, flow_data["client_data"])
     if not result.success:
         await reply_markdown_v2(update,
             format_error(result.error_message or "google_down")
         )
+        return False
+
+    photo_upload = flow_data.get("photo_upload")
+    if photo_upload:
+        from bot.handlers.photo import complete_photo_after_add_client
+
+        photo_ok, session_saved, display_label = await complete_photo_after_add_client(
+            update,
+            context,
+            user_id,
+            result.row,
+            flow_data["client_data"],
+            photo_upload,
+        )
+        if photo_ok and session_saved:
+            await reply_text(
+                update,
+                f"✅ Zapisane.\n📸 Zdjęcie dodane do: {display_label}. "
+                "Przez 15 minut kolejne zdjęcia bez opisu wrzucę do tego klienta.",
+            )
+        elif photo_ok:
+            await reply_text(
+                update,
+                "✅ Zapisane.\n📸 Zdjęcie dodane, ale nie udało się otworzyć sesji "
+                "kolejnych zdjęć. Kolejne zdjęcie wyślij z opisem klienta.",
+            )
+        else:
+            await reply_text(
+                update,
+                "✅ Klient zapisany, ale nie udało się dodać zdjęcia. "
+                "Wyślij je ponownie z opisem klienta.",
+            )
         return False
 
     name = flow_data["client_data"].get("Imię i nazwisko", "klient")
@@ -2642,7 +2747,12 @@ async def handle_confirm(
 
     try:
         if flow_type == "add_client":
-            skip_delete = await _confirm_add_client(update, telegram_id, user_id, flow_data)
+            skip_delete = await _confirm_add_client(update, context, telegram_id, user_id, flow_data)
+
+        elif flow_type == "photo_upload":
+            from bot.handlers.photo import confirm_photo_upload
+
+            skip_delete = await confirm_photo_upload(update, context, user, flow_data)
 
         elif flow_type == "add_client_duplicate":
             skip_delete = await _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)

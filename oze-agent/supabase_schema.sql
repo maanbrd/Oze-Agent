@@ -91,6 +91,18 @@ CREATE TABLE pending_flows (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE photo_upload_sessions (
+    telegram_id BIGINT PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    client_row INTEGER NOT NULL,
+    folder_id TEXT NOT NULL,
+    folder_link TEXT NOT NULL,
+    display_label TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE interaction_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     telegram_id BIGINT NOT NULL,
@@ -156,6 +168,7 @@ CREATE INDEX idx_users_telegram_id ON users(telegram_id);
 CREATE INDEX idx_conversation_history_telegram_id ON conversation_history(telegram_id, created_at DESC);
 CREATE INDEX idx_interaction_log_telegram_id ON interaction_log(telegram_id, created_at DESC);
 CREATE INDEX idx_pending_followups_status ON pending_followups(status, event_end_time);
+CREATE INDEX idx_photo_upload_sessions_expires_at ON photo_upload_sessions(expires_at);
 CREATE INDEX idx_daily_counts_date ON daily_interaction_counts(telegram_id, date);
 CREATE INDEX idx_webhook_log_source ON webhook_log(source, created_at DESC);
 CREATE INDEX idx_admin_broadcasts_status ON admin_broadcasts(status);
@@ -171,6 +184,7 @@ ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pending_followups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pending_flows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photo_upload_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interaction_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_habits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
@@ -191,3 +205,21 @@ ALTER TABLE users
 CREATE INDEX IF NOT EXISTS idx_users_eligible_brief
     ON users (is_suspended, is_deleted, telegram_id)
     WHERE is_suspended = FALSE AND is_deleted = FALSE AND telegram_id IS NOT NULL;
+
+-- Photo flow: 15-minute active target for same-client Drive uploads.
+CREATE TABLE IF NOT EXISTS photo_upload_sessions (
+    telegram_id BIGINT PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    client_row INTEGER NOT NULL,
+    folder_id TEXT NOT NULL,
+    folder_link TEXT NOT NULL,
+    display_label TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_photo_upload_sessions_expires_at
+    ON photo_upload_sessions(expires_at);
+
+ALTER TABLE photo_upload_sessions ENABLE ROW LEVEL SECURITY;

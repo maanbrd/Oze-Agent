@@ -47,7 +47,10 @@ def test_payload_map_class_per_type():
     [
         (
             PendingFlowType.ADD_CLIENT,
-            {"client_data": {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa"}},
+            {
+                "client_data": {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa"},
+                "photo_upload": {"file_id": "photo-file-id", "caption": "dach"},
+            },
             AddClientPayload,
         ),
         (
@@ -152,6 +155,19 @@ def test_add_client_without_offer_remaining_defaults_to_none():
     assert payload._offer_remaining is None
     serialized = payload_to_flow_data(payload)
     assert serialized == {"client_data": {"Imię i nazwisko": "Jan"}}
+
+
+def test_add_client_photo_upload_payload_is_preserved():
+    payload = payload_from_flow_data(
+        PendingFlowType.ADD_CLIENT,
+        {
+            "client_data": {"Imię i nazwisko": "Jan"},
+            "photo_upload": {"file_id": "photo-file-id", "caption": "opis"},
+        },
+    )
+    assert payload.photo_upload == {"file_id": "photo-file-id", "caption": "opis"}
+    serialized = payload_to_flow_data(payload)
+    assert serialized["photo_upload"] == {"file_id": "photo-file-id", "caption": "opis"}
 
 
 def test_disambiguation_add_note_variant():
