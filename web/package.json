@@ -12,7 +12,9 @@
     "test:api-base-url": "node scripts/test-api-base-url.mjs",
     "test:dates": "node scripts/test-dates.mjs",
     "test:routes": "node scripts/test-routes.mjs",
-    "test:web-units": "npm run test:routes && npm run test:dates && npm run test:api-base-url",
+    "test:logout-ui": "node scripts/test-logout-ui.mjs",
+    "test:telegram-onboarding-refresh": "node scripts/test-telegram-onboarding-refresh.mjs",
+    "test:web-units": "npm run test:routes && npm run test:dates && npm run test:api-base-url && npm run test:logout-ui && npm run test:telegram-onboarding-refresh",
     "check:phase1b-env": "node scripts/check-phase1b-env.mjs",
     "smoke:phase1b-local": "node scripts/smoke-phase1b-local.mjs"
   },
