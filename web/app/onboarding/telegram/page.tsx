@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { generateTelegramCodeAction } from "@/app/onboarding/actions";
+import { TelegramStatusPoller } from "@/components/telegram-status-poller";
 import { requireCurrentAccount } from "@/lib/api/account";
 import {
   getOnboardingStatus,
@@ -69,8 +70,9 @@ export default async function TelegramOnboardingPage({
             </code>
             <p className="mt-3 text-sm text-zinc-400">
               Kod jest krótkotrwały. Po wpisaniu w Telegramie ta strona pokaże
-              status po odświeżeniu.
+              status automatycznie.
             </p>
+            <TelegramStatusPoller />
             <form action={generateTelegramCodeAction} className="mt-5">
               <button className="rounded-full border border-[#3DFF7A]/40 px-5 py-3 text-sm font-semibold text-[#3DFF7A]">
                 Wygeneruj nowy kod

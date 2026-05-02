@@ -470,8 +470,18 @@ assert.equal(
   "Web package must expose route helper behavior tests.",
 );
 assert.equal(
+  packageJson.scripts["test:logout-ui"],
+  "node scripts/test-logout-ui.mjs",
+  "Web package must expose logout UI regression tests.",
+);
+assert.equal(
+  packageJson.scripts["test:telegram-onboarding-refresh"],
+  "node scripts/test-telegram-onboarding-refresh.mjs",
+  "Web package must expose Telegram onboarding refresh regression tests.",
+);
+assert.equal(
   packageJson.scripts["test:web-units"],
-  "npm run test:routes && npm run test:dates && npm run test:api-base-url",
+  "npm run test:routes && npm run test:dates && npm run test:api-base-url && npm run test:logout-ui && npm run test:telegram-onboarding-refresh",
   "Web package must expose combined web unit tests.",
 );
 assert.equal(
