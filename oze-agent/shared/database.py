@@ -3,6 +3,7 @@
 All functions use the service key (bypasses RLS). Returns None on failure.
 """
 
+import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -14,6 +15,7 @@ from bot.config import Config
 logger = logging.getLogger(__name__)
 
 _client: Optional[Client] = None
+PHOTO_SESSION_HISTORY_TYPE = "photo_upload_session"
 
 
 def get_supabase_client() -> Client:
@@ -242,6 +244,7 @@ def get_conversation_history(
             .table("conversation_history")
             .select("role, content, message_type, created_at")
             .eq("telegram_id", telegram_id)
+            .neq("message_type", PHOTO_SESSION_HISTORY_TYPE)
         )
         if since is not None:
             cutoff = datetime.now(tz=timezone.utc) - since
@@ -307,6 +310,98 @@ def delete_pending_flow(telegram_id: int) -> None:
 # ── Active photo upload sessions ─────────────────────────────────────────────
 
 
+def _photo_session_payload(
+    telegram_id: int,
+    user_id: str,
+    client_row: int,
+    folder_id: str,
+    folder_link: str,
+    display_label: str,
+    expires_at: datetime,
+) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "telegram_id": telegram_id,
+        "user_id": user_id,
+        "client_row": client_row,
+        "folder_id": folder_id,
+        "folder_link": folder_link,
+        "display_label": display_label,
+        "expires_at": expires_at.isoformat(),
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _is_photo_session_expired(session: dict) -> bool:
+    expires_raw = session.get("expires_at")
+    if not expires_raw:
+        return False
+    expires_at = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at <= datetime.now(timezone.utc)
+
+
+def _save_active_photo_session_fallback(payload: dict) -> bool:
+    """Persist active photo session in technical conversation history metadata."""
+    try:
+        get_supabase_client().table("conversation_history").insert(
+            {
+                "telegram_id": payload["telegram_id"],
+                "role": "system",
+                "content": json.dumps(payload, ensure_ascii=False),
+                "message_type": PHOTO_SESSION_HISTORY_TYPE,
+            }
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error(
+            "save_active_photo_session_fallback(%s): %s",
+            payload.get("telegram_id"),
+            e,
+        )
+        return False
+
+
+def _get_active_photo_session_fallback(telegram_id: int) -> Optional[dict]:
+    """Read active photo session from technical conversation history metadata."""
+    try:
+        result = (
+            get_supabase_client()
+            .table("conversation_history")
+            .select("content")
+            .eq("telegram_id", telegram_id)
+            .eq("message_type", PHOTO_SESSION_HISTORY_TYPE)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        content = result.data[0].get("content")
+        if not content:
+            return None
+        session = json.loads(content)
+        if _is_photo_session_expired(session):
+            delete_active_photo_session(telegram_id)
+            return None
+        return session
+    except Exception as e:
+        logger.debug("get_active_photo_session_fallback(%s): %s", telegram_id, e)
+        return None
+
+
+def _delete_active_photo_session_fallback(telegram_id: int) -> None:
+    """Clear technical conversation-history rows used as photo session fallback."""
+    try:
+        get_supabase_client().table("conversation_history").delete().eq(
+            "telegram_id", telegram_id
+        ).eq("message_type", PHOTO_SESSION_HISTORY_TYPE).execute()
+    except Exception as e:
+        logger.error("delete_active_photo_session_fallback(%s): %s", telegram_id, e)
+
+
 def save_active_photo_session(
     telegram_id: int,
     user_id: str,
@@ -317,23 +412,21 @@ def save_active_photo_session(
     expires_at: datetime,
 ) -> bool:
     """Upsert the 15-minute same-client photo upload session."""
+    payload = _photo_session_payload(
+        telegram_id=telegram_id,
+        user_id=user_id,
+        client_row=client_row,
+        folder_id=folder_id,
+        folder_link=folder_link,
+        display_label=display_label,
+        expires_at=expires_at,
+    )
     try:
-        get_supabase_client().table("photo_upload_sessions").upsert(
-            {
-                "telegram_id": telegram_id,
-                "user_id": user_id,
-                "client_row": client_row,
-                "folder_id": folder_id,
-                "folder_link": folder_link,
-                "display_label": display_label,
-                "expires_at": expires_at.isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
-            }
-        ).execute()
+        get_supabase_client().table("photo_upload_sessions").upsert(payload).execute()
         return True
     except Exception as e:
-        logger.error("save_active_photo_session(%s): %s", telegram_id, e)
-        return False
+        logger.warning("save_active_photo_session(%s): %s", telegram_id, e)
+        return _save_active_photo_session_fallback(payload)
 
 
 def get_active_photo_session(telegram_id: int) -> Optional[dict]:
@@ -349,20 +442,15 @@ def get_active_photo_session(telegram_id: int) -> Optional[dict]:
         )
         session = result.data
         if not session:
-            return None
+            return _get_active_photo_session_fallback(telegram_id)
 
-        expires_raw = session.get("expires_at")
-        if expires_raw:
-            expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at <= datetime.now(timezone.utc):
-                delete_active_photo_session(telegram_id)
-                return None
+        if _is_photo_session_expired(session):
+            delete_active_photo_session(telegram_id)
+            return None
         return session
     except Exception as e:
         logger.debug("get_active_photo_session(%s): %s", telegram_id, e)
-        return None
+        return _get_active_photo_session_fallback(telegram_id)
 
 
 def delete_active_photo_session(telegram_id: int) -> None:
@@ -372,7 +460,9 @@ def delete_active_photo_session(telegram_id: int) -> None:
             "telegram_id", telegram_id
         ).execute()
     except Exception as e:
-        logger.error("delete_active_photo_session(%s): %s", telegram_id, e)
+        logger.debug("delete_active_photo_session(%s): %s", telegram_id, e)
+    finally:
+        _delete_active_photo_session_fallback(telegram_id)
 
 
 # ── Pending follow-ups ────────────────────────────────────────────────────────

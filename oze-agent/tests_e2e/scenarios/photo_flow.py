@@ -78,7 +78,15 @@ async def _click_cancel_and_collect(
     if label is None:
         return []
     await harness.click_button(card_msg, label)
-    return await harness.collect_messages(duration_s=5.0)
+    replies = await harness.collect_messages(duration_s=5.0)
+    if replies:
+        return replies
+    if harness._client is None or harness._bot_entity is None:
+        return []
+    edited = await harness._client.get_messages(harness._bot_entity, ids=card_msg.id)
+    if edited is None:
+        return []
+    return [_ObservedMessage.from_telethon(edited)]
 
 
 async def _click_save_and_collect(
