@@ -458,4 +458,8 @@ After user responds (voice/text about multiple clients at once) → parse, show 
 
 ## Voice transcription, photo, multi-meeting
 
-Voice transcription is **live as an input adapter** since 25.04.2026 (Whisper STT → Polish name post-pass via Claude haiku → 2-button confirm card; confirmed transcription flows through normal text path via `handle_text(text_override=...)`). Photo upload to Google Drive and multi-meeting batch parsing remain **POST-MVP** (see `INTENCJE_MVP.md` section 8.1). In MVP agent handles text messages, voice messages (transcribed to text), and single meeting per message.
+Voice transcription is **live as an input adapter** since 25.04.2026 (Whisper STT → Polish name post-pass via Claude haiku → 2-button confirm card; confirmed transcription flows through normal text path via `handle_text(text_override=...)`).
+
+Photo upload to Google Drive is an active post-MVP slice. First Drive write always requires a `✅ Zapisać` card. A caption with first name + last name + city can identify the client and skip "Do którego klienta?", but never skips confirmation. After the first confirmed upload, the agent may upload more photos to the same client for 15 minutes; user-facing copy must state that clearly and explain `zdjęcia do [imię nazwisko miasto]` for switching client.
+
+Multi-meeting batch parsing remains POST-MVP. In MVP agent handles text messages, voice messages (transcribed to text), photo/image upload, and single meeting per message.

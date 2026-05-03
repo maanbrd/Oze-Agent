@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 25.04.2026_
+_Last updated: 27.04.2026_
 
 ---
 
@@ -14,13 +14,16 @@ The Python behavior layer is legacy/reference — not trusted as behavior contra
 The `.md` documentation is the primary project asset.
 We do not delete infrastructure blindly.
 
+Operational decision from 27.04.2026: **stabilize the Telegram agent before
+finishing the web app**. The web app should not be treated as launch-ready until
+the core agent flows are trustworthy in manual testing.
+
 ## Current Implementation Status
 
-Phase 5 (Mutation Pipeline) — done. Bundled cleanup commit `2603add`
-(5.5 + 5.5a + 5.6 + 5.7) + follow-up UX commit `210523a`, both pushed
-to `origin/develop`. Smoke 3/3 pass.
+Phase 5 (Mutation Pipeline) — done. The active deployed behavior includes the
+later 27.04 fixes on top of the original Phase 5 work.
 
-Phase 6 MVP (Morning Brief) — implemented. Scope frozen per 24.04:
+Phase 6 MVP (Morning Brief) — implemented and deployed. Scope frozen per 24.04:
 - **morning brief only**, 07:00 Europe/Warsaw, Mon–Fri.
 - Sources: Terminarz = Calendar events; Do dopilnowania dziś = Sheets K/L
   (`Następny krok` + `Data następnego kroku` ≤ today, non-terminal status).
@@ -32,8 +35,17 @@ Phase 6 MVP (Morning Brief) — implemented. Scope frozen per 24.04:
 - Evening follow-up, pipeline stats, pre-meeting reminders — POST-MVP /
   NIEPLANOWANE.
 
-Next: manual Telegram smoke (MB-1..MB-9 in `TEST_PLAN_CURRENT.md`),
-then deploy.
+Latest deployed hotfixes:
+- local R6 implementation — conversation memory now uses 10 messages / 30 min, assistant replies are persisted through handler wrappers, voice confirmations save as `message_type="voice"`, and add_note can derive an active client from recent history.
+- `e744d84` — normalize Unicode line/paragraph separators and prevent empty Telegram replies.
+- `bfa4061` — strip secret env whitespace before constructing API clients.
+- `8b0be20` — carry client data extracted from meeting text into the add-meeting → add-client flow.
+- `961fad1` — force `record_add_meeting` when meeting + temporal markers co-occur, redact classifier logs, and avoid treating a contact `telefon` field as a phone-call intent.
+
+Current verification baseline:
+- Unit/full test baseline after local R6 implementation: `834 passed`.
+- Production Railway deploy for `bot`: `bba35789-9b52-4a77-ae29-3597171ee461`, status `SUCCESS`.
+- Test Railway deploy for `bot-test`: `0f206b73-b001-49d1-9d1e-413c1ae7b7d4`, status `SUCCESS`.
 
 ### Keep (potential reuse)
 
@@ -56,10 +68,9 @@ then deploy.
 
 ### Deferred beyond first version
 
-- photo flow
 - multi-meeting
 
-Current photo code (and any batch/multi-meeting fragments) is legacy reference only.
+Current batch/multi-meeting fragments are legacy reference only.
 
 ### Active post-MVP slice (live)
 
@@ -67,12 +78,26 @@ Current photo code (and any batch/multi-meeting fragments) is legacy reference o
   `8beecba..6a8b1d4` on main). Whisper STT → Polish name post-pass via Claude
   haiku → 2-button confirm card (Zapisz/Anuluj). Confirmed transcription flows
   through normal text path via `handle_text(text_override=...)`.
+- **Google Drive photo upload** — active post-MVP slice. Telegram photos/images
+  use an R1 `✅ Zapisać` card before the first Drive write, update Sheets N/O,
+  and open a 15-minute same-client upload session that can be switched by
+  caption `zdjęcia do [imię nazwisko miasto]`.
 - **Global `/cancel` command** — universal escape hatch for any pending flow
   (added in `48e4a76`).
+
+### Operational environments — 27.04.2026
+
+- Production Telegram bot runs from Railway service `bot` on branch `main`, deployment `bba35789-9b52-4a77-ae29-3597171ee461`.
+- Test Telegram bot is live at `t.me/OZEAgentTestBot`, Railway service `bot-test`, branch `develop`, deployment `0f206b73-b001-49d1-9d1e-413c1ae7b7d4`.
+- `main` and `develop` currently point to `961fad1` (`fix(intent): force record_add_meeting when meeting+temporal markers present`).
+- `bot-test` has its own Telegram token and is online, but it may still use the same Google Sheets / Calendar / Supabase integrations as production.
+- Manual smoke tests on `bot-test` must use fictional data until backend resources are explicitly separated.
 
 ---
 
 ## Next Steps
+
+Completed foundation:
 
 1. Uporządkować `SOURCE_OF_TRUTH.md` — done
 2. Stworzyć `ARCHITECTURE.md` — done
@@ -85,29 +110,40 @@ Current photo code (and any batch/multi-meeting fragments) is legacy reference o
    - `TEST_PLAN_CURRENT.md`
    - `CLAUDE.md`
    - `SOURCE_OF_TRUTH.md`
-7. Phase 1 Infrastructure Audit — done (see `docs/PHASE1_AUDIT.md`)
-8. Phase 2 Behavior Contract Freeze — done (see `docs/PHASE2_CONTRACT_FREEZE.md`; 9/9 decyzji frozen, commits `65b5661` + `117f9c2`)
+7. Phase 1 Infrastructure Audit — done (archived at `docs/archive/PHASE1_AUDIT.md`)
+8. Phase 2 Behavior Contract Freeze — done (archived at `docs/archive/PHASE2_CONTRACT_FREEZE.md`; 9/9 decyzji frozen, commits `65b5661` + `117f9c2`)
 9. Phase 3 — Intent Router Rewrite — done
 10. Phase 4 — Pending Flow + Confirmation Cards — done
-11. Phase 5 — Mutation Pipeline — done (commits `2603add`, `210523a` on `origin/develop`)
-12. Phase 6 — Proactive Scheduler / Morning Brief — done in code (scope: morning brief only, see `IMPLEMENTATION_PLAN.md` Phase 6). P6-RCF Codex review fixes applied. **Next:** manual Telegram smoke (MB-1..MB-9) + prod deploy.
+11. Phase 5 — Mutation Pipeline — done
+12. Phase 6 — Proactive Scheduler / Morning Brief — implemented and deployed
+13. Voice transcription — live
+14. Google Drive photo upload — active post-MVP slice
+15. Test bot on `develop` — live at `t.me/OZEAgentTestBot`
+
+Current active track:
+
+1. Stabilize agent behavior on `bot-test` using fictional data.
+2. Build and run a small real-world regression pack for: text add_client, text add_meeting, voice → transcript → add_meeting, photo → Drive, add_meeting → preseed add_client, disambiguation, duplicate handling, R7 next-action prompts, show_day_plan, `/cancel`.
+3. Promote fixes from `develop` → `main` only after `bot-test` smoke passes.
+4. Separate test backend resources (Sheets / Calendar / Supabase) before destructive or high-volume testing.
+5. Return to web app implementation after the core Telegram agent is stable.
 
 ---
 
 ## Phase 2 Behavior Contract Freeze — done
 
-9/9 decyzji zamrożonych — pełny kontrakt behavior layer spisany w `docs/PHASE2_CONTRACT_FREEZE.md`.
+9/9 decyzji zamrożonych — pełny kontrakt behavior layer spisany w `docs/archive/PHASE2_CONTRACT_FREEZE.md`.
 
 - **Package 1** (`65b5661`) — D1 Sheets date format, D2 Calendar timezone contract, D3 Calendar reminders policy, D4 `Następny krok` enum values.
 - **Package 2** (`117f9c2`) — D5 voice/photo/multi-meeting handler scope, D6 `get_conversation_history` 30-min window, D7 Calendar scope narrowing, D8 extendedProperties, D9 user timezone.
 
 Housekeeping / security items z Phase 1 audit (~32) — osobny backlog, obsługiwane w miarę implementacji Phase 3-7.
 
-## Phase 3 — Intent Router Rewrite — next
+## Phase 3 — Intent Router Rewrite — done
 
 Per `docs/IMPLEMENTATION_PLAN.md` Phase 3. Klasyfikator 6 MVP intentów + `general_question` z strukturalnym JSON output. Rozróżnia POST-MVP roadmap / vision-only / NIEPLANOWANE z odpowiednio różnymi reply templates.
 
-Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, D6 30-min history window) są wejściem dla Phase 3.
+Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, D6 30-min history window) są wejściem dla Phase 3. D5 dla photo zostało później superseded przez aktywny photo upload slice.
 
 ---
 
@@ -132,11 +168,11 @@ Kontrakty zamrożone w Phase 2 (w szczególności D4 enum, D5 voice/photo stub, 
 - `TEST_PLAN_CURRENT.md` — change_status 3-button, duplicate resolution testy (AC-4a/4b, AN-4, AM-8), show_day_plan (SDP-1..5), voice/photo flow usunięte, morning brief bez pipeline stats, evening follow-up dodany
 - `CLAUDE.md` — unified 3-button dla wszystkich mutacji (usunięty wyjątek change_status 2-button), Read First rozszerzone o ARCHITECTURE/IMPLEMENTATION_PLAN/AGENT_WORKFLOW/TEST_PLAN_CURRENT, rewrite list bez voice/photo (POST-MVP)
 - `SOURCE_OF_TRUTH.md` — czterowarstwowy podział zakresu prac (MVP / POST-MVP roadmap / Product vision only-wymaga decyzji / NIEPLANOWANE); reschedule_meeting, cancel_meeting, free_slots, delete_client eksplicite vision-only; Voice/photo/multi-meeting jako sekcja deferred; sekcja "Najbliższy krok" bez obietnicy "Phase 2"
-- `docs/PHASE1_AUDIT.md` — **stworzony**. Per-wrapper audyt 7 plików infrastruktury (Google Sheets/Calendar/Drive, Supabase, OpenAI/Claude, OAuth, Telegram plumbing). 6 MVP blockerów, 9 Phase 2 decisions, ~32 housekeeping/security items. Zero rewrite'ów — wszystkie wrappery zostają z adjustmentami.
+- `docs/archive/PHASE1_AUDIT.md` — **stworzony**. Per-wrapper audyt 7 plików infrastruktury (Google Sheets/Calendar/Drive, Supabase, OpenAI/Claude, OAuth, Telegram plumbing). 6 MVP blockerów, 9 Phase 2 decisions, ~32 housekeeping/security items. Zero rewrite'ów — wszystkie wrappery zostają z adjustmentami.
 
 ### Sesja 15.04
 
-- `docs/PHASE2_CONTRACT_FREEZE.md` — **stworzony i domknięty**. 9/9 decyzji zamrożonych: D1 Sheets date format (ISO + PL display), D2 Calendar timezone (tz-aware Warsaw, wrapper rejects naive), D3 Calendar reminders (`useDefault: True`, no scheduler pre-meeting), D4 `Następny krok` enum (runtime English ↔ Sheets Polish, K=label never date), D5 voice/photo/multi-meeting → POST-MVP stub, D6 `get_conversation_history` hybrid `since` param (MVP mandate 30 min), D7 Calendar full scope in MVP (narrowing = POST-MVP hardening), D8 minimal `extendedProperties.private.event_type` + Sheets P as primary link, D9 hardcoded `Europe/Warsaw` via single `DEFAULT_TIMEZONE` constant. Commits: `65b5661` (D1-D4), `117f9c2` (D5-D9).
+- `docs/archive/PHASE2_CONTRACT_FREEZE.md` — **stworzony i domknięty**. 9/9 decyzji zamrożonych: D1 Sheets date format (ISO + PL display), D2 Calendar timezone (tz-aware Warsaw, wrapper rejects naive), D3 Calendar reminders (`useDefault: True`, no scheduler pre-meeting), D4 `Następny krok` enum (runtime English ↔ Sheets Polish, K=label never date), D5 voice/photo/multi-meeting → POST-MVP stub (photo później superseded przez aktywny photo upload slice), D6 `get_conversation_history` hybrid `since` param (MVP mandate 30 min), D7 Calendar full scope in MVP (narrowing = POST-MVP hardening), D8 minimal `extendedProperties.private.event_type` + Sheets P as primary link, D9 hardcoded `Europe/Warsaw` via single `DEFAULT_TIMEZONE` constant. Commits: `65b5661` (D1-D4), `117f9c2` (D5-D9).
 - `INTENCJE_MVP.md` — docs follow-up: §4.5 K/L semantics per D4 (K=label, L=data, P=event_id), extendedProperties tylko `event_type` per D8 (usunięte `client_sheet_row`/`managed_by`), §7 plan dnia filtruje po dedykowanym OZE calendar zamiast `managed_by` flag, offer_email emoji 📨.
 - `IMPLEMENTATION_PLAN.md` — dopisane POST-MVP roadmap items: `calendar_scope_narrowing` (D7), `multi_timezone_support` (D9).
 - Drift reconcile #2 (pre-Phase 3): `INTENCJE_MVP.md` §8.2 split na vision-only + §8.3 NIEPLANOWANE (per 4-tier SSOT model z 14.04; reschedule/cancel/free_slots/delete_client przeklasyfikowane z NIEPLANOWANE → VISION_ONLY; daily interaction limit oznaczony jako policy/business vision, nie router intent); §11 kolumna P poprawiona (populated w MVP dla Calendar-backed next steps, per D8); `agent_behavior_spec_v5.md` §6.3 rename NIEPLANOWANE → VISION-ONLY + §6.4 NIEPLANOWANE (tylko pre-meeting reminders); `PHASE2_CONTRACT_FREEZE.md` D8 wording "POST-MVP flows" → "Vision-only flows"; `TEST_PLAN_CURRENT.md` SDP-5 reclassify POST-MVP → VISION_ONLY.

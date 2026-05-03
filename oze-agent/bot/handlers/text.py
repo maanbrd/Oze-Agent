@@ -2,6 +2,7 @@
 
 import logging
 import re
+from uuid import uuid4
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -26,6 +27,8 @@ from bot.utils.telegram_helpers import (
     send_typing,
     send_unregistered_message,
 )
+from bot.utils.conversation_reply import reply_markdown_v2, reply_text
+from shared.active_client import derive_active_client
 from shared.claude_ai import (
     call_claude_with_tools,
     extract_client_data,
@@ -58,6 +61,7 @@ from shared.database import (
     save_pending_flow,
     update_pending_followup,
 )
+from shared.history_for_llm import get_history_unless_pending
 from shared.formatting import (
     format_add_client_card,
     format_client_card,
@@ -80,6 +84,11 @@ from shared.google_sheets import (
     search_clients,
     update_client,
 )
+from shared.offers.email_utils import extract_email_addresses, merge_offer_recipients
+from shared.offers.email_template import render_email_template
+from shared.offers.numbering import get_ready_offer_by_number, list_ready_with_numbers
+from shared.offers.pipeline import send_offer_after_confirmation
+from shared.offers.repository import OfferRepository
 from shared.clients import lookup_client, suggest_fuzzy_client
 from shared.matching import first_name_ok as _first_name_ok
 from shared.search import detect_potential_duplicate
@@ -281,6 +290,382 @@ def _looks_like_intent_switch_reply(message_text: str) -> bool:
         "przypomnij", "follow-up", "followup",
     )
     return any(text_lower.startswith(prefix) for prefix in switch_prefixes)
+
+
+def _looks_like_offer_list_request(message_text: str) -> bool:
+    text = message_text.lower().strip()
+    return "ofert" in text and any(marker in text for marker in (
+        "jakie", "lista", "pokaż", "pokaz", "gotowe",
+    ))
+
+
+def _looks_like_offer_send_request(message_text: str) -> bool:
+    text = message_text.lower().strip()
+    if "ofert" not in text:
+        return False
+    return any(marker in text for marker in (
+        "wyślij", "wyslij", "wyśle", "wysle", "wygeneruj", "generuj",
+        "przygotuj", "podeślij", "podeslij", "mail", "email",
+    ))
+
+
+def _has_offer_calendar_marker(text_lower: str) -> bool:
+    calendar_markers = _TEMPORAL_MARKERS - {"spotkanie"}
+    return any(w in text_lower for w in calendar_markers) or bool(_TIME_RE.search(text_lower))
+
+
+def _extract_offer_number(message_text: str) -> int | None:
+    text = message_text.lower()
+    patterns = [
+        r"\bofert\w*\s*(?:nr|numer)?\s*(\d{1,3})\b",
+        r"\b(?:nr|numer)\s*(\d{1,3})\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _extract_offer_client_query(message_text: str) -> str:
+    text = message_text
+    for email in extract_email_addresses(text):
+        text = text.replace(email, " ")
+    text = re.sub(r"\bofert\w*\s*(?:nr|numer)?\s*\d{1,3}\b", " ", text, flags=re.I)
+    text = re.sub(r"\b(?:nr|numer)\s*\d{1,3}\b", " ", text, flags=re.I)
+    text = re.sub(
+        r"\b(wyślij|wyslij|wyśle|wysle|wygeneruj|generuj|przygotuj|podeślij|podeslij|ofertę|oferte|ofertę|oferta|oferty|ofertą|oferta|klientowi|klienta|dla|do|na|mail|email|e-mail|temu|tej|i)\b",
+        " ",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(r"[@:;,./()\[\]{}]+", " ", text)
+    return " ".join(text.split()).strip()
+
+
+def _offer_list_text(templates: list[dict], intro: str = "Gotowe oferty:") -> str:
+    ready = list_ready_with_numbers(templates)
+    if not ready:
+        return "Nie masz jeszcze gotowych ofert w generatorze."
+    lines = [intro]
+    for item in ready:
+        product = item.get("product_type") or "zestaw"
+        name = item.get("name") or "Bez nazwy"
+        lines.append(f"{item['number']}. {name} — {product}")
+    return "\n".join(lines)
+
+
+async def _reply_offer_list(target, templates: list[dict], intro: str = "Gotowe oferty:") -> None:
+    text = _offer_list_text(templates, intro)
+    chunks: list[str] = []
+    current = ""
+    for line in text.splitlines():
+        candidate = f"{current}\n{line}".strip()
+        if len(candidate) > 3500 and current:
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    for chunk in chunks:
+        await reply_text(target, chunk)
+
+
+def _find_template_by_id(templates: list[dict], template_id: str) -> dict | None:
+    return next((item for item in templates if item.get("id") == template_id), None)
+
+
+def _client_label(client: dict) -> str:
+    name = client.get("Imię i nazwisko") or "klient"
+    city = client.get("Miasto") or client.get("Miejscowość") or ""
+    return f"{name}, {city}" if city else name
+
+
+async def handle_offer_list(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    try:
+        templates = OfferRepository().list_templates(user["id"])
+    except Exception as e:
+        logger.error("handle_offer_list: %s", e)
+        await reply_text(update, "Nie mogę teraz pobrać ofert.")
+        return
+    await _reply_offer_list(update, templates)
+
+
+async def handle_send_offer(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user: dict,
+    intent_data: dict,
+    message_text: str,
+) -> None:
+    telegram_id = update.effective_user.id
+    try:
+        templates = OfferRepository().list_templates(user["id"])
+    except Exception as e:
+        logger.error("handle_send_offer list_templates: %s", e)
+        await reply_text(update, "Nie mogę teraz pobrać ofert.")
+        return
+
+    ready = list_ready_with_numbers(templates)
+    if not ready:
+        await reply_text(update, "Nie masz jeszcze gotowych ofert w generatorze.")
+        return
+
+    offer_number = _extract_offer_number(message_text)
+    if offer_number is None:
+        save_pending_flow(
+            telegram_id,
+            "offer_select_offer",
+            {"command_text": message_text},
+        )
+        await _reply_offer_list(update, templates, "Wybierz numer oferty:")
+        return
+
+    template = get_ready_offer_by_number(templates, offer_number)
+    if not template:
+        save_pending_flow(
+            telegram_id,
+            "offer_select_offer",
+            {"command_text": message_text},
+        )
+        await _reply_offer_list(
+            update,
+            templates,
+            f"Nie mam oferty nr {offer_number}. Aktualne gotowe oferty:",
+        )
+        return
+
+    await _continue_offer_send_with_template(
+        update,
+        user,
+        offer_number=offer_number,
+        template=template,
+        command_text=message_text,
+    )
+
+
+async def _continue_offer_send_with_template(
+    target,
+    user: dict,
+    *,
+    offer_number: int,
+    template: dict,
+    command_text: str,
+    client_query: str | None = None,
+) -> None:
+    telegram_id = target.effective_user.id if hasattr(target, "effective_user") else target.from_user.id
+    user_id = user["id"]
+    query = (client_query or _extract_offer_client_query(command_text)).strip()
+
+    if not query:
+        active_client = await derive_active_client(telegram_id, user_id)
+        if active_client is not None:
+            await _start_offer_send_confirmation(
+                target,
+                user,
+                offer_number=offer_number,
+                template=template,
+                client=active_client,
+                command_text=command_text,
+            )
+            return
+        save_pending_flow(
+            telegram_id,
+            "offer_client_query",
+            {
+                "template_id": template.get("id"),
+                "offer_number": offer_number,
+                "command_text": command_text,
+            },
+        )
+        await reply_text(target, "Podaj imię i nazwisko klienta.")
+        return
+
+    result = await lookup_client(user_id, query)
+    if result.status == "not_found":
+        await reply_text(target, f"Nie znalazłem klienta: '{query}'.")
+        return
+
+    if result.status == "multi":
+        options = []
+        lines = [f"Mam {len(result.clients)} klientów:"]
+        for i, client in enumerate(result.clients[:10], start=1):
+            label = f"{i}. {_client_label(client)}"
+            lines.append(label)
+            options.append((label, f"select_client:{client.get('_row')}"))
+        lines.append("Którego użyć do wysyłki oferty?")
+        save_pending_flow(
+            telegram_id,
+            "offer_client_disambiguation",
+            {
+                "template_id": template.get("id"),
+                "offer_number": offer_number,
+                "command_text": command_text,
+                "candidate_rows": [c.get("_row") for c in result.clients[:10]],
+            },
+        )
+        await reply_text(target, "\n".join(lines), reply_markup=build_choice_buttons(options))
+        return
+
+    await _start_offer_send_confirmation(
+        target,
+        user,
+        offer_number=offer_number,
+        template=template,
+        client=result.clients[0],
+        command_text=command_text,
+    )
+
+
+async def _start_offer_send_confirmation(
+    target,
+    user: dict,
+    *,
+    offer_number: int,
+    template: dict,
+    client: dict,
+    command_text: str,
+) -> None:
+    telegram_id = target.effective_user.id if hasattr(target, "effective_user") else target.from_user.id
+    merge = merge_offer_recipients(client.get("Email", ""), command_text)
+    row = client.get("_row")
+
+    if not merge.recipients:
+        save_pending_flow(
+            telegram_id,
+            "offer_missing_email",
+            {
+                "template_id": template.get("id"),
+                "offer_number": offer_number,
+                "client_row": row,
+                "command_text": command_text,
+            },
+        )
+        invalid = (
+            f"\nPominięte błędne adresy: {', '.join(merge.invalid_recipients)}"
+            if merge.invalid_recipients
+            else ""
+        )
+        await reply_text(target, f"Klient nie ma poprawnego maila. Podaj adres email.{invalid}")
+        return
+
+    seller_profile = OfferRepository().get_seller_profile(user["id"])
+    idempotency_key = str(uuid4())
+    save_pending_flow(
+        telegram_id,
+        "offer_send_confirmation",
+        {
+            "idempotency_key": idempotency_key,
+            "template_id": template.get("id"),
+            "offer_number": offer_number,
+            "client_row": row,
+            "command_text": command_text,
+        },
+    )
+    text = _build_offer_send_confirmation_text(
+        offer_number=offer_number,
+        template=template,
+        client=client,
+        recipients=merge.recipients,
+        invalid_recipients=merge.invalid_recipients,
+        seller_profile=seller_profile,
+    )
+    await reply_text(
+        target,
+        text,
+        reply_markup=build_choice_buttons([
+            ("✅ Wysłać", "offer_send:confirm"),
+            ("❌ Anulować", "cancel:offer_send"),
+        ]),
+    )
+
+
+def _build_offer_send_confirmation_text(
+    *,
+    offer_number: int,
+    template: dict,
+    client: dict,
+    recipients: list[str],
+    invalid_recipients: list[str],
+    seller_profile: dict | None,
+) -> str:
+    rendered = render_email_template(
+        (seller_profile or {}).get("email_body_template"),
+        client=client,
+        template=template,
+        seller_profile=seller_profile or {},
+    )
+    preview = rendered.body.strip()
+    if len(preview) > 420:
+        preview = preview[:417].rstrip() + "..."
+    lines = [
+        "Wysłać ofertę?",
+        f"Klient: {_client_label(client)}",
+        f"Oferta: {offer_number}. {template.get('name', 'Bez nazwy')}",
+        f"Odbiorcy: {', '.join(recipients)}",
+    ]
+    if invalid_recipients:
+        lines.append(f"Pominięte błędne adresy: {', '.join(invalid_recipients)}")
+    if rendered.missing_variables:
+        lines.append(f"Brak wartości dla zmiennych: {', '.join(rendered.missing_variables)}.")
+    lines.extend(["", "Podgląd maila:", preview])
+    return "\n".join(lines)
+
+
+async def _confirm_offer_send(update, telegram_id: int, user_id: str, flow_data: dict) -> bool:
+    repo = OfferRepository()
+    templates = repo.list_templates(user_id)
+    template = _find_template_by_id(templates, flow_data.get("template_id"))
+    if not template or template.get("status") != "ready":
+        await reply_text(update, "Ta oferta nie jest już dostępna.")
+        return False
+
+    clients = await get_all_clients(user_id)
+    client = next((c for c in clients if c.get("_row") == flow_data.get("client_row")), None)
+    if not client:
+        await reply_text(update, "Nie znalazłem klienta w arkuszu.")
+        return False
+
+    result = await send_offer_after_confirmation(
+        user_id=user_id,
+        telegram_id=telegram_id,
+        idempotency_key=flow_data["idempotency_key"],
+        offer_number=flow_data.get("offer_number") or 0,
+        template=template,
+        seller_profile=repo.get_seller_profile(user_id),
+        client=client,
+        command_text=flow_data.get("command_text", ""),
+        repository=repo,
+    )
+    if result.sent:
+        if result.already_sent:
+            await reply_text(update, "Ta oferta została już wysłana.")
+            return False
+        lines = ["✅ Oferta wysłana."]
+        if result.invalid_recipients:
+            lines.append(f"Pominięte błędne adresy: {', '.join(result.invalid_recipients)}.")
+        if result.sheets_errors:
+            labels = {
+                "email": "nowy email",
+                "status": "status",
+            }
+            failed = ", ".join(labels.get(item, item) for item in result.sheets_errors)
+            lines.append(f"Nie udało się zapisać w arkuszu: {failed}.")
+        await reply_text(update, "\n".join(lines))
+        return False
+
+    if result.error == "missing_valid_email":
+        await reply_text(update, "Klient nie ma poprawnego maila. Podaj adres email.")
+        return True
+    await reply_text(update, "Nie udało się wysłać maila. Arkusz nie został zmieniony.")
+    return False
 
 
 def _infer_meeting_event_type(
@@ -637,6 +1022,7 @@ async def handle_text(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     text_override: str | None = None,
+    message_type_override: str = "text",
 ) -> None:
     """Main text message handler — classify intent and route to sub-handler.
 
@@ -656,12 +1042,29 @@ async def handle_text(
     message_text = raw_text.strip()
 
     await send_typing(context, telegram_id)
+    if message_text:
+        save_conversation_message(
+            telegram_id,
+            "user",
+            message_text,
+            message_type=message_type_override,
+        )
 
     # Pre-check: "statusy" command → return formatted list, skip LLM
     if message_text.lower().strip() in ("statusy", "lista statusów", "jakie są statusy", "pokaż statusy"):
         statuses_text = "📋 Dostępne statusy lejka:\n" + "\n".join(f"• {s}" for s in _VALID_STATUSES)
-        await update.effective_message.reply_text(statuses_text)
+        await reply_text(update, statuses_text)
         await increment_interaction(telegram_id, "show_statuses", "none", 0, 0, 0.0)
+        return
+
+    offer_lower = message_text.lower()
+    if _looks_like_offer_list_request(message_text):
+        await handle_offer_list(update, context, user, {}, message_text)
+        await increment_interaction(telegram_id, "offer_list", "none", 0, 0, 0.0)
+        return
+    if _looks_like_offer_send_request(message_text) and not _has_offer_calendar_marker(offer_lower):
+        await handle_send_offer(update, context, user, {}, message_text)
+        await increment_interaction(telegram_id, "offer_send", "none", 0, 0, 0.0)
         return
 
     # Check for active pending flow first
@@ -671,9 +1074,6 @@ async def handle_text(
         if consumed:
             return
         # Flow was auto-cancelled — fall through to process the new message normally
-
-    # Save message and get history
-    save_conversation_message(telegram_id, "user", message_text)
 
     # Classify intent via the structured router (shared.intent.classify pulls
     # its own 30-min history window internally).
@@ -739,6 +1139,127 @@ async def _route_pending_flow(
     elif is_no:
         await handle_cancel_flow(update, context, user, {}, message_text)
         return True
+    elif flow_type == "offer_select_offer":
+        telegram_id = update.effective_user.id
+        number = int(text_lower) if text_lower.isdigit() else _extract_offer_number(message_text)
+        try:
+            templates = OfferRepository().list_templates(user["id"])
+        except Exception as e:
+            logger.error("offer_select_offer list_templates: %s", e)
+            delete_pending_flow(telegram_id)
+            await reply_text(update, "Nie mogę teraz pobrać ofert.")
+            return True
+        if number is None:
+            await _reply_offer_list(update, templates, "Podaj numer oferty:")
+            return True
+        template = get_ready_offer_by_number(templates, number)
+        if not template:
+            await _reply_offer_list(
+                update,
+                templates,
+                f"Nie mam oferty nr {number}. Aktualne gotowe oferty:",
+            )
+            return True
+        delete_pending_flow(telegram_id)
+        await _continue_offer_send_with_template(
+            update,
+            user,
+            offer_number=number,
+            template=template,
+            command_text=flow.get("flow_data", {}).get("command_text", ""),
+        )
+        return True
+    elif flow_type == "offer_client_query":
+        telegram_id = update.effective_user.id
+        flow_data = flow.get("flow_data", {})
+        try:
+            templates = OfferRepository().list_templates(user["id"])
+        except Exception as e:
+            logger.error("offer_client_query list_templates: %s", e)
+            delete_pending_flow(telegram_id)
+            await reply_text(update, "Nie mogę teraz pobrać ofert.")
+            return True
+        template = _find_template_by_id(templates, flow_data.get("template_id"))
+        if not template or template.get("status") != "ready":
+            delete_pending_flow(telegram_id)
+            await reply_text(update, "Ta oferta nie jest już dostępna.")
+            return True
+        delete_pending_flow(telegram_id)
+        await _continue_offer_send_with_template(
+            update,
+            user,
+            offer_number=flow_data.get("offer_number") or 0,
+            template=template,
+            command_text=flow_data.get("command_text", ""),
+            client_query=message_text,
+        )
+        return True
+    elif flow_type == "offer_missing_email":
+        telegram_id = update.effective_user.id
+        flow_data = flow.get("flow_data", {})
+        command_text = f"{flow_data.get('command_text', '')} {message_text}".strip()
+        try:
+            repo = OfferRepository()
+            templates = repo.list_templates(user["id"])
+        except Exception as e:
+            logger.error("offer_missing_email list_templates: %s", e)
+            delete_pending_flow(telegram_id)
+            await reply_text(update, "Nie mogę teraz pobrać ofert.")
+            return True
+        template = _find_template_by_id(templates, flow_data.get("template_id"))
+        clients = await get_all_clients(user["id"])
+        client = next((c for c in clients if c.get("_row") == flow_data.get("client_row")), None)
+        if not template or template.get("status") != "ready" or not client:
+            delete_pending_flow(telegram_id)
+            await reply_text(update, "Nie mogę kontynuować tej wysyłki.")
+            return True
+        await _start_offer_send_confirmation(
+            update,
+            user,
+            offer_number=flow_data.get("offer_number") or 0,
+            template=template,
+            client=client,
+            command_text=command_text,
+        )
+        return True
+    elif flow_type == "photo_upload":
+        from bot.handlers.photo import handle_photo_text_reply
+
+        return await handle_photo_text_reply(update, context, user, flow.get("flow_data", {}), message_text)
+    elif flow_type == "photo_add_client":
+        telegram_id = update.effective_user.id
+        user_id = user["id"]
+        flow_data = flow.get("flow_data", {})
+        headers = await get_sheet_headers(user_id)
+        result = await extract_client_data(message_text, headers)
+        client_data = _filter_invalid_products(result.get("client_data", {}))
+        if not client_data:
+            await reply_text(update, "Podaj dane klienta: imię, nazwisko, miasto, adres, telefon, produkt.")
+            return True
+
+        save_pending(PendingFlow(
+            telegram_id=telegram_id,
+            flow_type=PendingFlowType.ADD_CLIENT,
+            flow_data=payload_to_flow_data(AddClientPayload(
+                client_data=client_data,
+                photo_upload={
+                    "file_id": flow_data.get("file_id"),
+                    "caption": flow_data.get("caption", ""),
+                },
+            )),
+        ))
+        sheet_columns = user.get("sheet_columns") or headers
+        missing = [
+            col for col in sheet_columns
+            if col and not client_data.get(col) and col not in SYSTEM_FIELDS
+        ]
+        card = format_add_client_card(client_data, missing)
+        await reply_text(
+            update,
+            f"{card}\n📸 Zapis obejmie też pierwsze zdjęcie.",
+            reply_markup=build_mutation_buttons("confirm"),
+        )
+        return True
     elif flow_type == "add_client":
         # If the message starts with a search/action verb, auto-cancel and re-process
         _search_prefixes = (
@@ -749,7 +1270,7 @@ async def _route_pending_flow(
         if any(text_lower.startswith(p) for p in _search_prefixes):
             telegram_id = update.effective_user.id
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         # User is augmenting an in-progress add_client flow with more data
@@ -788,7 +1309,7 @@ async def _route_pending_flow(
             sheet_columns = user.get("sheet_columns") or headers
             missing = [col for col in sheet_columns if col and not old_client_data.get(col) and col not in SYSTEM_FIELDS]
             card = format_add_client_card(old_client_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+            await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
             return True
 
         # If the new message names a different client → start fresh, don't merge
@@ -803,7 +1324,7 @@ async def _route_pending_flow(
                 flow_data=payload_to_flow_data(AddClientPayload(client_data=new_data)),
             ))
             card = format_add_client_card(new_data, missing)
-            await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+            await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
             return True
 
         merged = {**old_client_data, **new_data}
@@ -829,13 +1350,13 @@ async def _route_pending_flow(
                             _offer_remaining=new_remaining,
                         )),
                     ))
-                    await update.effective_message.reply_text(
+                    await reply_text(update,
                         f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
                     )
                 else:
-                    await update.effective_message.reply_text("✅ Zapisane.")
+                    await reply_text(update, "✅ Zapisane.")
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                await reply_markdown_v2(update, format_error("google_down"))
             return True
 
         # User is correcting/adding data (possibly after tapping [Nie]) — clear cancel flag, re-show card
@@ -849,7 +1370,7 @@ async def _route_pending_flow(
             )),
         ))
         card = format_add_client_card(merged, missing)
-        await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+        await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
         return True
     elif flow_type == "add_client_duplicate":
         # User clicked ➕ Dopisać on the dup card; bot asked "Co chcesz dopisać?".
@@ -878,7 +1399,7 @@ async def _route_pending_flow(
                 inline_facts = {}
 
         if not inline_facts:
-            await update.effective_message.reply_text("Co chcesz dopisać?")
+            await reply_text(update, "Co chcesz dopisać?")
             return True
 
         # Don't let a stray name in the reply overwrite the resolved client.
@@ -901,15 +1422,13 @@ async def _route_pending_flow(
         city_part = f" ({city})" if city else ""
         new_field_summary = ", ".join(f"{k}: {v}" for k, v in inline_facts.items())
         text = f"Zaktualizować {name}{city_part} o:\n{new_field_summary}?"
-        await update.effective_message.reply_text(
-            text, reply_markup=build_mutation_buttons("confirm")
-        )
+        await reply_text(update, text, reply_markup=build_mutation_buttons("confirm"))
         return True
     elif flow_type == "add_meeting":
         if _looks_like_intent_switch_reply(message_text):
             telegram_id = update.effective_user.id
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         flow_data = flow.get("flow_data", {})
@@ -973,7 +1492,7 @@ async def _route_pending_flow(
                         "client_data": client_data,
                         "status_update": status_update,
                     })
-                    await update.effective_message.reply_markdown_v2(
+                    await reply_markdown_v2(update,
                         card,
                         reply_markup=build_mutation_buttons("confirm"),
                     )
@@ -1022,13 +1541,13 @@ async def _route_pending_flow(
                 "description": description,
                 "client_data": client_data,
             })
-            await update.effective_message.reply_markdown_v2(
+            await reply_markdown_v2(update,
                 card,
                 reply_markup=build_mutation_buttons("confirm"),
             )
         except Exception as e:
             logger.error("add_meeting augment failed: %s", e)
-            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            await reply_markdown_v2(update, format_error("timeout"))
         return True
     elif flow_type == "add_note":
         telegram_id = update.effective_user.id
@@ -1040,7 +1559,7 @@ async def _route_pending_flow(
         )
         if any(text_lower.startswith(p) for p in _search_prefixes):
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         # User is appending more text after clicking Dopisać on add_note
@@ -1051,7 +1570,7 @@ async def _route_pending_flow(
         if row is None:
             logger.error("add_note augment: pending flow_data without row: %s", flow_data)
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            await reply_markdown_v2(update, format_error("timeout"))
             return True
         save_pending(PendingFlow(
             telegram_id=telegram_id,
@@ -1069,7 +1588,7 @@ async def _route_pending_flow(
         name = flow_data.get("client_name", "")
         c_city = flow_data.get("city", "")
         city_part = f", {c_city}" if c_city else ""
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
             reply_markup=build_mutation_buttons("confirm"),
         )
@@ -1088,7 +1607,7 @@ async def _route_pending_flow(
         )
         if any(text_lower.startswith(p) for p in _search_prefixes):
             delete_pending_flow(telegram_id)
-            await update.effective_message.reply_text("⚠️ Anulowane.")
+            await reply_text(update, "⚠️ Anulowane.")
             return False
 
         flow_data = flow.get("flow_data", {})
@@ -1105,7 +1624,7 @@ async def _route_pending_flow(
             )
         )
         if not text_has_action:
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "Dopisz następny krok, np. 'telefon jutro o 14' albo 'spotkanie w piątek o 10'."
             )
             return True
@@ -1177,7 +1696,7 @@ async def _route_pending_flow(
         # Slice 5.1d.2: no markers at all — tell the user instead of silently
         # dropping the flow so they know the reply wasn't understood.
         delete_pending_flow(telegram_id)
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Nie rozumiem. Podaj np. 'spotkanie jutro o 14', 'telefon', "
             "albo napisz 'nic' żeby zakończyć."
         )
@@ -1186,7 +1705,7 @@ async def _route_pending_flow(
         # New message arrived during a non-add_client pending flow → auto-cancel, process message normally
         telegram_id = update.effective_user.id
         delete_pending_flow(telegram_id)
-        await update.effective_message.reply_text("⚠️ Anulowane.")
+        await reply_text(update, "⚠️ Anulowane.")
         return False
 
 
@@ -1201,7 +1720,7 @@ async def handle_banner(
     message_text: str,
 ) -> None:
     """R5 / out-of-scope banner — copy resolved from intent + feature_key."""
-    await update.effective_message.reply_text(banner_for_legacy(intent_data))
+    await reply_text(update, banner_for_legacy(intent_data))
 
 
 async def handle_add_note(
@@ -1217,28 +1736,40 @@ async def handle_add_note(
 
     await send_typing(context, telegram_id)
 
-    result = await extract_note_data(message_text)
+    history = get_history_unless_pending(telegram_id)
+    result = await extract_note_data(message_text, history=history)
     client_name = result.get("client_name", "")
     city = result.get("city", "")
     note_text = result.get("note", "")
 
+    active_client = None
+    if not client_name and note_text:
+        active_client = await derive_active_client(telegram_id, user_id)
+        if active_client is not None:
+            client_name = active_client.get("Imię i nazwisko", "")
+            city = active_client.get("Miasto", active_client.get("Miejscowość", "")) or city
+
     if not client_name or not note_text:
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Podaj imię i nazwisko klienta, miasto i treść notatki.\n"
             "Np.: 'dodaj notatkę do Jana Kowalskiego z Warszawy: dzwonił w sprawie gwarancji'"
         )
         return
 
-    result = await lookup_client(user_id, client_name, city)
+    if active_client is not None:
+        result = None
+        client = active_client
+    else:
+        result = await lookup_client(user_id, client_name, city)
 
-    if result.status == "not_found":
+    if result is not None and result.status == "not_found":
         city_part = f" ({city})" if city else ""
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Nie znalazłem klienta: '{client_name}{city_part}'"
         )
         return
 
-    if result.status == "multi":
+    if result is not None and result.status == "multi":
         lines = [f"Mam {len(result.clients)} klientów:"]
         options = []
         for i, c in enumerate(result.clients[:10], start=1):
@@ -1257,13 +1788,14 @@ async def handle_add_note(
                 note_text=note_text,
             )),
         ))
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "\n".join(lines),
             reply_markup=build_choice_buttons(options),
         )
         return
 
-    client = result.clients[0]
+    if result is not None:
+        client = result.clients[0]
 
     row = client.get("_row")
     old_notes = client.get("Notatki", "")
@@ -1272,7 +1804,7 @@ async def handle_add_note(
 
     if row is None:
         logger.error("handle_add_note: client without _row: %s", client)
-        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
         return
 
     save_pending(PendingFlow(
@@ -1289,7 +1821,7 @@ async def handle_add_note(
 
     display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
     city_part = f", {c_city}" if c_city else ""
-    await update.effective_message.reply_text(
+    await reply_text(update,
         f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
         reply_markup=build_mutation_buttons("confirm"),
     )
@@ -1372,7 +1904,7 @@ async def handle_add_client(
     client_data = _filter_invalid_products(result.get("client_data", {}))
 
     if not client_data:
-        await update.effective_message.reply_text("Co chcesz zrobić?")
+        await reply_text(update, "Co chcesz zrobić?")
         return
 
     # Duplicate check
@@ -1384,11 +1916,11 @@ async def handle_add_client(
     if duplicate:
         built = _build_add_client_duplicate_card(telegram_id, client_data, duplicate)
         if built is None:
-            await update.effective_message.reply_markdown_v2(format_error("timeout"))
+            await reply_markdown_v2(update, format_error("timeout"))
             return
         flow, text, markup = built
         save_pending(flow)
-        await update.effective_message.reply_text(text, reply_markup=markup)
+        await reply_text(update, text, reply_markup=markup)
         return
 
     # No duplicate → new-client flow
@@ -1403,7 +1935,7 @@ async def handle_add_client(
     ))
 
     card = format_add_client_card(client_data, missing)
-    await update.effective_message.reply_text(card, reply_markup=build_mutation_buttons("confirm"))
+    await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_search_client(
@@ -1435,7 +1967,7 @@ async def handle_search_client(
                 candidate_city = candidate.get("Miasto", "")
                 suggestion_text = candidate_name + (f" z {candidate_city}" if candidate_city else "")
                 save_pending_flow(telegram_id, "confirm_search", {"row": candidate.get("_row")})
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Nie mam \"{query}\". Chodziło o {suggestion_text}?",
                     reply_markup=build_choice_buttons([
                         ("✅ Tak, pokaż", "confirm:yes"),
@@ -1443,12 +1975,12 @@ async def handle_search_client(
                     ]),
                 )
                 return
-        await update.effective_message.reply_text(f"Nie mam \"{query}\" w bazie.")
+        await reply_text(update, f"Nie mam \"{query}\" w bazie.")
         return
 
     if result.status == "multi" and len(result.clients) >= 50:
         sheets_url = f"https://docs.google.com/spreadsheets/d/{user.get('google_sheets_id', '')}"
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Znalazłem {len(result.clients)} klientów. Otwórz arkusz:\n{sheets_url}"
         )
         return
@@ -1457,12 +1989,12 @@ async def handle_search_client(
         client = result.clients[0]
         try:
             card = format_client_card(client)
-            await update.effective_message.reply_markdown_v2(card)
+            await reply_markdown_v2(update, card)
         except Exception as e:
             logger.error("format_client_card failed: %s", e)
             name = client.get("Imię i nazwisko", "?")
             city = client.get("Miasto", "")
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
             )
         return
@@ -1478,7 +2010,7 @@ async def handle_search_client(
         options.append((label, f"select_client:{row}"))
     lines.append("Którego?")
 
-    await update.effective_message.reply_text(
+    await reply_text(update,
         "\n".join(lines),
         reply_markup=build_choice_buttons(options),
     )
@@ -1500,7 +2032,7 @@ async def handle_edit_client(
     logger.info("handle_edit_client: query=%r", query)
     results = await search_clients(user_id, query)
     if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await reply_text(update, f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
@@ -1575,11 +2107,11 @@ async def handle_edit_client(
     if not updates:
         # Detect which keyword was mentioned and report missing column
         if any(kw in msg_lower for kw in ["dachu", "dach", "metraż"]):
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "Nie mam kolumny 'Metraż dachu' w arkuszu. Dodaj ją lub napisz 'odśwież kolumny'."
             )
         else:
-            await update.effective_message.reply_text("Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
+            await reply_text(update, "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej.")
         return
 
     # For phone/email fields: if client already has a value, offer replace or keep-both
@@ -1598,7 +2130,7 @@ async def handle_edit_client(
             "other_updates": other_updates,
         })
         field_label = field.lower()
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"{client_name} — {field_label}:\n"
             f"Stary: {old_val}\n"
             f"Nowy: {new_val}\n"
@@ -1641,7 +2173,7 @@ async def handle_edit_client(
         lines.append("Zmienić?")
         msg = "\n".join(lines)
 
-    await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
+    await reply_text(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
 
 async def handle_edit_client_v2(
@@ -1660,7 +2192,7 @@ async def handle_edit_client_v2(
     logger.info("handle_edit_client_v2: query=%r msg=%r", query, message_text)
     results = await search_clients(user_id, query)
     if not results:
-        await update.effective_message.reply_text(f"Nie znalazłem klienta: '{query}'")
+        await reply_text(update, f"Nie znalazłem klienta: '{query}'")
         return
 
     client = results[0]
@@ -1759,7 +2291,7 @@ Zasady:
             f"Będzie: {new_value}\n"
             f"Zmienić?"
         )
-        await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_text(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     elif tool_name == "append_client_note":
         note_text = tool_input.get("note_text", "")
@@ -1781,16 +2313,16 @@ Zasady:
             f"Dodaję: \"{note_text}\"\n"
             f"Zapisać?"
         )
-        await update.effective_message.reply_text(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_text(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     elif tool_name == "request_clarification":
         reason = tool_input.get("reason", "Nie rozumiem co chcesz zmienić. Opisz dokładniej.")
-        await update.effective_message.reply_text(reason)
+        await reply_text(update, reason)
 
     else:
         text = result.get("text") or "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej."
         logger.warning("handle_edit_client_v2: no tool called, text=%r", text[:100])
-        await update.effective_message.reply_text(text)
+        await reply_text(update, text)
 
 
 def _filter_invalid_products(client_data: dict) -> dict:
@@ -2041,16 +2573,17 @@ async def handle_add_meeting(
     user_id = user["id"]
 
     today_str = date.today().isoformat()
+    history = get_history_unless_pending(telegram_id)
     # Compound add_note + add_meeting (INTENCJE_MVP §4.3): if the trigger
     # starts with "dodaj notatkę X: ...", capture the post-colon text as
     # note_text so handle_confirm can append it to column H after the
     # meeting commits.
     compound_note_text = _extract_note_from_compound_trigger(message_text)
-    meeting_result = await extract_meeting_data(message_text, today_str)
+    meeting_result = await extract_meeting_data(message_text, today_str, history=history)
     meetings = meeting_result.get("meetings", [])
 
     if not meetings:
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
         )
         return
@@ -2061,7 +2594,7 @@ async def handle_add_meeting(
         # Single meeting — original flow with format_confirmation card
         m = meetings[0]
         if not m.get("date") or not m.get("time"):
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "Nie rozpoznałem daty lub godziny spotkania. Podaj np. 'jutro o 14:00 z Kowalskim'."
             )
             return
@@ -2080,14 +2613,14 @@ async def handle_add_meeting(
             )
             end_dt = start_dt + timedelta(minutes=duration)
         except Exception:
-            await update.effective_message.reply_text("Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
+            await reply_text(update, "Nie rozpoznałem daty lub godziny. Spróbuj ponownie.")
             return
 
         # Temporal guard: reject past dates
         if start_dt < datetime.now(WARSAW):
             _DAYS_PL_TG = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
             date_display = start_dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL_TG[start_dt.weekday()]})"
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Data {date_display} o {start_dt.strftime('%H:%M')} jest w przeszłości. Podaj datę przyszłą."
             )
             return
@@ -2149,7 +2682,7 @@ async def handle_add_meeting(
         if enriched.get("ambiguous_client") and ambiguous_candidates:
             if len(ambiguous_candidates) > _AMBIGUOUS_CANDIDATE_CAP:
                 # No pending saved — user must supply more context and retry.
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Znalazłem {len(ambiguous_candidates)} klientów o tym nazwisku. "
                     "Dopisz więcej danych klienta, np. miasto albo telefon."
                 )
@@ -2179,7 +2712,7 @@ async def handle_add_meeting(
                 for c in ambiguous_candidates
             ]
             options.append(("Żaden z nich", "select_client:none"))
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Mam {len(ambiguous_candidates)} klientów o tym nazwisku. Którego użyć do spotkania?",
                 reply_markup=build_choice_buttons(options),
             )
@@ -2232,7 +2765,7 @@ async def handle_add_meeting(
                 f"{status_update.get('new_value', '')}"
             )
         msg = format_confirmation("add_meeting", details) + conflict_warning
-        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_markdown_v2(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     else:
         # Multiple meetings — build all, check conflicts, confirm as a batch
@@ -2281,7 +2814,7 @@ async def handle_add_meeting(
             })
 
         if not flow_meetings:
-            await update.effective_message.reply_text("Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
+            await reply_text(update, "Nie udało się rozpoznać dat spotkań. Spróbuj ponownie.")
             return
 
         save_pending_flow(telegram_id, "add_meetings", {"meetings": flow_meetings})
@@ -2293,7 +2826,7 @@ async def handle_add_meeting(
             lines.append(f"• {fm.get('client_name', '?')} — {start.strftime('%d.%m %H:%M')}{loc}")
         lines.extend(conflict_warnings)
         msg = escape_markdown_v2("\n".join(lines))
-        await update.effective_message.reply_markdown_v2(msg, reply_markup=build_mutation_buttons("confirm"))
+        await reply_markdown_v2(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
 
 _DAY_NAME_TO_WEEKDAY = {
@@ -2392,7 +2925,7 @@ async def handle_show_day_plan(
         events = await get_events_for_date(user_id, target)
 
     schedule = format_daily_schedule(events, target or today)
-    await update.effective_message.reply_markdown_v2(schedule)
+    await reply_markdown_v2(update, schedule)
 
 
 async def handle_change_status(
@@ -2431,7 +2964,7 @@ async def handle_change_status(
         result = await lookup_client(user_id, name_query, city)
 
         if result.status == "not_found":
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Nie znalazłem klienta: '{name_query}'"
             )
             return
@@ -2455,7 +2988,7 @@ async def handle_change_status(
                     new_status=new_status,
                 )),
             ))
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "\n".join(lines),
                 reply_markup=build_choice_buttons(options),
             )
@@ -2469,7 +3002,7 @@ async def handle_change_status(
         # reject whole-message queries that routinely matched fuzzily before).
         results = await search_clients(user_id, search_query)
         if not results:
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Nie znalazłem klienta: '{search_query}'"
             )
             return
@@ -2493,7 +3026,7 @@ async def handle_change_status(
                     new_status=new_status,
                 )),
             ))
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 "\n".join(lines),
                 reply_markup=build_choice_buttons(options),
             )
@@ -2506,14 +3039,14 @@ async def handle_change_status(
     # No-op guard: new status == current status
     if new_status and old_status and old_status.lower() == new_status.lower():
         name = client.get("Imię i nazwisko", "klient")
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Status klienta {name} jest już: {old_status}."
         )
         return
 
     if not new_status:
         options = [(s, f"set_status:{client.get('_row')}:{s}") for s in _VALID_STATUSES]
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
             reply_markup=build_choice_buttons(options),
         )
@@ -2525,7 +3058,7 @@ async def handle_change_status(
         if matched:
             new_status = matched
         else:
-            await update.effective_message.reply_text(
+            await reply_text(update,
                 f"Nie znam statusu \"{new_status}\".\n"
                 f"Dostępne: {', '.join(_VALID_STATUSES)}"
             )
@@ -2534,7 +3067,7 @@ async def handle_change_status(
     row = client.get("_row")
     if row is None:
         logger.error("handle_change_status: client without _row: %s", client)
-        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
         return
     save_pending(PendingFlow(
         telegram_id=telegram_id,
@@ -2548,7 +3081,7 @@ async def handle_change_status(
         )),
     ))
 
-    await update.effective_message.reply_markdown_v2(
+    await reply_markdown_v2(update,
         f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
         + format_edit_comparison("Status", old_status, new_status),
         reply_markup=build_mutation_buttons("confirm"),
@@ -2566,17 +3099,46 @@ async def handle_change_status(
 # slice's scope.
 
 
-async def _confirm_add_client(update, telegram_id, user_id, flow_data) -> bool:
+async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) -> bool:
     remaining = flow_data.get("_offer_remaining", [])
     result = await commit_add_client(user_id, flow_data["client_data"])
     if not result.success:
-        await update.effective_message.reply_markdown_v2(
+        await reply_markdown_v2(update,
             format_error(result.error_message or "google_down")
         )
         return False
 
     name = flow_data["client_data"].get("Imię i nazwisko", "klient")
     city = flow_data["client_data"].get("Miasto", "")
+    photo_upload = flow_data.get("photo_upload")
+    if photo_upload:
+        from bot.handlers.photo import complete_photo_after_add_client
+
+        ok = await complete_photo_after_add_client(
+            update,
+            context,
+            user_id,
+            result.row,
+            flow_data["client_data"],
+            photo_upload,
+        )
+        if ok:
+            label_parts = [
+                flow_data["client_data"].get("Imię i nazwisko", ""),
+                flow_data["client_data"].get("Miasto", ""),
+                flow_data["client_data"].get("Adres", ""),
+            ]
+            label = ", ".join(part for part in label_parts if part)
+            await reply_text(
+                update,
+                f"✅ Klient zapisany. 📸 Dodane do: {label}. "
+                "Przez 15 minut kolejne zdjęcia bez opisu wrzucę do tego klienta. "
+                "Żeby zmienić klienta, napisz w opisie: zdjęcia do [imię nazwisko miasto].",
+            )
+        else:
+            await reply_text(update, "✅ Klient zapisany. ⚠️ Nie udało się dodać zdjęcia.")
+        return False
+
     if remaining:
         next_client = remaining[0]
         new_remaining = remaining[1:]
@@ -2588,12 +3150,12 @@ async def _confirm_add_client(update, telegram_id, user_id, flow_data) -> bool:
                 _offer_remaining=new_remaining,
             )),
         ))
-        await update.effective_message.reply_text(
+        await reply_text(update,
             f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
         )
         return True
 
-    await update.effective_message.reply_text("✅ Zapisane.")
+    await reply_text(update, "✅ Zapisane.")
     await send_next_action_prompt(
         update, telegram_id, name, city,
         client_row=result.row,
@@ -2609,13 +3171,13 @@ async def _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
             user_id, duplicate_row, flow_data["client_data"]
         )
         if not update_result.success:
-            await update.effective_message.reply_markdown_v2(
+            await reply_markdown_v2(update,
                 format_error(update_result.error_message or "google_down")
             )
             return False
         name = flow_data.get("client_name", "klient")
         city = flow_data.get("city", "")
-        await update.effective_message.reply_text("✅ Dane zaktualizowane.")
+        await reply_text(update, "✅ Dane zaktualizowane.")
         await send_next_action_prompt(
             update, telegram_id, name, city,
             client_row=duplicate_row,
@@ -2627,9 +3189,9 @@ async def _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
     # only "✅ Zapisane.", no R7, no batch).
     add_result = await commit_add_client(user_id, flow_data["client_data"])
     if add_result.success:
-        await update.effective_message.reply_text("✅ Zapisane.")
+        await reply_text(update, "✅ Zapisane.")
     else:
-        await update.effective_message.reply_markdown_v2(
+        await reply_markdown_v2(update,
             format_error(add_result.error_message or "google_down")
         )
     return False
@@ -2644,9 +3206,9 @@ async def _confirm_add_note(update, user_id, flow_data) -> bool:
         date.today(),
     )
     if result.success:
-        await update.effective_message.reply_text("✅ Notatka dodana.")
+        await reply_text(update, "✅ Notatka dodana.")
     else:
-        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        await reply_markdown_v2(update, format_error("google_down"))
     # Per spec (INTENCJE_MVP.md §4.3): clean note is a closed act — no R7.
     return False
 
@@ -2659,10 +3221,10 @@ async def _confirm_change_status(update, telegram_id, user_id, flow_data) -> boo
         date.today(),
     )
     if not result.success:
-        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        await reply_markdown_v2(update, format_error("google_down"))
         return False
 
-    await update.effective_message.reply_text(
+    await reply_text(update,
         f"✅ Status zmieniony na: {flow_data['new_value']}"
     )
     # R7 fires for every plain change_status (INTENCJE_MVP §4.4). A future
@@ -2694,7 +3256,7 @@ async def handle_confirm(
     flow = get_pending_flow(telegram_id)
     if not flow:
         if message_text:  # From text input: inform user. From button (empty ""): silent return.
-            await update.effective_message.reply_text("Nie ma nic do potwierdzenia.")
+            await reply_text(update, "Nie ma nic do potwierdzenia.")
         return
 
     flow_type = flow.get("flow_type", "")
@@ -2707,10 +3269,15 @@ async def handle_confirm(
 
     try:
         if flow_type == "add_client":
-            skip_delete = await _confirm_add_client(update, telegram_id, user_id, flow_data)
+            skip_delete = await _confirm_add_client(update, context, telegram_id, user_id, flow_data)
 
         elif flow_type == "add_client_duplicate":
             skip_delete = await _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
+
+        elif flow_type == "photo_upload":
+            from bot.handlers.photo import confirm_photo_upload
+
+            skip_delete = await confirm_photo_upload(update, context, user, flow_data)
 
         elif flow_type == "edit_client":
             updates = flow_data["updates"]
@@ -2725,17 +3292,17 @@ async def handle_confirm(
                     final_updates[field] = new_val
             ok = await update_client(user_id, flow_data["row"], final_updates)
             if ok:
-                await update.effective_message.reply_text("✅ Zapisane.")
+                await reply_text(update, "✅ Zapisane.")
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                await reply_markdown_v2(update, format_error("google_down"))
 
         elif flow_type == "delete_client":
             from shared.google_sheets import delete_client
             ok = await delete_client(user_id, flow_data["row"])
             if ok:
-                await update.effective_message.reply_text("✅ Klient usunięty z arkusza.")
+                await reply_text(update, "✅ Klient usunięty z arkusza.")
             else:
-                await update.effective_message.reply_markdown_v2(format_error("google_down"))
+                await reply_markdown_v2(update, format_error("google_down"))
 
         elif flow_type == "add_meeting":
             start = datetime.fromisoformat(flow_data["start"])
@@ -2812,13 +3379,13 @@ async def handle_confirm(
 
             if not result.success:
                 # Calendar failure — pipeline made no Sheets writes.
-                await update.effective_message.reply_markdown_v2(
+                await reply_markdown_v2(update,
                     format_error(result.error_message or "calendar_down")
                 )
             elif not result.sheets_attempted and ambiguous_client:
                 # Gate A fallback — stays in handler because the pipeline
                 # doesn't know about the disambiguation UX.
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"✅ Spotkanie dodane do kalendarza. Klient '{client_name}' ma "
                     f"≥2 wpisy w arkuszu — nie synchronizuję, uściślij przy add_note/change_status."
                 )
@@ -2844,22 +3411,22 @@ async def handle_confirm(
                     if col and not draft_client_data.get(col) and col not in SYSTEM_FIELDS
                 ]
                 card = format_add_client_card(draft_client_data, missing)
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"✅ Spotkanie dodane.\n{card}",
                     reply_markup=build_mutation_buttons("confirm"),
                 )
                 skip_delete = True
             elif result.sheets_attempted and not result.sheets_synced:
                 # Partial: Calendar event created, Sheets sync failed.
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
                 )
             elif result.status_updated:
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"✅ Spotkanie dodane do kalendarza. Status klienta: {result.status_new_value}."
                 )
             else:
-                await update.effective_message.reply_text("✅ Spotkanie dodane do kalendarza.")
+                await reply_text(update, "✅ Spotkanie dodane do kalendarza.")
 
         elif flow_type == "add_meetings":
             created = []
@@ -2893,13 +3460,16 @@ async def handle_confirm(
                 names_str = ", ".join(missing_from_sheets)
                 save_pending_flow(telegram_id, "offer_add_clients", {"names": missing_from_sheets})
                 msg_parts.append(f"Nie mam w bazie: {names_str}. Dodać?")
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     "\n".join(msg_parts),
                     reply_markup=build_mutation_buttons("confirm"),
                 )
                 skip_delete = True
             else:
-                await update.effective_message.reply_text("\n".join(msg_parts))
+                await reply_text(update, "\n".join(msg_parts))
+
+        elif flow_type == "offer_send_confirmation":
+            skip_delete = await _confirm_offer_send(update, telegram_id, user_id, flow_data)
 
         elif flow_type == "offer_add_client":
             client_name = flow_data.get("client_name", "")
@@ -2911,12 +3481,12 @@ async def handle_confirm(
                         client_data={"Imię i nazwisko": client_name},
                     )),
                 ))
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Podaj dane {client_name} — adres, telefon, produkt."
                 )
                 skip_delete = True
             else:
-                await update.effective_message.reply_text("Brak klienta do dodania.")
+                await reply_text(update, "Brak klienta do dodania.")
 
         elif flow_type == "offer_add_clients":
             names = flow_data.get("names", [])
@@ -2931,12 +3501,12 @@ async def handle_confirm(
                         _offer_remaining=new_remaining,
                     )),
                 ))
-                await update.effective_message.reply_text(
+                await reply_text(update,
                     f"Podaj dane {first} — adres, telefon, produkt."
                 )
                 skip_delete = True
             else:
-                await update.effective_message.reply_text("Brak klientów do dodania.")
+                await reply_text(update, "Brak klientów do dodania.")
 
         elif flow_type == "change_status":
             skip_delete = await _confirm_change_status(update, telegram_id, user_id, flow_data)
@@ -2951,23 +3521,23 @@ async def handle_confirm(
             if client:
                 try:
                     card = format_client_card(client)
-                    await update.effective_message.reply_markdown_v2(card)
+                    await reply_markdown_v2(update, card)
                 except Exception as e:
                     logger.error("format_client_card failed: %s", e)
                     name = client.get("Imię i nazwisko", "?")
                     city = client.get("Miasto", "")
-                    await update.effective_message.reply_text(
+                    await reply_text(update,
                         f"Błąd formatowania karty dla {name}{' (' + city + ')' if city else ''}. Sprawdź logi."
                     )
             else:
-                await update.effective_message.reply_text("Nie znalazłem tego klienta.")
+                await reply_text(update, "Nie znalazłem tego klienta.")
 
         else:
-            await update.effective_message.reply_text("✅ Gotowe.")
+            await reply_text(update, "✅ Gotowe.")
 
     except Exception as e:
         logger.error("handle_confirm(flow_type=%s): %s", flow_type, e)
-        await update.effective_message.reply_markdown_v2(format_error("timeout"))
+        await reply_markdown_v2(update, format_error("timeout"))
     finally:
         if not skip_delete:
             delete_pending_flow(telegram_id)
@@ -2985,7 +3555,7 @@ async def handle_cancel_flow(
     flow = get_pending_flow(telegram_id)
     if flow:
         delete_pending_flow(telegram_id)
-    await update.effective_message.reply_text("Anulowane.")
+    await reply_text(update, "Anulowane.")
 
 
 async def send_next_action_prompt(
@@ -3016,7 +3586,7 @@ async def send_next_action_prompt(
             current_status=current_status,
         )),
     ))
-    await update.effective_message.reply_text(
+    await reply_text(update,
         f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
         reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
     )
@@ -3034,9 +3604,9 @@ async def handle_refresh_columns(
     headers = await get_sheet_headers(user_id)  # already updates Supabase on success
     if headers:
         cols = ", ".join(headers)
-        await update.effective_message.reply_text(f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
+        await reply_text(update, f"✅ Odświeżono kolumny. Mam teraz: {cols}.")
     else:
-        await update.effective_message.reply_markdown_v2(format_error("google_down"))
+        await reply_markdown_v2(update, format_error("google_down"))
 
 
 async def handle_refresh_columns_command(
@@ -3067,7 +3637,11 @@ async def handle_general(
 ) -> None:
     """Handle general questions via Claude."""
     telegram_id = update.effective_user.id
-    history = get_conversation_history(telegram_id, limit=10)
+    history = get_conversation_history(
+        telegram_id,
+        limit=10,
+        since=timedelta(minutes=30),
+    )
 
     system_context = (
         "Jesteś asystentem handlowca OZE (odnawialne źródła energii) w Polsce. "
@@ -3085,11 +3659,9 @@ async def handle_general(
     )
 
     result = await generate_bot_response(system_context, message_text, history)
-    response_text = result.get("text", "Nie rozumiem. Spróbuj ponownie.")
+    response_text = (result.get("text") or "").strip() or "Co chcesz zrobić?"
 
-    save_conversation_message(telegram_id, "assistant", response_text)
-
-    await update.effective_message.reply_text(response_text)
+    await reply_text(update, response_text)
 
     await increment_interaction(
         telegram_id,

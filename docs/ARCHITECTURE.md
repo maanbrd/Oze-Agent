@@ -44,7 +44,9 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 | Component | Files | Status |
 |-----------|-------|--------|
 | Voice transcription | `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py` | Live since 25.04.2026 — Whisper STT + Polish name post-pass (Claude haiku), 2-button confirm card (Zapisz/Anuluj), transcription flows through normal text path via `handle_text(text_override=...)` |
+| Photo upload | `bot/handlers/photo.py`, `shared/google_drive.py`, `shared/google_sheets.py`, `shared/database.py` | Active post-MVP slice — R1 Drive confirmation, Sheets N/O metadata, 15-minute active client photo session |
 | Global cancel | `bot/handlers/cancel.py` | Live since 25.04.2026 — universal escape hatch for any pending flow |
+| R6 conversation memory | `shared/conversation_format.py`, `shared/active_client.py`, `bot/utils/conversation_reply.py` | Live since 27.04.2026 — 10 messages / 30 min rolling history, assistant replies persisted from handler wrappers, active client derive'owany just-in-time |
 
 ---
 
@@ -52,10 +54,9 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 
 | Component | Current Location | Problem |
 |-----------|-----------------|---------|
-| Photo flow | `bot/handlers/photo.py` | Drive upload, not fully tested |
 | Multi-meeting | Handlers / parser fragments (not centralized) | Batch of several meetings in one message |
 
-Current photo code and any batch/multi-meeting fragments are legacy reference only — not the contract. These flows are POST-MVP roadmap candidates.
+Batch/multi-meeting fragments are legacy reference only — not the contract.
 
 ---
 
@@ -77,7 +78,7 @@ bot/
   utils/               # Telegram helpers: buttons, typing indicators
 ```
 
-`shared/photo/` is a POST-MVP module candidate, not part of the core first-version behavior layer. Voice work currently lives in `shared/voice_postproc.py` + `shared/whisper_stt.py` + `bot/handlers/voice.py` — could be moved into `shared/voice/` if/when refactor is needed.
+Photo upload currently lives in `bot/handlers/photo.py` with stable wrapper support in `shared/google_drive.py`, `shared/google_sheets.py`, and `shared/database.py`. Voice work currently lives in `shared/voice_postproc.py` + `shared/whisper_stt.py` + `bot/handlers/voice.py` — could be moved into `shared/voice/` if/when refactor is needed.
 
 ---
 

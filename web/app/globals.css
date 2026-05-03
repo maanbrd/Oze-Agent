@@ -36,3 +36,149 @@ body {
 .num {
   font-variant-numeric: tabular-nums;
 }
+
+.oze-app {
+  --oze-green: #3dff7a;
+  --oze-panel: rgba(255, 255, 255, 0.04);
+  --oze-panel-strong: rgba(255, 255, 255, 0.07);
+  --oze-border: rgba(255, 255, 255, 0.1);
+  --oze-border-strong: rgba(61, 255, 122, 0.34);
+  --oze-text: #ffffff;
+  --oze-muted: #a1a1aa;
+  --oze-soft: #d4d4d8;
+}
+
+.oze-app h1,
+.oze-app h2 {
+  color: var(--oze-text);
+}
+
+.oze-app section,
+.oze-app aside,
+.oze-app table,
+.oze-app tbody,
+.oze-app tr {
+  color: var(--oze-soft);
+}
+
+.oze-offers > section > section,
+.oze-offers > aside,
+.oze-offers .rounded-\[8px\] {
+  border-color: var(--oze-border);
+}
+
+.oze-offers > section > section,
+.oze-offers > aside,
+.oze-offers table,
+.oze-offers tr,
+.oze-offers .bg-white {
+  background: var(--oze-panel);
+}
+
+.oze-offers thead tr,
+.oze-offers .bg-\[\#f8fafb\],
+.oze-offers .bg-\[\#f0f7f3\] {
+  background: var(--oze-panel-strong);
+}
+
+.oze-offers th,
+.oze-offers td,
+.oze-offers .border-b,
+.oze-offers .border {
+  border-color: var(--oze-border);
+}
+
+.oze-offers p.text-\[\#607080\],
+.oze-offers .text-\[\#607080\] {
+  color: var(--oze-green);
+}
+
+.oze-offers .text-\[\#111827\],
+.oze-offers .text-\[\#14181f\],
+.oze-offers .text-\[\#1d2a36\],
+.oze-offers .text-\[\#334155\] {
+  color: var(--oze-text);
+}
+
+.oze-offers .text-\[\#526170\],
+.oze-offers .text-\[\#667585\],
+.oze-offers .text-\[\#4d5a66\] {
+  color: var(--oze-muted);
+}
+
+.oze-offers input,
+.oze-offers select,
+.oze-offers textarea {
+  border-color: var(--oze-border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--oze-text);
+  outline: none;
+}
+
+.oze-offers input:focus,
+.oze-offers select:focus,
+.oze-offers textarea:focus {
+  border-color: var(--oze-border-strong);
+  box-shadow: 0 0 0 3px rgba(61, 255, 122, 0.12);
+}
+
+.oze-offers input[type="color"] {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.oze-offers button {
+  border-color: var(--oze-border);
+  color: var(--oze-soft);
+}
+
+.oze-offers button:hover:not(:disabled) {
+  border-color: rgba(61, 255, 122, 0.5);
+  color: var(--oze-text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.oze-offers button[data-active="true"],
+.oze-offers button[data-active="true"]:hover:not(:disabled),
+.oze-offers button.bg-\[\#3DFF7A\],
+.oze-offers button.bg-\[\#3DFF7A\]:hover:not(:disabled) {
+  color: #000000;
+}
+
+.oze-offers button.bg-\[\#163b2f\],
+.oze-offers button.bg-\[\#163b2f\]:hover,
+.oze-offers .bg-\[\#163b2f\] {
+  background: var(--oze-green);
+  color: #000000;
+  border-color: transparent;
+  box-shadow: 0 0 28px rgba(61, 255, 122, 0.18);
+}
+
+.oze-offers .offer-preview-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.oze-offers .offer-preview-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(11, 13, 16, 0.92), rgba(11, 13, 16, 0.62)),
+    url("/offers/pv-storage-watermark.png") center right / cover no-repeat;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.oze-offers .offer-preview-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.oze-offers .bg-\[\#fff7f7\] {
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.oze-offers .text-\[\#8f1d1d\],
+.oze-offers .text-\[\#9b1c1c\] {
+  color: #fca5a5;
+}

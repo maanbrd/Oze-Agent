@@ -78,6 +78,31 @@ async def test_call_claude_returns_empty_on_api_error():
     assert result["cost_usd"] == 0.0
 
 
+@pytest.mark.asyncio
+async def test_call_claude_normalizes_unicode_line_separators():
+    client = _mock_client("ok")
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude
+        await call_claude("sys\u2028tem", "u\u2029ser", model_type="simple")
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["system"] == "sys\ntem"
+    assert kwargs["messages"] == [{"role": "user", "content": "u\nser"}]
+
+
+@pytest.mark.asyncio
+async def test_call_claude_strips_anthropic_api_key():
+    client = _mock_client("ok")
+    with (
+        patch("shared.claude_ai.Config.ANTHROPIC_API_KEY", "sk-test\u2028"),
+        patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client) as constructor,
+    ):
+        from shared.claude_ai import call_claude
+        await call_claude("system", "user", model_type="simple")
+
+    constructor.assert_called_once_with(api_key="sk-test")
+
+
 # ── model routing cost calculation ───────────────────────────────────────────
 
 
@@ -115,6 +140,103 @@ async def test_call_claude_with_tools_force_tool_sets_tool_choice():
     kwargs = client.messages.create.call_args.kwargs
     assert kwargs["tool_choice"] == {"type": "any"}
     assert result["tool_name"] == "record_general_question"
+
+
+@pytest.mark.asyncio
+async def test_call_claude_with_tools_force_specific_tool_sets_tool_choice_name():
+    client = _mock_tool_client("record_add_meeting", {"client_name": "Jan"})
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude_with_tools
+        result = await call_claude_with_tools(
+            "system",
+            "user",
+            [{"name": "record_add_meeting", "input_schema": {"type": "object"}}],
+            model_type="simple",
+            force_tool="record_add_meeting",
+        )
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["tool_choice"] == {"type": "tool", "name": "record_add_meeting"}
+    assert result["tool_name"] == "record_add_meeting"
+
+
+@pytest.mark.asyncio
+async def test_call_claude_with_tools_normalizes_unicode_line_separators():
+    client = _mock_tool_client("record_general_question", {"reason": "test"})
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client):
+        from shared.claude_ai import call_claude_with_tools
+        await call_claude_with_tools(
+            "sys\u2028tem",
+            "u\u2029ser",
+            [{"name": "record_general_question", "input_schema": {"type": "object"}}],
+            model_type="simple",
+            force_tool=True,
+        )
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["system"] == "sys\ntem"
+    assert kwargs["messages"] == [{"role": "user", "content": "u\nser"}]
+
+
+# ── R6 conversation history injection ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_generate_bot_response_injects_conversation_history():
+    with patch(
+        "shared.claude_ai.call_claude",
+        new=AsyncMock(return_value={"text": "ok"}),
+    ) as mock_call:
+        from shared.claude_ai import generate_bot_response
+        await generate_bot_response(
+            "system",
+            "user",
+            [{"role": "assistant", "content": "Jan Kowalski", "message_type": "text"}],
+        )
+
+    system_prompt = mock_call.await_args.args[0]
+    assert "<conversation_history>" in system_prompt
+    assert "assistant: Jan Kowalski" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_extract_note_data_uses_history_when_provided():
+    with patch(
+        "shared.claude_ai.call_claude",
+        new=AsyncMock(return_value={
+            "text": '{"client_name":"Jan Kowalski","city":"","note":"x"}',
+            "tokens_in": 1,
+            "tokens_out": 1,
+            "cost_usd": 0.0,
+        }),
+    ) as mock_call:
+        from shared.claude_ai import extract_note_data
+        await extract_note_data(
+            "dodaj notatkę: x",
+            history=[{"role": "assistant", "content": "Jan Kowalski"}],
+        )
+
+    system_prompt = mock_call.await_args.args[0]
+    assert "<conversation_history>" in system_prompt
+    assert "Jan Kowalski" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_extract_meeting_data_omits_history_when_none():
+    with patch(
+        "shared.claude_ai.call_claude",
+        new=AsyncMock(return_value={
+            "text": '{"meetings":[]}',
+            "tokens_in": 1,
+            "tokens_out": 1,
+            "cost_usd": 0.0,
+        }),
+    ) as mock_call:
+        from shared.claude_ai import extract_meeting_data
+        await extract_meeting_data("telefon jutro 10", "2026-04-27")
+
+    system_prompt = mock_call.await_args.args[0]
+    assert "<conversation_history>" not in system_prompt
 
 
 # ── parse_voice_note ──────────────────────────────────────────────────────────

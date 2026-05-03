@@ -1,6 +1,6 @@
 # OZE-Agent — Multi-Agent Workflow
 
-_Last updated: 14.04.2026_
+_Last updated: 27.04.2026_
 
 ---
 
@@ -95,6 +95,34 @@ Sequential and controlled. No parallel chaos.
 If a test fails → Builder fixes → Tester retests → Reviewer re-reviews.
 
 If a spec contradiction is found → Spec Guardian resolves → workflow restarts from affected phase.
+
+---
+
+## Runtime Environments
+
+Production bot:
+- Telegram: main OZE-Agent bot
+- Railway service: `bot`
+- Git branch: `main`
+- Current deployed commit after 27.04.2026 hotfix: `961fad1`
+
+Test bot:
+- Telegram: `t.me/OZEAgentTestBot`
+- Railway service: `bot-test`
+- Git branch: `develop`
+- Purpose: safe manual testing of agent behavior before promoting changes to production.
+- Current deployed commit after 27.04.2026 setup: `961fad1`
+
+Important testing rule:
+- `bot-test` uses a separate Telegram token and follows `develop`, but backend integrations may still point to the same Google Sheets / Calendar / Supabase resources as production.
+- Use fictional test data unless the environment has been explicitly separated.
+- Do not copy Telegram bot tokens into docs, commits, screenshots, or chat logs intended for sharing.
+
+Promotion rule:
+- Agent behavior fixes land on `develop` first.
+- `bot-test` smoke/regression must pass before promotion.
+- Promote to `main` only after Maan confirms the relevant Telegram behavior on `bot-test`.
+- Production smoke should be a small subset of the same scenarios after Railway `bot` deploys.
 
 ---
 

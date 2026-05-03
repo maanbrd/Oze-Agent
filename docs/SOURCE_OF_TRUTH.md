@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 24.04.2026_
+_Last updated: 27.04.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -16,6 +16,11 @@ Poprzednia ścieżka łatania błędów jest zamknięta.
 
 Nie próbujemy już naprawiać obecnej warstwy zachowania błąd po błędzie.
 Obecna strategia to **selective rewrite**.
+
+Decyzja operacyjna z 27.04.2026: **stabilizacja agenta Telegram ma pierwszeństwo
+przed domykaniem web appu**. Web app jest ważny, ale nie powinien być traktowany
+jako gotowy produkt, dopóki core agent nie przechodzi powtarzalnego smoke/regression
+testu.
 
 ### Zostaje
 
@@ -38,12 +43,23 @@ Obecna strategia to **selective rewrite**.
 
 ### Odłożone poza pierwszą wersję behavior layer
 
-- photo flow
 - multi-meeting
 
-Obecny kod photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+Fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
 
 Voice transcription — **live od 25.04.2026** (post-MVP slice). Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path.
+
+Photo upload — **active post-MVP slice**. Zdjęcia z Telegrama trafiają na Google Drive po karcie `✅ Zapisać`; pierwsze potwierdzenie otwiera 15-minutową sesję uploadu do tego klienta. Sheets `N=Zdjęcia`, `O=Link do zdjęć`.
+
+Testowy bot — **live od 27.04.2026**:
+- Telegram: `t.me/OZEAgentTestBot`
+- Railway service: `bot-test`
+- Branch: `develop`
+- Production bot: Railway service `bot`, branch `main`
+- Na 27.04.2026 oba branche (`main`, `develop`) wskazują na `961fad1`.
+- `bot-test` ma osobny Telegram token, ale do czasu rozdzielenia backendów może korzystać z tych samych Google Sheets / Calendar / Supabase zasobów co produkcja. Testy muszą używać fikcyjnych danych.
+
+Ostatni wdrożony hotfix agenta: `961fad1` — wymusza `record_add_meeting` dla wiadomości compound meeting+client z markerem czasu, redaguje logi klasyfikatora bez PII i nie traktuje samego pola `telefon` jako intencji rozmowy telefonicznej.
 
 Kolejność przepisywania w ramach selective rewrite (w tym czy proactive scheduler/morning brief wchodzi w pierwszej rundzie, czy później) jest decyzją `IMPLEMENTATION_PLAN.md`, nie SSOT.
 
@@ -146,7 +162,6 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 - `edit_client`
 - `multi-meeting` (batch kilku spotkań w jednej wiadomości)
-- `photo_upload` (Drive)
 - import CSV / Excel
 - pełny dashboard
 - `evening_followup` — post-meeting check-in przez `pending_followups` (infra z Phase 5.3, runtime scheduler post-MVP)
@@ -170,9 +185,9 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 ### Photo i multi-meeting
 
-- Nie wchodzą do pierwszej wersji selective rewrite.
-- Zostają jako POST-MVP / późniejsza runda.
-- Obecny kod photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+- Photo upload jest aktywnym post-MVP slice.
+- Multi-meeting nie wchodzi do pierwszej wersji selective rewrite i zostaje POST-MVP / późniejsza runda.
+- Ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
 
 ### Voice transcription (live od 25.04.2026)
 

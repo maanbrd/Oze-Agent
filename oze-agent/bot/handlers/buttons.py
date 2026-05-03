@@ -22,6 +22,7 @@ from bot.utils.telegram_helpers import (
     build_mutation_buttons,
     is_private_chat,
 )
+from bot.utils.conversation_reply import edit_message_text, reply_markdown_v2, reply_text
 from shared.database import (
     delete_pending_flow,
     get_pending_flow,
@@ -77,20 +78,23 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # R1: commit the pending flow
         await handle_confirm(update, context, user, {}, "")
 
+    elif action == "offer_send":
+        await handle_confirm(update, context, user, {}, "")
+
     elif action == "append":
         # R1: keep pending flow open, prompt user for more data
         flow = get_pending_flow(telegram_id)
         if flow:
-            await query.message.reply_text("Co chcesz dopisać?")
+            await reply_text(query, "Co chcesz dopisać?")
         else:
-            await query.edit_message_text("Brak aktywnego wpisu.")
+            await edit_message_text(query, "Brak aktywnego wpisu.")
 
     elif action == "cancel":
         # R1: one-click cancel — delete pending flow immediately
         flow = get_pending_flow(telegram_id)
         if flow:
             delete_pending_flow(telegram_id)
-        await query.edit_message_text("Anulowane.")
+        await edit_message_text(query, "Anulowane.")
 
     elif action == "merge":
         # R4: update existing client with new data from duplicate flow
@@ -121,12 +125,22 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             from datetime import date, timedelta
             tomorrow = date.today() + timedelta(days=1)
             increment_daily_interaction_count(telegram_id, tomorrow)
-            await query.edit_message_text("✅ Pożyczono 1 interakcję z jutra.")
+            await edit_message_text(query, "✅ Pożyczono 1 interakcję z jutra.")
         else:
-            await query.edit_message_text("❌ Brak dodatkowych interakcji na dziś.")
+            await edit_message_text(query, "❌ Brak dodatkowych interakcji na dziś.")
 
     elif action == "select_client":
         await _handle_select_client(query, context, user, value)
+
+    elif action == "photo_select_client":
+        from bot.handlers.photo import handle_photo_select_client
+
+        await handle_photo_select_client(query, telegram_id, value)
+
+    elif action == "photo_add_client":
+        from bot.handlers.photo import start_photo_add_client
+
+        await start_photo_add_client(query, telegram_id)
 
     elif action == "edit":
         await _handle_edit_choice(query, telegram_id, user["id"], value)
@@ -144,13 +158,18 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 # Feed transcription into text router via text_override —
                 # Message.text is read-only in PTB ≥21, can't assign to it.
                 from bot.handlers.text import handle_text
-                await handle_text(update, context, text_override=transcription)
+                await handle_text(
+                    update,
+                    context,
+                    text_override=transcription,
+                    message_type_override="voice",
+                )
 
         elif value in ("cancel", "no"):
             # `:no` is a back-compat alias for `:cancel`.
             if is_voice_flow:
                 delete_pending_flow(telegram_id)
-                await query.edit_message_text("❌ Anulowane.")
+                await edit_message_text(query, "❌ Anulowane.")
 
     elif action == "set_status":
         # value format: "{row}:{status}"
@@ -159,9 +178,9 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             row, new_status = int(parts[0]), parts[1]
             ok = await update_client(user["id"], row, {"Status": new_status})
             if ok:
-                await query.edit_message_text(f"✅ Status zmieniony na: {new_status}")
+                await edit_message_text(query, f"✅ Status zmieniony na: {new_status}")
             else:
-                await query.edit_message_text("❌ Nie udało się zmienić statusu.")
+                await edit_message_text(query, "❌ Nie udało się zmienić statusu.")
 
     elif action == "phone":
         await _handle_phone_choice(query, telegram_id, user["id"], value)
@@ -185,19 +204,48 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
         if flow and flow.get("flow_type") == "add_meeting_disambiguation":
             await _resume_add_meeting_skip_client(query, telegram_id, flow["flow_data"])
         else:
-            await query.edit_message_text("❌ Nieprawidłowy wybór.")
+            await edit_message_text(query, "❌ Nieprawidłowy wybór.")
         return
 
     try:
         row = int(row_str)
     except ValueError:
-        await query.edit_message_text("❌ Nieprawidłowy wybór.")
+        await edit_message_text(query, "❌ Nieprawidłowy wybór.")
         return
 
     clients = await get_all_clients(user["id"])
     client = next((c for c in clients if c.get("_row") == row), None)
     if not client:
-        await query.edit_message_text("Nie znaleziono klienta.")
+        await edit_message_text(query, "Nie znaleziono klienta.")
+        return
+
+    if flow and flow.get("flow_type") == "offer_client_disambiguation":
+        flow_data = flow.get("flow_data", {})
+        allowed_rows = set(flow_data.get("candidate_rows") or [])
+        if allowed_rows and row not in allowed_rows:
+            delete_pending_flow(telegram_id)
+            await edit_message_text(query, "❌ Nieprawidłowy wybór.")
+            return
+        from bot.handlers.text import _find_template_by_id, _start_offer_send_confirmation
+        from shared.offers.repository import OfferRepository
+
+        repo = OfferRepository()
+        templates = repo.list_templates(user["id"])
+        template = _find_template_by_id(templates, flow_data.get("template_id"))
+        if not template or template.get("status") != "ready":
+            delete_pending_flow(telegram_id)
+            await edit_message_text(query, "Ta oferta nie jest już dostępna.")
+            return
+        delete_pending_flow(telegram_id)
+        await edit_message_text(query, "Wybrano klienta.")
+        await _start_offer_send_confirmation(
+            query,
+            user,
+            offer_number=flow_data.get("offer_number") or 0,
+            template=template,
+            client=client,
+            command_text=flow_data.get("command_text", ""),
+        )
         return
 
     if flow and flow.get("flow_type") == "add_meeting_disambiguation":
@@ -217,17 +265,17 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                 pipeline_statuses = user.get("pipeline_statuses", [])
                 if pipeline_statuses:
                     options = [(s, f"set_status:{client.get('_row')}:{s}") for s in pipeline_statuses]
-                    await query.edit_message_text(
+                    await edit_message_text(query,
                         f"Wybierz nowy status dla {client.get('Imię i nazwisko', 'klienta')}:",
                         reply_markup=build_choice_buttons(options),
                     )
                 else:
-                    await query.edit_message_text("Podaj nowy status dla klienta.")
+                    await edit_message_text(query, "Podaj nowy status dla klienta.")
                 return
             row = client.get("_row")
             if row is None:
                 logger.error("buttons change_status: client without _row: %s", client)
-                await query.edit_message_text("❌ Wystąpił błąd. Spróbuj ponownie.")
+                await edit_message_text(query, "❌ Wystąpił błąd. Spróbuj ponownie.")
                 return
             save_pending(PendingFlow(
                 telegram_id=telegram_id,
@@ -240,7 +288,7 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                     city=client.get("Miasto", ""),
                 )),
             ))
-            await query.edit_message_text(
+            await edit_message_text(query,
                 f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
                 + format_edit_comparison("Status", old_status, new_status),
                 parse_mode="MarkdownV2",
@@ -256,7 +304,7 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
             row = client.get("_row")
             if row is None:
                 logger.error("buttons add_note: client without _row: %s", client)
-                await query.edit_message_text("❌ Wystąpił błąd. Spróbuj ponownie.")
+                await edit_message_text(query, "❌ Wystąpił błąd. Spróbuj ponownie.")
                 return
             save_pending(PendingFlow(
                 telegram_id=telegram_id,
@@ -271,21 +319,21 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
             ))
             display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
             city_part = f", {c_city}" if c_city else ""
-            await query.edit_message_text(
+            await edit_message_text(query,
                 f"📝 {name}{city_part}:\ndodaj notatkę \"{display_note}\"?",
                 reply_markup=build_mutation_buttons("confirm"),
             )
             return
 
     card = format_client_card(client)
-    await query.edit_message_text(card, parse_mode="MarkdownV2")
+    await edit_message_text(query, card, parse_mode="MarkdownV2")
 
 
 async def _handle_phone_choice(query, telegram_id: int, user_id: str, value: str) -> None:
     """Handle keep-or-replace choice for phone/email field edits."""
     flow = get_pending_flow(telegram_id)
     if not flow or flow.get("flow_type") != "edit_client_phone_choice":
-        await query.edit_message_text("Brak aktywnej edycji.")
+        await edit_message_text(query, "Brak aktywnej edycji.")
         return
 
     flow_data = flow["flow_data"]
@@ -306,16 +354,16 @@ async def _handle_phone_choice(query, telegram_id: int, user_id: str, value: str
     delete_pending_flow(telegram_id)
 
     if ok:
-        await query.edit_message_text(f"✅ {label}.")
+        await edit_message_text(query, f"✅ {label}.")
     else:
-        await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
+        await edit_message_text(query, "❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
 
 
 async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None:
     """R4: update existing client row with new data from the duplicate detection flow."""
     flow = get_pending_flow(telegram_id)
     if not flow or flow.get("flow_type") != "add_client_duplicate":
-        await query.edit_message_text("Brak aktywnego duplikatu.")
+        await edit_message_text(query, "Brak aktywnego duplikatu.")
         return
 
     flow_data = flow["flow_data"]
@@ -323,7 +371,7 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
     new_data = {k: v for k, v in flow_data.get("client_data", {}).items() if v}
 
     if not duplicate_row:
-        await query.edit_message_text("Brak wiersza do aktualizacji.")
+        await edit_message_text(query, "Brak wiersza do aktualizacji.")
         return
 
     delete_pending_flow(telegram_id)
@@ -342,20 +390,20 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
                 current_status=new_data.get("Status") or "",
             )),
         ))
-        await query.edit_message_text("✅ Dane zaktualizowane.")
-        await query.message.reply_text(
+        await edit_message_text(query, "✅ Dane zaktualizowane.")
+        await reply_text(query,
             f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
             reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
         )
     else:
-        await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
+        await edit_message_text(query, "❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
 
 
 async def _handle_edit_choice(query, telegram_id: int, user_id: str, value: str) -> None:
     """Handle edit mode choices: replace or keep_both."""
     flow = get_pending_flow(telegram_id)
     if not flow or flow.get("flow_type") != "edit_client":
-        await query.edit_message_text("Brak aktywnej edycji.")
+        await edit_message_text(query, "Brak aktywnej edycji.")
         return
 
     flow_data = flow["flow_data"]
@@ -376,9 +424,9 @@ async def _handle_edit_choice(query, telegram_id: int, user_id: str, value: str)
     delete_pending_flow(telegram_id)
 
     if ok:
-        await query.edit_message_text("✅ Dane zaktualizowane.")
+        await edit_message_text(query, "✅ Dane zaktualizowane.")
     else:
-        await query.edit_message_text("❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
+        await edit_message_text(query, "❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
 
 
 async def _send_add_meeting_confirmation_card(
@@ -424,7 +472,7 @@ async def _send_add_meeting_confirmation_card(
             f"{status_update.get('new_value', '')}"
         )
     msg = format_confirmation("add_meeting", details) + conflict_warning
-    await query.message.reply_markdown_v2(
+    await reply_markdown_v2(query,
         msg, reply_markup=build_mutation_buttons("confirm")
     )
 
@@ -472,7 +520,7 @@ async def _resume_add_meeting_disambiguation(
             "add_meeting_disambiguation: selected row %s not in pending candidates %s",
             selected_row, sorted(r for r in valid_rows if r is not None),
         )
-        await query.edit_message_text("❌ Nieprawidłowy wybór. Spróbuj ponownie.")
+        await edit_message_text(query, "❌ Nieprawidłowy wybór. Spróbuj ponownie.")
         delete_pending_flow(telegram_id)
         return
 
@@ -485,7 +533,7 @@ async def _resume_add_meeting_disambiguation(
             "add_meeting_disambiguation: selected row %s != compound status_update.row %s",
             selected_row, compound_row,
         )
-        await query.edit_message_text("❌ Nieprawidłowy wybór. Spróbuj ponownie.")
+        await edit_message_text(query, "❌ Nieprawidłowy wybór. Spróbuj ponownie.")
         delete_pending_flow(telegram_id)
         return
 

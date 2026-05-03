@@ -14,6 +14,7 @@ from datetime import date
 import anthropic
 
 from bot.config import Config
+from shared.conversation_format import format_history_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +271,11 @@ Parsuj bez pytania:
 # ── Meeting data extraction ───────────────────────────────────────────────────
 
 
-async def extract_meeting_data(message: str, today: str) -> dict:
+async def extract_meeting_data(
+    message: str,
+    today: str,
+    history: list[dict] | None = None,
+) -> dict:
     """Parse meeting info from natural language (Polish dates/times).
 
     Returns:
@@ -306,7 +311,10 @@ Przykłady wielu spotkań z odmienionymi formami:
 - "Jutro jadę do Jana Nowaka o 10 i do Anny Kowalskiej o 15" → meetings: [{{"client_name": "Jan Nowak", "time": "10:00", "event_type": "in_person"}}, {{"client_name": "Anna Kowalska", "time": "15:00", "event_type": "in_person"}}]
 - "Spotkanie z Markiem Zielińskim jutro o 9 i z Barbarą Wiśniewską o 14" → meetings: [{{"client_name": "Marek Zieliński", "time": "09:00", "event_type": "in_person"}}, {{"client_name": "Barbara Wiśniewska", "time": "14:00", "event_type": "in_person"}}]
 - "Dodaj spotkanie z Janem Kowalskim jutro o 9, zadzwoń do Tomasza Nowickiego jutro o 12 i wyślij ofertę do Wojtka Testowego jutro o 15" → meetings: [{{"client_name": "Jan Kowalski", "time": "09:00", "event_type": "in_person"}}, {{"client_name": "Tomasz Nowicki", "time": "12:00", "event_type": "phone_call"}}, {{"client_name": "Wojtek Testowy", "time": "15:00", "event_type": "offer_email"}}]
-WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" / "przez telefon" / "rozmowa telefoniczna" → location: "telefonicznie". Gdy brak innego adresu a spotkanie jest telefoniczne — ustaw location na "telefonicznie", nie na miasto klienta."""
+WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" / "przez telefon" / "rozmowa telefoniczna" → location: "telefonicznie". Gdy brak innego adresu a spotkanie jest telefoniczne — ustaw location na "telefonicznie", nie na miasto klienta.
+Jeśli bieżąca wiadomość używa skrótu bez klienta (np. "telefon jutro 10"), użyj historii tylko do ustalenia ostatnio omawianego klienta. Nie kopiuj z historii dat, godzin ani innych nowych danych."""
+
+    system_prompt += format_history_for_llm(history or [])
 
     result = await call_claude(system_prompt, message, model_type="complex", max_tokens=1024)
 
@@ -335,7 +343,10 @@ WAŻNE lokalizacja: "telefoniczne" / "spotkanie telefoniczne" / "telefonicznie" 
 # ── Note data extraction ──────────────────────────────────────────────────────
 
 
-async def extract_note_data(message: str) -> dict:
+async def extract_note_data(
+    message: str,
+    history: list[dict] | None = None,
+) -> dict:
     """Extract client name, city, and note text from an add_note message.
 
     Returns: {"client_name": str, "city": str, "note": str,
@@ -349,7 +360,10 @@ Zasady:
 - client_name: pełne imię i nazwisko w mianowniku ("Jan Kowalski" nie "Janowi Kowalskiemu")
 - city: samo miasto bez dodatkowych słów
 - note: treść notatki — reszta wiadomości po identyfikacji klienta
-- Jeśli nie możesz wyciągnąć pola, zostaw pusty string"""
+- Jeśli nie możesz wyciągnąć pola, zostaw pusty string
+- Jeśli wiadomość zawiera notatkę bez klienta, użyj historii tylko do ustalenia ostatnio omawianego klienta. Nie dopisuj treści notatki z historii."""
+
+    system_prompt += format_history_for_llm(history or [])
 
     result = await call_claude(system_prompt, message, model_type="simple")
     raw = result["text"].strip()
@@ -385,7 +399,8 @@ async def generate_bot_response(
     suggests a multi-step flow (> 4 messages).
     """
     model_type = "complex" if len(conversation_history) > 4 else "simple"
-    return await call_claude(system_context, user_message, model_type=model_type)
+    prompt = system_context + format_history_for_llm(conversation_history)
+    return await call_claude(prompt, user_message, model_type=model_type)
 
 
 # ── Follow-up response parsing ────────────────────────────────────────────────
