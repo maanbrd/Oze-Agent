@@ -226,7 +226,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     session = get_active_photo_session(telegram_id)
     explicit_query = _explicit_target_query(caption) if caption else None
 
-    if session and caption and not explicit_query and len(caption.split()) >= 3:
+    if session and caption and not explicit_query:
         caption_clients = await _resolve_clients_from_text(user_id, caption)
         if len(caption_clients) == 1:
             await _show_confirmation(update, file_id, caption, caption_clients[0])

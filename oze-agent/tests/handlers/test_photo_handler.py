@@ -180,3 +180,42 @@ async def test_image_document_uses_document_file_id_and_shows_r1_card():
     context.bot.get_file.assert_not_awaited()
     assert mock_save.call_args.args[2]["file_id"] == "document-file-id"
     assert "Zapisać zdjęcie do folderu" in mock_reply.call_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_active_session_image_document_caption_matching_client_starts_new_confirmation():
+    update = _make_document_update(caption="E2E-Beta-Photo-123-Beta E2E-Beta-City")
+    context = _make_context()
+    session = {
+        "telegram_id": 12345,
+        "user_id": "user-1",
+        "client_row": 7,
+        "folder_id": "alpha-folder",
+        "folder_link": "https://drive/alpha-folder",
+        "display_label": "E2E-Beta-Photo-123-Alpha, E2E-Beta-City",
+    }
+    beta = _client(
+        _row=8,
+        **{
+            "Imię i nazwisko": "E2E-Beta-Photo-123-Beta",
+            "Miasto": "E2E-Beta-City",
+        },
+    )
+
+    with patch("bot.handlers.photo.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.photo._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.photo.get_active_photo_session", return_value=session, create=True), \
+         patch("bot.handlers.photo.get_all_clients", new=AsyncMock(return_value=[beta]), create=True), \
+         patch("bot.handlers.photo.upload_photo_for_session", new=AsyncMock(), create=True) as mock_upload_session, \
+         patch("bot.handlers.photo.save_pending_flow") as mock_save, \
+         patch("bot.handlers.photo.reply_text", new=AsyncMock()) as mock_reply:
+        from bot.handlers.photo import handle_photo
+
+        await handle_photo(update, context)
+
+    mock_upload_session.assert_not_awaited()
+    assert mock_save.call_args.args[1] == "photo_upload"
+    assert mock_save.call_args.args[2]["file_id"] == "document-file-id"
+    reply_text = mock_reply.call_args.args[1]
+    assert "Zapisać zdjęcie do folderu" in reply_text
+    assert "E2E-Beta-Photo-123-Beta" in reply_text
