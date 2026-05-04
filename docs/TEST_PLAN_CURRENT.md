@@ -1,6 +1,6 @@
 # OZE-Agent — Test Plan
 
-_Last updated: 27.04.2026_
+_Last updated: 04.05.2026_
 
 This is the test plan for the new behavior layer (selective rewrite). Not for the old patch-track.
 
@@ -50,6 +50,61 @@ intent classify: tool=record_add_meeting preflight_meeting_hint=True message_len
 ```
 
 Log must not contain client names, phone numbers, addresses, or `message_prefix`.
+
+---
+
+## Offer Generator — Web/API/Bot
+
+Run on fictional clients and controlled email addresses only.
+
+Automated checks when offer-generator code changes:
+
+```bash
+cd oze-agent
+PYTHONPATH=. pytest tests/offers -q
+
+cd ..
+node --test web/tests/offer-email-template-ui.test.mjs web/tests/offer-navigation.test.mjs web/tests/offer-pdf-encoding.test.mjs
+cd web
+npm run lint
+npm run build
+```
+
+Manual web smoke at `http://127.0.0.1:3000/oferty`:
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| OF-W1 | Create draft | Draft appears below ready offers, no number |
+| OF-W2 | Fill required PV fields and publish/save ready offer | Offer appears in ready list with next number |
+| OF-W3 | Remove required field from ready offer and save | Save blocked with clear UI message |
+| OF-W4 | Reorder ready offers | Numbers follow current order |
+| OF-W5 | Delete ready offer | List closes numbering gap |
+| OF-W6 | Duplicate ready offer | New draft without number |
+| OF-W7 | Upload logo and set company | Values persist after refresh and appear in preview/test PDF |
+| OF-W8 | Email body editor | Natural text + draggable/removable variable chips; unknown tokens blocked on save |
+| OF-W9 | Test PDF | Dark preview-style PDF, no upper-right price block, no `Oferta informacyjna`, no accent field |
+
+Telegram/Gmail smoke:
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| OF-B1 | `jakie mam oferty?` | Numbered list of ready offers only |
+| OF-B2 | Send with valid number + one client | Card shows client, offer, recipients, short email preview, buttons `✅ Wysłać` / `❌ Anulować` |
+| OF-B3 | Send without number | Bot lists ready offers and waits for number |
+| OF-B4 | Wrong offer number | Bot shows current ready-offer list |
+| OF-B5 | Client missing email | Bot asks for email; no Gmail send yet |
+| OF-B6 | Multiple emails in Sheets | One Gmail message to all valid addresses; invalid addresses shown as skipped |
+| OF-B7 | Email supplied in command | Sends to Sheets emails + command email; after success tries to append new email to Sheets |
+| OF-B8 | Terminal/past-funnel status | Gmail can send; Sheets status is not regressed |
+| OF-B9 | Gmail failure | No Sheets write attempted |
+| OF-B10 | Gmail success + Sheets partial failure | Agent confirms email sent and says briefly what Sheets write failed |
+| OF-B11 | Double-click `✅ Wysłać` | Only one Gmail message; idempotent callback |
+| OF-B12 | Voice → transcript → send offer | Same flow as text after voice confirmation |
+
+Manual external check:
+- Controlled recipient receives the PDF.
+- Gmail Sent contains one sent message with expected subject and attachment name.
+- PDF uses current template/company/logo/email data.
 
 ---
 

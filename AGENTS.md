@@ -2,8 +2,8 @@
 
 AI-powered sales assistant for B2C renewable energy salespeople in Poland. Telegram bot + FastAPI backend + Next.js webapp.
 
-Current project owner: Maan  
-User-facing language: Polish  
+Current project owner: Maan
+User-facing language: Polish
 Code/comments language: English
 
 ---

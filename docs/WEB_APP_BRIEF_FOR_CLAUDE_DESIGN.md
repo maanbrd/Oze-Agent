@@ -82,14 +82,15 @@ Handlowiec ma już agenta AI, który żyje w Telegramie na jego telefonie — ag
 Sekcje sidebar (kolejność istotna):
 
 1. **Dashboard** (home, ikona dashboardu) — centrum dowodzenia.
-2. **Klienci** (ikona ludzi) — widok tabelaryczny + filtry, klik w wiersz = karta klienta.
-3. **Kalendarz** (ikona kalendarza) — widok tygodnia / miesiąca / listy spotkań.
-4. **Statystyki** (ikona wykresu) — wykresy aktywności i lejka w czasie.
-5. **Import klientów** (ikona upload) — CSV / Excel.
-6. **Instrukcja** (ikona książki) — interaktywny tutorial / „Poznaj swojego agenta".
-7. **FAQ** (ikona ?) — najczęstsze pytania.
-8. **Płatności** (ikona portfela) — status subskrypcji, faktury, zmiana planu.
-9. **Ustawienia** (ikona zębatki, dół sidebar) — kolumny arkusza, statusy lejka, godzina morning briefu, dni robocze, profil.
+2. **Oferty** (ikona dokumentu/oferty) — generator szablonów ofert i testowy PDF.
+3. **Klienci** (ikona ludzi) — widok tabelaryczny + filtry, klik w wiersz = karta klienta.
+4. **Kalendarz** (ikona kalendarza) — widok tygodnia / miesiąca / listy spotkań.
+5. **Statystyki** (ikona wykresu) — wykresy aktywności i lejka w czasie.
+6. **Import klientów** (ikona upload) — CSV / Excel.
+7. **Instrukcja** (ikona książki) — interaktywny tutorial / „Poznaj swojego agenta".
+8. **FAQ** (ikona ?) — najczęstsze pytania.
+9. **Płatności** (ikona portfela) — status subskrypcji, faktury, zmiana planu.
+10. **Ustawienia** (ikona zębatki, dół sidebar) — kolumny arkusza, statusy lejka, godzina morning briefu, dni robocze, profil.
 
 **Topbar:** logo lewo (kliknięcie → dashboard), pole wyszukiwania klienta (działa cross-page), avatar usera prawo (rozwija menu: profil, wyloguj).
 
@@ -319,6 +320,68 @@ Odrzucone           █ 4
 
 ---
 
+### 6.3b. `/oferty` — Generator ofert
+
+Generator ofert jest częścią webappu, nie osobnym produktem. Ma wyglądać
+identycznie jak reszta aplikacji: ten sam dark shell, te same kolory, spacing,
+typografia i przyciski. Nie używać jasnych paneli ani osobnego design language.
+
+**Rola webappu:** setup i test. Webapp tworzy szablony ofert, pokazuje preview i
+pozwala pobrać testowy PDF na fikcyjnego klienta. Webapp **nie wysyła oferty do
+klienta**.
+
+**Sidebar w kontekście `/oferty`:** pokazuje tylko logo OZE Agent i aktywną
+zakładkę `Oferty`. Nagłówek strony: `Generator ofert`.
+
+**Układ:**
+- Lewa część: tabela gotowych ofert na górze i szkiców niżej.
+- Prawa część: edytor krokowy/kafelki: `Podstawy`, `Komponenty`, `Cena`,
+  `Warunki`, `Treść`, `Preview`.
+- `Treść` to ostatni krok przed `Preview` i zawiera edytor treści emaila.
+
+**Gotowe oferty i szkice:**
+- Gotowe oferty numerowane według ręcznej kolejności.
+- Szkice bez numerów, sortowane od najnowszych.
+- Duplikacja tworzy szkic bez numeru.
+- Reorder tylko dla gotowych ofert.
+- Gotowe oferty i szkice można usuwać.
+
+**Szablon oferty MVP:**
+- Typy: `PV`, `Magazyn energii`, `PV + Magazyn energii`.
+- Wymagane do publikacji: nazwa, typ, cena netto, VAT `8%`/`23%`, wymagane
+  komponenty zależnie od typu.
+- Cena wejściowa = jedna cena netto zestawu. System liczy brutto i opcjonalną
+  cenę po dofinansowaniu.
+
+**Profil sprzedawcy:**
+- Pola: `Firma`, `Logo`, `Treść emaila`.
+- Nie ma pól `Akcent` ani `Podpis maila`.
+- Dane profilu zapisują się raz i wracają po refreshu.
+
+**Treść emaila:**
+- Użytkownik pisze naturalny tekst.
+- Zmienne są kafelkami drag-and-drop w edytorze, bez widocznych nawiasów.
+- Kafelek po wstawieniu zostaje w treści i ma `x` do usunięcia.
+- Zmienne kanoniczne: Imię i nazwisko, Miasto, Email, Telefon, Produkt, Status,
+  Następny krok, Data następnego kroku, Firma, Nazwa oferty, Cena.
+- Nie pokazywać technicznych pól: `_row`, `_sheet_id`, ID wydarzenia Kalendarz,
+  Zdjęcia, Link do zdjęć.
+- Podglądu testowego emaila w UI nie pokazujemy.
+
+**PDF:**
+- Wygląda jak dark preview: ciemne tło, białe napisy, profesjonalny ton.
+- Logo i nazwa firmy z profilu, jeśli ustawione.
+- Brak pola akcentu, brak napisu `Oferta informacyjna`, brak prostokąta ceny w
+  prawym górnym rogu.
+- W tle może być półprzezroczysta grafika PV + magazyn energii.
+
+**Telegram/Gmail:**
+- Realna wysyłka idzie tylko przez Telegram: `jakie mam oferty?`,
+  `wyślij ofertę...`.
+- Karta wysyłki ma `✅ Wysłać` / `❌ Anulować`, bez `➕ Dopisać`.
+
+---
+
 ### 6.4. `/klienci` — Lista klientów
 
 - **Tabela** z filtrami u góry: status (multi-select), miasto (multi-select), produkt, źródło, zakres dat (pierwszy / ostatni kontakt).
@@ -470,7 +533,7 @@ Tabbed layout, 6 sekcji:
 
 ## 8. Zachowania i zasady, których ABSOLUTNIE musisz przestrzegać
 
-1. **Web app NIE jest interfejsem do mutacji danych klientów.** Dodawanie, edycja, dodawanie spotkań, zmiana statusu — wszystko przez agenta w Telegramie. Web app tylko **wyświetla** i **konfiguruje**. Wyjątek: import CSV (`/import`) i operacje na koncie usera (płatności, ustawienia).
+1. **Web app NIE jest interfejsem do mutacji danych klientów.** Dodawanie, edycja, dodawanie spotkań, zmiana statusu — wszystko przez agenta w Telegramie. Web app tylko **wyświetla** i **konfiguruje**. Wyjątek: generator ofert (`/oferty`) zapisuje systemowe szablony/profil sprzedawcy, import CSV (`/import`) i operacje na koncie usera (płatności, ustawienia).
 2. **Dane klientów żyją na Google koncie usera** (Sheets, Calendar, Drive). Web app **odczytuje** je przez backend, ale nie traktuje jako własnego źródła prawdy. Nie buduj UI sugerującego, że klient jest „w naszej bazie" — wszędzie pokazuj „📊 Otwórz w Sheets" jako akcję dotykową.
 3. **Daty zawsze w formacie `DD.MM.YYYY (Dzień tygodnia)`**. Nigdy ISO, serial, „2026-04-25". Nigdy „2 days ago" — zamiast tego „25.04.2026 (Sobota)".
 4. **Klient zawsze identyfikowany pełnym `imię + nazwisko + miasto`**. Nigdy samo nazwisko (zbyt wiele Kowalskich).
@@ -490,6 +553,7 @@ Tabbed layout, 6 sekcji:
 - Funkcje społecznościowe (zespoły, dzielenie się klientami) — to jest single-user app w MVP.
 - Edycja klientów w UI — przez agenta tylko.
 - Drag-and-drop dodawanie spotkań w kalendarzu — przez agenta.
+- Wysyłka oferty do klienta z webappu — realna wysyłka tylko przez Telegram/Gmail.
 
 ---
 
@@ -505,10 +569,11 @@ Nie traktuj tego jako sprzeczność. Web app i agent to dwa kanały tego samego 
 
 1. **Landing publiczny** (`/`) — pełna strona z hero, sekcjami, demo, cennikiem, FAQ, stopką. Sticky CTA bar.
 2. **Dashboard** (`/dashboard`) — pełny układ z 4 KPI, lejkiem, aktywnością, planem dnia, top klientami. Z floating action buttons.
-3. **Onboarding wizard** (`/rejestracja`) — wszystkie 5 kroków z transitions i loading states (zwłaszcza animowany checklist w kroku 4 i live status sparowania w kroku 5).
-4. **Lista klientów** (`/klienci`) — tabela + filtry + side-panel karta klienta.
-5. **Kalendarz** (`/kalendarz`) — widok tygodnia + side-panel popup wydarzenia.
-6. **Płatności** (`/platnosci`) — status + historia + zarządzanie planem.
+3. **Generator ofert** (`/oferty`) — szablony ofert, profil sprzedawcy, treść emaila, preview i test PDF.
+4. **Onboarding wizard** (`/rejestracja`) — wszystkie 5 kroków z transitions i loading states (zwłaszcza animowany checklist w kroku 4 i live status sparowania w kroku 5).
+5. **Lista klientów** (`/klienci`) — tabela + filtry + side-panel karta klienta.
+6. **Kalendarz** (`/kalendarz`) — widok tygodnia + side-panel popup wydarzenia.
+7. **Płatności** (`/platnosci`) — status + historia + zarządzanie planem.
 
 Pozostałe (statystyki, import, instrukcja, FAQ, ustawienia, login) — w drugiej iteracji.
 

@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 27.04.2026_
+_Last updated: 04.05.2026_
 
 ---
 
@@ -17,6 +17,10 @@ We do not delete infrastructure blindly.
 Operational decision from 27.04.2026: **stabilize the Telegram agent before
 finishing the web app**. The web app should not be treated as launch-ready until
 the core agent flows are trustworthy in manual testing.
+
+Product decision from 04.05.2026: **offer generator is an approved integrated
+slice**. It lives in the existing webapp at `/oferty` and uses Telegram + Gmail
+for real customer delivery. It does not reopen broad dashboard/webapp scope.
 
 ## Current Implementation Status
 
@@ -85,6 +89,42 @@ Current batch/multi-meeting fragments are legacy reference only.
 - **Global `/cancel` command** — universal escape hatch for any pending flow
   (added in `48e4a76`).
 
+### Offer Generator baseline
+
+Implementation baseline: `09e0957 feat: add offer generator`.
+
+Delivered scope:
+- Web route `/oferty` inside the existing dark app shell.
+- Offer templates for `PV`, `Magazyn energii`, `PV + Magazyn energii`.
+- Ready offers and drafts, manual ordering for ready offers, duplicate-as-draft,
+  delete, validation before publishing/saving ready templates.
+- Seller profile with persisted company, logo and global email body template.
+  `Akcent` and `Podpis maila` are no longer active UI fields.
+- Email body editor uses natural text with draggable variable chips; chips render
+  as clean inline rectangles in the editor and can be removed with `x`.
+- Test PDF uses the dark preview-style layout, white text, seller logo/company
+  when available and no upper-right price block.
+- Backend API: `oze-agent/api/routes/offers.py`.
+- Shared logic: `oze-agent/shared/offers/` for validation, pricing, PDF,
+  email rendering, Gmail MIME/send pipeline and idempotency.
+- Supabase system data: `offer_templates`, `offer_seller_profiles`,
+  `offer_send_attempts`, bucket `offer-logos`.
+- Telegram flow: `jakie mam oferty?`, send with offer number, no-number list,
+  wrong-number list, confirmation card `✅ Wysłać` / `❌ Anulować`, Gmail first,
+  Sheets follow-up writes only after Gmail success.
+
+Verified before commit:
+- Targeted offer/backend pytest suite: `86 passed`.
+- `node --test web/tests/offer-email-template-ui.test.mjs web/tests/offer-navigation.test.mjs web/tests/offer-pdf-encoding.test.mjs`: `21 passed`.
+- `npm run lint` in `web/`: passed.
+- `npm run build` in `web/`: passed.
+
+Not yet proven end-to-end:
+- Live Telegram voice → transcript → send offer smoke.
+- Controlled-address Gmail Sent check from staging/test user.
+- Deployed Supabase Storage bucket and logo upload in target environment.
+- Real Sheets partial-failure messaging after Gmail success.
+
 ### Operational environments — 27.04.2026
 
 - Production Telegram bot runs from Railway service `bot` on branch `main`, deployment `bba35789-9b52-4a77-ae29-3597171ee461`.
@@ -126,7 +166,8 @@ Current active track:
 2. Build and run a small real-world regression pack for: text add_client, text add_meeting, voice → transcript → add_meeting, photo → Drive, add_meeting → preseed add_client, disambiguation, duplicate handling, R7 next-action prompts, show_day_plan, `/cancel`.
 3. Promote fixes from `develop` → `main` only after `bot-test` smoke passes.
 4. Separate test backend resources (Sheets / Calendar / Supabase) before destructive or high-volume testing.
-5. Return to web app implementation after the core Telegram agent is stable.
+5. Run offer-generator smoke separately on fictional clients and controlled email addresses before any real customer send.
+6. Return to broad web app/dashboard implementation after the core Telegram agent is stable.
 
 ---
 

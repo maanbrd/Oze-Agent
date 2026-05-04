@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 27.04.2026_
+_Last updated: 04.05.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -21,6 +21,12 @@ Decyzja operacyjna z 27.04.2026: **stabilizacja agenta Telegram ma pierwszeństw
 przed domykaniem web appu**. Web app jest ważny, ale nie powinien być traktowany
 jako gotowy produkt, dopóki core agent nie przechodzi powtarzalnego smoke/regression
 testu.
+
+Decyzja produktowa z 04.05.2026: **generator ofert jest zatwierdzonym,
+zintegrowanym slice'em produktu**. To nie jest osobna aplikacja ani pełny
+dashboard. Webapp tworzy i testuje szablony ofert na `/oferty`; realna wysyłka
+do klienta idzie przez Telegram + Gmail handlowca po osobnym potwierdzeniu.
+Baseline implementacji: `09e0957 feat: add offer generator`.
 
 ### Zostaje
 
@@ -142,6 +148,7 @@ Dane systemowe żyją w Supabase:
 - pending state
 - historia rozmowy
 - techniczne metadane
+- szablony ofert, profile sprzedawcy, techniczny log wysyłek ofert i logo ofert
 
 Nie mieszamy tych dwóch światów.
 
@@ -169,6 +176,15 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 - `per_user_brief_time` — respektować `users.morning_brief_hour` (MVP hardcoduje 07:00)
 - `morning_brief_polish_pass` — deklinacja / humanizacja linii briefu (MVP używa `Akcja: Klient` w mianowniku)
 
+**Zatwierdzone slice'e produktu poza 6 intencjami MVP:**
+
+- `offer_generator` — webapp `/oferty` do tworzenia szablonów PV / magazyn
+  energii / PV + magazyn energii, testowy PDF, profil sprzedawcy (firma, logo,
+  treść emaila) oraz Telegram/Gmail send flow. Webapp nie wysyła ofert do
+  klientów i nie przypisuje szablonu do klienta. Telegram obsługuje:
+  `jakie mam oferty?` oraz natychmiastowe `wyślij/wygeneruj ofertę...`.
+  Frazy z przyszłą datą/godziną nadal należą do `add_meeting(offer_email)`.
+
 **Product vision only / wymaga osobnej decyzji Maana** — opisane w `poznaj_swojego_agenta_v5_FINAL.md` jako wizja, ale **nie zatwierdzone jako roadmapa**. Każdą trzeba osobno zaakceptować przed wejściem do implementacji. **Nie są NIEPLANOWANE i nie są POST-MVP roadmap** — zostają w tej warstwie dopóki Maan nie zdecyduje inaczej:
 
 - `reschedule_meeting`
@@ -194,6 +210,24 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 - Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj) — `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`.
 - Po Zapisz transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) — voice działa jako input adapter, nie odrębny intent type.
 - Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
+
+### Generator ofert (baseline od 04.05.2026)
+
+- Webapp `/oferty` jest integralną częścią dark UI aplikacji. Sidebar w kontekście
+  generatora pokazuje tylko `Oferty`; nagłówek strony to `Generator ofert`.
+- Oferta = szablon zestawu, nie oferta przypisana wcześniej do klienta.
+- Produkty MVP: `PV`, `Magazyn energii`, `PV + Magazyn energii`.
+- Webapp zapisuje szablony i profil sprzedawcy w Supabase, generuje preview oraz
+  testowy PDF. Nie wysyła maili do klientów.
+- Profil sprzedawcy przechowuje firmę, logo i globalną treść emaila. `Podpis
+  maila` i `akcent` nie są aktywnymi polami UI.
+- Treść emaila używa zmiennych z Sheets/oferty jako kafelków w edytorze; zapis
+  blokuje nieznane tokeny.
+- Telegram send flow używa gotowego szablonu, szuka klienta w Sheets, pokazuje
+  kartę `✅ Wysłać` / `❌ Anulować`, wysyła PDF przez połączonego Gmaila i dopiero
+  po sukcesie próbuje dopisać email/status w Sheets. Po wysyłce nie odpala R7.
+- Idempotencja callbacków jest obowiązkowa: jedna karta wysyłki nie może wysłać
+  dwóch maili.
 
 ### Product Vision
 
@@ -283,6 +317,9 @@ Czytaj:
 
 ## 8. Najbliższy krok
 
-Phase 1 z `IMPLEMENTATION_PLAN.md`: Infrastructure Audit.
+Kontynuować stabilizację agenta na `bot-test` oraz wykonać kontrolowany smoke
+generatora ofert:
 
-Sprawdzić wrappery → verdict per wrapper → potem kontynuować rewrite zgodnie z `IMPLEMENTATION_PLAN.md`.
+1. `/oferty` w webappie: zapis szablonu, profil, logo, treść emaila, test PDF.
+2. Telegram: lista ofert, wysyłka z numerem, brak numeru, zły numer, brak emaila.
+3. Gmail/Sent i Sheets effects na fikcyjnych danych i kontrolowanych adresach.

@@ -1,6 +1,6 @@
 # OZE-Agent — Architecture
 
-_Last updated: 14.04.2026_
+_Last updated: 04.05.2026_
 
 ---
 
@@ -48,6 +48,23 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 | Global cancel | `bot/handlers/cancel.py` | Live since 25.04.2026 — universal escape hatch for any pending flow |
 | R6 conversation memory | `shared/conversation_format.py`, `shared/active_client.py`, `bot/utils/conversation_reply.py` | Live since 27.04.2026 — 10 messages / 30 min rolling history, assistant replies persisted from handler wrappers, active client derive'owany just-in-time |
 
+## Active product slice — Offer Generator
+
+The offer generator is an integrated web + backend + Telegram/Gmail slice,
+baseline `09e0957 feat: add offer generator`.
+
+| Layer | Files / Data | Responsibility |
+|-------|--------------|----------------|
+| Web UI | `web/app/oferty/`, `web/components/offers/` | Create templates, manage drafts/ready offers, seller profile, logo, email body template, preview and test PDF |
+| API | `oze-agent/api/routes/offers.py` | Thin FastAPI endpoints for templates, profile, logo, PDF and email variables |
+| Shared logic | `oze-agent/shared/offers/` | Validation, pricing, PDF rendering, email rendering, Gmail MIME sender, send pipeline, idempotency |
+| Bot | Telegram handlers / callbacks touching offers | List offers, select offer, resolve one client, confirm send, call send pipeline |
+| Supabase | `offer_templates`, `offer_seller_profiles`, `offer_send_attempts`, bucket `offer-logos` | System data and technical logs only |
+| Google | Sheets + Gmail | Client source data and real email delivery |
+
+Offer templates are system data. Customer identity, emails and funnel status stay
+in Google Sheets. PDFs are generated for preview/send but are not archived in MVP.
+
 ---
 
 ## Deferred flows
@@ -66,6 +83,7 @@ Batch/multi-meeting fragments are legacy reference only — not the contract.
 shared/
   google/              # Stable wrappers (sheets, calendar, drive, auth)
   clients/             # Client CRUD: search, add, update, duplicate detection
+  offers/              # Offer templates, pricing, PDF, email rendering, Gmail send
   intent/              # Intent router: classify, extract entities
   pending/             # Pending state machine: create, route, cancel, confirm
   cards/               # Card builders: mutation cards, read-only cards, disambiguation
@@ -79,6 +97,9 @@ bot/
 ```
 
 Photo upload currently lives in `bot/handlers/photo.py` with stable wrapper support in `shared/google_drive.py`, `shared/google_sheets.py`, and `shared/database.py`. Voice work currently lives in `shared/voice_postproc.py` + `shared/whisper_stt.py` + `bot/handlers/voice.py` — could be moved into `shared/voice/` if/when refactor is needed.
+
+Offer-generator business rules should stay in `shared/offers/`; web/API/bot
+layers are adapters around that shared logic.
 
 ---
 
@@ -109,6 +130,16 @@ Photo upload currently lives in `bot/handlers/photo.py` with stable wrapper supp
 └─────────────────────────────────┘
 ```
 
+Offer generator has a second entry point:
+
+```
+Web /oferty ──► FastAPI offers route ──► shared/offers ──► Supabase
+                                      │
+Telegram send callback ───────────────┘
+                                      ├──► Gmail API
+                                      └──► Google Sheets follow-up writes
+```
+
 ---
 
 ## Design Principles
@@ -123,3 +154,7 @@ Photo upload currently lives in `bot/handlers/photo.py` with stable wrapper supp
 8. **Mutations are atomic pipelines** — Sheets → Calendar → response, with error handling
 9. **Unified 3-button mutation cards** — all mutation intents (`add_client`, `add_note`, `change_status`, `add_meeting`) use the same pattern: `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`. `❌ Anulować` is one-click.
 10. **Duplicate resolution is explicit** — a first name + last name + city match routes through `[Nowy]` / `[Aktualizuj]` before any mutation card. No default merge.
+11. **Offer-send confirmation is explicit** — offer delivery uses `[✅ Wysłać] [❌ Anulować]`, no `➕ Dopisać`, Gmail first, Sheets writes only after Gmail success.
+12. **Web offer setup is not CRM mutation** — `/oferty` writes system data
+    (templates/profile/logo/email template) to Supabase; it does not create or
+    edit client rows in Sheets.

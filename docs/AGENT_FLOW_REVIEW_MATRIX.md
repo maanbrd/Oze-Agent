@@ -5,6 +5,12 @@
 **Dane:** wyłącznie fikcyjne dane testowe  
 **Cel:** przejść scenariusz po scenariuszu i oznaczyć, które flow są OK, a które mają zostać zmienione.
 
+> Stan 04.05.2026: ten dokument nadal mapuje core flow Telegram/CRM z 27.04.
+> Generator ofert jest osobnym zatwierdzonym slice'em i ma testy w
+> `docs/TEST_PLAN_CURRENT.md` sekcja `Offer Generator — Web/API/Bot`. Nie
+> dopisujemy tutaj pełnych scenariuszy OF-*, żeby nie mieszać review core agenta
+> z web/Gmail flow.
+
 ## Jak czytać dokument
 
 - Każdy scenariusz pokazuje obecne zachowanie agenta, nie docelowy ideał.

@@ -429,6 +429,14 @@ Tabbed:
 
 ## 9. Implications dla bota Telegram (co dochodzi po stronie bota)
 
+### Generator ofert w kontekście firmowym
+
+Stan 04.05.2026: generator ofert jest zaimplementowany jako profil i szablony
+sprzedawcy (`offer_seller_profiles`, `offer_templates`). W modelu firmowym nie
+zakładamy automatycznie współdzielonych ofert całej organizacji. Jeśli owner ma
+zarządzać wspólnymi szablonami, to jest osobna decyzja produktowa i osobny model
+uprawnień.
+
 **Bot nie zmienia się prawie wcale**, ale:
 
 1. **Nowy intent typu informacyjnego** — handlowiec może zapytać agenta „Kto jeszcze rozmawiał z Kowalskim w naszej firmie?" — agent odpowiada na podstawie cross-team query (czyli musi mieć dostęp do `organization_aggregates_cache`). To jest **POST-MVP rozszerzenia firmowego**, nie pierwsza runda.

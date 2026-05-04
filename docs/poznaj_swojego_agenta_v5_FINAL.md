@@ -94,6 +94,32 @@ Agent pokaże co zmieni i poczeka na Twoje potwierdzenie.
 
 Agent zaproponuje zmianę statusu i poczeka na Twoje potwierdzenie.
 
+### 📨 Generator ofert
+
+Generator ofert działa dwutorowo:
+
+- W webappie, w zakładce **Oferty**, tworzysz gotowe szablony zestawów:
+  fotowoltaika, magazyn energii albo PV + magazyn. Ustawiasz komponenty, cenę,
+  dofinansowanie, warunki, logo firmy i treść emaila.
+- W Telegramie prosisz agenta o wysyłkę konkretnej oferty do konkretnego klienta.
+
+Webapp służy do przygotowania szablonu i testowego PDF. Nie wysyła oferty
+klientowi. Realna wysyłka idzie przez Gmail handlowca po potwierdzeniu w
+Telegramie.
+
+Przykłady:
+
+- *"Jakie mam oferty?"* — agent pokaże listę gotowych ofert z numerami.
+- *"Wyślij ofertę nr 2 Janowi Kowalskiemu z Warszawy"* — agent znajdzie klienta,
+  sprawdzi email, pokaże kartę wysyłki i poczeka na `✅ Wysłać`.
+
+Jeśli powiesz *"wyślę ofertę Janowi jutro o 12"*, agent potraktuje to jako
+zaplanowanie czynności w Kalendarzu, nie natychmiastową wysyłkę PDF.
+
+Po wysłaniu agent nie odpala dodatkowego pytania „co dalej" — po prostu
+potwierdza wysyłkę. Jeśli Gmail zadziałał, ale dopisanie statusu/emaila w Sheets
+częściowo się nie udało, agent mówi krótko co nie zostało zapisane.
+
 **Usuwanie klientów** — jeśli chcesz usunąć klienta z bazy, powiedz np. *"Usuń z bazy Krzysztofa Nowaka z Piaseczna"*. Agent zawsze pyta o potwierdzenie, bo tej operacji nie da się cofnąć.
 
 ### 📅 Kalendarz i spotkania

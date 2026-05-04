@@ -1,6 +1,6 @@
 # OZE-Agent — Behavior Spec v5
 
-_Last updated: 14.04.2026._
+_Last updated: 04.05.2026._
 
 Definiuje KIM jest agent, JAK się komunikuje i CO robi.
 
@@ -42,6 +42,11 @@ Jeśli wszystko uzupełnione, NIE pokazuj 'Brakuje:'.
 - `[Tak]` / `[Nie]` NIE zastępuje karty mutacyjnej R1.
 - `[Tak]` / `[Nie]` jest dopuszczalne przy prostych pytaniach binarnych niе-mutacyjnych (np. potwierdzenie fuzzy match, potwierdzenie transkrypcji voice).
 - `[Zapisz bez]` jest retired.
+
+**Wyjątek generatora ofert:** karta realnej wysyłki oferty używa
+`[✅ Wysłać] [❌ Anulować]`. Nie ma `➕ Dopisać`, bo nie jest to karta edycji
+pending danych klienta. Gmail wysyła dopiero po `✅ Wysłać`; Sheets effects są
+best-effort dopiero po sukcesie Gmaila.
 
 ### R2: Pytaj TYLKO gdy konieczne
 
@@ -173,6 +178,48 @@ Co dalej z Janem Kowalskim z Warszawy? Spotkanie, telefon, mail, odłożyć na p
 - Jeśli odpowiedź zawiera typ akcji + datę/godzinę (`"telefon w piątek o 10"`) → agent parsuje jako `add_meeting` i startuje normalny flow z kartą 3-button.
 - Jeśli odpowiedź to `"nie wiem jeszcze"`, `"później"`, `"zobaczę"` → agent zamyka flow bez tworzenia wydarzenia.
 - Jeśli handlowiec wciśnie `❌ Anuluj / nic` → koniec flow.
+
+---
+
+### R9: Generator ofert — wysyłka PDF przez Gmail
+
+Generator ofert jest zatwierdzonym flow obok 6 intencji CRM. Webapp `/oferty`
+służy do setupu szablonów, profilu sprzedawcy, logo i treści emaila. Telegram
+służy do realnej wysyłki klientowi.
+
+**Routing:**
+- `jakie mam oferty?` → numerowana lista gotowych ofert.
+- `wyślij/wygeneruj ofertę...` bez przyszłej daty/godziny → offer-send.
+- `wyślę ofertę jutro o 12` / `przypomnij wysłać ofertę w piątek` →
+  `add_meeting(offer_email)`, nie generator.
+
+**Karta wysyłki:**
+
+```
+📨 Wysłać ofertę?
+Klient: Jan Kowalski, Warszawa
+Oferta: 2. PV 6,2 kWp — dom jednorodzinny
+Odbiorcy: jan@example.pl
+Mail: krótki preview treści
+
+[✅ Wysłać] [❌ Anulować]
+```
+
+**Reguły:**
+- Jedna komenda = jeden klient.
+- Jeśli nie podano numeru oferty, agent pokazuje listę i czeka na numer.
+- Jeśli numer nie istnieje, agent pokazuje aktualną listę gotowych ofert.
+- Jeśli klient nie ma poprawnego maila, agent pyta o email i nie wysyła.
+- Wiele poprawnych maili w Sheets → jeden Gmail do wszystkich.
+- Błędne adresy są pokazane jako pominięte.
+- Email z komendy dołączany jest do odbiorców; po udanym Gmailu agent próbuje
+  dopisać go do Sheets, jeśli go tam nie było.
+- Nieznane tokeny w treści emaila są blokowane w webappie. Puste znane zmienne
+  pokazują warning na karcie, ale nie blokują wysyłki.
+- Po Gmail success agent może zmienić status na `Oferta wysłana`, ale nie cofa:
+  `Podpisane`, `Zamontowana`, `Rezygnacja z umowy`, `Nieaktywny`, `Odrzucone`.
+- Po skutecznej wysyłce R7 nie odpala.
+- Callback musi być idempotentny: double click nie może wysłać drugiego maila.
 
 ---
 
@@ -516,6 +563,25 @@ Anulowanie jest **one-click**. Przycisk `❌ Anulować` natychmiast zamyka pendi
 | 50 | wracam w poniedziałek do Jana Nowaka | Follow-up: poniedziałek [data] w `L=Data następnego kroku`, karta 3-button | Data poprawnie sparsowana, relatywna "poniedziałek" rozwiązana do najbliższego |
 | 51 | co umiesz? | Lista możliwości (6 intencji MVP) | Routing do `general_question`, NIE `add_client` |
 | 52 | Pusty msg / samo emoji | Nie zrozumiałem, powiedz to inaczej. | Graceful — bez erroru, bez halucynacji |
+
+---
+
+### Generator ofert (53-64)
+
+| # | Input | Intent / flow | PASS gdy |
+|---|-------|---------------|----------|
+| 53 | jakie mam oferty? | offer_list | Bot pokazuje tylko gotowe oferty z aktualną numeracją |
+| 54 | wyślij ofertę nr 1 Janowi Kowalskiemu Warszawa | offer_send | Karta `✅ Wysłać` / `❌ Anulować`, bez Gmail przed kliknięciem |
+| 55 | wyślij ofertę Janowi Kowalskiemu Warszawa | offer_send_missing_number | Bot pokazuje listę ofert i czeka na numer |
+| 56 | wyślij ofertę nr 99 Janowi Kowalskiemu Warszawa | offer_send_bad_number | Bot pokazuje aktualną listę gotowych ofert |
+| 57 | wyślij ofertę nr 1 Janowi bez maila | offer_send_missing_email | Bot pyta o email, nic nie wysyła |
+| 58 | klient ma 2 poprawne maile | offer_send | Jeden mail do obu adresów |
+| 59 | klient ma mail poprawny i błędny | offer_send | Poprawny dostaje mail, błędny pokazany jako pominięty |
+| 60 | email podany w komendzie | offer_send | Mail idzie na Sheets + command email; po sukcesie próba dopisania do Sheets |
+| 61 | klient ma status Podpisane | offer_send | Gmail może iść, status nie cofa się do Oferta wysłana |
+| 62 | Gmail fail | offer_send | Brak Sheets write |
+| 63 | Gmail success, Sheets partial fail | offer_send | Agent potwierdza mail i krótko mówi co nie zapisało się w Sheets |
+| 64 | double click `✅ Wysłać` | offer_send | Jeden Gmail message id, drugi callback idempotentny |
 
 ---
 

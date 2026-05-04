@@ -1,6 +1,6 @@
 # OZE-Agent — Macierz intencji MVP
 
-_Ostatnia aktualizacja: 14.04.2026_
+_Ostatnia aktualizacja: 04.05.2026_
 _Hierarchia SSOT: ten plik jest #5 per `SOURCE_OF_TRUTH.md` sekcja 5. W razie konfliktu — wygrywa wyższy._
 
 Ten dokument definiuje **kontrakt 6 intencji MVP** — co agent robi w Sheets i Kalendarzu dla każdej rozpoznanej intencji, w jakiej kolejności, z jakimi potwierdzeniami.
@@ -37,6 +37,18 @@ Po Sesji 1 Regresja, decyzja produktowa: **MVP zawiera tylko intencje z tabeli p
 | 6 | `show_day_plan` | Pokazuje plan dnia | NIE (read-only) | NIE (read-only — czyta z Kalendarza) |
 
 **Kluczowe: intencje `show_*` czytają z Kalendarza, nie z Sheets.** Plan dnia nie pochodzi z Sheets — pochodzi z Calendar API query "wydarzenia na dziś". To jest konsekwencja zasady "Calendar = akcja".
+
+### 2.1. Adjacent product flow: generator ofert
+
+Generator ofert **nie jest siódmą intencją CRM MVP**. To osobny, zatwierdzony
+slice produktu:
+- Webapp `/oferty` tworzy szablony ofert, profil sprzedawcy, logo, treść maila
+  i testowy PDF.
+- Telegram obsługuje realną wysyłkę PDF przez Gmail handlowca.
+- Natychmiastowe komendy typu `wyślij ofertę Janowi Kowalskiemu` bez przyszłej
+  daty/godziny idą do offer-send flow.
+- Frazy z przyszłą datą/godziną, np. `wyślę ofertę Janowi jutro o 12`, nadal
+  należą do `add_meeting(event_type=offer_email)` i tworzą blok w Kalendarzu.
 
 ---
 
@@ -357,6 +369,53 @@ Typ: rozmowa telefoniczna
 
 ---
 
+### 4.7. `offer_send` — wysyłka gotowego szablonu oferty
+
+To flow generatora ofert, a nie standardowa intencja CRM.
+
+**Wejścia:**
+- `jakie mam oferty?` → lista gotowych ofert z aktualną numeracją.
+- `wyślij ofertę nr 2 Janowi Kowalskiemu Warszawa` → wybór szablonu + klient.
+- `wygeneruj ofertę dla Jana Kowalskiego` bez numeru → agent pokazuje listę
+  gotowych ofert i czeka na odpowiedź numerem.
+
+**Rozróżnienie z Kalendarzem:**
+- Jeśli komenda zawiera przyszłą datę/godzinę (`jutro`, `w piątek o 12`,
+  `za tydzień`) → `add_meeting(offer_email)`, nie generator.
+- Jeśli nie ma przyszłej daty/godziny → generator ofert.
+
+**Karta potwierdzenia wysyłki:**
+
+```
+📨 Wysłać ofertę?
+Klient: Jan Kowalski, Warszawa
+Oferta: 2. PV 6,2 kWp — dom jednorodzinny
+Odbiorcy: jan@example.pl
+Pominięte adresy: zly-email
+Mail: krótki preview treści
+
+[✅ Wysłać] [❌ Anulować]
+```
+
+**Zasady:**
+- Jedna komenda wysyłki = jeden klient.
+- Karta używa tylko `✅ Wysłać` / `❌ Anulować`. Nie ma `➕ Dopisać`.
+- Gmail/PDF ma priorytet. Przed `✅ Wysłać` nie ma maila i nie ma zmian w Sheets.
+- Jeśli klient nie ma poprawnego maila, agent pyta o email.
+- Jeśli klient nie istnieje w Sheets, flow się kończy bez tworzenia klienta.
+- Jeśli numer oferty nie istnieje, agent pokazuje aktualną listę gotowych ofert.
+- Jeśli mail podany w komendzie nie istnieje w Sheets, po udanej wysyłce agent
+  próbuje dopisać go średnikiem.
+- Po udanym Gmailu agent próbuje ustawić status `Oferta wysłana`, ale nie cofa
+  terminalnych/późniejszych statusów: `Podpisane`, `Zamontowana`,
+  `Rezygnacja z umowy`, `Nieaktywny`, `Odrzucone`.
+- `Data ostatniego kontaktu` zmienia się tylko wtedy, gdy status faktycznie
+  zmienia się na `Oferta wysłana`.
+- Po skutecznej wysyłce agent tylko potwierdza. R7 nie odpala.
+- Idempotencja jest obowiązkowa: ta sama karta/callback nie może wysłać dwóch maili.
+
+---
+
 ## 5. State machine pending flow (R1)
 
 ### 5.0. Karta potwierdzenia — 3 przyciski (zamrożone 11.04.2026)
@@ -422,8 +481,13 @@ Nie pokazujemy pustych pól. Nie pokazujemy surowych danych technicznych (`_row`
 | Duplicate resolution | `[Nowy]` `[Aktualizuj]` |
 | Proste pytanie binarne (nie karta zapisu) | `[Tak]` `[Nie]` dopuszczalne — np. potwierdzenie fuzzy match ("Chodziło o Kowalskiego z Warszawy?"), potwierdzenie transkrypcji voice |
 | Karta read-only (show_client, show_day_plan) | Brak przycisków |
+| Karta wysyłki oferty (generator) | `[✅ Wysłać]` `[❌ Anulować]` |
 
 `[Tak]` / `[Nie]` **NIE zastępuje** karty zapisu do Sheets/Calendar/Drive. Jest dopuszczalne tylko w pytaniach binarnych nie-mutacyjnych.
+
+Offer-send card jest wyjątkiem od standardowej karty mutacyjnej, bo nie służy
+do edycji pending danych. Potwierdza realną wysyłkę Gmail + PDF i późniejsze
+best-effort Sheets effects. Nie ma `➕ Dopisać`.
 
 Każda intencja mutująca przechodzi przez **3 stany**: `parsed → pending → committed` (lub `cancelled`).
 

@@ -3,7 +3,7 @@
 Panel webowy dla Agent-OZE. Web app jest osobnym Next.js appem w monorepo,
 deployowanym docelowo na Vercel z root directory `web/`.
 
-Phase 0A zawiera:
+Aktualny web app zawiera:
 
 - Next.js 16 App Router
 - TypeScript
@@ -13,6 +13,8 @@ Phase 0A zawiera:
 - statyczne placeholder routes: `/rejestracja`, `/login`, `/regulamin`,
   `/polityka-prywatnosci`
 - `/healthz` jako JSON healthcheck
+- `/oferty` — generator szablonów ofert PV / magazyn energii / PV + magazyn,
+  seller profile, logo, treść emaila, preview i testowy PDF
 
 ## Getting Started
 
@@ -30,6 +32,7 @@ Adresy:
 - `http://localhost:3000/healthz` — healthcheck JSON
 - `http://localhost:3000/rejestracja` — placeholder onboardingu
 - `http://localhost:3000/login` — placeholder logowania
+- `http://localhost:3000/oferty` — generator ofert
 
 ## Scripts
 
@@ -44,8 +47,9 @@ Turbopacka służy `npm run build:turbo`.
 
 ## Scope
 
-W Phase 0A web app nie integruje jeszcze Supabase, Stripe, Resend, Railway ani
-Google API. Bot w `../oze-agent/` pozostaje nietknięty.
+Generator ofert komunikuje się z backendem FastAPI w `../oze-agent/` dla
+szablonów, profilu, logo, zmiennych emaila i testowego PDF. Webapp nie wysyła
+ofert do klientów; realna wysyłka idzie przez Telegram + Gmail.
 
 Landing używa animacji Midjourney dostarczonej przez usera:
 `public/media/hero-bg.mp4`. Pliki medialne trzymaj w `public/media/`.

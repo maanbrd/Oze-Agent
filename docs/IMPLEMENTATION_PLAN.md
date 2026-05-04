@@ -1,6 +1,6 @@
 # OZE-Agent — Implementation Plan
 
-_Last updated: 27.04.2026_
+_Last updated: 04.05.2026_
 
 ---
 
@@ -31,6 +31,35 @@ surface, but the product's core value is the agent in Telegram.
   R7 next-action prompts, show_day_plan, `/cancel`.
 - Add focused tests for each production bug before promoting fixes to `main`.
 - Plan separate staging Google/Supabase resources before destructive testing.
+- Run a controlled offer-generator smoke on fictional clients and controlled
+  addresses before any real customer send.
+
+## Offer Generator Slice — baseline implemented
+
+Baseline commit: `09e0957 feat: add offer generator`.
+
+Scope delivered:
+- `/oferty` in the existing webapp, visually integrated with the dark app shell.
+- Ready offers/drafts, manual ready-offer ordering, delete, duplicate-as-draft,
+  validation gates and test PDF.
+- Seller profile persistence: company, logo and global email body template.
+  `Akcent` and `Podpis maila` are no longer active UI fields.
+- Email template editor with natural writing + draggable/removable variable chips.
+- Shared backend logic in `oze-agent/shared/offers/`: validation, pricing, PDF,
+  email renderer, Gmail MIME sender, idempotent send pipeline.
+- FastAPI offers route and Supabase system tables/bucket.
+- Telegram send flow: list offers, select offer, resolve one client, confirm
+  `✅ Wysłać` / `❌ Anulować`, Gmail send, then best-effort Sheets follow-up writes.
+
+Current remaining work for this slice:
+1. Manual `/oferty` browser smoke after deploy: create/publish/reorder/delete,
+   duplicate, logo upload, email chips, test PDF.
+2. Controlled Gmail Sent check with a non-customer address.
+3. Telegram text send flow: `jakie mam oferty?`, send with number, no number,
+   wrong number, missing email, multiple emails, email from command.
+4. Telegram voice → transcript → send offer smoke.
+5. Verify Supabase Storage bucket `offer-logos` and deployed env vars in staging/production.
+6. Verify partial Sheets failure messaging after Gmail success.
 
 ---
 
@@ -245,8 +274,9 @@ the relevant subset passes on production after promotion:
 - Read-only formatting (show_client, show_day_plan)
 - Dual-write rules per intent (per Phase 5)
 - Proactive scheduler (morning brief + evening follow-up)
+- Offer-generator send flow on controlled test data before customer use
 
-**Do NOT:** Treat multi-meeting test failures as MVP blockers. Photo upload is an active post-MVP slice and should be tested when touched. Add unrelated features. Change specs. Rush to deploy. (Voice transcription went live 25.04.2026 — its tests **are** MVP blockers.)
+**Do NOT:** Treat multi-meeting test failures as MVP blockers. Photo upload is an active post-MVP slice and should be tested when touched. Add unrelated features. Change specs. Rush to deploy. (Voice transcription went live 25.04.2026 — its tests **are** MVP blockers. Offer generator is a separate approved product slice and has its own smoke gate.)
 
 ---
 
@@ -254,6 +284,13 @@ the relevant subset passes on production after promotion:
 
 - **Voice transcription** — Whisper STT + Polish name post-pass (Claude haiku) + 2-button confirm card (Zapisz/Anuluj). Live since 25.04.2026 (post-Phase 7 slice). Confirmed transcription flows through normal text path via `handle_text(text_override=...)`. Voice acts as input adapter — no separate voice intent type. Files: `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`, `bot/handlers/cancel.py`.
 - **Photo upload** — Telegram photo/image → R1 Drive card → Google Drive folder + Sheets N/O update + 15-minute active client photo session.
+
+## Approved product slice outside the 6 bot intents
+
+- **Offer generator** — implemented baseline, see section above. It is not a
+  seventh CRM intent in `INTENCJE_MVP.md`; it is an adjacent product flow with
+  web setup and Telegram/Gmail send. Future-dated "wyślę ofertę..." phrases
+  still route to `add_meeting(offer_email)`.
 
 ---
 
