@@ -7,6 +7,7 @@ Returns None / empty list on failure — never raises.
 import asyncio
 import io
 import logging
+import re
 from typing import Optional
 
 from googleapiclient.discovery import build
@@ -16,6 +17,8 @@ from shared.database import get_user_by_id, update_user
 from shared.google_auth import get_google_credentials
 
 logger = logging.getLogger(__name__)
+
+FOLDER_URL_PREFIX = "https://drive.google.com/drive/folders/"
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -27,6 +30,32 @@ def _get_drive_service_sync(user_id: str):
     if not creds:
         return None
     return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _escape_drive_query_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def extract_folder_id(value: str) -> Optional[str]:
+    """Extract a Drive folder ID from a folder URL or raw ID-like value."""
+    if not value:
+        return None
+    match = re.search(r"/folders/([A-Za-z0-9_-]+)", value)
+    if match:
+        return match.group(1)
+    if re.fullmatch(r"[A-Za-z0-9_-]{10,}", value.strip()):
+        return value.strip()
+    return None
+
+
+def build_client_folder_name(client: dict) -> str:
+    """Build a user-facing Drive folder name from Sheets client fields."""
+    parts = [
+        client.get("Imię i nazwisko", ""),
+        client.get("Miasto", client.get("Miejscowość", "")),
+        client.get("Adres", ""),
+    ]
+    return " — ".join(part.strip() for part in parts if part and part.strip())
 
 
 # ── Public async API ──────────────────────────────────────────────────────────
@@ -151,8 +180,95 @@ async def get_or_create_client_folder(
         return None
 
 
+async def get_or_create_client_photo_folder(
+    user_id: str,
+    client: dict,
+) -> Optional[dict]:
+    """Return client photo folder metadata, creating it under root if needed.
+
+    Existing Sheets column O is preferred when it contains a Drive folder link.
+    """
+    try:
+        user = get_user_by_id(user_id)
+        if not user:
+            return None
+
+        root_folder_id = user.get("google_drive_folder_id")
+        if not root_folder_id:
+            root_folder_id = await create_root_folder(user_id)
+        if not root_folder_id:
+            return None
+
+        existing_folder_id = extract_folder_id(client.get("Link do zdjęć", ""))
+        folder_name = build_client_folder_name(client)
+        if not folder_name:
+            folder_name = client.get("Imię i nazwisko", "Klient")
+
+        def _find_or_create():
+            service = _get_drive_service_sync(user_id)
+            if not service:
+                return None
+
+            if existing_folder_id:
+                try:
+                    existing = service.files().get(
+                        fileId=existing_folder_id,
+                        fields="id, name, webViewLink",
+                    ).execute()
+                    if existing:
+                        return existing
+                except Exception as e:
+                    logger.warning(
+                        "get_or_create_client_photo_folder: existing folder %s invalid: %s",
+                        existing_folder_id,
+                        e,
+                    )
+
+            escaped_name = _escape_drive_query_value(folder_name)
+            query = (
+                f"name = '{escaped_name}' "
+                f"and '{root_folder_id}' in parents "
+                f"and mimeType = 'application/vnd.google-apps.folder' "
+                f"and trashed = false"
+            )
+            result = service.files().list(
+                q=query,
+                fields="files(id, name, webViewLink)",
+            ).execute()
+            files = result.get("files", [])
+            if files:
+                return files[0]
+
+            metadata = {
+                "name": folder_name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [root_folder_id],
+            }
+            return service.files().create(
+                body=metadata,
+                fields="id, name, webViewLink",
+            ).execute()
+
+        folder = await asyncio.to_thread(_find_or_create)
+        if not folder:
+            return None
+        folder_id = folder.get("id")
+        return {
+            "id": folder_id,
+            "name": folder.get("name", folder_name),
+            "webViewLink": folder.get("webViewLink") or f"{FOLDER_URL_PREFIX}{folder_id}",
+        }
+    except Exception as e:
+        logger.error("get_or_create_client_photo_folder(%s): %s", user_id, e)
+        return None
+
+
 async def upload_photo(
-    user_id: str, folder_id: str, file_bytes: bytes, filename: str
+    user_id: str,
+    folder_id: str,
+    file_bytes: bytes,
+    filename: str,
+    description: str = "",
 ) -> Optional[str]:
     """Upload a photo to the specified folder. Returns web view link or None."""
     try:
@@ -164,6 +280,8 @@ async def upload_photo(
             mime_type = "image/jpeg" if filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg") else "image/png"
             media = MediaIoBaseUpload(file_stream, mimetype=mime_type)
             metadata = {"name": filename, "parents": [folder_id]}
+            if description:
+                metadata["description"] = description
             uploaded = service.files().create(
                 body=metadata,
                 media_body=media,

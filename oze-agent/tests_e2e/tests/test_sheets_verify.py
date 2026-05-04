@@ -29,6 +29,16 @@ async def test_resolve_user_id_returns_supabase_uuid():
 
 
 @pytest.mark.asyncio
+async def test_resolve_user_id_uses_env_override(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_E2E_SUPABASE_USER_ID", "uuid-from-env")
+    with patch("tests_e2e.sheets_verify.get_user_by_telegram_id") as get_user:
+        uid = await resolve_user_id(999)
+
+    assert uid == "uuid-from-env"
+    get_user.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_resolve_user_id_none_when_user_missing():
     with patch("tests_e2e.sheets_verify.get_user_by_telegram_id", return_value=None):
         uid = await resolve_user_id(42)

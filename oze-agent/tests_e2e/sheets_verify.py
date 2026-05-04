@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Optional
 
 from shared.database import get_user_by_telegram_id
@@ -26,11 +27,32 @@ logger = logging.getLogger(__name__)
 # ── User-id resolution ──────────────────────────────────────────────────────
 
 
+def _supabase_user_id_override() -> Optional[str]:
+    """Return an explicit Supabase user UUID for local/MCP verifier runs."""
+    for name in (
+        "TELEGRAM_E2E_SUPABASE_USER_ID",
+        "TELEGRAM_E2E_USER_ID",
+        "OZE_E2E_USER_ID",
+    ):
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return None
+
+
 async def resolve_user_id(telegram_id: int) -> Optional[str]:
     """Resolve Supabase user UUID from a Telegram numeric id. None if no match."""
+    override = _supabase_user_id_override()
+    if override:
+        return override
+
     user = await asyncio.to_thread(get_user_by_telegram_id, telegram_id)
     if not user:
-        logger.warning("resolve_user_id: no user for telegram_id=%s", telegram_id)
+        logger.warning(
+            "resolve_user_id: no user for telegram_id=%s; set "
+            "TELEGRAM_E2E_SUPABASE_USER_ID for local verifier runs",
+            telegram_id,
+        )
         return None
     return user.get("id")
 

@@ -5,6 +5,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.utils.conversation_reply import reply_text
 from bot.utils.telegram_helpers import is_private_chat
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,14 @@ async def handle_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif message.photo:
             from bot.handlers.photo import handle_photo
             await handle_photo(update, context)
+        elif message.document and (message.document.mime_type or "").startswith("image/"):
+            from bot.handlers.photo import handle_photo
+            await handle_photo(update, context)
         return
 
     # Unsupported types
-    await message.reply_text(
+    await reply_text(
+        update,
         "Obsługuję wiadomości tekstowe, głosówki i zdjęcia. "
         "Wyślij jedną z tych form, żeby zacząć."
     )

@@ -39,6 +39,8 @@ async def error_handler(update, context):
 
 
 def main():
+    Config.warn_secret_whitespace()
+
     missing = Config.validate_phase_a()
     if missing:
         logger.error("Missing required env vars: %s", missing)
@@ -52,7 +54,7 @@ def main():
     app.add_handler(CommandHandler("debug_brief", debug_brief_command))
     app.add_handler(CommandHandler("odswiez_kolumny", handle_refresh_columns_command))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(CallbackQueryHandler(handle_button))
     app.add_handler(MessageHandler(filters.ALL, handle_fallback))

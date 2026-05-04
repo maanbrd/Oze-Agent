@@ -67,6 +67,7 @@ Required variables (also documented in `.env.example`):
 | `TELEGRAM_E2E_ADMIN_ID` | Numeric Telegram id of the test user |
 | `TELEGRAM_E2E_SESSION` | Path prefix for the Telethon session file |
 | `TELEGRAM_E2E_REPORT` | (Optional) override for the report file path |
+| `TELEGRAM_E2E_SUPABASE_USER_ID` | (Optional) Supabase UUID for local Sheets/Calendar verification when Supabase env cannot resolve `TELEGRAM_E2E_ADMIN_ID` |
 
 The harness reads plain env (no `.env` auto-load) — use `set -a; source
 tests_e2e/.env; set +a` or your favourite dotenv runner when invoking.

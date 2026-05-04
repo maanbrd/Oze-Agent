@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class AddClientPayload:
     client_data: dict
     _offer_remaining: Optional[list] = None
+    photo_upload: Optional[dict] = None
 
 
 @dataclass
