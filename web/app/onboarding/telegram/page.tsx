@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { TelegramPairingCard } from "@/components/onboarding/telegram-pairing-card";
-import { requireCurrentAccount } from "@/lib/api/account";
-import {
-  getOnboardingStatus,
-  getTelegramStatus,
-} from "@/lib/api/onboarding";
+import { requireOnboardingStep } from "@/lib/auth/guards";
+import { getTelegramStatus } from "@/lib/api/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +11,9 @@ export default async function TelegramOnboardingPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
-  await requireCurrentAccount("/onboarding/telegram");
-  const [status, pairing] = await Promise.all([
-    getOnboardingStatus(),
-    getTelegramStatus(),
-  ]);
+  const { onboardingStatus: status } =
+    await requireOnboardingStep("/onboarding/telegram");
+  const pairing = await getTelegramStatus();
   const paired = pairing?.paired || status?.steps.telegram;
 
   return (

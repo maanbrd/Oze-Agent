@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { startGoogleOAuthAction } from "@/app/onboarding/actions";
-import { requireCurrentAccount } from "@/lib/api/account";
-import { getOnboardingStatus } from "@/lib/api/onboarding";
+import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +10,8 @@ export default async function GoogleOnboardingPage({
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const params = await searchParams;
-  await requireCurrentAccount("/onboarding/google");
-  const status = await getOnboardingStatus();
+  const { onboardingStatus: status } =
+    await requireOnboardingStep("/onboarding/google");
   const connected = status?.steps.google;
 
   return (

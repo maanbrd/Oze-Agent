@@ -1,6 +1,5 @@
 import { createGoogleResourcesAction } from "@/app/onboarding/actions";
-import { requireCurrentAccount } from "@/lib/api/account";
-import { getOnboardingStatus } from "@/lib/api/onboarding";
+import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +9,8 @@ export default async function ResourcesPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
-  await requireCurrentAccount("/onboarding/zasoby");
-  const status = await getOnboardingStatus();
+  const { onboardingStatus: status } =
+    await requireOnboardingStep("/onboarding/zasoby");
   const profile = status?.profile;
   const defaultName = String(profile?.name ?? profile?.email ?? "Agent-OZE");
 

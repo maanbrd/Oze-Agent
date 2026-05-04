@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createCheckoutSession } from "@/app/onboarding/actions";
-import { getCurrentAccount } from "@/lib/api/account";
+import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +16,7 @@ export default async function PaymentStepPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
-  const account = await getCurrentAccount();
-
-  if (!account.authenticated) {
-    redirect("/login?next=/onboarding/platnosc");
-  }
+  const { account } = await requireOnboardingStep("/onboarding/platnosc");
 
   const isActive = account.profile?.subscription_status === "active";
 

@@ -12,6 +12,10 @@ const dashboardPageSource = readSource("../app/dashboard/page.tsx");
 const offersPageSource = readSource("../app/oferty/page.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
+const paymentPageSource = readSource("../app/onboarding/platnosc/page.tsx");
+const googlePageSource = readSource("../app/onboarding/google/page.tsx");
+const resourcesPageSource = readSource("../app/onboarding/zasoby/page.tsx");
+const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 
 test("private app pages require completed onboarding", () => {
   assert.match(dashboardPageSource, /requireCompletedOnboarding\("\/dashboard"\)/);
@@ -49,4 +53,14 @@ test("full onboarding routes exist", () => {
   ]) {
     assert.equal(existsSync(new URL(path, import.meta.url)), true, path);
   }
+});
+
+test("onboarding steps enforce sequence and cannot be opened through a stale next param", () => {
+  assert.match(guardSource, /requireOnboardingStep/);
+  assert.match(guardSource, /status\?\.nextStep/);
+  assert.match(guardSource, /redirect\(resolvedNextStep\)/);
+  assert.match(paymentPageSource, /requireOnboardingStep\("\/onboarding\/platnosc"\)/);
+  assert.match(googlePageSource, /requireOnboardingStep\("\/onboarding\/google"\)/);
+  assert.match(resourcesPageSource, /requireOnboardingStep\("\/onboarding\/zasoby"\)/);
+  assert.match(telegramPageSource, /requireOnboardingStep\("\/onboarding\/telegram"\)/);
 });
