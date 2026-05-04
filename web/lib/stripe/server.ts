@@ -33,17 +33,13 @@ export function requireStripeEnv() {
     process.env.STRIPE_PRICE_MONTHLY ?? STRIPE_PRICE_LOOKUP_KEYS.monthly;
   const yearlyPrice =
     process.env.STRIPE_PRICE_YEARLY ?? STRIPE_PRICE_LOOKUP_KEYS.yearly;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-  if (!appUrl) {
-    throw new Error("Missing NEXT_PUBLIC_APP_URL");
-  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? null;
 
   return {
     activationPrice,
     monthlyPrice,
     yearlyPrice,
-    appUrl: appUrl.replace(/\/$/, ""),
+    appUrl,
   };
 }
 

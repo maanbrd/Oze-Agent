@@ -12,10 +12,12 @@ const dashboardPageSource = readSource("../app/dashboard/page.tsx");
 const offersPageSource = readSource("../app/oferty/page.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
+const onboardingActionsSource = readSource("../app/onboarding/actions.ts");
 const paymentPageSource = readSource("../app/onboarding/platnosc/page.tsx");
 const googlePageSource = readSource("../app/onboarding/google/page.tsx");
 const resourcesPageSource = readSource("../app/onboarding/zasoby/page.tsx");
 const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
+const stripeServerSource = readSource("../lib/stripe/server.ts");
 
 test("private app pages require completed onboarding", () => {
   assert.match(dashboardPageSource, /requireCompletedOnboarding\("\/dashboard"\)/);
@@ -63,4 +65,14 @@ test("onboarding steps enforce sequence and cannot be opened through a stale nex
   assert.match(googlePageSource, /requireOnboardingStep\("\/onboarding\/google"\)/);
   assert.match(resourcesPageSource, /requireOnboardingStep\("\/onboarding\/zasoby"\)/);
   assert.match(telegramPageSource, /requireOnboardingStep\("\/onboarding\/telegram"\)/);
+});
+
+test("stripe checkout returns to the current request origin, not a stale preview URL", () => {
+  assert.match(onboardingActionsSource, /import \{ headers \} from "next\/headers"/);
+  assert.match(onboardingActionsSource, /resolveCheckoutReturnBaseUrl/);
+  assert.match(onboardingActionsSource, /hostname\.endsWith\("\.vercel\.app"\)/);
+  assert.match(onboardingActionsSource, /success_url: `\$\{returnBaseUrl\}\/onboarding\/sukces/);
+  assert.match(onboardingActionsSource, /cancel_url: `\$\{returnBaseUrl\}\/onboarding\/anulowano`/);
+  assert.equal(onboardingActionsSource.includes("success_url: `${appUrl}/"), false);
+  assert.match(stripeServerSource, /NEXT_PUBLIC_APP_URL\?\./);
 });
