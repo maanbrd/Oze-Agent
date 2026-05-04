@@ -16,6 +16,10 @@ type FormState = {
   email: string;
   phone: string;
   password: string;
+  region: string;
+  specialty: string;
+  referralSource: string;
+  experience: string;
   consentTerms: boolean;
   consentMarketing: boolean;
   consentPhoneContact: boolean;
@@ -27,10 +31,38 @@ const initialState: FormState = {
   email: "",
   phone: "",
   password: "",
+  region: "",
+  specialty: "",
+  referralSource: "",
+  experience: "",
   consentTerms: false,
   consentMarketing: false,
   consentPhoneContact: false,
 };
+
+const regions = [
+  "dolnośląskie",
+  "kujawsko-pomorskie",
+  "lubelskie",
+  "lubuskie",
+  "łódzkie",
+  "małopolskie",
+  "mazowieckie",
+  "opolskie",
+  "podkarpackie",
+  "podlaskie",
+  "pomorskie",
+  "śląskie",
+  "świętokrzyskie",
+  "warmińsko-mazurskie",
+  "wielkopolskie",
+  "zachodniopomorskie",
+  "cała Polska",
+];
+
+const specialties = ["PV", "Pompy ciepła", "PV + magazyn", "Wszystko"];
+const referralSources = ["Facebook", "Polecenie", "Google", "Inne"];
+const experiences = ["do 1 roku", "1-3 lata", "3+ lata"];
 
 const fieldClass =
   "mt-2 h-12 w-full rounded-[8px] border border-white/10 bg-black/28 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-[#3DFF7A]/50 focus:ring-4 focus:ring-[#3DFF7A]/10";
@@ -54,7 +86,7 @@ export function AuthPage({ mode }: AuthPageProps) {
             title: "Załóż konto i przejdź do onboardingu.",
             body: "Ten krok tworzy bezpieczne konto. Płatność, Google OAuth i parowanie Telegrama będą kolejnymi krokami tego samego flow.",
             highlights: ["Auth + RLS", "Płatność", "Google + Telegram"],
-            cta: "Utwórz konto",
+            cta: "Dalej: płatność",
             formTitle: "Załóż konto",
             switchLabel: "Masz już konto?",
             switchCta: "Zaloguj się",
@@ -87,6 +119,12 @@ export function AuthPage({ mode }: AuthPageProps) {
     const firstName = form.firstName.trim();
     const lastName = form.lastName.trim();
     const phone = form.phone.trim();
+    const onboardingSurvey = {
+      region: form.region,
+      specialty: form.specialty,
+      referral_source: form.referralSource,
+      experience: form.experience,
+    };
 
     if (!email || !password) {
       setError("Uzupełnij email i hasło.");
@@ -110,6 +148,17 @@ export function AuthPage({ mode }: AuthPageProps) {
       return;
     }
 
+    if (
+      isRegister &&
+      (!onboardingSurvey.region ||
+        !onboardingSurvey.specialty ||
+        !onboardingSurvey.referral_source ||
+        !onboardingSurvey.experience)
+    ) {
+      setError("Uzupełnij krótką ankietę onboardingową.");
+      return;
+    }
+
     if (isRegister && !form.consentTerms) {
       setError("Regulamin i polityka prywatności są wymagane.");
       return;
@@ -125,6 +174,11 @@ export function AuthPage({ mode }: AuthPageProps) {
       consent_terms: form.consentTerms,
       consent_marketing: form.consentMarketing,
       consent_phone_contact: form.consentPhoneContact,
+      onboarding_survey: onboardingSurvey,
+      region: onboardingSurvey.region,
+      specialty: onboardingSurvey.specialty,
+      referral_source: onboardingSurvey.referral_source,
+      experience: onboardingSurvey.experience,
       createdAt: new Date().toISOString(),
       source: mode,
     };
@@ -262,6 +316,36 @@ export function AuthPage({ mode }: AuthPageProps) {
 
               {isRegister ? (
                 <div className="space-y-3">
+                  <div className="border-t border-white/10 pt-5">
+                    <p className="text-sm font-semibold text-white">Krótka ankieta</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">
+                      Pomaga ustawić onboarding pod teren, w którym pracujesz.
+                    </p>
+                    <SelectField
+                      label="Region działania"
+                      value={form.region}
+                      options={regions}
+                      onChange={(value) => updateField("region", value)}
+                    />
+                    <SelectField
+                      label="Branża"
+                      value={form.specialty}
+                      options={specialties}
+                      onChange={(value) => updateField("specialty", value)}
+                    />
+                    <SelectField
+                      label="Skąd nas znasz"
+                      value={form.referralSource}
+                      options={referralSources}
+                      onChange={(value) => updateField("referralSource", value)}
+                    />
+                    <SelectField
+                      label="Doświadczenie w OZE"
+                      value={form.experience}
+                      options={experiences}
+                      onChange={(value) => updateField("experience", value)}
+                    />
+                  </div>
                   <label className="flex items-start gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 text-sm leading-6 text-zinc-300">
                     <input
                       required
@@ -322,5 +406,36 @@ export function AuthPage({ mode }: AuthPageProps) {
         </section>
       </div>
     </main>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="mt-4 block text-sm font-medium text-zinc-200">
+      {label}
+      <select
+        required
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 h-12 w-full rounded-[8px] border border-white/10 bg-black/28 px-4 text-sm text-white outline-none transition focus:border-[#3DFF7A]/50 focus:ring-4 focus:ring-[#3DFF7A]/10"
+      >
+        <option value="">Wybierz</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

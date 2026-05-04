@@ -27,7 +27,7 @@ test("registration page renders a real onboarding form instead of the placeholde
   assert.equal(registrationPageSource.includes("Onboarding jest już w przygotowaniu"), false);
   assert.match(registrationPageSource, /AuthPage/);
 
-  for (const label of ["Imię", "Nazwisko", "Telefon", "Email", "Hasło", "Utwórz konto"]) {
+  for (const label of ["Imię", "Nazwisko", "Telefon", "Email", "Hasło", "Dalej: płatność"]) {
     assert.equal(authPageSource.includes(label), true);
   }
 });
@@ -49,6 +49,27 @@ test("registration form keeps the fuller onboarding content and three consent ch
   assert.equal(authPageSource.includes("consent_terms"), true);
   assert.equal(authPageSource.includes("consent_marketing"), true);
   assert.equal(authPageSource.includes("consent_phone_contact"), true);
+});
+
+test("registration form keeps the onboarding survey before consent", () => {
+  for (const text of [
+    "Krótka ankieta",
+    "Pomaga ustawić onboarding pod teren, w którym pracujesz.",
+    "Region działania",
+    "Branża",
+    "Skąd nas znasz",
+    "Doświadczenie w OZE",
+    "cała Polska",
+    "PV + magazyn",
+    "Polecenie",
+    "3+ lata",
+    "Dalej: płatność",
+  ]) {
+    assert.equal(authPageSource.includes(text), true);
+  }
+
+  assert.equal(authPageSource.includes("onboarding_survey"), true);
+  assert.equal(authPageSource.includes("referral_source"), true);
 });
 
 test("auth form creates a local web session and returns the seller to the app", () => {
