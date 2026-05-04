@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.google_oauth import router as google_oauth_router
 from api.routes.offers import router as offers_router
+from api.routes.onboarding import router as onboarding_router
 
 app = FastAPI(title="OZE-Agent API", version="0.1.0")
 
@@ -17,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(google_oauth_router, prefix="/auth")
+app.include_router(onboarding_router, prefix="/api/onboarding")
 app.include_router(offers_router, prefix="/offers")
 
 
