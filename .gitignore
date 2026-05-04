@@ -1,0 +1,28 @@
+# Secrets — NEVER commit env files (except .env.example templates)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+.secrets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs / temp
+*.log
+*.tmp
+*.pid
+
+# Worktrees (Claude Code)
+.claude/worktrees/
+
+# Per-project ignores live in subfolders (oze-agent/, web/, services/billing/)
