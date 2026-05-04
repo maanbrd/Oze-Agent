@@ -1,6 +1,11 @@
 import { AppShell } from "@/components/app-shell";
+import { requireCompletedOnboarding } from "@/lib/auth/guards";
 
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  await requireCompletedOnboarding("/dashboard");
+
   return (
     <AppShell active="dashboard">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-6 sm:px-8">

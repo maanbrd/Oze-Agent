@@ -9,26 +9,26 @@ function readSource(path) {
 
 const loginPageSource = readSource("../app/login/page.tsx");
 const registrationPageSource = readSource("../app/rejestracja/page.tsx");
-const authPageSource = readSource("../components/auth/auth-page.tsx");
+const authActionsSource = readSource("../app/auth/actions.ts");
 
-test("login page renders a real auth form instead of the placeholder", () => {
+test("login page renders a real Supabase auth form instead of the placeholder", () => {
   assert.equal(loginPageSource.includes("PlaceholderPage"), false);
   assert.equal(loginPageSource.includes("Panel handlowca będzie dostępny"), false);
   assert.equal(loginPageSource.includes("Brak formularza jest celowy"), false);
-  assert.match(loginPageSource, /AuthPage/);
+  assert.match(loginPageSource, /action=\{login\}/);
 
   for (const label of ["Email", "Hasło", "Zaloguj się"]) {
-    assert.equal(authPageSource.includes(label), true);
+    assert.equal(loginPageSource.includes(label), true);
   }
 });
 
-test("registration page renders a real onboarding form instead of the placeholder", () => {
+test("registration page renders a real server-action onboarding form instead of the placeholder", () => {
   assert.equal(registrationPageSource.includes("PlaceholderPage"), false);
   assert.equal(registrationPageSource.includes("Onboarding jest już w przygotowaniu"), false);
-  assert.match(registrationPageSource, /AuthPage/);
+  assert.match(registrationPageSource, /action=\{signup\}/);
 
   for (const label of ["Imię", "Nazwisko", "Telefon", "Email", "Hasło", "Dalej: płatność"]) {
-    assert.equal(authPageSource.includes(label), true);
+    assert.equal(registrationPageSource.includes(label), true);
   }
 });
 
@@ -42,13 +42,13 @@ test("registration form keeps the fuller onboarding content and three consent ch
     "Chcę otrzymywać informacje o rozwoju Agent-OZE.",
     "Możecie zadzwonić, jeśli onboarding utknie.",
   ]) {
-    assert.equal(authPageSource.includes(text), true);
+    assert.equal(registrationPageSource.includes(text), true);
   }
 
-  assert.equal((authPageSource.match(/type="checkbox"/g) ?? []).length, 3);
-  assert.equal(authPageSource.includes("consent_terms"), true);
-  assert.equal(authPageSource.includes("consent_marketing"), true);
-  assert.equal(authPageSource.includes("consent_phone_contact"), true);
+  assert.equal((registrationPageSource.match(/type="checkbox"/g) ?? []).length, 3);
+  assert.equal(authActionsSource.includes("consent_terms"), true);
+  assert.equal(authActionsSource.includes("consent_marketing"), true);
+  assert.equal(authActionsSource.includes("consent_phone_contact"), true);
 });
 
 test("registration form keeps the onboarding survey before consent", () => {
@@ -65,16 +65,18 @@ test("registration form keeps the onboarding survey before consent", () => {
     "3+ lata",
     "Dalej: płatność",
   ]) {
-    assert.equal(authPageSource.includes(text), true);
+    assert.equal(registrationPageSource.includes(text), true);
   }
 
-  assert.equal(authPageSource.includes("onboarding_survey"), true);
-  assert.equal(authPageSource.includes("referral_source"), true);
+  assert.equal(authActionsSource.includes("onboarding_survey"), true);
+  assert.equal(authActionsSource.includes("referral_source"), true);
 });
 
-test("auth form creates a local web session and returns the seller to the app", () => {
-  assert.equal(authPageSource.includes('"use client"'), true);
-  assert.equal(authPageSource.includes("localStorage.setItem"), true);
-  assert.equal(authPageSource.includes("oze-agent-session"), true);
-  assert.equal(authPageSource.includes('router.push("/oferty")'), true);
+test("signup creates a real auth account and sends the seller to payment onboarding", () => {
+  assert.equal(authActionsSource.includes('"use server"'), true);
+  assert.equal(authActionsSource.includes("signUp"), true);
+  assert.equal(authActionsSource.includes('redirect("/onboarding/platnosc")'), true);
+  assert.equal(authActionsSource.includes('router.push("/oferty")'), false);
+  assert.equal(authActionsSource.includes('redirect("/oferty")'), false);
+  assert.equal(authActionsSource.includes("localStorage.setItem"), false);
 });

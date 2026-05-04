@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentAccount } from "@/lib/api/account";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Płatność przyjęta | Agent-OZE",
+};
+
+export default async function PaymentSuccessPage() {
+  const account = await getCurrentAccount();
+
+  if (!account.authenticated) {
+    redirect("/login?next=/onboarding/platnosc");
+  }
+
+  const active = account.profile?.subscription_status === "active";
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#050607] px-5 text-zinc-100">
+      <section className="w-full max-w-2xl rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 p-8">
+        <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+          Płatność
+        </p>
+        <h1 className="mt-3 text-3xl font-semibold text-white">
+          {active ? "Płatność zaksięgowana." : "Czekamy na potwierdzenie Stripe."}
+        </h1>
+        <p className="mt-4 text-sm leading-7 text-zinc-300">
+          {active
+            ? "Konto ma aktywną subskrypcję. Następny etap to Google OAuth, zasoby Google i Telegram."
+            : "Checkout wrócił do panelu, ale konto nie ma jeszcze aktywnej subskrypcji. Odśwież za chwilę albo wróć do płatności, jeśli webhook nie dojdzie."}
+        </p>
+        <Link
+          href={active ? "/onboarding/google" : "/onboarding/platnosc"}
+          className="mt-7 inline-flex rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black"
+        >
+          {active ? "Przejdź do Google" : "Sprawdź płatność"}
+        </Link>
+      </section>
+    </main>
+  );
+}
