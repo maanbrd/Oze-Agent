@@ -27,9 +27,28 @@ test("registration page renders a real onboarding form instead of the placeholde
   assert.equal(registrationPageSource.includes("Onboarding jest już w przygotowaniu"), false);
   assert.match(registrationPageSource, /AuthPage/);
 
-  for (const label of ["Imię", "Nazwisko", "Telefon", "Email", "Hasło", "Załóż konto"]) {
+  for (const label of ["Imię", "Nazwisko", "Telefon", "Email", "Hasło", "Utwórz konto"]) {
     assert.equal(authPageSource.includes(label), true);
   }
+});
+
+test("registration form keeps the fuller onboarding content and three consent checkboxes", () => {
+  for (const text of [
+    "Załóż konto i przejdź do onboardingu.",
+    "Auth + RLS",
+    "Płatność",
+    "Google + Telegram",
+    "Akceptuję regulamin i politykę prywatności.",
+    "Chcę otrzymywać informacje o rozwoju Agent-OZE.",
+    "Możecie zadzwonić, jeśli onboarding utknie.",
+  ]) {
+    assert.equal(authPageSource.includes(text), true);
+  }
+
+  assert.equal((authPageSource.match(/type="checkbox"/g) ?? []).length, 3);
+  assert.equal(authPageSource.includes("consent_terms"), true);
+  assert.equal(authPageSource.includes("consent_marketing"), true);
+  assert.equal(authPageSource.includes("consent_phone_contact"), true);
 });
 
 test("auth form creates a local web session and returns the seller to the app", () => {

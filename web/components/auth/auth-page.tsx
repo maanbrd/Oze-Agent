@@ -16,7 +16,9 @@ type FormState = {
   email: string;
   phone: string;
   password: string;
-  consent: boolean;
+  consentTerms: boolean;
+  consentMarketing: boolean;
+  consentPhoneContact: boolean;
 };
 
 const initialState: FormState = {
@@ -25,7 +27,9 @@ const initialState: FormState = {
   email: "",
   phone: "",
   password: "",
-  consent: false,
+  consentTerms: false,
+  consentMarketing: false,
+  consentPhoneContact: false,
 };
 
 const fieldClass =
@@ -47,9 +51,11 @@ export function AuthPage({ mode }: AuthPageProps) {
       isRegister
         ? {
             eyebrow: "Rejestracja",
-            title: "Załóż konto handlowca",
-            body: "Utwórz konto i przejdź do panelu ofert. Integracje Google i Telegram domkniemy w dalszym kroku onboardingu.",
-            cta: "Załóż konto",
+            title: "Załóż konto i przejdź do onboardingu.",
+            body: "Ten krok tworzy bezpieczne konto. Płatność, Google OAuth i parowanie Telegrama będą kolejnymi krokami tego samego flow.",
+            highlights: ["Auth + RLS", "Płatność", "Google + Telegram"],
+            cta: "Utwórz konto",
+            formTitle: "Załóż konto",
             switchLabel: "Masz już konto?",
             switchCta: "Zaloguj się",
             switchHref: "/login",
@@ -58,7 +64,9 @@ export function AuthPage({ mode }: AuthPageProps) {
             eyebrow: "Logowanie",
             title: "Wejdź do panelu handlowca",
             body: "Zaloguj się i wróć do generatora ofert oraz ustawień sprzedażowych.",
+            highlights: ["Generator ofert", "Gmail handlowca", "Google Sheets"],
             cta: "Zaloguj się",
+            formTitle: "Zaloguj się",
             switchLabel: "Nie masz konta?",
             switchCta: "Załóż konto",
             switchHref: "/rejestracja",
@@ -90,8 +98,10 @@ export function AuthPage({ mode }: AuthPageProps) {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Hasło musi mieć co najmniej 6 znaków.");
+    const minimumPasswordLength = isRegister ? 8 : 6;
+
+    if (password.length < minimumPasswordLength) {
+      setError(`Hasło musi mieć co najmniej ${minimumPasswordLength} znaków.`);
       return;
     }
 
@@ -100,8 +110,8 @@ export function AuthPage({ mode }: AuthPageProps) {
       return;
     }
 
-    if (isRegister && !form.consent) {
-      setError("Zaznacz zgodę, żeby utworzyć konto.");
+    if (isRegister && !form.consentTerms) {
+      setError("Regulamin i polityka prywatności są wymagane.");
       return;
     }
 
@@ -112,6 +122,9 @@ export function AuthPage({ mode }: AuthPageProps) {
       firstName,
       lastName,
       phone,
+      consent_terms: form.consentTerms,
+      consent_marketing: form.consentMarketing,
+      consent_phone_contact: form.consentPhoneContact,
       createdAt: new Date().toISOString(),
       source: mode,
     };
@@ -144,7 +157,7 @@ export function AuthPage({ mode }: AuthPageProps) {
           </Link>
         </header>
 
-        <section className="grid flex-1 items-center gap-10 py-14 lg:grid-cols-[0.95fr_440px] lg:py-20">
+        <section className="grid flex-1 items-center gap-10 py-14 lg:grid-cols-[0.9fr_0.8fr] lg:items-start lg:py-20">
           <div className="max-w-3xl">
             <p className="mb-5 text-xs font-semibold uppercase tracking-[0] text-[#3DFF7A]">
               {copy.eyebrow}
@@ -157,7 +170,7 @@ export function AuthPage({ mode }: AuthPageProps) {
             </p>
 
             <div className="mt-9 grid gap-3 sm:grid-cols-3">
-              {["Generator ofert", "Gmail handlowca", "Google Sheets"].map((item) => (
+              {copy.highlights.map((item) => (
                 <div
                   key={item}
                   className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-zinc-300"
@@ -174,7 +187,9 @@ export function AuthPage({ mode }: AuthPageProps) {
             className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.36)] backdrop-blur sm:p-6"
           >
             <div className="mb-6">
-              <h2 className="text-2xl font-semibold tracking-[0] text-white">{copy.cta}</h2>
+              <h2 className="text-2xl font-semibold tracking-[0] text-white">
+                {copy.formTitle}
+              </h2>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
                 {copy.switchLabel}{" "}
                 <Link href={copy.switchHref} className="font-semibold text-[#6DFF98]">
@@ -239,21 +254,50 @@ export function AuthPage({ mode }: AuthPageProps) {
                   className={fieldClass}
                   type="password"
                   autoComplete={isRegister ? "new-password" : "current-password"}
+                  minLength={isRegister ? 8 : 6}
                   value={form.password}
                   onChange={(event) => updateField("password", event.target.value)}
                 />
               </label>
 
               {isRegister ? (
-                <label className="flex items-start gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 text-sm leading-6 text-zinc-300">
-                  <input
-                    className="mt-1 h-4 w-4 accent-[#3DFF7A]"
-                    type="checkbox"
-                    checked={form.consent}
-                    onChange={(event) => updateField("consent", event.target.checked)}
-                  />
-                  <span>Akceptuję utworzenie konta w panelu OZE Agent.</span>
-                </label>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 text-sm leading-6 text-zinc-300">
+                    <input
+                      required
+                      name="terms"
+                      className="mt-1 h-4 w-4 accent-[#3DFF7A]"
+                      type="checkbox"
+                      checked={form.consentTerms}
+                      onChange={(event) => updateField("consentTerms", event.target.checked)}
+                    />
+                    <span>Akceptuję regulamin i politykę prywatności.</span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 text-sm leading-6 text-zinc-400">
+                    <input
+                      name="marketing"
+                      className="mt-1 h-4 w-4 accent-[#3DFF7A]"
+                      type="checkbox"
+                      checked={form.consentMarketing}
+                      onChange={(event) =>
+                        updateField("consentMarketing", event.target.checked)
+                      }
+                    />
+                    <span>Chcę otrzymywać informacje o rozwoju Agent-OZE.</span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-[8px] border border-white/10 bg-black/20 p-3 text-sm leading-6 text-zinc-400">
+                    <input
+                      name="phoneContact"
+                      className="mt-1 h-4 w-4 accent-[#3DFF7A]"
+                      type="checkbox"
+                      checked={form.consentPhoneContact}
+                      onChange={(event) =>
+                        updateField("consentPhoneContact", event.target.checked)
+                      }
+                    />
+                    <span>Możecie zadzwonić, jeśli onboarding utknie.</span>
+                  </label>
+                </div>
               ) : null}
             </div>
 
