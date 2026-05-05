@@ -21,6 +21,7 @@ const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 const stripeServerSource = readSource("../lib/stripe/server.ts");
 const stripeWebhookRouteSource = readSource("../app/api/webhooks/stripe/route.ts");
 const logoutRouteSource = readSource("../app/logout/route.ts");
+const accountSource = readSource("../lib/api/account.ts");
 const packageJsonSource = readSource("../package.json");
 const envPullScriptSource = readSource("../scripts/pull-vercel-env-safe.mjs");
 
@@ -46,6 +47,20 @@ test("login preserves next path without bypassing onboarding gate", () => {
   assert.match(loginPageSource, /safeLocalPath\(params\.next\)/);
   assert.match(loginPageSource, /name="next"/);
   assert.equal(loginPageSource.includes('"/oferty"'), false);
+});
+
+test("account auth uses the Supabase user as the source of truth", () => {
+  const getUserIndex = accountSource.indexOf("auth.getUser()");
+  const getSessionIndex = accountSource.indexOf("auth.getSession()");
+
+  assert.notEqual(getUserIndex, -1);
+  assert.notEqual(getSessionIndex, -1);
+  assert.ok(getUserIndex < getSessionIndex);
+  assert.equal(accountSource.includes("auth.getClaims()"), false);
+  assert.match(accountSource, /const authUserId = userData\.user\.id/);
+  assert.match(accountSource, /const authEmail = userData\.user\.email \?\? null/);
+  assert.match(accountSource, /fetchProfileFromSupabase\(supabase, authUserId\)/);
+  assert.match(accountSource, /authenticated: true/);
 });
 
 test("full onboarding routes exist", () => {

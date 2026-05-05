@@ -116,9 +116,9 @@ async function fetchProfileFromSupabase(
 
 export async function getCurrentAccount(): Promise<CurrentAccount> {
   const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
 
-  if (!claimsData?.claims) {
+  if (userError || !userData.user) {
     return {
       authenticated: false,
       email: null,
@@ -129,17 +129,20 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
   }
 
   const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-  const authUserId = String(claimsData.claims.sub ?? "");
-  const claimsEmail = String(claimsData.claims.email ?? "");
+  const accessToken = sessionData.session?.access_token ?? "";
+  const authUserId = userData.user.id;
+  const authEmail = userData.user.email ?? null;
 
   if (!accessToken) {
+    const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: claimsEmail,
-      profile: null,
+      email: fallbackProfile?.email ?? authEmail,
+      profile: fallbackProfile,
       accessToken: "",
-      error: "Brak tokenu sesji.",
+      error: fallbackProfile
+        ? "Brak tokenu sesji. Profil pobrano z Supabase."
+        : "Brak tokenu sesji.",
     };
   }
 
@@ -148,7 +151,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
     const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? claimsEmail,
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -165,7 +168,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
     const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? claimsEmail,
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -183,7 +186,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
     const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? claimsEmail,
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -199,7 +202,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
     const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? claimsEmail,
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -210,7 +213,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
 
   return {
     authenticated: true,
-    email: account.email,
+    email: account.email ?? authEmail,
     profile: account.profile,
     accessToken,
     error: null,
