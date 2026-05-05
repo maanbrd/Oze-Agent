@@ -1,21 +1,39 @@
 import { NextResponse } from "next/server";
-import { getTelegramStatus } from "@/lib/api/onboarding";
+import { getTelegramStatusOrThrow } from "@/lib/api/onboarding";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const status = await getTelegramStatus();
-  return NextResponse.json(
-    status ?? {
-      paired: false,
-      telegramId: null,
-      code: null,
-      expiresAt: null,
-    },
-    {
-      headers: {
-        "Cache-Control": "no-store",
+  try {
+    const status = await getTelegramStatusOrThrow();
+    return NextResponse.json(
+      {
+        ok: true,
+        ...status,
       },
-    },
-  );
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("telegram-status route failed", error);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "status_check_failed",
+        paired: false,
+        telegramId: null,
+        code: null,
+        expiresAt: null,
+      },
+      {
+        status: 502,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
 }

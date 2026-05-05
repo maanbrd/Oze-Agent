@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { generateTelegramCodeAction } from "@/app/onboarding/actions";
 
@@ -9,7 +9,9 @@ const PAIRING_TTL_SECONDS = 90;
 const POLL_INTERVAL_MS = 3000;
 
 type TelegramPollingStatus = {
+  ok?: boolean;
   paired?: boolean;
+  error?: string;
 };
 
 function remainingFromExpiry(expiresAt: string | null) {
@@ -36,6 +38,7 @@ export function TelegramPairingCard({
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     remainingFromExpiry(expiresAt),
   );
+  const [statusError, setStatusError] = useState<string | null>(null);
   const command = `/start ${code ?? "KOD"}`;
   const expired = remainingSeconds <= 0;
 
@@ -57,38 +60,41 @@ export function TelegramPairingCard({
     return () => window.clearInterval(timer);
   }, [code, expiresAt]);
 
+  const pollStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/onboarding/telegram-status", {
+        cache: "no-store",
+      });
+      const status = (await response.json().catch(() => null)) as
+        | TelegramPollingStatus
+        | null;
+
+      if (!response.ok || !status || status.ok === false) {
+        setStatusError("Nie udało się sprawdzić statusu. Spróbujemy ponownie.");
+        return;
+      }
+
+      setStatusError(null);
+      if (status.paired) {
+        window.location.assign("/dashboard?onboarding=complete");
+      }
+    } catch {
+      setStatusError("Nie udało się sprawdzić statusu. Spróbujemy ponownie.");
+    }
+  }, []);
+
   useEffect(() => {
     if (!code || expired) {
       return;
     }
 
-    let cancelled = false;
-
-    async function pollStatus() {
-      try {
-        const response = await fetch("/api/onboarding/telegram-status", {
-          cache: "no-store",
-        });
-        if (!response.ok || cancelled) {
-          return;
-        }
-
-        const status = (await response.json()) as TelegramPollingStatus;
-        if (!cancelled && status.paired) {
-          window.location.assign("/dashboard?onboarding=complete");
-        }
-      } catch {
-        // Polling is best-effort. The manual refresh button remains available.
-      }
-    }
-
-    pollStatus();
+    const initialPoll = window.setTimeout(pollStatus, 0);
     const polling = window.setInterval(pollStatus, POLL_INTERVAL_MS);
     return () => {
-      cancelled = true;
+      window.clearTimeout(initialPoll);
       window.clearInterval(polling);
     };
-  }, [code, expired]);
+  }, [code, expired, pollStatus]);
 
   const timerLabel = useMemo(() => {
     const minutes = Math.floor(remainingSeconds / 60);
@@ -141,6 +147,10 @@ export function TelegramPairingCard({
           <p className="mt-4 rounded-[8px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm font-semibold text-red-100">
             Kod wygasł. Wygeneruj nowy kod.
           </p>
+        ) : statusError ? (
+          <p className="mt-4 rounded-[8px] border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-sm font-semibold text-yellow-100">
+            {statusError}
+          </p>
         ) : (
           <p className="mt-4 text-sm leading-6 text-zinc-400">
             Nie zamykaj tej strony. Otwórz Telegrama w osobnej karcie albo w
@@ -162,7 +172,7 @@ export function TelegramPairingCard({
           </form>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={pollStatus}
             className="inline-flex w-full items-center justify-center rounded-full border border-white/12 px-5 py-3 text-sm font-semibold text-zinc-200 transition hover:border-white/30 hover:text-white sm:w-auto"
           >
             Sprawdź status

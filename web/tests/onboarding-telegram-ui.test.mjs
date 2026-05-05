@@ -72,8 +72,23 @@ test("telegram pairing card polls status and redirects after successful pairing"
   assert.equal(pairingCardSource.includes("if (!code || expired)"), true);
 });
 
+test("telegram pairing card shows status failures instead of silently hanging", () => {
+  assert.equal(
+    pairingCardSource.includes(
+      "Nie udało się sprawdzić statusu. Spróbujemy ponownie.",
+    ),
+    true,
+  );
+  assert.match(pairingCardSource, /const \[statusError, setStatusError\]/);
+  assert.equal(pairingCardSource.includes("onClick={pollStatus}"), true);
+  assert.equal(pairingCardSource.includes("window.location.reload()"), false);
+});
+
 test("telegram status API route exposes current pairing state to the polling UI", () => {
   assert.equal(telegramStatusRouteSource.includes("getTelegramStatus"), true);
   assert.equal(telegramStatusRouteSource.includes("NextResponse.json"), true);
+  assert.equal(telegramStatusRouteSource.includes("ok: true"), true);
+  assert.equal(telegramStatusRouteSource.includes("ok: false"), true);
+  assert.equal(telegramStatusRouteSource.includes("status ??"), false);
   assert.equal(telegramStatusRouteSource.includes("no-store"), true);
 });

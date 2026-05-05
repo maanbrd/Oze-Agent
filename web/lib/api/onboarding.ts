@@ -110,11 +110,15 @@ export async function generateTelegramCode(): Promise<TelegramPairingStatus> {
 
 export async function getTelegramStatus(): Promise<TelegramPairingStatus | null> {
   try {
-    const response = await authedFetch("/api/onboarding/telegram-status");
-    return (await response.json()) as TelegramPairingStatus;
+    return await getTelegramStatusOrThrow();
   } catch {
     return null;
   }
+}
+
+export async function getTelegramStatusOrThrow(): Promise<TelegramPairingStatus> {
+  const response = await authedFetch("/api/onboarding/telegram-status");
+  return (await response.json()) as TelegramPairingStatus;
 }
 
 export async function updateAccount(input: { name?: string; phone?: string }) {
