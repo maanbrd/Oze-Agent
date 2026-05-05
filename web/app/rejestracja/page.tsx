@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signup } from "@/app/auth/actions";
-import { createClient } from "@/lib/supabase/server";
+import { AuthConfigError } from "@/components/auth/auth-config-error";
+import { createClient, missingSupabaseEnvMessage } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,11 @@ export default async function RegistrationPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
+  const supabaseEnvError = missingSupabaseEnvMessage();
+  if (supabaseEnvError) {
+    return <AuthConfigError detail={supabaseEnvError} />;
+  }
+
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
 

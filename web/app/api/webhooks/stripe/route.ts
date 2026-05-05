@@ -2,7 +2,7 @@ import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { normalizeFastApiBaseUrl } from "@/lib/api/base-url";
-import { getStripe } from "@/lib/stripe/server";
+import { envValue, getStripe } from "@/lib/stripe/server";
 
 export const runtime = "nodejs";
 
@@ -17,9 +17,9 @@ const FORWARDED_EVENTS = new Set([
 const FASTAPI_FORWARD_TIMEOUT_MS = 8000;
 
 function requireWebhookEnv() {
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  const billingSecret = process.env.BILLING_INTERNAL_SECRET;
-  const fastapiBaseUrl = process.env.FASTAPI_INTERNAL_BASE_URL;
+  const webhookSecret = envValue("STRIPE_WEBHOOK_SECRET");
+  const billingSecret = envValue("BILLING_INTERNAL_SECRET");
+  const fastapiBaseUrl = envValue("FASTAPI_INTERNAL_BASE_URL");
 
   if (!webhookSecret || !billingSecret || !fastapiBaseUrl) {
     throw new Error(

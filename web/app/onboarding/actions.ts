@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/onboarding";
 import { getCurrentAccount } from "@/lib/api/account";
 import {
+  checkoutConfigErrorMessage,
   getStripe,
   requireStripeEnv,
   resolveStripePriceId,
@@ -135,7 +136,7 @@ export async function createCheckoutSession(formData: FormData) {
     redirect(
       encoded(
         "/onboarding/platnosc",
-        "Nie udało się uruchomić płatności. Sprawdź konfigurację Stripe.",
+        checkoutConfigErrorMessage(error),
       ),
     );
   }

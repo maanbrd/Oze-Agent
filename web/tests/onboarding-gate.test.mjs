@@ -13,11 +13,16 @@ const offersPageSource = readSource("../app/oferty/page.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
 const onboardingActionsSource = readSource("../app/onboarding/actions.ts");
+const apiBaseUrlSource = readSource("../lib/api/base-url.ts");
 const paymentPageSource = readSource("../app/onboarding/platnosc/page.tsx");
 const googlePageSource = readSource("../app/onboarding/google/page.tsx");
 const resourcesPageSource = readSource("../app/onboarding/zasoby/page.tsx");
 const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 const stripeServerSource = readSource("../lib/stripe/server.ts");
+const stripeWebhookRouteSource = readSource("../app/api/webhooks/stripe/route.ts");
+const logoutRouteSource = readSource("../app/logout/route.ts");
+const packageJsonSource = readSource("../package.json");
+const envPullScriptSource = readSource("../scripts/pull-vercel-env-safe.mjs");
 
 test("private app pages require completed onboarding", () => {
   assert.match(dashboardPageSource, /requireCompletedOnboarding\("\/dashboard"\)/);
@@ -74,5 +79,48 @@ test("stripe checkout returns to the current request origin, not a stale preview
   assert.match(onboardingActionsSource, /success_url: `\$\{returnBaseUrl\}\/onboarding\/sukces/);
   assert.match(onboardingActionsSource, /cancel_url: `\$\{returnBaseUrl\}\/onboarding\/anulowano`/);
   assert.equal(onboardingActionsSource.includes("success_url: `${appUrl}/"), false);
-  assert.match(stripeServerSource, /NEXT_PUBLIC_APP_URL\?\./);
+  assert.match(stripeServerSource, /envValue\("NEXT_PUBLIC_APP_URL"\)/);
+});
+
+test("stripe checkout reports actionable configuration failures", () => {
+  assert.match(stripeServerSource, /envValue\("STRIPE_SECRET_KEY"\)/);
+  assert.match(stripeServerSource, /export function envValue/);
+  assert.match(stripeServerSource, /value === `""`/);
+  assert.match(stripeServerSource, /checkoutConfigErrorMessage/);
+  assert.match(stripeServerSource, /Missing STRIPE_SECRET_KEY/);
+  assert.match(stripeServerSource, /web\/\.env\.local mógł zostać nadpisany/);
+  assert.match(stripeServerSource, /No active Stripe price found for lookup key/);
+  assert.match(onboardingActionsSource, /checkoutConfigErrorMessage\(error\)/);
+});
+
+test("stripe webhook treats blank env values as missing configuration", () => {
+  assert.match(stripeWebhookRouteSource, /envValue\("STRIPE_WEBHOOK_SECRET"\)/);
+  assert.match(stripeWebhookRouteSource, /envValue\("BILLING_INTERNAL_SECRET"\)/);
+  assert.match(stripeWebhookRouteSource, /envValue\("FASTAPI_INTERNAL_BASE_URL"\)/);
+  assert.equal(stripeWebhookRouteSource.includes("process.env.STRIPE_WEBHOOK_SECRET"), false);
+  assert.match(stripeWebhookRouteSource, /Webhook not configured/);
+});
+
+test("FastAPI base URL ignores blank quoted env values before using fallback", () => {
+  assert.match(apiBaseUrlSource, /trimmed === `""`/);
+  assert.match(apiBaseUrlSource, /normalizeFastApiBaseUrl\(process\.env\.FASTAPI_INTERNAL_BASE_URL\) \|\|/);
+  assert.match(apiBaseUrlSource, /normalizeFastApiBaseUrl\(process\.env\.NEXT_PUBLIC_API_BASE_URL\)/);
+});
+
+test("local Vercel env pull protects the existing env file first", () => {
+  assert.match(packageJsonSource, /"env:pull": "node scripts\/pull-vercel-env-safe\.mjs"/);
+  assert.match(envPullScriptSource, /copyFileSync\(targetPath, backupPath\)/);
+  assert.match(envPullScriptSource, /\/tmp\/agent-oze-env-backups/);
+  assert.match(envPullScriptSource, /"env", "pull"/);
+  assert.match(envPullScriptSource, /removedBlankLines/);
+  assert.match(envPullScriptSource, /return !isBlank/);
+});
+
+test("onboarding has a direct logout route for stuck browser sessions", () => {
+  assert.match(logoutRouteSource, /auth\.signOut\(\)/);
+  assert.match(logoutRouteSource, /NextResponse\.redirect\(url\)/);
+  assert.match(paymentPageSource, /<LogoutLink \/>/);
+  assert.match(googlePageSource, /<LogoutLink \/>/);
+  assert.match(resourcesPageSource, /<LogoutLink \/>/);
+  assert.match(telegramPageSource, /<LogoutLink \/>/);
 });

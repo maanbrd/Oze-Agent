@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "build:turbo": "next build --turbopack",
+    "env:pull": "node scripts/pull-vercel-env-safe.mjs",
     "start": "next start",
     "lint": "eslint"
   },

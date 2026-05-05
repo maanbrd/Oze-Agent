@@ -1,6 +1,6 @@
 export function normalizeFastApiBaseUrl(value: string | null | undefined) {
   const trimmed = (value ?? "").trim();
-  if (!trimmed) return "";
+  if (!trimmed || trimmed === `""` || trimmed === "''") return "";
 
   try {
     const url = new URL(trimmed);
@@ -17,7 +17,8 @@ export function normalizeFastApiBaseUrl(value: string | null | undefined) {
 }
 
 export function fastApiBaseUrl() {
-  return normalizeFastApiBaseUrl(
-    process.env.FASTAPI_INTERNAL_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL,
+  return (
+    normalizeFastApiBaseUrl(process.env.FASTAPI_INTERNAL_BASE_URL) ||
+    normalizeFastApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL)
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { startGoogleOAuthAction } from "@/app/onboarding/actions";
+import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,9 @@ export default async function GoogleOnboardingPage({
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-zinc-100">
       <section className="mx-auto max-w-3xl">
+        <div className="mb-8 flex justify-end">
+          <LogoutLink />
+        </div>
         <p className="text-xs font-semibold uppercase text-[#3DFF7A]">Krok 3</p>
         <h1 className="mt-3 text-4xl font-semibold text-white">
           Połącz Google.

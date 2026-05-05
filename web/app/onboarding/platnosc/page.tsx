@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createCheckoutSession } from "@/app/onboarding/actions";
+import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +28,7 @@ export default async function PaymentStepPage({
           <Link href="/" className="text-sm font-semibold text-white">
             OZE Agent
           </Link>
-          <Link
-            href="/dashboard"
-            className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
-          >
-            Dashboard
-          </Link>
+          <LogoutLink />
         </header>
 
         <section className="grid flex-1 gap-8 py-8 lg:grid-cols-[0.9fr_0.7fr]">

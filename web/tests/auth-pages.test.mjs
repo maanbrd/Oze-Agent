@@ -10,6 +10,10 @@ function readSource(path) {
 const loginPageSource = readSource("../app/login/page.tsx");
 const registrationPageSource = readSource("../app/rejestracja/page.tsx");
 const authActionsSource = readSource("../app/auth/actions.ts");
+const supabaseServerSource = readSource("../lib/supabase/server.ts");
+const authConfigErrorSource = readSource(
+  "../components/auth/auth-config-error.tsx",
+);
 
 test("login page renders a real Supabase auth form instead of the placeholder", () => {
   assert.equal(loginPageSource.includes("PlaceholderPage"), false);
@@ -79,4 +83,26 @@ test("signup creates a real auth account and sends the seller to payment onboard
   assert.equal(authActionsSource.includes('router.push("/oferty")'), false);
   assert.equal(authActionsSource.includes('redirect("/oferty")'), false);
   assert.equal(authActionsSource.includes("localStorage.setItem"), false);
+});
+
+test("auth pages show a controlled Supabase config error instead of crashing", () => {
+  assert.match(supabaseServerSource, /getSupabaseEnvStatus/);
+  assert.match(supabaseServerSource, /envValue/);
+  assert.match(supabaseServerSource, /value !== `""`/);
+  assert.equal(supabaseServerSource.includes('"SUPABASE_URL"'), true);
+  assert.equal(supabaseServerSource.includes('"SUPABASE_KEY"'), true);
+  assert.match(supabaseServerSource, /missingSupabaseEnvMessage/);
+  assert.match(supabaseServerSource, /missingSupabaseEnvRedirectMessage/);
+  assert.match(loginPageSource, /missingSupabaseEnvMessage\(\)/);
+  assert.match(registrationPageSource, /missingSupabaseEnvMessage\(\)/);
+  assert.match(authActionsSource, /missingSupabaseEnvRedirectMessage\(\)/);
+  assert.equal(authConfigErrorSource.includes("Logowanie wymaga konfiguracji Supabase."), true);
+  assert.equal(authConfigErrorSource.includes("web/.env.local"), true);
+  assert.equal(
+    authConfigErrorSource.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
+    true,
+  );
+  assert.equal(authConfigErrorSource.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY"), true);
+  assert.equal(authConfigErrorSource.includes("SUPABASE_URL"), true);
+  assert.equal(authConfigErrorSource.includes("SUPABASE_KEY"), true);
 });

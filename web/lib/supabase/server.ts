@@ -1,19 +1,90 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-function requireSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+type SupabaseEnvStatus =
+  | {
+      configured: true;
+      url: string;
+      key: string;
+      missing: [];
+    }
+  | {
+      configured: false;
+      url: null;
+      key: null;
+      missing: string[];
+    };
 
-  if (!url || !key) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-    );
+function envValue(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+
+    if (value && value !== `""` && value !== "''") {
+      return value;
+    }
   }
 
-  return { url, key };
+  return null;
+}
+
+export function getSupabaseEnvStatus(): SupabaseEnvStatus {
+  const url = envValue("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL");
+  const key = envValue(
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_KEY",
+  );
+
+  if (!url || !key) {
+    const missing: string[] = [];
+    if (!url) {
+      missing.push("NEXT_PUBLIC_SUPABASE_URL albo SUPABASE_URL");
+    }
+    if (!key) {
+      missing.push(
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY albo SUPABASE_KEY",
+      );
+    }
+
+    return {
+      configured: false,
+      url: null,
+      key: null,
+      missing,
+    };
+  }
+
+  return { configured: true, url, key, missing: [] };
+}
+
+function requireSupabaseEnv() {
+  const status = getSupabaseEnvStatus();
+
+  if (!status.configured) {
+    throw new Error(`Missing ${status.missing.join(" and ")}`);
+  }
+
+  return { url: status.url, key: status.key };
+}
+
+export function missingSupabaseEnvMessage() {
+  const status = getSupabaseEnvStatus();
+
+  if (status.configured) {
+    return null;
+  }
+
+  return `Brak konfiguracji Supabase: ${status.missing.join(", ")}.`;
+}
+
+export function missingSupabaseEnvRedirectMessage() {
+  const status = getSupabaseEnvStatus();
+
+  if (status.configured) {
+    return null;
+  }
+
+  return "Brak konfiguracji Supabase dla web appu. Ustaw zmienne środowiskowe i zrestartuj serwer.";
 }
 
 export async function createClient() {

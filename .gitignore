@@ -26,3 +26,5 @@ Thumbs.db
 .claude/worktrees/
 
 # Per-project ignores live in subfolders (oze-agent/, web/, services/billing/)
+.vercel
+.env*.local
