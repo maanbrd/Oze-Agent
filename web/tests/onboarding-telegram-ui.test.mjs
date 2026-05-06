@@ -24,7 +24,9 @@ test("telegram pairing page resolves the configured bot handle and exact command
   assert.equal(telegramPageSource.includes("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME"), true);
   assert.equal(pairingCardSource.includes("botHandle"), true);
   assert.equal(pairingCardSource.includes("@OZEAGENTBot"), false);
-  assert.match(pairingCardSource, /\/start \$\{code \?\? "KOD"\}/);
+  assert.equal(pairingCardSource.includes('/start ${code ?? "KOD"}'), false);
+  assert.equal(pairingCardSource.includes("/start KOD"), false);
+  assert.match(pairingCardSource, /\/start \$\{code\}/);
 });
 
 test("telegram pairing card exposes a real 90 second countdown and expired state", () => {
@@ -50,12 +52,9 @@ test("telegram pairing card gives every small step in plain language", () => {
   }
 });
 
-test("telegram pairing card includes the generated visual process representation", () => {
-  assert.equal(
-    existsSync(new URL("../public/media/telegram-pairing-flow.png", import.meta.url)),
-    true,
-  );
-  assert.equal(pairingCardSource.includes("telegram-pairing-flow.png"), true);
+test("telegram pairing card uses the live command in the visual process representation", () => {
+  assert.equal(pairingCardSource.includes("telegram-pairing-flow.png"), false);
+  assert.equal(pairingCardSource.includes("commandLabel"), true);
   for (const text of ["Telegram", "Komenda", "Połączenie", "Panel"]) {
     assert.equal(pairingCardSource.includes(text), true);
   }

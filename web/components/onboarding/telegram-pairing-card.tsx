@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { generateTelegramCodeAction } from "@/app/onboarding/actions";
 
 const PAIRING_TTL_SECONDS = 90;
@@ -40,7 +39,8 @@ export function TelegramPairingCard({
     remainingFromExpiry(expiresAt),
   );
   const [statusError, setStatusError] = useState<string | null>(null);
-  const command = `/start ${code ?? "KOD"}`;
+  const command = code ? `/start ${code}` : "";
+  const commandLabel = command || "Wygeneruj kod, aby zobaczyć komendę";
   const expired = remainingSeconds <= 0;
 
   useEffect(() => {
@@ -140,7 +140,7 @@ export function TelegramPairingCard({
         <div className="mt-4 rounded-[8px] border border-white/10 bg-black/45 p-4">
           <p className="text-sm text-zinc-400">Wyślij dokładnie tę komendę</p>
           <code className="mt-2 block overflow-x-auto whitespace-nowrap text-xl font-semibold text-white">
-            {command}
+            {commandLabel}
           </code>
         </div>
 
@@ -185,15 +185,36 @@ export function TelegramPairingCard({
         <p className="text-sm font-semibold text-white">
           Jak połączyć swojego agenta
         </p>
-        <div className="mt-5 overflow-hidden rounded-[8px] border border-white/10 bg-black/30">
-          <Image
-            src="/media/telegram-pairing-flow.png"
-            alt="Instrukcja: Telegram, Komenda, Połączenie, Panel"
-            width={1774}
-            height={887}
-            className="h-auto w-full"
-            priority
-          />
+        <div className="mt-5 grid gap-3 rounded-[8px] border border-white/10 bg-black/30 p-4 sm:grid-cols-4">
+          <div className="rounded-[8px] border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+              Telegram
+            </p>
+            <div className="mt-4 h-2 rounded-full bg-white/15" />
+            <div className="mt-2 h-2 w-2/3 rounded-full bg-[#3DFF7A]/70" />
+          </div>
+          <div className="rounded-[8px] border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+              Bot
+            </p>
+            <p className="mt-4 truncate text-sm font-semibold text-white">
+              {botHandle}
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 p-3">
+            <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+              Komenda
+            </p>
+            <code className="mt-4 block overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-white">
+              {commandLabel}
+            </code>
+          </div>
+          <div className="rounded-[8px] border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+              Połączenie
+            </p>
+            <p className="mt-4 text-sm font-semibold text-white">Panel CRM</p>
+          </div>
         </div>
 
         <ol className="mt-5 space-y-3 text-sm leading-6 text-zinc-300">
