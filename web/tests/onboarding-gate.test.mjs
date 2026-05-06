@@ -8,8 +8,11 @@ function readSource(path) {
 }
 
 const homePageSource = readSource("../app/page.tsx");
-const dashboardPageSource = readSource("../app/dashboard/page.tsx");
+const flatDashboardPath = new URL("../app/dashboard/page.tsx", import.meta.url);
+const crmLayoutSource = readSource("../app/(app)/layout.tsx");
+const dashboardPageSource = readSource("../app/(app)/dashboard/page.tsx");
 const offersPageSource = readSource("../app/oferty/page.tsx");
+const crmShellSource = readSource("../components/crm-shell.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
 const onboardingActionsSource = readSource("../app/onboarding/actions.ts");
@@ -33,8 +36,20 @@ const proxySource = readSource("../proxy.ts");
 const supabaseProxySource = readSource("../lib/supabase/proxy.ts");
 
 test("private app pages require completed onboarding", () => {
-  assert.match(dashboardPageSource, /requireCompletedOnboarding\("\/dashboard"\)/);
+  assert.equal(existsSync(flatDashboardPath), false);
+  assert.match(crmLayoutSource, /getCurrentAccount/);
+  assert.match(crmLayoutSource, /redirect\("\/login\?next=\/dashboard"\)/);
+  assert.match(crmLayoutSource, /getOnboardingStatus/);
+  assert.match(crmLayoutSource, /account\.profile\?\.onboarding_completed/);
+  assert.match(crmLayoutSource, /safeLocalPath\(onboardingStatus\?\.nextStep, "\/onboarding\/platnosc"\)/);
+  assert.match(dashboardPageSource, /getCrmDashboardData/);
   assert.match(offersPageSource, /requireCompletedOnboarding\("\/oferty"\)/);
+});
+
+test("CRM shell is separate from the offer generator shell", () => {
+  assert.match(crmShellSource, /\["Oferty", "\/oferty"\]/);
+  assert.match(offersPageSource, /<AppShell active="oferty">/);
+  assert.equal(offersPageSource.includes("CrmShell"), false);
 });
 
 test("landing page remains public and does not use the private app gate", () => {
