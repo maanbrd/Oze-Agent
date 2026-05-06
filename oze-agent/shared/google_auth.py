@@ -165,17 +165,25 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
         return None
 
 
-def store_google_tokens(user_id: str, credentials: Credentials) -> None:
+def store_google_tokens(user_id: str, credentials: Credentials) -> bool:
     """Encrypt and store Google tokens in Supabase users table."""
     try:
+        if not credentials.token:
+            logger.error("store_google_tokens: missing access token for user %s", user_id)
+            return False
+        if not credentials.refresh_token:
+            logger.error("store_google_tokens: missing refresh token for user %s", user_id)
+            return False
+
         data = {
             "google_access_token": encrypt_token(credentials.token),
             "google_refresh_token": encrypt_token(credentials.refresh_token),
             "google_token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
         }
-        update_user(user_id, data)
+        return update_user(user_id, data) is not None
     except Exception as e:
         logger.error("store_google_tokens: failed for user %s: %s", user_id, e)
+        return False
 
 
 def build_oauth_url(user_id: str, return_url: str | None = None) -> str:
@@ -195,6 +203,7 @@ def build_oauth_url(user_id: str, return_url: str | None = None) -> str:
     auth_url, _ = oauth.authorization_url(
         "https://accounts.google.com/o/oauth2/auth",
         access_type="offline",
+        prompt="consent",
     )
     return auth_url
 
@@ -222,7 +231,8 @@ def handle_oauth_callback(code: str, state: str) -> Optional[dict]:
         credentials = flow.credentials
         parsed_state = parse_oauth_state(state)
         user_id = parsed_state["user_id"]
-        store_google_tokens(user_id, credentials)
+        if not store_google_tokens(user_id, credentials):
+            return None
         user = get_user_by_id(user_id)
         if user and parsed_state.get("return_url"):
             user["_oauth_return_url"] = parsed_state["return_url"]
