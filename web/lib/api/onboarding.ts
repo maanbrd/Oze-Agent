@@ -80,10 +80,10 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
   }
 }
 
-export async function startGoogleOAuth(): Promise<string> {
+export async function startGoogleOAuth(returnUrl?: string): Promise<string> {
   const response = await authedFetch("/api/onboarding/google/oauth-url", {
     method: "POST",
-    body: "{}",
+    body: JSON.stringify({ returnUrl }),
   });
   const payload = (await response.json()) as { url: string };
   return payload.url;

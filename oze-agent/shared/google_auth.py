@@ -4,9 +4,12 @@ Tokens are stored encrypted in Supabase users table.
 All functions use the service key via shared.database.
 """
 
+import base64
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -24,6 +27,82 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/gmail.send",
 ]
+
+
+def _base64url_encode(payload: dict) -> str:
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _base64url_decode(value: str) -> dict | None:
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+        payload = json.loads(decoded)
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _configured_web_host() -> str | None:
+    for value in (Config.DASHBOARD_URL, Config.BASE_URL):
+        if not value:
+            continue
+        try:
+            return urlparse(value).hostname
+        except Exception:
+            continue
+    return None
+
+
+def _trusted_return_url(return_url: str | None) -> str | None:
+    if not return_url:
+        return None
+    try:
+        parsed = urlparse(return_url)
+    except Exception:
+        return None
+
+    if parsed.path != "/onboarding/google/sukces":
+        return None
+
+    hostname = parsed.hostname or ""
+    configured_host = _configured_web_host()
+    allowed_host = (
+        hostname == configured_host
+        or hostname in {"localhost", "127.0.0.1"}
+        or hostname.endswith("-maanbrds-projects.vercel.app")
+    )
+    allowed_scheme = parsed.scheme == "https" or hostname in {"localhost", "127.0.0.1"}
+    if not allowed_host or not allowed_scheme:
+        return None
+
+    return return_url
+
+
+def build_oauth_state(user_id: str, return_url: str | None = None) -> str:
+    payload = {"user_id": user_id}
+    trusted_return_url = _trusted_return_url(return_url)
+    if trusted_return_url:
+        payload["return_url"] = trusted_return_url
+    return _base64url_encode(payload)
+
+
+def parse_oauth_state(state: str) -> dict[str, str | None]:
+    payload = _base64url_decode(state)
+    if not payload:
+        return {"user_id": state, "return_url": None}
+
+    user_id = str(payload.get("user_id") or "").strip()
+    if not user_id:
+        return {"user_id": state, "return_url": None}
+
+    return {
+        "user_id": user_id,
+        "return_url": _trusted_return_url(
+            str(payload.get("return_url") or "").strip() or None
+        ),
+    }
 
 
 def get_google_credentials(user_id: str) -> Optional[Credentials]:
@@ -99,7 +178,7 @@ def store_google_tokens(user_id: str, credentials: Credentials) -> None:
         logger.error("store_google_tokens: failed for user %s: %s", user_id, e)
 
 
-def build_oauth_url(user_id: str) -> str:
+def build_oauth_url(user_id: str, return_url: str | None = None) -> str:
     """Generate Google OAuth authorization URL.
 
     Uses plain OAuth2 without PKCE — correct for server-side web app flows.
@@ -111,7 +190,7 @@ def build_oauth_url(user_id: str) -> str:
         client_id=Config.GOOGLE_CLIENT_ID,
         scope=SCOPES,
         redirect_uri=Config.GOOGLE_REDIRECT_URI,
-        state=user_id,
+        state=build_oauth_state(user_id, return_url),
     )
     auth_url, _ = oauth.authorization_url(
         "https://accounts.google.com/o/oauth2/auth",
@@ -141,9 +220,12 @@ def handle_oauth_callback(code: str, state: str) -> Optional[dict]:
         )
         flow.fetch_token(code=code)
         credentials = flow.credentials
-        user_id = state
+        parsed_state = parse_oauth_state(state)
+        user_id = parsed_state["user_id"]
         store_google_tokens(user_id, credentials)
         user = get_user_by_id(user_id)
+        if user and parsed_state.get("return_url"):
+            user["_oauth_return_url"] = parsed_state["return_url"]
         return user
     except Exception as e:
         logger.error("handle_oauth_callback: failed for state=%s: %s", state, e)

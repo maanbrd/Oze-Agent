@@ -13,6 +13,7 @@ const offersPageSource = readSource("../app/oferty/page.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
 const onboardingActionsSource = readSource("../app/onboarding/actions.ts");
+const onboardingApiSource = readSource("../lib/api/onboarding.ts");
 const apiBaseUrlSource = readSource("../lib/api/base-url.ts");
 const paymentPageSource = readSource("../app/onboarding/platnosc/page.tsx");
 const googlePageSource = readSource("../app/onboarding/google/page.tsx");
@@ -20,10 +21,15 @@ const resourcesPageSource = readSource("../app/onboarding/zasoby/page.tsx");
 const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 const stripeServerSource = readSource("../lib/stripe/server.ts");
 const stripeWebhookRouteSource = readSource("../app/api/webhooks/stripe/route.ts");
+const paymentSuccessPageSource = readSource("../app/onboarding/sukces/page.tsx");
+const checkoutReconcileSource = readSource("../lib/billing/checkout-reconcile.ts");
+const stripeEventForwardSource = readSource("../lib/billing/stripe-events.ts");
 const logoutRouteSource = readSource("../app/logout/route.ts");
 const accountSource = readSource("../lib/api/account.ts");
 const packageJsonSource = readSource("../package.json");
 const envPullScriptSource = readSource("../scripts/pull-vercel-env-safe.mjs");
+const proxySource = readSource("../proxy.ts");
+const supabaseProxySource = readSource("../lib/supabase/proxy.ts");
 
 test("private app pages require completed onboarding", () => {
   assert.match(dashboardPageSource, /requireCompletedOnboarding\("\/dashboard"\)/);
@@ -87,6 +93,13 @@ test("onboarding steps enforce sequence and cannot be opened through a stale nex
   assert.match(telegramPageSource, /requireOnboardingStep\("\/onboarding\/telegram"\)/);
 });
 
+test("Google OAuth starts with the current preview success URL", () => {
+  assert.match(onboardingActionsSource, /resolveCheckoutReturnBaseUrl/);
+  assert.match(onboardingActionsSource, /startGoogleOAuth\(`\$\{returnBaseUrl\}\/onboarding\/google\/sukces`\)/);
+  assert.match(onboardingApiSource, /returnUrl\?: string/);
+  assert.match(onboardingApiSource, /body: JSON\.stringify\(\{ returnUrl \}\)/);
+});
+
 test("stripe checkout returns to the current request origin, not a stale preview URL", () => {
   assert.match(onboardingActionsSource, /import \{ headers \} from "next\/headers"/);
   assert.match(onboardingActionsSource, /resolveCheckoutReturnBaseUrl/);
@@ -110,10 +123,22 @@ test("stripe checkout reports actionable configuration failures", () => {
 
 test("stripe webhook treats blank env values as missing configuration", () => {
   assert.match(stripeWebhookRouteSource, /envValue\("STRIPE_WEBHOOK_SECRET"\)/);
-  assert.match(stripeWebhookRouteSource, /envValue\("BILLING_INTERNAL_SECRET"\)/);
-  assert.match(stripeWebhookRouteSource, /envValue\("FASTAPI_INTERNAL_BASE_URL"\)/);
+  assert.match(stripeEventForwardSource, /envValue\("BILLING_INTERNAL_SECRET"\)/);
+  assert.match(stripeEventForwardSource, /envValue\("FASTAPI_INTERNAL_BASE_URL"\)/);
   assert.equal(stripeWebhookRouteSource.includes("process.env.STRIPE_WEBHOOK_SECRET"), false);
   assert.match(stripeWebhookRouteSource, /Webhook not configured/);
+});
+
+test("payment success reconciles a paid Checkout session before waiting for webhook", () => {
+  assert.match(paymentSuccessPageSource, /searchParams: Promise<\{ session_id\?: string \}>/);
+  assert.match(paymentSuccessPageSource, /reconcileCheckoutSession\(params\.session_id\)/);
+  assert.match(checkoutReconcileSource, /stripe\.checkout\.sessions\.retrieve\(sessionId\)/);
+  assert.match(checkoutReconcileSource, /session\.status === "complete"/);
+  assert.match(checkoutReconcileSource, /session\.payment_status === "paid"/);
+  assert.match(checkoutReconcileSource, /session\.client_reference_id === profile\.id/);
+  assert.match(checkoutReconcileSource, /session\.metadata\?\.auth_user_id === profile\.auth_user_id/);
+  assert.match(checkoutReconcileSource, /type: "checkout\.session\.completed"/);
+  assert.match(checkoutReconcileSource, /forwardStripeEventToFastApi/);
 });
 
 test("FastAPI base URL ignores blank quoted env values before using fallback", () => {
@@ -138,4 +163,14 @@ test("onboarding has a direct logout route for stuck browser sessions", () => {
   assert.match(googlePageSource, /<LogoutLink \/>/);
   assert.match(resourcesPageSource, /<LogoutLink \/>/);
   assert.match(telegramPageSource, /<LogoutLink \/>/);
+});
+
+test("Supabase SSR proxy persists auth cookies across server actions", () => {
+  assert.match(proxySource, /export async function proxy/);
+  assert.match(proxySource, /updateSession\(request\)/);
+  assert.match(proxySource, /matcher/);
+  assert.match(supabaseProxySource, /createServerClient/);
+  assert.match(supabaseProxySource, /request\.cookies\.set/);
+  assert.match(supabaseProxySource, /response\.cookies\.set/);
+  assert.match(supabaseProxySource, /auth\.getClaims\(\)/);
 });

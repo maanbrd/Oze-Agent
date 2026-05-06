@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { generateTelegramCodeAction } from "@/app/onboarding/actions";
 
-const TELEGRAM_BOT_HANDLE = "@OZEAGENTBot";
 const PAIRING_TTL_SECONDS = 90;
 const POLL_INTERVAL_MS = 3000;
 
@@ -29,9 +28,11 @@ function remainingFromExpiry(expiresAt: string | null) {
 }
 
 export function TelegramPairingCard({
+  botHandle,
   code,
   expiresAt,
 }: {
+  botHandle: string;
   code: string | null;
   expiresAt: string | null;
 }) {
@@ -132,7 +133,7 @@ export function TelegramPairingCard({
         <div className="mt-6 rounded-[8px] border border-white/10 bg-black/35 p-4">
           <p className="text-sm text-zinc-400">Bot Telegram</p>
           <p className="mt-2 text-lg font-semibold text-white">
-            {TELEGRAM_BOT_HANDLE}
+            {botHandle}
           </p>
         </div>
 
@@ -199,7 +200,7 @@ export function TelegramPairingCard({
           {[
             "Otwórz Telegram.",
             "Kliknij wyszukiwarkę u góry ekranu.",
-            "Wpisz @OZEAGENTBot.",
+            `Wpisz ${botHandle}.`,
             "Otwórz czat z botem.",
             "Jeśli widzisz przycisk Start, kliknij go.",
             "Skopiuj komendę z tej strony.",

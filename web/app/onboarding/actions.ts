@@ -11,6 +11,7 @@ import {
 import { getCurrentAccount } from "@/lib/api/account";
 import {
   checkoutConfigErrorMessage,
+  envValue,
   getStripe,
   requireStripeEnv,
   resolveStripePriceId,
@@ -163,7 +164,10 @@ export async function createCheckoutSession(formData: FormData) {
 export async function startGoogleOAuthAction() {
   let url: string;
   try {
-    url = await startGoogleOAuth();
+    const returnBaseUrl = await resolveCheckoutReturnBaseUrl(
+      envValue("NEXT_PUBLIC_APP_URL"),
+    );
+    url = await startGoogleOAuth(`${returnBaseUrl}/onboarding/google/sukces`);
   } catch (error) {
     console.error("startGoogleOAuthAction failed", error);
     redirect(

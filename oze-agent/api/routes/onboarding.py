@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 
 from api.auth import AuthUser, get_current_auth_user
 from shared.database import get_supabase_client
@@ -183,14 +183,18 @@ async def update_account(
 
 
 @router.post("/google/oauth-url")
-async def start_google_oauth(auth_user: AuthUser = Depends(get_current_auth_user)):
+async def start_google_oauth(
+    payload: dict[str, Any] | None = Body(default=None),
+    auth_user: AuthUser = Depends(get_current_auth_user),
+):
     user = _get_user_for_auth(auth_user)
     if not _has_payment(user):
         raise HTTPException(
             status_code=402,
             detail="Payment is required before Google OAuth.",
         )
-    return {"url": build_oauth_url(user["id"])}
+    return_url = str((payload or {}).get("returnUrl") or "").strip() or None
+    return {"url": build_oauth_url(user["id"], return_url=return_url)}
 
 
 @router.post("/resources")

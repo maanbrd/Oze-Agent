@@ -6,6 +6,20 @@ import { getTelegramStatus } from "@/lib/api/onboarding";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_TELEGRAM_BOT_HANDLE = "@AgentOZE_Bot";
+
+function telegramBotHandle() {
+  const raw =
+    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ??
+    process.env.TELEGRAM_BOT_USERNAME ??
+    DEFAULT_TELEGRAM_BOT_HANDLE;
+  const handle = raw.trim();
+  if (!handle) {
+    return DEFAULT_TELEGRAM_BOT_HANDLE;
+  }
+  return handle.startsWith("@") ? handle : `@${handle}`;
+}
+
 export default async function TelegramOnboardingPage({
   searchParams,
 }: {
@@ -58,6 +72,7 @@ export default async function TelegramOnboardingPage({
           </div>
         ) : (
           <TelegramPairingCard
+            botHandle={telegramBotHandle()}
             code={pairing?.code ?? null}
             expiresAt={pairing?.expiresAt ?? null}
           />

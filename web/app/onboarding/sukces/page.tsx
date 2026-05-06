@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentAccount } from "@/lib/api/account";
+import { reconcileCheckoutSession } from "@/lib/billing/checkout-reconcile";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,21 @@ export const metadata: Metadata = {
   title: "Płatność przyjęta | Agent-OZE",
 };
 
-export default async function PaymentSuccessPage() {
+export default async function PaymentSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ session_id?: string }>;
+}) {
+  const params = await searchParams;
+
+  if (params.session_id) {
+    try {
+      await reconcileCheckoutSession(params.session_id);
+    } catch (error) {
+      console.error("reconcileCheckoutSession failed", error);
+    }
+  }
+
   const account = await getCurrentAccount();
 
   if (!account.authenticated) {
