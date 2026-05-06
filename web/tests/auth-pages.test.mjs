@@ -11,6 +11,7 @@ const loginPageSource = readSource("../app/login/page.tsx");
 const registrationPageSource = readSource("../app/rejestracja/page.tsx");
 const authActionsSource = readSource("../app/auth/actions.ts");
 const supabaseServerSource = readSource("../lib/supabase/server.ts");
+const logoutLinkSource = readSource("../components/auth/logout-link.tsx");
 const authConfigErrorSource = readSource(
   "../components/auth/auth-config-error.tsx",
 );
@@ -101,6 +102,11 @@ test("auth mutations invalidate the router cache before redirecting", () => {
 
     assert.match(actionSource, /revalidatePath\("\/", "layout"\);/);
   }
+});
+
+test("logout link does not prefetch the GET logout side effect", () => {
+  assert.equal(logoutLinkSource.includes("next/link"), false);
+  assert.match(logoutLinkSource, /<a\s+href="\/logout"/);
 });
 
 test("auth pages show a controlled Supabase config error instead of crashing", () => {

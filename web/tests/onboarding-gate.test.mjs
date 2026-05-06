@@ -21,6 +21,7 @@ const resourcesPageSource = readSource("../app/onboarding/zasoby/page.tsx");
 const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 const stripeServerSource = readSource("../lib/stripe/server.ts");
 const stripeWebhookRouteSource = readSource("../app/api/webhooks/stripe/route.ts");
+const checkoutRouteSource = readSource("../app/onboarding/checkout/route.ts");
 const paymentSuccessPageSource = readSource("../app/onboarding/sukces/page.tsx");
 const checkoutReconcileSource = readSource("../lib/billing/checkout-reconcile.ts");
 const stripeEventForwardSource = readSource("../lib/billing/stripe-events.ts");
@@ -108,6 +109,15 @@ test("stripe checkout returns to the current request origin, not a stale preview
   assert.match(onboardingActionsSource, /cancel_url: `\$\{returnBaseUrl\}\/onboarding\/anulowano`/);
   assert.equal(onboardingActionsSource.includes("success_url: `${appUrl}/"), false);
   assert.match(stripeServerSource, /envValue\("NEXT_PUBLIC_APP_URL"\)/);
+});
+
+test("payment plans use a route handler post so checkout keeps browser cookies", () => {
+  assert.equal(paymentPageSource.includes("action={createCheckoutSession}"), false);
+  assert.match(paymentPageSource, /action="\/onboarding\/checkout"/);
+  assert.match(paymentPageSource, /method="post"/);
+  assert.match(checkoutRouteSource, /export async function POST/);
+  assert.match(checkoutRouteSource, /getCurrentAccount/);
+  assert.match(checkoutRouteSource, /NextResponse\.redirect/);
 });
 
 test("stripe checkout reports actionable configuration failures", () => {

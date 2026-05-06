@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { createCheckoutSession } from "@/app/onboarding/actions";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 
@@ -157,7 +156,8 @@ function PlanCard({
 }) {
   return (
     <form
-      action={createCheckoutSession}
+      action="/onboarding/checkout"
+      method="post"
       className="rounded-[8px] border border-white/10 bg-black/20 p-5"
     >
       <input type="hidden" name="plan" value={plan} />
