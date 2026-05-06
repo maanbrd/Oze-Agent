@@ -9,9 +9,10 @@ function readSource(path) {
 
 const homePageSource = readSource("../app/page.tsx");
 const flatDashboardPath = new URL("../app/dashboard/page.tsx", import.meta.url);
+const flatOffersPath = new URL("../app/oferty/page.tsx", import.meta.url);
 const crmLayoutSource = readSource("../app/(app)/layout.tsx");
 const dashboardPageSource = readSource("../app/(app)/dashboard/page.tsx");
-const offersPageSource = readSource("../app/oferty/page.tsx");
+const offersPageSource = readSource("../app/(app)/oferty/page.tsx");
 const crmShellSource = readSource("../components/crm-shell.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
@@ -43,13 +44,15 @@ test("private app pages require completed onboarding", () => {
   assert.match(crmLayoutSource, /account\.profile\?\.onboarding_completed/);
   assert.match(crmLayoutSource, /safeLocalPath\(onboardingStatus\?\.nextStep, "\/onboarding\/platnosc"\)/);
   assert.match(dashboardPageSource, /getCrmDashboardData/);
-  assert.match(offersPageSource, /requireCompletedOnboarding\("\/oferty"\)/);
+  assert.equal(existsSync(flatOffersPath), false);
+  assert.match(offersPageSource, /<OfferGenerator \/>/);
 });
 
-test("CRM shell is separate from the offer generator shell", () => {
+test("offer generator route is inside the CRM shell", () => {
   assert.match(crmShellSource, /\["Oferty", "\/oferty"\]/);
-  assert.match(offersPageSource, /<AppShell active="oferty">/);
-  assert.equal(offersPageSource.includes("CrmShell"), false);
+  assert.match(crmLayoutSource, /<CrmShell account=\{account\}>/);
+  assert.equal(offersPageSource.includes("AppShell"), false);
+  assert.equal(offersPageSource.includes("requireCompletedOnboarding"), false);
 });
 
 test("landing page remains public and does not use the private app gate", () => {
