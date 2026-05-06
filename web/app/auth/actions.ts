@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeLocalPath } from "@/lib/routes";
 import {
@@ -44,6 +45,7 @@ export async function login(formData: FormData) {
     );
   }
 
+  revalidatePath("/", "layout");
   redirect(next);
 }
 
@@ -103,6 +105,7 @@ export async function signup(formData: FormData) {
     redirect(encoded("/login", "Konto utworzone. Sprawdź email i zaloguj się."));
   }
 
+  revalidatePath("/", "layout");
   redirect("/onboarding/platnosc");
 }
 
@@ -114,5 +117,6 @@ export async function logout() {
 
   const supabase = await createClient();
   await supabase.auth.signOut();
+  revalidatePath("/", "layout");
   redirect("/login");
 }

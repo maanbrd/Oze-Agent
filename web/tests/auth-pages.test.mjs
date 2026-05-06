@@ -85,6 +85,24 @@ test("signup creates a real auth account and sends the seller to payment onboard
   assert.equal(authActionsSource.includes("localStorage.setItem"), false);
 });
 
+test("auth mutations invalidate the router cache before redirecting", () => {
+  assert.match(authActionsSource, /import \{ revalidatePath \} from "next\/cache";/);
+
+  for (const actionName of ["login", "signup", "logout"]) {
+    const actionStart = authActionsSource.indexOf(`export async function ${actionName}`);
+    const nextActionStart = authActionsSource.indexOf(
+      "export async function",
+      actionStart + 1,
+    );
+    const actionSource = authActionsSource.slice(
+      actionStart,
+      nextActionStart === -1 ? undefined : nextActionStart,
+    );
+
+    assert.match(actionSource, /revalidatePath\("\/", "layout"\);/);
+  }
+});
+
 test("auth pages show a controlled Supabase config error instead of crashing", () => {
   assert.match(supabaseServerSource, /getSupabaseEnvStatus/);
   assert.match(supabaseServerSource, /envValue/);
