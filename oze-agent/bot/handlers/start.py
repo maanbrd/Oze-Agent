@@ -140,6 +140,16 @@ async def _handle_linking_code(
         "telegram_link_code_expires": None,
     })
     if not updated_user:
+        existing_user = get_user_by_telegram_id(telegram_id)
+        if existing_user and existing_user.get("id") != user["id"]:
+            logger.warning(
+                "start_command linking result: code_found=true expired=false update_success=false telegram_id_already_used=true"
+            )
+            await reply_text(update,
+                "❌ To konto Telegram jest już połączone z innym użytkownikiem."
+            )
+            return
+
         logger.error(
             "start_command linking result: code_found=true expired=false update_success=false telegram_id_already_used=false"
         )
