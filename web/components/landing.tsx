@@ -1119,13 +1119,13 @@ function DzienHandlowcaSection() {
   const scenarios: Scenario[] = [
     {
       num: "01",
-      title: "18:40, w aucie po trzecim spotkaniu",
+      title: "18:40 wsiadasz do auta po trzecim spotkaniu",
       image: "scenariusz-01-auto",
       alt: "Mockup Telegrama z kartą klienta po spotkaniu - Agent OZE",
       body: (
         <>
           <p style={paraStyle}>
-            Mówisz głosówką: „Jan Kowalski, Warszawa, dom 160m², dach 40m² południe,
+            Nagrywasz głosówkę: „Jan Kowalski, Warszawa, dom 160m², dach 40m² południe,
             zainteresowany ofertą, follow-up sobota.”
           </p>
           <p style={paraStyle}>
@@ -1137,7 +1137,7 @@ function DzienHandlowcaSection() {
     },
     {
       num: "02",
-      title: "7:00, kawa w kuchni",
+      title: "7:00 poranna kawa w kuchni",
       image: "scenariusz-02-brief",
       alt: "Mockup Telegrama z porannym briefem spotkań - Agent OZE",
       body: (
@@ -1179,7 +1179,7 @@ function DzienHandlowcaSection() {
       body: (
         <>
           <p style={paraStyle}>
-            Wsiadasz do auta i&nbsp;mówisz: „Oferta dla Kowalskiego, 8kW, magazyn 10kWh.”
+            Wsiadasz do auta i&nbsp;nagrywasz głosówkę: „Oferta dla Kowalskiego, 8kW, magazyn 10kWh.”
           </p>
           <p style={paraStyle}>
             Agent generuje PDF, pokazuje podgląd, czeka na „Wyślij”. Klikasz — mail
@@ -1765,7 +1765,7 @@ function FAQSection() {
       a: "Agent przestaje działać, ale Twój arkusz, kalendarz i folder ze zdjęciami zostają w Twoim Google. Nie zabieramy bazy klientów ze sobą.",
     },
     {
-      q: "Czy mogę używać na telefonie?",
+      q: "Czy mogę używać agenta na telefonie?",
       a: "Tak. Cały agent działa w Telegramie — masz go w kieszeni. Dashboard otwierasz w przeglądarce, kiedy chcesz zobaczyć lejek.",
     },
     {
