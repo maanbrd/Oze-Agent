@@ -39,8 +39,414 @@ DEFAULT_COLUMNS = [
     "ID wydarzenia Kalendarz", # P
 ]
 
+STATUS_OPTIONS = [
+    "Nowy lead",
+    "Spotkanie umówione",
+    "Spotkanie odbyte",
+    "Oferta wysłana",
+    "Podpisane",
+    "Zamontowana",
+    "Rezygnacja z umowy",
+    "Nieaktywny",
+    "Odrzucone",
+]
+
+NEXT_STEP_OPTIONS = [
+    "Telefon",
+    "Spotkanie",
+    "Wysłać ofertę",
+    "Follow-up dokumentowy",
+    "Czekać na decyzję klienta",
+    "Nic — zamknięte",
+    "Inne",
+]
+
+SOURCE_OPTIONS = [
+    "Polecenie",
+    "Facebook ads",
+    "Targi / event",
+    "Formularz WWW",
+    "Door to Door",
+    "Baza własna",
+    "Inne",
+]
+
+CRM_TEMPLATE_ROW_LIMIT = 1000
+
+_COLUMN_WIDTHS = [
+    180,  # A Imię i nazwisko
+    115,  # B Telefon
+    190,  # C Email
+    130,  # D Miasto
+    210,  # E Adres
+    165,  # F Status
+    155,  # G Produkt
+    380,  # H Notatki
+    145,  # I Data pierwszego kontaktu
+    145,  # J Data ostatniego kontaktu
+    200,  # K Następny krok
+    165,  # L Data następnego kroku
+    165,  # M Źródło pozyskania
+    90,   # N Zdjęcia
+    260,  # O Link do zdjęć
+    230,  # P ID wydarzenia Kalendarz
+]
+
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
+
+def _rgb(hex_color: str) -> dict[str, float]:
+    value = hex_color.removeprefix("#")
+    return {
+        "red": int(value[0:2], 16) / 255,
+        "green": int(value[2:4], 16) / 255,
+        "blue": int(value[4:6], 16) / 255,
+    }
+
+
+def _canonical_schema_matches(headers: list[str]) -> bool:
+    return headers == DEFAULT_COLUMNS
+
+
+def _log_schema_mismatch(user_id: str, headers: list[str]) -> None:
+    logger.error(
+        "sheet_schema_mismatch(%s): expected=%r actual=%r. "
+        "Repair required: restore A1:P1 to the canonical OZE-Agent CRM headers.",
+        user_id,
+        DEFAULT_COLUMNS,
+        headers,
+    )
+
+
+async def _get_verified_sheet_headers(user_id: str) -> list[str]:
+    headers = await get_sheet_headers(user_id)
+    if not headers:
+        return []
+    if not _canonical_schema_matches(headers):
+        return []
+    return headers
+
+
+def _grid_range(
+    sheet_id: int,
+    *,
+    start_row: int | None = None,
+    end_row: int | None = None,
+    start_col: int | None = None,
+    end_col: int | None = None,
+) -> dict:
+    range_body: dict[str, int] = {"sheetId": sheet_id}
+    if start_row is not None:
+        range_body["startRowIndex"] = start_row
+    if end_row is not None:
+        range_body["endRowIndex"] = end_row
+    if start_col is not None:
+        range_body["startColumnIndex"] = start_col
+    if end_col is not None:
+        range_body["endColumnIndex"] = end_col
+    return range_body
+
+
+def _data_validation_rule(options: list[str]) -> dict:
+    return {
+        "condition": {
+            "type": "ONE_OF_LIST",
+            "values": [{"userEnteredValue": option} for option in options],
+        },
+        "inputMessage": "Wybierz wartość z listy OZE-Agent.",
+        "strict": True,
+        "showCustomUi": True,
+    }
+
+
+def _conditional_text_eq_rule(
+    sheet_id: int,
+    *,
+    column_index: int,
+    value: str,
+    background: str,
+    foreground: str = "#050806",
+) -> dict:
+    return {
+        "addConditionalFormatRule": {
+            "rule": {
+                "ranges": [
+                    _grid_range(
+                        sheet_id,
+                        start_row=1,
+                        end_row=CRM_TEMPLATE_ROW_LIMIT,
+                        start_col=column_index,
+                        end_col=column_index + 1,
+                    )
+                ],
+                "booleanRule": {
+                    "condition": {
+                        "type": "TEXT_EQ",
+                        "values": [{"userEnteredValue": value}],
+                    },
+                    "format": {
+                        "backgroundColor": _rgb(background),
+                        "textFormat": {
+                            "bold": True,
+                            "foregroundColor": _rgb(foreground),
+                        },
+                    },
+                },
+            },
+            "index": 0,
+        }
+    }
+
+
+def _border(color: str, style: str = "SOLID") -> dict:
+    return {
+        "style": style,
+        "width": 1,
+        "color": _rgb(color),
+    }
+
+
+def _build_operational_crm_template_requests(sheet_id: int) -> list[dict]:
+    requests: list[dict] = [
+        {
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": sheet_id,
+                    "gridProperties": {"frozenRowCount": 1, "hideGridlines": True},
+                    "tabColor": _rgb("#3DFF7A"),
+                },
+                "fields": "gridProperties.frozenRowCount,gridProperties.hideGridlines,tabColor",
+            }
+        },
+        {
+            "setBasicFilter": {
+                "filter": {
+                    "range": _grid_range(sheet_id, start_row=0, start_col=0, end_col=len(DEFAULT_COLUMNS)),
+                }
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(sheet_id, start_row=0, end_row=1, start_col=0, end_col=len(DEFAULT_COLUMNS)),
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": _rgb("#050806"),
+                        "horizontalAlignment": "CENTER",
+                        "verticalAlignment": "MIDDLE",
+                        "wrapStrategy": "WRAP",
+                        "textFormat": {
+                            "bold": True,
+                            "fontSize": 10,
+                            "foregroundColor": _rgb("#6DFF7A"),
+                        },
+                    }
+                },
+                "fields": (
+                    "userEnteredFormat(backgroundColor,horizontalAlignment,"
+                    "verticalAlignment,wrapStrategy,textFormat)"
+                ),
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(
+                    sheet_id,
+                    start_row=1,
+                    end_row=CRM_TEMPLATE_ROW_LIMIT,
+                    start_col=0,
+                    end_col=len(DEFAULT_COLUMNS),
+                ),
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": _rgb("#F4FAF6"),
+                        "verticalAlignment": "TOP",
+                        "wrapStrategy": "WRAP",
+                        "textFormat": {
+                            "foregroundColor": _rgb("#101815"),
+                            "fontSize": 10,
+                        },
+                    }
+                },
+                "fields": "userEnteredFormat(backgroundColor,verticalAlignment,wrapStrategy,textFormat)",
+            }
+        },
+        {
+            "updateBorders": {
+                "range": _grid_range(
+                    sheet_id,
+                    start_row=0,
+                    end_row=CRM_TEMPLATE_ROW_LIMIT,
+                    start_col=0,
+                    end_col=len(DEFAULT_COLUMNS),
+                ),
+                "top": _border("#C7D8CC"),
+                "bottom": _border("#C7D8CC"),
+                "left": _border("#C7D8CC"),
+                "right": _border("#C7D8CC"),
+                "innerHorizontal": _border("#C7D8CC"),
+                "innerVertical": _border("#C7D8CC"),
+            }
+        },
+        {
+            "updateBorders": {
+                "range": _grid_range(
+                    sheet_id,
+                    start_row=0,
+                    end_row=1,
+                    start_col=0,
+                    end_col=len(DEFAULT_COLUMNS),
+                ),
+                "bottom": _border("#3DFF7A", "SOLID_THICK"),
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(sheet_id, start_row=1, end_row=CRM_TEMPLATE_ROW_LIMIT, start_col=8, end_col=10),
+                "cell": {
+                    "userEnteredFormat": {
+                        "numberFormat": {"type": "DATE", "pattern": "dd.mm.yyyy"}
+                    }
+                },
+                "fields": "userEnteredFormat.numberFormat",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(sheet_id, start_row=1, end_row=CRM_TEMPLATE_ROW_LIMIT, start_col=11, end_col=12),
+                "cell": {
+                    "userEnteredFormat": {
+                        "numberFormat": {"type": "DATE_TIME", "pattern": "dd.mm.yyyy hh:mm"}
+                    }
+                },
+                "fields": "userEnteredFormat.numberFormat",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(sheet_id, start_row=1, end_row=CRM_TEMPLATE_ROW_LIMIT, start_col=5, end_col=6),
+                "cell": {"dataValidation": _data_validation_rule(STATUS_OPTIONS)},
+                "fields": "dataValidation",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(sheet_id, start_row=1, end_row=CRM_TEMPLATE_ROW_LIMIT, start_col=10, end_col=11),
+                "cell": {"dataValidation": _data_validation_rule(NEXT_STEP_OPTIONS)},
+                "fields": "dataValidation",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": _grid_range(sheet_id, start_row=1, end_row=CRM_TEMPLATE_ROW_LIMIT, start_col=12, end_col=13),
+                "cell": {"dataValidation": _data_validation_rule(SOURCE_OPTIONS)},
+                "fields": "dataValidation",
+            }
+        },
+        {
+            "addProtectedRange": {
+                "protectedRange": {
+                    "description": "OZE-Agent schema header - do not edit",
+                    "range": _grid_range(sheet_id, start_row=0, end_row=1, start_col=0, end_col=len(DEFAULT_COLUMNS)),
+                    "warningOnly": False,
+                }
+            }
+        },
+        {
+            "addProtectedRange": {
+                "protectedRange": {
+                    "description": "OZE-Agent Calendar event IDs - do not edit",
+                    "range": _grid_range(sheet_id, start_row=1, start_col=15, end_col=16),
+                    "warningOnly": False,
+                }
+            }
+        },
+    ]
+
+    for index, width in enumerate(_COLUMN_WIDTHS):
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": index,
+                    "endIndex": index + 1,
+                },
+                "properties": {"pixelSize": width},
+                "fields": "pixelSize",
+            }
+        })
+
+    requests.append({
+        "updateDimensionProperties": {
+            "range": {
+                "sheetId": sheet_id,
+                "dimension": "COLUMNS",
+                "startIndex": 15,
+                "endIndex": 16,
+            },
+            "properties": {"hiddenByUser": True},
+            "fields": "hiddenByUser",
+        }
+    })
+
+    status_colors = {
+        "Nowy lead": ("#6DFF7A", "#050806"),
+        "Spotkanie umówione": ("#57D9FF", "#050806"),
+        "Spotkanie odbyte": ("#60CDBB", "#050806"),
+        "Oferta wysłana": ("#FFD34D", "#050806"),
+        "Podpisane": ("#A7F3D0", "#050806"),
+        "Zamontowana": ("#16A34A", "#FFFFFF"),
+        "Rezygnacja z umowy": ("#FF6B7A", "#050806"),
+        "Nieaktywny": ("#7C8087", "#FFFFFF"),
+        "Odrzucone": ("#EF4444", "#FFFFFF"),
+    }
+    for status, (background, foreground) in status_colors.items():
+        requests.append(_conditional_text_eq_rule(
+            sheet_id,
+            column_index=5,
+            value=status,
+            background=background,
+            foreground=foreground,
+        ))
+
+    next_step_colors = {
+        "Telefon": ("#6DFF7A", "#050806"),
+        "Spotkanie": ("#57D9FF", "#050806"),
+        "Wysłać ofertę": ("#FFD34D", "#050806"),
+        "Follow-up dokumentowy": ("#B084FF", "#050806"),
+        "Czekać na decyzję klienta": ("#F2AA65", "#050806"),
+        "Nic — zamknięte": ("#7C8087", "#FFFFFF"),
+        "Inne": ("#C7D2FE", "#050806"),
+    }
+    for next_step, (background, foreground) in next_step_colors.items():
+        requests.append(_conditional_text_eq_rule(
+            sheet_id,
+            column_index=10,
+            value=next_step,
+            background=background,
+            foreground=foreground,
+        ))
+
+    source_colors = {
+        "Polecenie": ("#6DFF7A", "#050806"),
+        "Facebook ads": ("#3B82F6", "#FFFFFF"),
+        "Targi / event": ("#F97316", "#050806"),
+        "Formularz WWW": ("#22D3EE", "#050806"),
+        "Door to Door": ("#FACC15", "#050806"),
+        "Baza własna": ("#A78BFA", "#050806"),
+        "Inne": ("#9CA3AF", "#050806"),
+    }
+    for source, (background, foreground) in source_colors.items():
+        requests.append(_conditional_text_eq_rule(
+            sheet_id,
+            column_index=12,
+            value=source,
+            background=background,
+            foreground=foreground,
+        ))
+
+    return requests
 
 
 def _get_sheets_service_sync(user_id: str):
@@ -138,8 +544,10 @@ async def get_sheet_headers(user_id: str) -> list[str]:
             return result.get("values", [[]])[0]
 
         headers = await asyncio.to_thread(_read)
-        if headers:
+        if headers and _canonical_schema_matches(headers):
             update_user(user_id, {"sheet_columns": headers})
+        elif headers:
+            _log_schema_mismatch(user_id, headers)
         return headers
     except Exception as e:
         logger.error("get_sheet_headers(%s): %s", user_id, e)
@@ -303,7 +711,7 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
             return None
         spreadsheet_id = user["google_sheets_id"]
 
-        headers = await get_sheet_headers(user_id)
+        headers = await _get_verified_sheet_headers(user_id)
         if not headers:
             return None
 
@@ -322,7 +730,7 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
                 spreadsheetId=spreadsheet_id,
                 range="A1",
                 valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
+                insertDataOption="OVERWRITE",
                 body={"values": [row]},
             ).execute()
             updated_range = result.get("updates", {}).get("updatedRange", "")
@@ -349,7 +757,7 @@ async def update_client(user_id: str, row_number: int, updates: dict) -> bool:
             return False
         spreadsheet_id = user["google_sheets_id"]
 
-        headers = await get_sheet_headers(user_id)
+        headers = await _get_verified_sheet_headers(user_id)
         if not headers:
             return False
 
@@ -395,7 +803,7 @@ async def update_client_fields_without_touch(user_id: str, row_number: int, upda
             return False
         spreadsheet_id = user["google_sheets_id"]
 
-        headers = await get_sheet_headers(user_id)
+        headers = await _get_verified_sheet_headers(user_id)
         if not headers:
             return False
 
@@ -449,7 +857,7 @@ async def update_client_photo_metadata(
             return False
         spreadsheet_id = user["google_sheets_id"]
 
-        headers = await get_sheet_headers(user_id)
+        headers = await _get_verified_sheet_headers(user_id)
         if not headers:
             return False
 
@@ -498,6 +906,10 @@ async def delete_client(user_id: str, row_number: int) -> bool:
             return False
         spreadsheet_id = user["google_sheets_id"]
 
+        headers = await _get_verified_sheet_headers(user_id)
+        if not headers:
+            return False
+
         def _get_sheet_id():
             service = _get_sheets_service_sync(user_id)
             if not service:
@@ -545,7 +957,23 @@ async def create_spreadsheet(user_id: str, name: str) -> Optional[str]:
                 return None
 
             spreadsheet = service.spreadsheets().create(
-                body={"properties": {"title": name}}
+                body={
+                    "properties": {
+                        "title": name,
+                        "locale": "pl_PL",
+                        "timeZone": "Europe/Warsaw",
+                    },
+                    "sheets": [{
+                        "properties": {
+                            "title": "OZE Klienci",
+                            "gridProperties": {
+                                "rowCount": CRM_TEMPLATE_ROW_LIMIT,
+                                "columnCount": len(DEFAULT_COLUMNS),
+                                "frozenRowCount": 1,
+                            },
+                        }
+                    }],
+                }
             ).execute()
             spreadsheet_id = spreadsheet["spreadsheetId"]
             sheet_id = spreadsheet["sheets"][0]["properties"]["sheetId"]
@@ -558,37 +986,10 @@ async def create_spreadsheet(user_id: str, name: str) -> Optional[str]:
                 body={"values": [DEFAULT_COLUMNS]},
             ).execute()
 
-            # Bold + freeze header row
+            # Operational CRM template: visual polish, validations, protection.
             service.spreadsheets().batchUpdate(
                 spreadsheetId=spreadsheet_id,
-                body={
-                    "requests": [
-                        {
-                            "repeatCell": {
-                                "range": {
-                                    "sheetId": sheet_id,
-                                    "startRowIndex": 0,
-                                    "endRowIndex": 1,
-                                },
-                                "cell": {
-                                    "userEnteredFormat": {
-                                        "textFormat": {"bold": True}
-                                    }
-                                },
-                                "fields": "userEnteredFormat.textFormat.bold",
-                            }
-                        },
-                        {
-                            "updateSheetProperties": {
-                                "properties": {
-                                    "sheetId": sheet_id,
-                                    "gridProperties": {"frozenRowCount": 1},
-                                },
-                                "fields": "gridProperties.frozenRowCount",
-                            }
-                        },
-                    ]
-                },
+                body={"requests": _build_operational_crm_template_requests(sheet_id)},
             ).execute()
             return spreadsheet_id
 
