@@ -360,11 +360,9 @@ export function DecyzjePreview() {
               fontWeight: 500,
             }}
           >
-            Lejek kłamie, kiedy zostawiasz w nim klientów, którym właściwie powiedziałeś
-            „nie” albo o których po prostu zapomniałeś. „Wymagają decyzji” zbiera tych,
-            co stoją za długo w jednym statusie — żeby co dzień zająć Ci{" "}
-            <strong style={{ color: G }}>2 minuty</strong> na posprzątanie i pchnięcie
-            spraw dalej.
+            To Twoja codzienna 2-minutowa decyzja: który klient idzie dalej, kto jeszcze
+            czeka, kogo wyrzucasz z&nbsp;lejka. Bez tego dashboard pokazuje śmieci, a&nbsp;Ty{" "}
+            <strong style={{ color: G }}>tracisz pieniądze</strong>.
           </p>
           <div
             style={{
