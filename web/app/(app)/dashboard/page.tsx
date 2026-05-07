@@ -1,5 +1,7 @@
 import { CrmNotice } from "@/components/crm-notice";
 import { DataFreshnessBadge } from "@/components/data-freshness-badge";
+import { QuickActionsStrip } from "@/components/dashboard/quick-actions-strip";
+import { getDecisionsCount } from "@/lib/api/decisions";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
 import type { CrmClient, CrmEvent, FunnelStatus } from "@/lib/crm/types";
 import { formatWarsawTime, warsawDateKey, warsawDateKeyFromIso } from "@/lib/dates";
@@ -23,10 +25,19 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const onboardingComplete = params?.onboarding === "complete";
-  const data = await getCrmDashboardData();
+  const [data, decisionsCount] = await Promise.all([
+    getCrmDashboardData(),
+    getDecisionsCount(),
+  ]);
   const todayKey = warsawDateKey();
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowKey = warsawDateKey(tomorrowDate);
   const todayEvents = data.events.filter((event) =>
     warsawDateKeyFromIso(event.startsAt) === todayKey,
+  );
+  const tomorrowEvents = data.events.filter((event) =>
+    warsawDateKeyFromIso(event.startsAt) === tomorrowKey,
   );
   const urgentClients = data.clients
     .filter((client) => {
@@ -40,6 +51,13 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
+      <QuickActionsStrip
+        tomorrowKey={tomorrowKey}
+        tomorrowEvents={tomorrowEvents}
+        urgentClients={urgentClients}
+        decisionsCount={decisionsCount}
+      />
+
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
