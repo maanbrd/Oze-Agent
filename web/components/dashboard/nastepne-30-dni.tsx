@@ -46,7 +46,7 @@ export function Nastepne30Dni({
           detail={offerDetail(oldestOffer)}
         />
         <Cell
-          label="Podpisani MTD"
+          label="Podpisane (ten miesiąc)"
           value={signedMtd}
           detail={`do końca miesiąca: ${monthDaysLeft} ${monthDaysLeft === 1 ? "dzień" : "dni"}`}
         />
