@@ -336,18 +336,18 @@ export function DecyzjePreview() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 8,
-                fontSize: 14,
-                fontWeight: 800,
+                fontSize: 13,
+                fontWeight: 700,
                 letterSpacing: 1.6,
                 textTransform: "uppercase",
-                color: "#000",
-                background: G,
+                color: G,
+                background: `${G}1A`,
                 padding: "6px 14px",
                 borderRadius: 999,
-                boxShadow: `0 0 16px ${G}66`,
+                border: `1px solid ${G}55`,
               }}
             >
-              <span aria-hidden="true" style={{ fontSize: 16 }}>💡</span>
+              <span aria-hidden="true" style={{ fontSize: 14 }}>💡</span>
               Po co ta sekcja
             </span>
           </div>
