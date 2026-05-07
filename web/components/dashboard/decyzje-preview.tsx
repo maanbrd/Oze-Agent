@@ -318,34 +318,53 @@ export function DecyzjePreview() {
         {/* Explainer — po co ta sekcja */}
         <div
           style={{
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.025)",
+            border: `1px solid ${G}40`,
+            borderLeft: `4px solid ${G}`,
+            background: `linear-gradient(90deg, ${G}10 0%, rgba(255,255,255,0.025) 35%)`,
             borderRadius: 14,
-            padding: "20px 22px",
+            padding: "22px 26px",
             marginBottom: 24,
             display: "grid",
             gridTemplateColumns: "1fr",
-            gap: 12,
+            gap: 14,
+            boxShadow: `0 0 24px ${G}14`,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span
               style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: 1.4,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 800,
+                letterSpacing: 1.6,
                 textTransform: "uppercase",
-                color: G,
+                color: "#000",
+                background: G,
+                padding: "6px 14px",
+                borderRadius: 999,
+                boxShadow: `0 0 16px ${G}66`,
               }}
             >
+              <span aria-hidden="true" style={{ fontSize: 16 }}>💡</span>
               Po co ta sekcja
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "rgba(255,255,255,0.85)" }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 16,
+              lineHeight: 1.6,
+              color: "#fff",
+              fontWeight: 500,
+            }}
+          >
             Lejek kłamie, kiedy zostawiasz w nim klientów, którym właściwie powiedziałeś
             „nie” albo o których po prostu zapomniałeś. „Wymagają decyzji” zbiera tych,
-            co stoją za długo w jednym statusie — żeby co dzień zająć Ci 2 minuty na
-            posprzątanie i pchnięcie spraw dalej.
+            co stoją za długo w jednym statusie — żeby co dzień zająć Ci{" "}
+            <strong style={{ color: G }}>2 minuty</strong> na posprzątanie i pchnięcie
+            spraw dalej.
           </p>
           <div
             style={{
