@@ -3,8 +3,9 @@ import { DataFreshnessBadge } from "@/components/data-freshness-badge";
 import { MojTydzien } from "@/components/dashboard/moj-tydzien";
 import { Nastepne30Dni } from "@/components/dashboard/nastepne-30-dni";
 import { QuickActionsStrip } from "@/components/dashboard/quick-actions-strip";
+import { Trend6mo } from "@/components/dashboard/trend-6mo";
 import { getDecisionsCount } from "@/lib/api/decisions";
-import { getActivityWeek } from "@/lib/api/insights";
+import { getActivityWeek, getTrend6mo } from "@/lib/api/insights";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
 import {
   countActiveClients,
@@ -35,10 +36,11 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const onboardingComplete = params?.onboarding === "complete";
-  const [data, decisionsCount, activity] = await Promise.all([
+  const [data, decisionsCount, activity, trend] = await Promise.all([
     getCrmDashboardData(),
     getDecisionsCount(),
     getActivityWeek(),
+    getTrend6mo(),
   ]);
   const todayKey = warsawDateKey();
   const tomorrowDate = new Date();
@@ -133,6 +135,8 @@ export default async function DashboardPage({
 
       <Nastepne30Dni clients={data.clients} events={data.events} now={now} />
 
+      <MojTydzien activity={activity} />
+
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <Panel title="Lejek z Sheets">
           <div className="space-y-3">
@@ -173,7 +177,7 @@ export default async function DashboardPage({
         </div>
       </Panel>
 
-      <MojTydzien activity={activity} />
+      <Trend6mo trend={trend} />
     </div>
   );
 }

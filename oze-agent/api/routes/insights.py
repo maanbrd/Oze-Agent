@@ -3,6 +3,7 @@
 Endpoints:
 
   GET /api/insights/activity-week  — 4-metric "Mój tydzień" card
+  GET /api/insights/trend-6mo      — 6-month sparkline data (4 series)
 
 This module is intentionally separate from api/routes/dashboard.py so it
 can be developed without touching the file other agents (Codex/Maan) are
@@ -224,3 +225,132 @@ def _compute_streak(
         else:
             break
     return streak
+
+
+# ── 6-month trend ─────────────────────────────────────────────────────────────
+
+# Series we expose. Keep keys camelCase to match the web client.
+TREND_SERIES_KEYS = ("newClients", "meetingsDone", "offersSent", "signed")
+
+
+def _ym(year: int, month: int) -> str:
+    return f"{year:04d}-{month:02d}"
+
+
+def _last_six_month_keys(today: date) -> list[str]:
+    """Return the last 6 calendar-month keys including the current month, oldest first."""
+    keys: list[str] = []
+    year, month = today.year, today.month
+    for _ in range(6):
+        keys.append(_ym(year, month))
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return list(reversed(keys))
+
+
+def _months_window(month_keys: list[str]) -> tuple[date, date]:
+    """Return (firstDayOfFirstMonth, lastDayOfLastMonth) covering the given month keys."""
+    first_y, first_m = (int(p) for p in month_keys[0].split("-"))
+    last_y, last_m = (int(p) for p in month_keys[-1].split("-"))
+    start = date(first_y, first_m, 1)
+    if last_m == 12:
+        end = date(last_y + 1, 1, 1) - timedelta(days=1)
+    else:
+        end = date(last_y, last_m + 1, 1) - timedelta(days=1)
+    return start, end
+
+
+def _empty_trend_payload(today: date) -> dict[str, Any]:
+    months = _last_six_month_keys(today)
+    return {
+        "fetchedAt": datetime.now(tz=timezone.utc).isoformat(),
+        "today": today.isoformat(),
+        "months": months,
+        "series": {key: [0] * len(months) for key in TREND_SERIES_KEYS},
+        "source": "unavailable",
+    }
+
+
+@router.get("/insights/trend-6mo")
+async def get_trend_6mo(
+    auth_user: AuthUser = Depends(get_current_auth_user),
+) -> dict[str, Any]:
+    """Return 4 monthly series over the last 6 calendar months.
+
+    Series:
+      newClients    — Sheets rows whose 'Data pierwszego kontaktu' falls
+                      in that month.
+      meetingsDone  — Calendar past events grouped by month (no
+                      event_type filter; any past event = "spotkanie odbyte").
+      offersSent    — Calendar past events with event_type=offer_email.
+      signed        — Sheets rows with status="Podpisane" whose 'Data
+                      ostatniego kontaktu' falls in that month (heuristic
+                      proxy for the missing signing-date column).
+
+    Months array is oldest-first, so series[i] aligns with months[i].
+    """
+    record = _resolve_user_record(auth_user)
+    today = _today_warsaw()
+
+    if not record or not record.get("google_sheets_id"):
+        return _empty_trend_payload(today)
+
+    user_id = record["id"]
+    months = _last_six_month_keys(today)
+    window_start, window_end = _months_window(months)
+
+    range_start = datetime.combine(window_start, time.min, tzinfo=WARSAW_TZ)
+    # Cap the calendar fetch at "end of today" — months past today haven't
+    # happened yet, so future events would dilute "meetingsDone" totals.
+    range_end_cap = min(window_end, today)
+    range_end = datetime.combine(range_end_cap, time.max, tzinfo=WARSAW_TZ)
+
+    rows, events = await asyncio.gather(
+        get_all_clients(user_id),
+        get_events_for_range(user_id, range_start, range_end),
+    )
+
+    series: dict[str, list[int]] = {key: [0] * len(months) for key in TREND_SERIES_KEYS}
+    month_index = {ym: i for i, ym in enumerate(months)}
+    now_warsaw = _now_warsaw()
+
+    for row in rows:
+        first = _parse_iso_date(row.get("Data pierwszego kontaktu"))
+        if first is not None:
+            key = _ym(first.year, first.month)
+            idx = month_index.get(key)
+            if idx is not None:
+                series["newClients"][idx] += 1
+
+        status_value = (row.get("Status") or "").strip()
+        if status_value == "Podpisane":
+            last = _parse_iso_date(row.get("Data ostatniego kontaktu"))
+            if last is not None:
+                key = _ym(last.year, last.month)
+                idx = month_index.get(key)
+                if idx is not None:
+                    series["signed"][idx] += 1
+
+    for ev in events:
+        ev_dt = _parse_event_start_warsaw(ev.get("start"))
+        if ev_dt is None:
+            continue
+        if ev_dt > now_warsaw:
+            continue
+        key = _ym(ev_dt.year, ev_dt.month)
+        idx = month_index.get(key)
+        if idx is None:
+            continue
+        series["meetingsDone"][idx] += 1
+        if (ev.get("event_type") or "") == "offer_email":
+            series["offersSent"][idx] += 1
+
+    return {
+        "fetchedAt": datetime.now(tz=timezone.utc).isoformat(),
+        "today": today.isoformat(),
+        "months": months,
+        "series": series,
+        "source": "live",
+    }
