@@ -71,6 +71,7 @@ async def test_add_client_success_replies_and_fires_r7_keeps_pending():
             "Imię i nazwisko": "Jan Kowalski",
             "Miasto": "Warszawa",
             "Telefon": "600111222",
+            "Status": "Nowy lead",
         },
     )
     upd.effective_message.reply_text.assert_awaited_once_with("✅ Zapisane.")
@@ -81,7 +82,7 @@ async def test_add_client_success_replies_and_fires_r7_keeps_pending():
     assert args[2] == "Jan Kowalski"
     assert args[3] == "Warszawa"
     assert mock_r7.await_args.kwargs["client_row"] == 42
-    assert mock_r7.await_args.kwargs["current_status"] == ""
+    assert mock_r7.await_args.kwargs["current_status"] == "Nowy lead"
     mock_delete.assert_not_called()
 
 

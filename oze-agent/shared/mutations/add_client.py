@@ -18,6 +18,8 @@ from typing import Optional
 
 from shared.clients import create_client_row, update_client_row_touching_contact
 
+DEFAULT_CLIENT_STATUS = "Nowy lead"
+
 
 @dataclass
 class AddClientResult:
@@ -32,19 +34,26 @@ class UpdateClientFieldsResult:
     error_message: Optional[str] = None          # "google_down" on Sheets fail
 
 
+def with_default_client_status(client_data: dict) -> dict:
+    """Return a copy with the default status for newly-added clients."""
+    prepared = dict(client_data)
+    status = prepared.get("Status")
+    if status is None or not str(status).strip():
+        prepared["Status"] = DEFAULT_CLIENT_STATUS
+    return prepared
+
+
 async def commit_add_client(
     user_id: str,
     client_data: dict,
 ) -> AddClientResult:
     """Append a new client row to Sheets.
 
-    `create_client_row` already copies the dict before forwarding
-    (shared/clients/crud.py), so callers can safely reuse their local
-    inputs. Column I ("Data pierwszego kontaktu") is auto-populated by
-    google_sheets.add_client; F ("Status") / J ("Data ostatniego
-    kontaktu") stay untouched unless the caller supplied them.
+    Callers can safely reuse their local inputs. Column I ("Data
+    pierwszego kontaktu") is auto-populated by google_sheets.add_client.
+    Column F ("Status") defaults to "Nowy lead" unless explicitly supplied.
     """
-    row = await create_client_row(user_id, client_data)
+    row = await create_client_row(user_id, with_default_client_status(client_data))
     if row is None:
         return AddClientResult(success=False, error_message="google_down")
     return AddClientResult(success=True, row=row)

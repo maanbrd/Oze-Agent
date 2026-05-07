@@ -74,3 +74,48 @@ async def test_dashboard_crm_uses_google_resource_ids(monkeypatch):
     assert result["events"][0]["calendarUrl"].startswith("https://calendar.google.com")
     assert result["source"] == "live"
     assert "Google" in result["sourceMessage"]
+
+
+def test_dashboard_calendar_event_maps_client_name_from_dash_title():
+    from api.routes import dashboard
+
+    mapped = dashboard._map_calendar_event(
+        {
+            "id": "event-1",
+            "title": "Spotkanie — Anna Nowicka",
+            "start": "2026-05-07T15:30:00+02:00",
+        },
+        "cal-1",
+    )
+
+    assert mapped["clientName"] == "Anna Nowicka"
+
+
+def test_dashboard_calendar_event_maps_client_name_from_phone_dash_title():
+    from api.routes import dashboard
+
+    mapped = dashboard._map_calendar_event(
+        {
+            "id": "event-1",
+            "title": "Telefon — Tomasz Król",
+            "start": "2026-05-08T10:00:00+02:00",
+        },
+        "cal-1",
+    )
+
+    assert mapped["clientName"] == "Tomasz Król"
+
+
+def test_dashboard_calendar_event_keeps_legacy_colon_fallback():
+    from api.routes import dashboard
+
+    mapped = dashboard._map_calendar_event(
+        {
+            "id": "event-1",
+            "title": "Spotkanie: Karolina Wiśniewska",
+            "start": "2026-05-12T09:00:00+02:00",
+        },
+        "cal-1",
+    )
+
+    assert mapped["clientName"] == "Karolina Wiśniewska"

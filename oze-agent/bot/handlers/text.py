@@ -111,6 +111,7 @@ from shared.mutations import (
     STATUS_NEW_LEAD as _STATUS_NEW_LEAD,
     commit_add_client,
     commit_update_client_fields,
+    with_default_client_status,
 )
 _EVENT_TYPE_DEFAULT_DURATION = {
     "in_person": 60,
@@ -3101,15 +3102,16 @@ async def handle_change_status(
 
 async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) -> bool:
     remaining = flow_data.get("_offer_remaining", [])
-    result = await commit_add_client(user_id, flow_data["client_data"])
+    client_data = with_default_client_status(flow_data["client_data"])
+    result = await commit_add_client(user_id, client_data)
     if not result.success:
         await reply_markdown_v2(update,
             format_error(result.error_message or "google_down")
         )
         return False
 
-    name = flow_data["client_data"].get("Imię i nazwisko", "klient")
-    city = flow_data["client_data"].get("Miasto", "")
+    name = client_data.get("Imię i nazwisko", "klient")
+    city = client_data.get("Miasto", "")
     photo_upload = flow_data.get("photo_upload")
     if photo_upload:
         from bot.handlers.photo import complete_photo_after_add_client
@@ -3119,14 +3121,14 @@ async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) 
             context,
             user_id,
             result.row,
-            flow_data["client_data"],
+            client_data,
             photo_upload,
         )
         if ok:
             label_parts = [
-                flow_data["client_data"].get("Imię i nazwisko", ""),
-                flow_data["client_data"].get("Miasto", ""),
-                flow_data["client_data"].get("Adres", ""),
+                client_data.get("Imię i nazwisko", ""),
+                client_data.get("Miasto", ""),
+                client_data.get("Adres", ""),
             ]
             label = ", ".join(part for part in label_parts if part)
             await reply_text(
@@ -3159,7 +3161,7 @@ async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) 
     await send_next_action_prompt(
         update, telegram_id, name, city,
         client_row=result.row,
-        current_status=flow_data["client_data"].get("Status") or "",
+        current_status=client_data.get("Status") or _STATUS_NEW_LEAD,
     )
     return True  # r7_prompt flow created inside send_next_action_prompt
 

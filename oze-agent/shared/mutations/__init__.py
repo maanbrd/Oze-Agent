@@ -8,9 +8,11 @@ the result flags. No user-facing strings in this module.
 
 from .add_client import (
     AddClientResult,
+    DEFAULT_CLIENT_STATUS,
     UpdateClientFieldsResult,
     commit_add_client,
     commit_update_client_fields,
+    with_default_client_status,
 )
 from .add_meeting import (
     EVENT_TYPE_TO_NEXT_STEP_LABEL,
@@ -28,6 +30,7 @@ __all__ = [
     "AddMeetingResult",
     "AddNoteResult",
     "ChangeStatusResult",
+    "DEFAULT_CLIENT_STATUS",
     "EVENT_TYPE_TO_NEXT_STEP_LABEL",
     "STATUS_MEETING_AUTO_UPGRADE_FROM",
     "STATUS_MEETING_BOOKED",
@@ -38,4 +41,5 @@ __all__ = [
     "commit_add_note",
     "commit_change_status",
     "commit_update_client_fields",
+    "with_default_client_status",
 ]

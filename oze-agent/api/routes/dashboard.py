@@ -53,13 +53,45 @@ def _map_sheet_client(row: dict[str, Any], sheet_id: str) -> dict[str, Any]:
     }
 
 
+_EVENT_CLIENT_TITLE_PREFIXES = {
+    "spotkanie",
+    "telefon",
+    "wysłać ofertę",
+    "follow-up ofertowy",
+    "follow-up dokumentowy",
+}
+
+
+def _client_name_from_calendar_title(title: str) -> str:
+    clean_title = title.strip()
+    if not clean_title:
+        return "Wydarzenie"
+
+    for separator in (" — ", " – ", " - "):
+        if separator not in clean_title:
+            continue
+        prefix, client_name = clean_title.split(separator, 1)
+        if (
+            prefix.strip().lower() in _EVENT_CLIENT_TITLE_PREFIXES
+            and client_name.strip()
+        ):
+            return client_name.strip()
+
+    if ":" in clean_title:
+        client_name = clean_title.rsplit(":", 1)[-1].strip()
+        if client_name:
+            return client_name
+
+    return clean_title
+
+
 def _map_calendar_event(event: dict[str, Any], calendar_id: str) -> dict[str, Any]:
     title = str(event.get("title") or "")
     return {
         "id": str(event.get("id") or title),
         "clientId": None,
         "title": title,
-        "clientName": title.split(":")[-1].strip() or title or "Wydarzenie",
+        "clientName": _client_name_from_calendar_title(title),
         "city": None,
         "startsAt": event.get("start"),
         "endsAt": event.get("end"),
