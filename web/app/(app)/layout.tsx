@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { CrmShell } from "@/components/crm-shell";
 import { getCurrentAccount } from "@/lib/api/account";
+import { getDecisionsCount } from "@/lib/api/decisions";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
 import { safeLocalPath } from "@/lib/routes";
 
@@ -23,8 +24,10 @@ export default async function LoggedInLayout({
     redirect(safeLocalPath(onboardingStatus?.nextStep, "/onboarding/platnosc"));
   }
 
+  const decisionsCount = await getDecisionsCount();
+
   return (
-    <CrmShell account={account}>
+    <CrmShell account={account} decisionsCount={decisionsCount}>
       {children}
     </CrmShell>
   );

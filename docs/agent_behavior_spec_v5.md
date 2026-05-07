@@ -48,6 +48,53 @@ Jeśli wszystko uzupełnione, NIE pokazuj 'Brakuje:'.
 pending danych klienta. Gmail wysyła dopiero po `✅ Wysłać`; Sheets effects są
 best-effort dopiero po sukcesie Gmaila.
 
+#### R1.web: Mutacje z poziomu web (dashboard)
+
+Dla pól zmienianych z dashboardu webowego zasada confirmation card R1 jest
+zachowana w duchu (jawne kliknięcie + odwracalność), ale w innym wzorcu
+interakcji niż w Telegramie. Powód: w web nie ma miejsca na pomyłkę
+interpretacji NLP — handlowiec klika konkretny przycisk z explicit etykietą.
+Modal potwierdzający byłby więc zbędnym friction. W zamian każda mutacja ma
+**10-sekundowe okno UI „Cofnij"** (Telegram tego nie ma — bo tam confirmation
+żyje przed commitem, nie po).
+
+W tym trybie web może bezpośrednio mutować Sheets / Calendar w trzech ściśle
+zdefiniowanych operacjach na karcie klienta w `/dashboard/decyzje-preview`:
+
+1. **`change_status`** (kontekstowe przyciski decyzji: Happy / Out)
+   — kliknięcie przycisku z explicit etykietą (np. `✓ Wysłałem ofertę` /
+   `✗ Nieaktywny`). Side effects:
+   - F (Status) → wybrana wartość
+   - J (Data ostatniego kontaktu) → today (auto-bump przez `update_client`)
+   - Opcjonalnie K (Następny krok) i L (Data następnego kroku) — auto-derive
+     z tabeli przejść (zob. `oze-agent/api/routes/decisions.py`
+     `NEXT_STEP_AFTER_STATUS`). Tylko dla happy transitions; Out nie ruszają K/L.
+   - Cofnij wywołuje odwrotny `change_status` (przywrócenie poprzedniej wartości
+     w F). K/L po cofnięciu pozostają w stanie "po decyzji" — to znana
+     ograniczeniem MVP.
+
+2. **`touch_contact`** (przycisk „Nadal czeka")
+   — kliknięcie zostawia status bez zmian, ale wymusza aktualizację J. Side
+   effect: tylko J → today. Cofnięcie nie cofa J (column J nie ma reverse w MVP).
+
+3. **`schedule_call`** (modal „Zaplanuj kontakt telefoniczny")
+   — submit modalu z polami `data | godzina | notatka`. Side effects:
+   - Calendar: 15-minutowy event w `OZE Spotkania`, title
+     `📞 Telefon — {fullName}`, description = pełne dane klienta z Sheets
+     (imię, miasto, telefon, email, adres, produkt, status, notatka z modalu)
+   - Sheets: K=`Telefon`, L=ISO datetime, P=event_id, J=today (auto)
+   - Konflikt: gdy P jest niepuste przy próbie nowego scheduleu, web pokazuje
+     mini-modal `Nadpisz / Usuń stary / Anuluj`. „Nadpisz" = delete event +
+     create new. „Usuń stary" = delete + clear K/L/P. „Anuluj" = no-op.
+   - Brak undo button (Calendar event jest source of truth — handlowiec może
+     odwołać event ręcznie w Calendar).
+
+**Co zostaje wyłącznie w Telegramie:** mutacje voice/text wywołane głosówką
+lub wolną składnią (`add_client`, `add_note`, `add_meeting` z głosówki/text)
+— tu R1 z confirmation card pozostaje bez zmian. Powód: te wymagają
+interpretacji NLP, więc explicit confirmation zapobiega błędom („u
+Krzywińskim" → Krzywiński zamiast Krzywinska).
+
 ### R2: Pytaj TYLKO gdy konieczne
 
 Pytaj: brak krytycznych danych, wielu pasujących klientów, niejednoznaczne miasto.
