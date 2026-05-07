@@ -204,7 +204,7 @@ export function DecyzjePreview() {
         clientName: client.fullName,
         oldStatus: client.status,
         newStatus: client.status,
-        expiresAt: Date.now() + 5000,
+        expiresAt: Date.now() + 10000,
       });
     } else {
       setClients((prev) =>
@@ -217,11 +217,11 @@ export function DecyzjePreview() {
         clientName: client.fullName,
         oldStatus: client.status,
         newStatus: transition.next,
-        expiresAt: Date.now() + 5000,
+        expiresAt: Date.now() + 10000,
       });
     }
 
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
+    toastTimer.current = setTimeout(() => setToast(null), 10000);
   };
 
   const undoToast = () => {
@@ -257,10 +257,10 @@ export function DecyzjePreview() {
       clientId: draft.client.id,
       clientName: draft.client.fullName,
       whenLabel: formatScheduleLabel(draft.date, draft.time),
-      expiresAt: Date.now() + 5000,
+      expiresAt: Date.now() + 10000,
     });
     setScheduleDraft(null);
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
+    toastTimer.current = setTimeout(() => setToast(null), 10000);
   };
 
   const resetAll = () => {
@@ -294,7 +294,7 @@ export function DecyzjePreview() {
           <span style={{ fontSize: 18 }}>🧪</span>
           <div style={{ flex: 1, fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,0.9)" }}>
             <strong style={{ color: AMBER }}>Prototyp UI.</strong> Klik = zmiana w lokalnym stanie
-            tej karty + 5-sekundowy „Cofnij”. <em>Nic się nie zapisuje do Sheets.</em> Decyzje:
+            tej karty + 10-sekundowy „Cofnij”. <em>Nic się nie zapisuje do Sheets.</em> Decyzje:
             kontekstowe 3 przyciski per status, bez modalu, undo na toaście.
           </div>
           <button
@@ -581,24 +581,34 @@ function ClientRow({
         <button
           type="button"
           onClick={() => onSchedule(client)}
-          onMouseEnter={(e) => (e.currentTarget.style.color = G)}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = `${G}26`;
+            e.currentTarget.style.borderColor = G;
+            e.currentTarget.style.boxShadow = `0 0 18px ${G}40`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = `${G}14`;
+            e.currentTarget.style.borderColor = `${G}66`;
+            e.currentTarget.style.boxShadow = "none";
+          }}
           style={{
-            background: "transparent",
-            border: 0,
-            padding: "4px 0",
-            color: "rgba(255,255,255,0.55)",
-            fontSize: 12.5,
-            fontWeight: 500,
+            marginTop: 12,
+            background: `${G}14`,
+            border: `1px solid ${G}66`,
+            padding: "9px 16px",
+            color: G,
+            fontSize: 13.5,
+            fontWeight: 600,
             cursor: "pointer",
             fontFamily: "inherit",
             display: "inline-flex",
             alignItems: "center",
-            gap: 6,
-            transition: "color 0.15s",
+            gap: 8,
+            borderRadius: 999,
+            transition: "background 0.15s, border-color 0.15s, box-shadow 0.15s",
           }}
         >
-          <span aria-hidden="true">📞</span>
+          <span aria-hidden="true" style={{ fontSize: 15 }}>📞</span>
           Zaplanuj kontakt telefoniczny
         </button>
       </div>
