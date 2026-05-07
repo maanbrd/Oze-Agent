@@ -1,8 +1,10 @@
 import { CrmNotice } from "@/components/crm-notice";
 import { DataFreshnessBadge } from "@/components/data-freshness-badge";
+import { MojTydzien } from "@/components/dashboard/moj-tydzien";
 import { Nastepne30Dni } from "@/components/dashboard/nastepne-30-dni";
 import { QuickActionsStrip } from "@/components/dashboard/quick-actions-strip";
 import { getDecisionsCount } from "@/lib/api/decisions";
+import { getActivityWeek } from "@/lib/api/insights";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
 import {
   countActiveClients,
@@ -33,9 +35,10 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const onboardingComplete = params?.onboarding === "complete";
-  const [data, decisionsCount] = await Promise.all([
+  const [data, decisionsCount, activity] = await Promise.all([
     getCrmDashboardData(),
     getDecisionsCount(),
+    getActivityWeek(),
   ]);
   const todayKey = warsawDateKey();
   const tomorrowDate = new Date();
@@ -169,6 +172,8 @@ export default async function DashboardPage({
           ))}
         </div>
       </Panel>
+
+      <MojTydzien activity={activity} />
     </div>
   );
 }
