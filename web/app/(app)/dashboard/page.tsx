@@ -3,6 +3,13 @@ import { DataFreshnessBadge } from "@/components/data-freshness-badge";
 import { QuickActionsStrip } from "@/components/dashboard/quick-actions-strip";
 import { getDecisionsCount } from "@/lib/api/decisions";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
+import {
+  countActiveClients,
+  formatTodayMeetingTimes,
+  oldestOfferStaleDays,
+  signedPreviousMonth,
+  signedThisMonth,
+} from "@/lib/crm/dashboard-stats";
 import type { CrmClient, CrmEvent, FunnelStatus } from "@/lib/crm/types";
 import { formatWarsawTime, warsawDateKey, warsawDateKeyFromIso } from "@/lib/dates";
 
@@ -46,8 +53,14 @@ export default async function DashboardPage({
       return Boolean(nextActionDay && nextActionDay <= todayKey);
     })
     .slice(0, 5);
-  const signed = data.clients.filter((client) => client.status === "Podpisane");
   const offers = data.clients.filter((client) => client.status === "Oferta wysłana");
+  const now = new Date();
+  const activeClients = countActiveClients(data.clients);
+  const totalClients = data.clients.length;
+  const oldestOfferDays = oldestOfferStaleDays(data.clients, now);
+  const todayTimesLabel = formatTodayMeetingTimes(todayEvents);
+  const signedThis = signedThisMonth(data.clients, now);
+  const signedPrev = signedPreviousMonth(data.clients, now);
 
   return (
     <div className="space-y-6">
@@ -84,10 +97,34 @@ export default async function DashboardPage({
       </p>
 
       <section className="grid gap-4 md:grid-cols-4">
-        <Metric label="Klienci" value={data.clients.length} detail="z Google Sheets" />
-        <Metric label="Spotkania dziś" value={todayEvents.length} detail="z Google Calendar" />
-        <Metric label="Oferty wysłane" value={offers.length} detail="czekają na decyzję" />
-        <Metric label="Podpisane" value={signed.length} detail="aktywny miesiąc" />
+        <Metric
+          label="Aktywni"
+          value={activeClients}
+          detail={`z ${totalClients} razem`}
+        />
+        <Metric
+          label="Spotkania dziś"
+          value={todayEvents.length}
+          detail={todayTimesLabel}
+        />
+        <Metric
+          label="Oferty czekają"
+          value={offers.length}
+          detail={
+            oldestOfferDays === null
+              ? "brak"
+              : `najstarsza ${oldestOfferDays} ${oldestOfferDays === 1 ? "dzień" : "dni"}`
+          }
+        />
+        <Metric
+          label="Podpisane (ten miesiąc)"
+          value={signedThis}
+          detail={
+            signedPrev.count === 0
+              ? "brak danych z poprzedniego miesiąca"
+              : `vs ${signedPrev.count} w ${signedPrev.monthLabel}`
+          }
+        />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
