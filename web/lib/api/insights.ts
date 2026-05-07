@@ -30,6 +30,22 @@ export type Trend6mo = {
   source: "live" | "unavailable";
 };
 
+export type LeadSourceRow = {
+  source: string;
+  totalCount: number;
+  signedCount: number;
+  conversionRate: number;
+};
+
+export type LeadSources = {
+  fetchedAt: string;
+  today: string;
+  totalClients: number;
+  totalSigned: number;
+  rows: LeadSourceRow[];
+  source: "live" | "unavailable";
+};
+
 async function authedFetch(path: string, init: RequestInit = {}) {
   const account = await getCurrentAccount();
   const baseUrl = fastApiBaseUrl();
@@ -122,5 +138,26 @@ export async function getTrend6mo(): Promise<Trend6mo> {
     return (await response.json()) as Trend6mo;
   } catch {
     return emptyTrend6mo();
+  }
+}
+
+function emptyLeadSources(): LeadSources {
+  return {
+    fetchedAt: new Date().toISOString(),
+    today: new Date().toISOString().slice(0, 10),
+    totalClients: 0,
+    totalSigned: 0,
+    rows: [],
+    source: "unavailable",
+  };
+}
+
+export async function getLeadSources(): Promise<LeadSources> {
+  try {
+    const response = await authedFetch("/api/insights/sources");
+    if (!response.ok) return emptyLeadSources();
+    return (await response.json()) as LeadSources;
+  } catch {
+    return emptyLeadSources();
   }
 }

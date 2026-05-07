@@ -3,9 +3,10 @@ import { DataFreshnessBadge } from "@/components/data-freshness-badge";
 import { MojTydzien } from "@/components/dashboard/moj-tydzien";
 import { Nastepne30Dni } from "@/components/dashboard/nastepne-30-dni";
 import { QuickActionsStrip } from "@/components/dashboard/quick-actions-strip";
+import { TopZrodla } from "@/components/dashboard/top-zrodla";
 import { Trend6mo } from "@/components/dashboard/trend-6mo";
 import { getDecisionsCount } from "@/lib/api/decisions";
-import { getActivityWeek, getTrend6mo } from "@/lib/api/insights";
+import { getActivityWeek, getLeadSources, getTrend6mo } from "@/lib/api/insights";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
 import {
   countActiveClients,
@@ -36,11 +37,12 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const onboardingComplete = params?.onboarding === "complete";
-  const [data, decisionsCount, activity, trend] = await Promise.all([
+  const [data, decisionsCount, activity, trend, sources] = await Promise.all([
     getCrmDashboardData(),
     getDecisionsCount(),
     getActivityWeek(),
     getTrend6mo(),
+    getLeadSources(),
   ]);
   const todayKey = warsawDateKey();
   const tomorrowDate = new Date();
@@ -178,6 +180,8 @@ export default async function DashboardPage({
       </Panel>
 
       <Trend6mo trend={trend} />
+
+      <TopZrodla sources={sources} />
     </div>
   );
 }

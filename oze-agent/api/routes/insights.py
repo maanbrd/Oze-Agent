@@ -4,6 +4,7 @@ Endpoints:
 
   GET /api/insights/activity-week  — 4-metric "Mój tydzień" card
   GET /api/insights/trend-6mo      — 6-month sparkline data (4 series)
+  GET /api/insights/sources        — top lead-source bars (count + conversion)
 
 This module is intentionally separate from api/routes/dashboard.py so it
 can be developed without touching the file other agents (Codex/Maan) are
@@ -352,5 +353,104 @@ async def get_trend_6mo(
         "today": today.isoformat(),
         "months": months,
         "series": series,
+        "source": "live",
+    }
+
+
+# ── Top lead sources ──────────────────────────────────────────────────────────
+
+# Cap returned rows so a noisy free-text Źródło column doesn't render 50 bars.
+SOURCES_TOP_N = 3
+
+
+def _normalize_source(value: str) -> str:
+    """Trim whitespace; preserve case (handlowiec sees their own typing)."""
+    return (value or "").strip()
+
+
+def _empty_sources_payload(today: date) -> dict[str, Any]:
+    return {
+        "fetchedAt": datetime.now(tz=timezone.utc).isoformat(),
+        "today": today.isoformat(),
+        "totalClients": 0,
+        "totalSigned": 0,
+        "rows": [],
+        "source": "unavailable",
+    }
+
+
+@router.get("/insights/sources")
+async def get_lead_sources(
+    auth_user: AuthUser = Depends(get_current_auth_user),
+) -> dict[str, Any]:
+    """Top lead-source bars: count + conversion rate to "Podpisane".
+
+    Reads column M ("Źródło pozyskania") raw — no dictionary validation
+    (free-text in Sheets stays free-text in UI). Empty/blank sources are
+    skipped from the bars but counted in totalClients so the overall
+    rate matches what the salesperson sees on the funnel.
+
+    Each row:
+        {
+          source: str,          # e.g. "Polecenie"
+          totalCount: int,      # clients with this source
+          signedCount: int,     # subset whose status == "Podpisane"
+          conversionRate: float # signedCount / totalCount, rounded to 4dp
+        }
+
+    Sorted by totalCount desc, capped at SOURCES_TOP_N.
+    """
+    record = _resolve_user_record(auth_user)
+    today = _today_warsaw()
+
+    if not record or not record.get("google_sheets_id"):
+        return _empty_sources_payload(today)
+
+    user_id = record["id"]
+    rows = await get_all_clients(user_id)
+
+    by_source_total: dict[str, int] = {}
+    by_source_signed: dict[str, int] = {}
+    total_clients = 0
+    total_signed = 0
+
+    for row in rows:
+        total_clients += 1
+        is_signed = (row.get("Status") or "").strip() == "Podpisane"
+        if is_signed:
+            total_signed += 1
+
+        source = _normalize_source(row.get("Źródło pozyskania") or "")
+        if not source:
+            continue
+
+        by_source_total[source] = by_source_total.get(source, 0) + 1
+        if is_signed:
+            by_source_signed[source] = by_source_signed.get(source, 0) + 1
+
+    sorted_sources = sorted(
+        by_source_total.items(),
+        key=lambda pair: (-pair[1], pair[0]),
+    )[:SOURCES_TOP_N]
+
+    result_rows = []
+    for source, total in sorted_sources:
+        signed = by_source_signed.get(source, 0)
+        rate = round(signed / total, 4) if total > 0 else 0.0
+        result_rows.append(
+            {
+                "source": source,
+                "totalCount": total,
+                "signedCount": signed,
+                "conversionRate": rate,
+            }
+        )
+
+    return {
+        "fetchedAt": datetime.now(tz=timezone.utc).isoformat(),
+        "today": today.isoformat(),
+        "totalClients": total_clients,
+        "totalSigned": total_signed,
+        "rows": result_rows,
         "source": "live",
     }
