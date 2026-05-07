@@ -4,6 +4,7 @@ import type { CurrentAccount } from "@/lib/api/account";
 
 const navItems = [
   ["Dashboard", "/dashboard"],
+  ["Wymagają decyzji", "/dashboard/decyzje-preview"],
   ["Klienci", "/klienci"],
   ["Kalendarz", "/kalendarz"],
   ["Płatności", "/platnosci"],
@@ -13,6 +14,16 @@ const navItems = [
   ["FAQ", "/faq"],
   ["Oferty", "/oferty"],
 ] as const;
+
+// TODO v2: replace with real count from getCrmDashboardData() (open statuses, stale > N days)
+const PROTOTYPE_DECYZJE_COUNT = 7;
+
+function decyzjeBadgeColor(count: number): string {
+  if (count === 0) return "text-zinc-500 border-white/10 bg-white/5";
+  if (count <= 7) return "text-[#3DFF7A] border-[#3DFF7A]/40 bg-[#3DFF7A]/10";
+  if (count <= 15) return "text-amber-300 border-amber-300/40 bg-amber-300/10";
+  return "text-red-400 border-red-400/40 bg-red-400/10";
+}
 
 function googleLinks(account: CurrentAccount) {
   const profile = account.profile;
@@ -58,15 +69,27 @@ export function CrmShell({
             Agent-OZE
           </Link>
           <nav className="mt-7 grid gap-1">
-            {navItems.map(([label, href]) => (
-              <Link
-                key={href}
-                href={href}
-                className="rounded-[8px] px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
-              >
-                {label}
-              </Link>
-            ))}
+            {navItems.map(([label, href]) => {
+              const isDecyzje = href === "/dashboard/decyzje-preview";
+              const badgeClass = isDecyzje ? decyzjeBadgeColor(PROTOTYPE_DECYZJE_COUNT) : "";
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+                >
+                  <span>{label}</span>
+                  {isDecyzje && PROTOTYPE_DECYZJE_COUNT > 0 ? (
+                    <span
+                      aria-label={`${PROTOTYPE_DECYZJE_COUNT} klientów wymaga decyzji`}
+                      className={`min-w-[24px] rounded-full border px-2 py-0.5 text-center text-xs font-bold tabular-nums ${badgeClass}`}
+                    >
+                      {PROTOTYPE_DECYZJE_COUNT}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </nav>
           <div className="mt-7 rounded-[8px] border border-white/10 bg-white/[0.04] p-3 text-xs leading-5 text-zinc-400">
             CRM read-only. Edycja: Sheets i Calendar.
