@@ -100,3 +100,53 @@ export function formatTodayMeetingTimes(events: CrmEvent[]): string {
     .map((event) => formatWarsawTime(event.startsAt))
     .join(" · ");
 }
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function shiftDateKey(key: string, days: number): string {
+  const [y, m, d] = key.split("-").map((s) => parseInt(s, 10));
+  if (!y || !m || !d) return key;
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+}
+
+function mondayOffsetFromKey(key: string): number {
+  const [y, m, d] = key.split("-").map((s) => parseInt(s, 10));
+  if (!y || !m || !d) return 0;
+  const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+  return (dow + 6) % 7;
+}
+
+export function meetingsThisWeek(
+  events: CrmEvent[],
+  now = new Date(),
+): { total: number; past: number } {
+  const todayKey = warsawDateKey(now);
+  const fromMon = mondayOffsetFromKey(todayKey);
+  const weekStartKey = shiftDateKey(todayKey, -fromMon);
+  const weekEndKey = shiftDateKey(todayKey, 6 - fromMon);
+  const cutoffMs = now.getTime();
+
+  let total = 0;
+  let past = 0;
+  for (const event of events) {
+    const evKey = warsawDateKeyFromIso(event.startsAt);
+    if (!evKey) continue;
+    if (evKey < weekStartKey || evKey > weekEndKey) continue;
+    total += 1;
+    const startMs = new Date(event.startsAt).getTime();
+    if (Number.isFinite(startMs) && startMs < cutoffMs) past += 1;
+  }
+  return { total, past };
+}
+
+export function daysLeftInMonth(now = new Date()): number {
+  const todayKey = warsawDateKey(now);
+  const [y, m, d] = todayKey.split("-").map((s) => parseInt(s, 10));
+  if (!y || !m || !d) return 0;
+  const lastDayOfMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return Math.max(0, lastDayOfMonth - d);
+}

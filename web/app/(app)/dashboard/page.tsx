@@ -1,5 +1,6 @@
 import { CrmNotice } from "@/components/crm-notice";
 import { DataFreshnessBadge } from "@/components/data-freshness-badge";
+import { Nastepne30Dni } from "@/components/dashboard/nastepne-30-dni";
 import { QuickActionsStrip } from "@/components/dashboard/quick-actions-strip";
 import { getDecisionsCount } from "@/lib/api/decisions";
 import { getCrmDashboardData } from "@/lib/crm/adapters";
@@ -126,6 +127,8 @@ export default async function DashboardPage({
           }
         />
       </section>
+
+      <Nastepne30Dni clients={data.clients} events={data.events} now={now} />
 
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <Panel title="Lejek z Sheets">
