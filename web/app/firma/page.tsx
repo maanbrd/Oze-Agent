@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { FirmaContactForm } from "@/components/firma-contact-form";
 
 const G = "#3DFF7A";
 
 export const metadata = {
-  title: "Dla firm OZE — w przygotowaniu | OZE Agent",
+  title: "Agent OZE dla firm | OZE Agent",
   description:
-    "Wersja Agenta OZE dla całych zespołów sprzedaży jest w przygotowaniu. Napisz na kontakt@oze-agent.pl, damy znać, kiedy będzie gotowa.",
+    "Agent OZE skrojony pod Twoją firmę. Prosty formularz kontaktowy dla właścicieli firm OZE.",
 };
 
 export default function FirmaPage() {
@@ -15,13 +16,6 @@ export default function FirmaPage() {
         minHeight: "100vh",
         background: "#000",
         color: "#fff",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 32,
-        textAlign: "center",
-        gap: 18,
         position: "relative",
         overflow: "hidden",
       }}
@@ -31,73 +25,192 @@ export default function FirmaPage() {
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(ellipse at center, ${G}10 0%, transparent 60%)`,
+          background:
+            "radial-gradient(circle at 20% 20%, rgba(61,255,122,0.07), transparent 28%), radial-gradient(circle at 80% 30%, rgba(61,255,122,0.04), transparent 30%), linear-gradient(180deg, #071009 0%, #000 68%)",
           pointerEvents: "none",
         }}
       />
       <div
         style={{
-          fontSize: 12,
-          color: G,
-          textTransform: "uppercase",
-          letterSpacing: 2,
-          fontWeight: 700,
           position: "relative",
+          zIndex: 1,
+          width: "min(1160px, calc(100% - 40px))",
+          minHeight: "100vh",
+          margin: "0 auto",
+          padding: "28px 0 44px",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        — Dla firm OZE
-      </div>
-      <h1
-        style={{
-          fontSize: "clamp(32px, 5vw, 56px)",
-          fontWeight: 600,
-          lineHeight: 1.1,
-          margin: 0,
-          maxWidth: 720,
-          position: "relative",
-          textWrap: "balance" as React.CSSProperties["textWrap"],
-        }}
-      >
-        Strona dla właścicieli firm OZE
-        <br />
-        <span style={{ color: G, textShadow: `0 0 40px ${G}55` }}>w przygotowaniu.</span>
-      </h1>
-      <p
-        style={{
-          color: "rgba(255,255,255,0.65)",
-          maxWidth: 560,
-          lineHeight: 1.6,
-          fontSize: 16,
-          margin: 0,
-          position: "relative",
-        }}
-      >
-        Pracujemy nad wersją Agenta OZE dla całych zespołów sprzedaży. Napisz na{" "}
-        <a
-          href="mailto:kontakt@oze-agent.pl"
-          style={{ color: G, textDecoration: "underline", textUnderlineOffset: 3 }}
+        <header
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 18,
+          }}
         >
-          kontakt@oze-agent.pl
-        </a>
-        , a damy znać, kiedy będzie gotowa.
-      </p>
-      <Link
-        href="/"
-        style={{
-          marginTop: 12,
-          padding: "14px 26px",
-          borderRadius: 999,
-          background: G,
-          color: "#000",
-          fontWeight: 700,
-          fontSize: 14.5,
-          textDecoration: "none",
-          boxShadow: `0 0 28px ${G}55`,
-          position: "relative",
-        }}
-      >
-        ← Wróć na stronę główną
-      </Link>
+          <Link
+            href="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              color: "#fff",
+              textDecoration: "none",
+              fontWeight: 700,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                border: `2px solid ${G}`,
+                boxShadow: "0 0 4px rgba(61,255,122,0.18)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: G,
+                  boxShadow: "none",
+                }}
+              />
+            </span>
+            OZE Agent
+          </Link>
+          <Link
+            href="/"
+            style={{
+              color: "rgba(255,255,255,0.7)",
+              textDecoration: "none",
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            strona główna
+          </Link>
+        </header>
+
+        <section
+          className="firma-grid"
+          style={{
+            flex: 1,
+            display: "grid",
+            alignItems: "center",
+            gap: 48,
+            padding: "72px 0 36px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                color: G,
+                textTransform: "uppercase",
+                letterSpacing: 2,
+                fontSize: 12,
+                fontWeight: 800,
+                marginBottom: 22,
+              }}
+            >
+              — Dla właścicieli firm OZE
+            </div>
+            <h1
+              style={{
+                fontSize: "clamp(40px, 6vw, 78px)",
+                lineHeight: 0.96,
+                letterSpacing: "-0.04em",
+                fontWeight: 700,
+                margin: 0,
+                maxWidth: 760,
+                textWrap: "balance" as React.CSSProperties["textWrap"],
+              }}
+            >
+              Agent OZE skrojony pod Twoją firmę
+            </h1>
+            <div
+              style={{
+                marginTop: 30,
+                display: "grid",
+                gap: 14,
+                maxWidth: 680,
+              }}
+            >
+              {[
+                "nie tracisz pieniędzy",
+                "wspólnie z Twoimi ludźmi zarabiacie więcej",
+                "macie mniej na głowie",
+              ].map((text) => (
+                <div
+                  key={text}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    color: "rgba(255,255,255,0.82)",
+                    fontSize: "clamp(18px, 2vw, 24px)",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: G,
+                      boxShadow: "none",
+                      flex: "0 0 auto",
+                    }}
+                  />
+                  {text}
+                </div>
+              ))}
+            </div>
+            <a
+              href="#formularz"
+              style={{
+                marginTop: 34,
+                height: 56,
+                padding: "0 28px",
+                borderRadius: 999,
+                background: G,
+                color: "#000",
+                fontWeight: 800,
+                fontSize: 16,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 10px 28px rgba(0,0,0,0.32)",
+              }}
+            >
+              Umów się na rozmowę
+            </a>
+          </div>
+
+          <FirmaContactForm />
+        </section>
+      </div>
+      <style>{`
+        .firma-grid {
+          grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+        }
+
+        @media (max-width: 860px) {
+          .firma-grid {
+            grid-template-columns: 1fr;
+            padding-top: 56px !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
