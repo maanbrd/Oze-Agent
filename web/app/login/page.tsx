@@ -115,7 +115,7 @@ function Header() {
         href="/"
         className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
       >
-        Landing
+        Strona główna
       </Link>
     </header>
   );
