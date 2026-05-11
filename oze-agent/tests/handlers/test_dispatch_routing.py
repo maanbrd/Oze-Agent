@@ -15,6 +15,7 @@ from bot.handlers.text import (
     _resolve_meeting_event_type,
     handle_banner,
     handle_general,
+    handle_text,
 )
 from shared.intent.intents import IntentResult, IntentType, ScopeTier
 
@@ -175,11 +176,34 @@ async def test_handle_general_never_sends_empty_message():
 
     with patch("bot.handlers.text.get_conversation_history", return_value=[]), \
          patch("bot.handlers.text.generate_bot_response", new=AsyncMock(return_value={"text": ""})), \
-         patch("bot.handlers.text.save_conversation_message"), \
+         patch("bot.utils.conversation_reply.save_conversation_message"), \
          patch("bot.handlers.text.increment_interaction", new=AsyncMock()):
         await handle_general(update, context, {"id": "uid"}, {}, "x")
 
     update.effective_message.reply_text.assert_awaited_once_with("Co chcesz zrobić?")
+
+
+@pytest.mark.asyncio
+async def test_handle_text_saves_user_message_before_pending_consumes_it():
+    update = MagicMock()
+    update.effective_user.id = 12345
+    update.effective_message.text = "zapisz"
+    context = MagicMock()
+
+    with patch("bot.handlers.text.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.text._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
+         patch("bot.handlers.text.send_typing", new=AsyncMock()), \
+         patch("bot.handlers.text.save_conversation_message") as save_message, \
+         patch("bot.handlers.text.get_pending_flow", return_value={"flow_type": "add_note"}), \
+         patch("bot.handlers.text._route_pending_flow", new=AsyncMock(return_value=True)):
+        await handle_text(update, context)
+
+    save_message.assert_called_once_with(
+        12345,
+        "user",
+        "zapisz",
+        message_type="text",
+    )
 
 
 def test_r7_context_injected_when_reply_has_no_client_name():

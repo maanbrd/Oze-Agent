@@ -9,25 +9,60 @@ events.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from shared.google_calendar import (
     delete_event,
-    get_events_for_range,
+    get_events_for_range_or_raise,
 )
 
 logger = logging.getLogger(__name__)
 
+_CALENDAR_READ_ATTEMPTS = 4
+_CALENDAR_READ_RETRY_DELAY_S = 2.0
+
 
 _SYNTHETIC_PREFIX = "E2E-Beta-"
 _FIXTURE_PREFIX = "E2E-Beta-Fixture-"
+_SYNTHETIC_EMAIL_DOMAIN = "@e2e-noinbox.local"
+_REALISTIC_SYNTHETIC_TITLE_MARKERS = (
+    "Michał Zieliński",
+    "Karolina Woźniak",
+)
 
 VALID_EVENT_TYPES = ("in_person", "phone_call", "offer_email", "doc_followup")
 
 
 # ── Read by summary / window ────────────────────────────────────────────────
+
+
+async def get_events_for_range_for_e2e(
+    user_id: str,
+    start: datetime,
+    end: datetime,
+) -> list[dict]:
+    """Strict Calendar read for E2E verification and cleanup."""
+    last_error: Exception | None = None
+    for attempt in range(1, _CALENDAR_READ_ATTEMPTS + 1):
+        try:
+            return await get_events_for_range_or_raise(user_id, start, end)
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "get_events_for_range_for_e2e(%s): attempt %s/%s failed: %s",
+                user_id,
+                attempt,
+                _CALENDAR_READ_ATTEMPTS,
+                e,
+            )
+            if attempt < _CALENDAR_READ_ATTEMPTS:
+                await asyncio.sleep(_CALENDAR_READ_RETRY_DELAY_S * attempt)
+    raise RuntimeError(
+        f"strict Calendar read failed after {_CALENDAR_READ_ATTEMPTS} attempts: {last_error}"
+    )
 
 
 async def find_event_by_summary_in_window(
@@ -37,7 +72,7 @@ async def find_event_by_summary_in_window(
     end: datetime,
 ) -> Optional[dict]:
     """Return the first event in [start, end) whose title contains the substring."""
-    events = await get_events_for_range(user_id, start, end)
+    events = await get_events_for_range_for_e2e(user_id, start, end)
     for e in events:
         if summary_substring in e.get("title", ""):
             return e
@@ -48,7 +83,7 @@ async def find_events_in_window(
     user_id: str, start: datetime, end: datetime,
 ) -> list[dict]:
     """Pass-through to `get_events_for_range` — kept here for symmetry."""
-    return await get_events_for_range(user_id, start, end)
+    return await get_events_for_range_for_e2e(user_id, start, end)
 
 
 # ── Field assertions on event dict ──────────────────────────────────────────
@@ -122,20 +157,32 @@ async def find_synthetic_events(
     run_id: Optional[str] = None,
     include_fixtures: bool = False,
 ) -> list[dict]:
-    """Return all events in the next `days_forward` days whose title starts
-    with `E2E-Beta-`. Filters by `run_id` substring; excludes fixtures by
-    default."""
+    """Return all E2E synthetic events in the next `days_forward` days.
+
+    Legacy events are discovered by `E2E-Beta-` in the title. Realistic-name
+    scenarios are discovered by the cleanup-only email domain in description.
+    """
     now = datetime.now(tz=timezone.utc)
     end = now + timedelta(days=days_forward)
-    events = await get_events_for_range(user_id, now, end)
+    events = await get_events_for_range_for_e2e(user_id, now, end)
     out: list[dict] = []
     for e in events:
         title = e.get("title", "")
-        if not title.startswith(_SYNTHETIC_PREFIX):
+        description = e.get("description", "").lower()
+        # Bot creates events titled like "Spotkanie — E2E-Beta-...",
+        # "Telefon — E2E-Beta-...", "Wysłać ofertę — E2E-Beta-...",
+        # so use substring match, not prefix.
+        is_legacy_synthetic = _SYNTHETIC_PREFIX in title
+        is_email_synthetic = _SYNTHETIC_EMAIL_DOMAIN in description
+        is_realistic_synthetic = any(
+            marker in title for marker in _REALISTIC_SYNTHETIC_TITLE_MARKERS
+        )
+        if not (is_legacy_synthetic or is_email_synthetic or is_realistic_synthetic):
             continue
-        if not include_fixtures and title.startswith(_FIXTURE_PREFIX):
+        is_fixture = _FIXTURE_PREFIX in title or "fixture" in description
+        if not include_fixtures and is_fixture:
             continue
-        if run_id is not None and run_id not in title:
+        if run_id is not None and run_id not in title and run_id not in description:
             continue
         out.append(e)
     return out

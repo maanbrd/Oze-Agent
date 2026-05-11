@@ -1,6 +1,6 @@
 # OZE-Agent — Source of Truth
 
-_Last updated: 29.04.2026_
+_Last updated: 04.05.2026_
 _Owner: Maan_
 
 Ten plik jest główną mapą projektu OZE-Agent.
@@ -12,12 +12,21 @@ Jeśli dokument jest w `docs/archive/`, nie jest źródłem prawdy.
 
 ## 1. Aktualna decyzja strategiczna
 
-Projekt prowadzi **dwa równoległe tracki**:
+Poprzednia ścieżka łatania błędów jest zamknięta.
 
-1. **Bot track (`oze-agent/`)** — selective rewrite warstwy zachowania (intent routing, pending flow, confirmation cards, proactive scheduler). Poprzednia ścieżka łatania błędów zamknięta. Photo flow i multi-meeting odłożone poza pierwszą wersję.
-2. **Web app track (`web/`)** — Next.js 16 + Supabase Auth + Stripe + Vercel (`oze-agent.vercel.app`). Active branch `feat/web-phase-0c` / PR #5 has the Phase 0C/0D/0E/0F/Phase 1 functional spine implemented and pushed: Stripe sandbox boundary, logged-in app shell, read-only CRM pages, Google OAuth/resource onboarding, Telegram pairing, onboarding gate, CRM source states, and account-only settings. It is **not live-complete** until the rollout/smoke checklist passes.
+Nie próbujemy już naprawiać obecnej warstwy zachowania błąd po błędzie.
+Obecna strategia to **selective rewrite**.
 
-Tracki są niezależne — bot rewrite nie blokuje web app i odwrotnie. Wspólne punkty: Supabase users (`auth_user_id` ↔ `telegram_id`), FastAPI authenticated web endpoints, Stripe billing writes, Google OAuth/resource metadata.
+Decyzja operacyjna z 27.04.2026: **stabilizacja agenta Telegram ma pierwszeństwo
+przed domykaniem web appu**. Web app jest ważny, ale nie powinien być traktowany
+jako gotowy produkt, dopóki core agent nie przechodzi powtarzalnego smoke/regression
+testu.
+
+Decyzja produktowa z 04.05.2026: **generator ofert jest zatwierdzonym,
+zintegrowanym slice'em produktu**. To nie jest osobna aplikacja ani pełny
+dashboard. Webapp tworzy i testuje szablony ofert na `/oferty`; realna wysyłka
+do klienta idzie przez Telegram + Gmail handlowca po osobnym potwierdzeniu.
+Baseline implementacji: `09e0957 feat: add offer generator`.
 
 ### Zostaje
 
@@ -40,12 +49,23 @@ Tracki są niezależne — bot rewrite nie blokuje web app i odwrotnie. Wspólne
 
 ### Odłożone poza pierwszą wersję behavior layer
 
-- photo flow
 - multi-meeting
 
-Obecny kod photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+Fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
 
 Voice transcription — **live od 25.04.2026** (post-MVP slice). Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path.
+
+Photo upload — **active post-MVP slice**. Zdjęcia z Telegrama trafiają na Google Drive po karcie `✅ Zapisać`; pierwsze potwierdzenie otwiera 15-minutową sesję uploadu do tego klienta. Sheets `N=Zdjęcia`, `O=Link do zdjęć`.
+
+Testowy bot — **live od 27.04.2026**:
+- Telegram: `t.me/OZEAgentTestBot`
+- Railway service: `bot-test`
+- Branch: `develop`
+- Production bot: Railway service `bot`, branch `main`
+- Na 27.04.2026 oba branche (`main`, `develop`) wskazują na `961fad1`.
+- `bot-test` ma osobny Telegram token, ale do czasu rozdzielenia backendów może korzystać z tych samych Google Sheets / Calendar / Supabase zasobów co produkcja. Testy muszą używać fikcyjnych danych.
+
+Ostatni wdrożony hotfix agenta: `961fad1` — wymusza `record_add_meeting` dla wiadomości compound meeting+client z markerem czasu, redaguje logi klasyfikatora bez PII i nie traktuje samego pola `telefon` jako intencji rozmowy telefonicznej.
 
 Kolejność przepisywania w ramach selective rewrite (w tym czy proactive scheduler/morning brief wchodzi w pierwszej rundzie, czy później) jest decyzją `IMPLEMENTATION_PLAN.md`, nie SSOT.
 
@@ -128,24 +148,9 @@ Dane systemowe żyją w Supabase:
 - pending state
 - historia rozmowy
 - techniczne metadane
+- szablony ofert, profile sprzedawcy, techniczny log wysyłek ofert i logo ofert
 
 Nie mieszamy tych dwóch światów.
-
-### Web CRM boundary
-
-Web app może zmieniać wyłącznie dane systemowe użytkownika: auth/profile,
-billing, onboarding state, Google token/resource metadata, Telegram pairing
-state. Web app **nie tworzy ani nie edytuje** klientów, statusów, notatek,
-spotkań ani event contentu CRM.
-
-UI musi wyraźnie pokazywać, że edycja CRM idzie przez:
-
-- Google Sheets dla klientów,
-- Google Calendar dla spotkań/akcji,
-- Google Drive dla zdjęć,
-- Telegram dla potwierdzonych flow agenta.
-
-Strona może dawać bezpośrednie linki do Google, ale nie formularze mutujące CRM.
 
 ### Sheets schema
 
@@ -164,13 +169,21 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 - `edit_client`
 - `multi-meeting` (batch kilku spotkań w jednej wiadomości)
-- `photo_upload` (Drive)
 - import CSV / Excel
 - pełny dashboard
 - `evening_followup` — post-meeting check-in przez `pending_followups` (infra z Phase 5.3, runtime scheduler post-MVP)
 - `brief_pipeline_stats` — status-count dashboard opcjonalnie w morning brief
 - `per_user_brief_time` — respektować `users.morning_brief_hour` (MVP hardcoduje 07:00)
 - `morning_brief_polish_pass` — deklinacja / humanizacja linii briefu (MVP używa `Akcja: Klient` w mianowniku)
+
+**Zatwierdzone slice'e produktu poza 6 intencjami MVP:**
+
+- `offer_generator` — webapp `/oferty` do tworzenia szablonów PV / magazyn
+  energii / PV + magazyn energii, testowy PDF, profil sprzedawcy (firma, logo,
+  treść emaila) oraz Telegram/Gmail send flow. Webapp nie wysyła ofert do
+  klientów i nie przypisuje szablonu do klienta. Telegram obsługuje:
+  `jakie mam oferty?` oraz natychmiastowe `wyślij/wygeneruj ofertę...`.
+  Frazy z przyszłą datą/godziną nadal należą do `add_meeting(offer_email)`.
 
 **Product vision only / wymaga osobnej decyzji Maana** — opisane w `poznaj_swojego_agenta_v5_FINAL.md` jako wizja, ale **nie zatwierdzone jako roadmapa**. Każdą trzeba osobno zaakceptować przed wejściem do implementacji. **Nie są NIEPLANOWANE i nie są POST-MVP roadmap** — zostają w tej warstwie dopóki Maan nie zdecyduje inaczej:
 
@@ -188,15 +201,33 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 ### Photo i multi-meeting
 
-- Nie wchodzą do pierwszej wersji selective rewrite.
-- Zostają jako POST-MVP / późniejsza runda.
-- Obecny kod photo oraz ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
+- Photo upload jest aktywnym post-MVP slice.
+- Multi-meeting nie wchodzi do pierwszej wersji selective rewrite i zostaje POST-MVP / późniejsza runda.
+- Ewentualne fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
 
 ### Voice transcription (live od 25.04.2026)
 
 - Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj) — `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`.
 - Po Zapisz transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) — voice działa jako input adapter, nie odrębny intent type.
 - Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
+
+### Generator ofert (baseline od 04.05.2026)
+
+- Webapp `/oferty` jest integralną częścią dark UI aplikacji. Sidebar w kontekście
+  generatora pokazuje tylko `Oferty`; nagłówek strony to `Generator ofert`.
+- Oferta = szablon zestawu, nie oferta przypisana wcześniej do klienta.
+- Produkty MVP: `PV`, `Magazyn energii`, `PV + Magazyn energii`.
+- Webapp zapisuje szablony i profil sprzedawcy w Supabase, generuje preview oraz
+  testowy PDF. Nie wysyła maili do klientów.
+- Profil sprzedawcy przechowuje firmę, logo i globalną treść emaila. `Podpis
+  maila` i `akcent` nie są aktywnymi polami UI.
+- Treść emaila używa zmiennych z Sheets/oferty jako kafelków w edytorze; zapis
+  blokuje nieznane tokeny.
+- Telegram send flow używa gotowego szablonu, szuka klienta w Sheets, pokazuje
+  kartę `✅ Wysłać` / `❌ Anulować`, wysyła PDF przez połączonego Gmaila i dopiero
+  po sukcesie próbuje dopisać email/status w Sheets. Po wysyłce nie odpala R7.
+- Idempotencja callbacków jest obowiązkowa: jedna karta wysyłki nie może wysłać
+  dwóch maili.
 
 ### Product Vision
 
@@ -277,7 +308,6 @@ Czytaj:
 | `IMPLEMENTATION_PLAN.md` | ✅ Stworzony |
 | `TEST_PLAN_CURRENT.md` | ✅ Stworzony |
 | `AGENT_WORKFLOW.md` | ✅ Stworzony |
-| `STRIPE_PHASE_0C_ROLLOUT.md` | ✅ Aktywny rollout checklist dla Stripe sandbox / webhooków |
 | `INTENCJE_MVP.md` | ✅ Zsynchronizowany (dual-write, duplicate resolution, buttons, display) |
 | `agent_system_prompt.md` | ✅ Zsynchronizowany (button policies, display rules) |
 | `agent_behavior_spec_v5.md` | ✅ Zsynchronizowany (duplicate flow, show_client, Calendar sync) |
@@ -287,14 +317,9 @@ Czytaj:
 
 ## 8. Najbliższy krok
 
-**Web Phase 1B rollout/readiness gate** na branchu `feat/web-phase-0c`:
+Kontynuować stabilizację agenta na `bot-test` oraz wykonać kontrolowany smoke
+generatora ofert:
 
-1. ustawić sandbox env dla Vercel/Railway/Supabase/Stripe/Google,
-2. uruchomić migracje billing/onboarding,
-3. przejść Stripe sandbox smoke + webhook replay,
-4. przejść Google OAuth/resource smoke,
-5. przejść Telegram `/start <code>` pairing smoke,
-6. dopiero wtedy oznaczyć web functional spine jako live-ready.
-
-Bot lane: manual Telegram smoke dla Phase 6 Morning Brief pozostaje osobnym
-torem i nie blokuje web rollout, jeśli nie dotyka wspólnych kontraktów.
+1. `/oferty` w webappie: zapis szablonu, profil, logo, treść emaila, test PDF.
+2. Telegram: lista ofert, wysyłka z numerem, brak numeru, zły numer, brak emaila.
+3. Gmail/Sent i Sheets effects na fikcyjnych danych i kontrolowanych adresach.

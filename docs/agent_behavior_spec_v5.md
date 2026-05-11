@@ -1,6 +1,6 @@
 # OZE-Agent — Behavior Spec v5
 
-_Last updated: 14.04.2026._
+_Last updated: 04.05.2026._
 
 Definiuje KIM jest agent, JAK się komunikuje i CO robi.
 
@@ -42,6 +42,58 @@ Jeśli wszystko uzupełnione, NIE pokazuj 'Brakuje:'.
 - `[Tak]` / `[Nie]` NIE zastępuje karty mutacyjnej R1.
 - `[Tak]` / `[Nie]` jest dopuszczalne przy prostych pytaniach binarnych niе-mutacyjnych (np. potwierdzenie fuzzy match, potwierdzenie transkrypcji voice).
 - `[Zapisz bez]` jest retired.
+
+**Wyjątek generatora ofert:** karta realnej wysyłki oferty używa
+`[✅ Wysłać] [❌ Anulować]`. Nie ma `➕ Dopisać`, bo nie jest to karta edycji
+pending danych klienta. Gmail wysyła dopiero po `✅ Wysłać`; Sheets effects są
+best-effort dopiero po sukcesie Gmaila.
+
+#### R1.web: Mutacje z poziomu web (dashboard)
+
+Dla pól zmienianych z dashboardu webowego zasada confirmation card R1 jest
+zachowana w duchu (jawne kliknięcie + odwracalność), ale w innym wzorcu
+interakcji niż w Telegramie. Powód: w web nie ma miejsca na pomyłkę
+interpretacji NLP — handlowiec klika konkretny przycisk z explicit etykietą.
+Modal potwierdzający byłby więc zbędnym friction. W zamian każda mutacja ma
+**10-sekundowe okno UI „Cofnij"** (Telegram tego nie ma — bo tam confirmation
+żyje przed commitem, nie po).
+
+W tym trybie web może bezpośrednio mutować Sheets / Calendar w trzech ściśle
+zdefiniowanych operacjach na karcie klienta w `/dashboard/decyzje-preview`:
+
+1. **`change_status`** (kontekstowe przyciski decyzji: Happy / Out)
+   — kliknięcie przycisku z explicit etykietą (np. `✓ Wysłałem ofertę` /
+   `✗ Nieaktywny`). Side effects:
+   - F (Status) → wybrana wartość
+   - J (Data ostatniego kontaktu) → today (auto-bump przez `update_client`)
+   - Opcjonalnie K (Następny krok) i L (Data następnego kroku) — auto-derive
+     z tabeli przejść (zob. `oze-agent/api/routes/decisions.py`
+     `NEXT_STEP_AFTER_STATUS`). Tylko dla happy transitions; Out nie ruszają K/L.
+   - Cofnij wywołuje odwrotny `change_status` (przywrócenie poprzedniej wartości
+     w F). K/L po cofnięciu pozostają w stanie "po decyzji" — to znana
+     ograniczeniem MVP.
+
+2. **`touch_contact`** (przycisk „Nadal czeka")
+   — kliknięcie zostawia status bez zmian, ale wymusza aktualizację J. Side
+   effect: tylko J → today. Cofnięcie nie cofa J (column J nie ma reverse w MVP).
+
+3. **`schedule_call`** (modal „Zaplanuj kontakt telefoniczny")
+   — submit modalu z polami `data | godzina | notatka`. Side effects:
+   - Calendar: 15-minutowy event w `OZE Spotkania`, title
+     `📞 Telefon — {fullName}`, description = pełne dane klienta z Sheets
+     (imię, miasto, telefon, email, adres, produkt, status, notatka z modalu)
+   - Sheets: K=`Telefon`, L=ISO datetime, P=event_id, J=today (auto)
+   - Konflikt: gdy P jest niepuste przy próbie nowego scheduleu, web pokazuje
+     mini-modal `Nadpisz / Usuń stary / Anuluj`. „Nadpisz" = delete event +
+     create new. „Usuń stary" = delete + clear K/L/P. „Anuluj" = no-op.
+   - Brak undo button (Calendar event jest source of truth — handlowiec może
+     odwołać event ręcznie w Calendar).
+
+**Co zostaje wyłącznie w Telegramie:** mutacje voice/text wywołane głosówką
+lub wolną składnią (`add_client`, `add_note`, `add_meeting` z głosówki/text)
+— tu R1 z confirmation card pozostaje bez zmian. Powód: te wymagają
+interpretacji NLP, więc explicit confirmation zapobiega błędom („u
+Krzywińskim" → Krzywiński zamiast Krzywinska).
 
 ### R2: Pytaj TYLKO gdy konieczne
 
@@ -143,6 +195,8 @@ Rolling window: ostatnie 10 wiadomości LUB 30 minut (cokolwiek nastąpi wcześn
 
 **Aktywny klient:** z rolling window agent utrzymuje `user_data["active_client"]` — ostatnio wspomnianego klienta z ostatnich 10 wiadomości. Gdy handlowiec mówi "dodaj że ma duży dom" bez wskazania klienta, agent bierze aktywnego z kontekstu zamiast pytać "którego klienta?".
 
+**Status implementacji (27.04.2026):** R6 działa bez nowej tabeli/kolumny — `active_client` jest derive'owany just-in-time z `conversation_history` przez `shared/active_client.py`. Odpowiedzi bota zapisuje wrapper w `bot/utils/conversation_reply.py`; wiadomości usera konsumowane przez pending flow też trafiają do historii.
+
 ### R7: Next action prompt (po commit mutacji, warunkowy)
 
 Po committed mutacji agent wysyła **jedno wolnotekstowe pytanie** o następny krok — **tylko gdy z samej mutacji nie wynika już wprost następny krok.**
@@ -171,6 +225,48 @@ Co dalej z Janem Kowalskim z Warszawy? Spotkanie, telefon, mail, odłożyć na p
 - Jeśli odpowiedź zawiera typ akcji + datę/godzinę (`"telefon w piątek o 10"`) → agent parsuje jako `add_meeting` i startuje normalny flow z kartą 3-button.
 - Jeśli odpowiedź to `"nie wiem jeszcze"`, `"później"`, `"zobaczę"` → agent zamyka flow bez tworzenia wydarzenia.
 - Jeśli handlowiec wciśnie `❌ Anuluj / nic` → koniec flow.
+
+---
+
+### R9: Generator ofert — wysyłka PDF przez Gmail
+
+Generator ofert jest zatwierdzonym flow obok 6 intencji CRM. Webapp `/oferty`
+służy do setupu szablonów, profilu sprzedawcy, logo i treści emaila. Telegram
+służy do realnej wysyłki klientowi.
+
+**Routing:**
+- `jakie mam oferty?` → numerowana lista gotowych ofert.
+- `wyślij/wygeneruj ofertę...` bez przyszłej daty/godziny → offer-send.
+- `wyślę ofertę jutro o 12` / `przypomnij wysłać ofertę w piątek` →
+  `add_meeting(offer_email)`, nie generator.
+
+**Karta wysyłki:**
+
+```
+📨 Wysłać ofertę?
+Klient: Jan Kowalski, Warszawa
+Oferta: 2. PV 6,2 kWp — dom jednorodzinny
+Odbiorcy: jan@example.pl
+Mail: krótki preview treści
+
+[✅ Wysłać] [❌ Anulować]
+```
+
+**Reguły:**
+- Jedna komenda = jeden klient.
+- Jeśli nie podano numeru oferty, agent pokazuje listę i czeka na numer.
+- Jeśli numer nie istnieje, agent pokazuje aktualną listę gotowych ofert.
+- Jeśli klient nie ma poprawnego maila, agent pyta o email i nie wysyła.
+- Wiele poprawnych maili w Sheets → jeden Gmail do wszystkich.
+- Błędne adresy są pokazane jako pominięte.
+- Email z komendy dołączany jest do odbiorców; po udanym Gmailu agent próbuje
+  dopisać go do Sheets, jeśli go tam nie było.
+- Nieznane tokeny w treści emaila są blokowane w webappie. Puste znane zmienne
+  pokazują warning na karcie, ale nie blokują wysyłki.
+- Po Gmail success agent może zmienić status na `Oferta wysłana`, ale nie cofa:
+  `Podpisane`, `Zamontowana`, `Rezygnacja z umowy`, `Nieaktywny`, `Odrzucone`.
+- Po skutecznej wysyłce R7 nie odpala.
+- Callback musi być idempotentny: double click nie może wysłać drugiego maila.
 
 ---
 
@@ -320,13 +416,13 @@ Te intencje nie są w MVP, ale klasyfikator musi je rozpoznać, żeby agent odpo
 | `lejek_sprzedazowy` | 'ilu klientów', 'lejek', 'ile mam w' | ilu mam klientów? | Funkcja dashboardowa, czeka na dashboard |
 | `filtruj_klientów` | 'klienci z', 'pokaż wszystkich z' + kryterium | pokaż klientów z Warszawy | Dashboard, nie bot — handlowiec nie filtruje w locie |
 | `multi-meeting` | kilka spotkań w jednej wiadomości | jutro o 10 do Kowalskiego, o 14 do Nowaka | MVP obsługuje tylko single meeting |
-| `Drive photos` | zdjęcia dachu/instalacji → folder Drive klienta | (photo attachment) | Wymaga Google Drive integracji; kolumny N i O w Sheets puste w MVP |
+| `Drive photos` | zdjęcia dachu/instalacji → folder Drive klienta | (photo attachment) | Active post-MVP slice: wymaga `✅ Zapisać` przed pierwszym Drive write; aktualizuje Sheets N/O |
 
 > **Active post-MVP slice (live od 25.04.2026):** voice transcription jako input adapter — Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj). Po potwierdzeniu transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`). Voice nie jest odrębnym intent type — podlega standardowej intent classification. Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
 
 Dla `edit_client` / `lejek_sprzedazowy` / `filtruj_klientów` agent odpowiada: _"To feature post-MVP. Zrobisz to w Google Sheets / dashboardzie, który wejdzie w kolejnej fazie."_ — krótko, bez przeprosin, bez udawania że robi.
 
-Dla `multi-meeting` / `Drive photos` — w MVP te ścieżki nie są aktywne w runtime (agent obsługuje tylko tekst i pojedyncze spotkanie). Photo / image-document — stub per D5 w `bot/main.py`. Multi-meeting — rejection przez router (`IntentType.MULTI_MEETING`) z prośbą o jedno spotkanie naraz. Voice transcription — LIVE od 25.04.2026 jako input adapter (handle_voice → Whisper → post-pass → confirm card → handle_text text_override).
+Dla `Drive photos` — photo/image-document jest aktywnym post-MVP slice. Zdjęcie z podpisem `Jan Kowalski Warszawa` może od razu wskazać klienta, ale pierwsze zapisanie do Drive zawsze przechodzi przez kartę `✅ Zapisać`. Po potwierdzeniu agent informuje, że przez 15 minut kolejne zdjęcia bez opisu trafią do tego klienta; zmiana klienta wymaga podpisu `zdjęcia do [imię nazwisko miasto]` albo jednoznacznego imię+nazwisko+miasto. Dla `multi-meeting` — w MVP ścieżka nie jest aktywna w runtime; router odrzuca (`IntentType.MULTI_MEETING`) z prośbą o jedno spotkanie naraz. Voice transcription — LIVE od 25.04.2026 jako input adapter (handle_voice → Whisper → post-pass → confirm card → handle_text text_override).
 
 ### 6.3. Intencje VISION-ONLY (wymaga osobnej decyzji Maana)
 
@@ -514,6 +610,25 @@ Anulowanie jest **one-click**. Przycisk `❌ Anulować` natychmiast zamyka pendi
 | 50 | wracam w poniedziałek do Jana Nowaka | Follow-up: poniedziałek [data] w `L=Data następnego kroku`, karta 3-button | Data poprawnie sparsowana, relatywna "poniedziałek" rozwiązana do najbliższego |
 | 51 | co umiesz? | Lista możliwości (6 intencji MVP) | Routing do `general_question`, NIE `add_client` |
 | 52 | Pusty msg / samo emoji | Nie zrozumiałem, powiedz to inaczej. | Graceful — bez erroru, bez halucynacji |
+
+---
+
+### Generator ofert (53-64)
+
+| # | Input | Intent / flow | PASS gdy |
+|---|-------|---------------|----------|
+| 53 | jakie mam oferty? | offer_list | Bot pokazuje tylko gotowe oferty z aktualną numeracją |
+| 54 | wyślij ofertę nr 1 Janowi Kowalskiemu Warszawa | offer_send | Karta `✅ Wysłać` / `❌ Anulować`, bez Gmail przed kliknięciem |
+| 55 | wyślij ofertę Janowi Kowalskiemu Warszawa | offer_send_missing_number | Bot pokazuje listę ofert i czeka na numer |
+| 56 | wyślij ofertę nr 99 Janowi Kowalskiemu Warszawa | offer_send_bad_number | Bot pokazuje aktualną listę gotowych ofert |
+| 57 | wyślij ofertę nr 1 Janowi bez maila | offer_send_missing_email | Bot pyta o email, nic nie wysyła |
+| 58 | klient ma 2 poprawne maile | offer_send | Jeden mail do obu adresów |
+| 59 | klient ma mail poprawny i błędny | offer_send | Poprawny dostaje mail, błędny pokazany jako pominięty |
+| 60 | email podany w komendzie | offer_send | Mail idzie na Sheets + command email; po sukcesie próba dopisania do Sheets |
+| 61 | klient ma status Podpisane | offer_send | Gmail może iść, status nie cofa się do Oferta wysłana |
+| 62 | Gmail fail | offer_send | Brak Sheets write |
+| 63 | Gmail success, Sheets partial fail | offer_send | Agent potwierdza mail i krótko mówi co nie zapisało się w Sheets |
+| 64 | double click `✅ Wysłać` | offer_send | Jeden Gmail message id, drugi callback idempotentny |
 
 ---
 

@@ -27,6 +27,42 @@ def _update(telegram_id: int = 123) -> MagicMock:
     return upd
 
 
+def _duplicate_flow() -> dict:
+    return {
+        "flow_type": "add_client_duplicate",
+        "flow_data": {
+            "duplicate_row": 7,
+            "client_name": "Jan Kowalski",
+            "city": "Warszawa",
+            "client_data": {
+                "Imię i nazwisko": "Jan Kowalski",
+                "Miasto": "Warszawa",
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_add_client_duplicate_augment_extracts_inline_email_without_llm():
+    upd = _update()
+    with patch("bot.handlers.text.extract_client_data", new=AsyncMock()) as mock_extract, \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": "u1"},
+            _duplicate_flow(),
+            "email: updated@example.pl",
+        )
+
+    assert consumed is True
+    mock_extract.assert_not_awaited()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type.value == "add_client_duplicate"
+    assert saved_flow.flow_data["duplicate_row"] == 7
+    assert saved_flow.flow_data["client_data"]["Email"] == "updated@example.pl"
+
+
 @pytest.mark.asyncio
 async def test_add_client_augment_spotkanie_routes_before_client_extraction():
     upd = _update()

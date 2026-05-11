@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createCheckoutSession } from "@/app/onboarding/actions";
-import { getCurrentAccount } from "@/lib/api/account";
+import { LogoutLink } from "@/components/auth/logout-link";
+import { requireOnboardingStep } from "@/lib/auth/guards";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Płatność | Agent-OZE",
@@ -15,13 +16,16 @@ export default async function PaymentStepPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
-  const account = await getCurrentAccount();
+  const { account, onboardingStatus } =
+    await requireOnboardingStep("/onboarding/platnosc");
 
-  if (!account.authenticated) {
-    redirect("/login?next=/onboarding/platnosc");
-  }
-
-  const isActive = account.profile?.subscription_status === "active";
+  const betaEligible = Boolean(onboardingStatus?.access?.betaEligible);
+  const isBetaActive = onboardingStatus?.access?.type === "beta";
+  const isPaidActive = Boolean(
+    account.profile?.subscription_status === "active" &&
+      account.profile?.activation_paid,
+  );
+  const isActive = Boolean(onboardingStatus?.access?.active || isPaidActive);
 
   return (
     <main className="min-h-screen bg-[#050607] text-zinc-100">
@@ -30,12 +34,7 @@ export default async function PaymentStepPage({
           <Link href="/" className="text-sm font-semibold text-white">
             OZE Agent
           </Link>
-          <Link
-            href="/dashboard"
-            className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
-          >
-            Dashboard
-          </Link>
+          <LogoutLink />
         </header>
 
         <section className="grid flex-1 gap-8 py-8 lg:grid-cols-[0.9fr_0.7fr]">
@@ -77,34 +76,38 @@ export default async function PaymentStepPage({
             ) : isActive ? (
               <div className="mt-8 rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 p-5">
                 <p className="text-sm font-semibold text-white">
-                  Subskrypcja aktywna.
+                  {isBetaActive ? "Dostęp beta aktywny." : "Subskrypcja aktywna."}
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-300">
-                  Płatność jest zaksięgowana. Następny etap to Google OAuth i
-                  parowanie Telegrama.
+                  {isBetaActive
+                    ? "Możesz przejść dalej bez Stripe. Następny etap to Google OAuth, zasoby Google i parowanie Telegrama."
+                    : "Płatność jest zaksięgowana. Następny etap to Google OAuth, zasoby Google i parowanie Telegrama."}
                 </p>
                 <Link
-                  href="/dashboard"
+                  href="/onboarding/google"
                   className="mt-5 inline-flex rounded-full bg-[#3DFF7A] px-5 py-2.5 text-sm font-semibold text-black"
                 >
-                  Przejdź do dashboardu
+                  Przejdź do Google
                 </Link>
               </div>
             ) : (
-              <div className="mt-8 grid gap-4 md:grid-cols-2">
-                <PlanCard
-                  plan="monthly"
-                  title="Miesięcznie"
-                  price="49 zł"
-                  note="Najmniejszy próg wejścia. Rezygnujesz kiedy chcesz."
-                />
-                <PlanCard
-                  plan="yearly"
-                  title="Rocznie"
-                  price="350 zł"
-                  badge="Oszczędzasz 238 zł"
-                  note="Jedna płatność za rok pracy agenta."
-                />
+              <div className="mt-8 space-y-4">
+                {betaEligible ? <BetaAccessCard /> : null}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <PlanCard
+                    plan="monthly"
+                    title="Miesięcznie"
+                    price="49 zł"
+                    note="Najmniejszy próg wejścia. Rezygnujesz kiedy chcesz."
+                  />
+                  <PlanCard
+                    plan="yearly"
+                    title="Rocznie"
+                    price="350 zł"
+                    badge="Oszczędzasz 238 zł"
+                    note="Jedna płatność za rok pracy agenta."
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -126,6 +129,32 @@ export default async function PaymentStepPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function BetaAccessCard() {
+  return (
+    <form
+      action="/onboarding/beta-access"
+      method="post"
+      className="rounded-[8px] border border-[#3DFF7A]/25 bg-[#3DFF7A]/10 p-5"
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Dostęp beta</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
+            Twój email jest na liście beta testerów. Możesz przejść dalej bez
+            płatności Stripe i skonfigurować Google oraz Telegram.
+          </p>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98]"
+        >
+          Kontynuuj jako beta tester
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -164,7 +193,8 @@ function PlanCard({
 }) {
   return (
     <form
-      action={createCheckoutSession}
+      action="/onboarding/checkout"
+      method="post"
       className="rounded-[8px] border border-white/10 bg-black/20 p-5"
     >
       <input type="hidden" name="plan" value={plan} />

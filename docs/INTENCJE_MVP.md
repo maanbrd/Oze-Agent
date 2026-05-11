@@ -1,6 +1,6 @@
 # OZE-Agent — Macierz intencji MVP
 
-_Ostatnia aktualizacja: 14.04.2026_
+_Ostatnia aktualizacja: 04.05.2026_
 _Hierarchia SSOT: ten plik jest #5 per `SOURCE_OF_TRUTH.md` sekcja 5. W razie konfliktu — wygrywa wyższy._
 
 Ten dokument definiuje **kontrakt 6 intencji MVP** — co agent robi w Sheets i Kalendarzu dla każdej rozpoznanej intencji, w jakiej kolejności, z jakimi potwierdzeniami.
@@ -38,6 +38,18 @@ Po Sesji 1 Regresja, decyzja produktowa: **MVP zawiera tylko intencje z tabeli p
 
 **Kluczowe: intencje `show_*` czytają z Kalendarza, nie z Sheets.** Plan dnia nie pochodzi z Sheets — pochodzi z Calendar API query "wydarzenia na dziś". To jest konsekwencja zasady "Calendar = akcja".
 
+### 2.1. Adjacent product flow: generator ofert
+
+Generator ofert **nie jest siódmą intencją CRM MVP**. To osobny, zatwierdzony
+slice produktu:
+- Webapp `/oferty` tworzy szablony ofert, profil sprzedawcy, logo, treść maila
+  i testowy PDF.
+- Telegram obsługuje realną wysyłkę PDF przez Gmail handlowca.
+- Natychmiastowe komendy typu `wyślij ofertę Janowi Kowalskiemu` bez przyszłej
+  daty/godziny idą do offer-send flow.
+- Frazy z przyszłą datą/godziną, np. `wyślę ofertę Janowi jutro o 12`, nadal
+  należą do `add_meeting(event_type=offer_email)` i tworzą blok w Kalendarzu.
+
 ---
 
 ## 3. R4 — Identyfikacja klienta
@@ -60,6 +72,8 @@ Wszystkie intencje które pracują na istniejącym kliencie (`show_client`, `add
 **R4 nie stosuje się do `add_client`** — bo to tworzy klienta, nie identyfikuje istniejącego. Ale `add_client` ma swój własny kontrakt minimalnych pól (imię + nazwisko + miasto jako pola obowiązkowe, bo to dane które identyfikują klienta w przyszłości).
 
 **R4 nie stosuje się do `show_day_plan`** — bo to lista wszystkich wydarzeń dnia, nie operacja na konkretnym kliencie.
+
+**Fallback R6:** jeśli wiadomość mutacyjna nie zawiera identyfikatora klienta, agent może użyć aktywnego klienta z rolling memory R6 (10 wiadomości / 30 min), ale tylko gdy wynik jest jednoznaczny. Gdy R6 daje `multi` albo `not_found`, wracamy do standardowego pytania/disambiguation z R4.
 
 **Duplicate resolution:** gdy przy `add_client` match = 1 w Sheets → agent przechodzi przez flow duplicate resolution (sekcja 5.3): krótki komunikat + `[Nowy]` / `[Aktualizuj]`, potem karta mutacyjna.
 
@@ -102,7 +116,7 @@ Notatki: moc PV 8kW, dom 160m², dach 40m² płd., chce wycenę
 
 **Efekt w Sheets (po `✅ Zapisać`):**
 - Nowy wiersz w arkuszu
-- Kolumny: `A=Imię nazwisko`, `B=Telefon`, `C=Email`, `D=Miasto`, `E=Adres`, `F=Status="Nowy lead"`, `G=Produkt` (tylko typ), `H=Notatki` (wszystko inne, w tym moc/metraż/dach), `I=Data pierwszego kontaktu=dziś`, `J=Data ostatniego kontaktu=dziś`, `K=Następny krok` (z dropdowna, pusty chyba że user podał), `L=Data następnego kroku` (pusta chyba że user podał), `M=Źródło pozyskania` (jeśli parser wyciągnął), `N/O` (puste — POST-MVP photo flow), `P=ID wydarzenia Kalendarz` (per D8: event_id jeśli `add_client` utworzył Calendar event przez podany follow-up; pusty gdy add_client bez follow-upu lub gdy follow-up to no-event K value)
+- Kolumny: `A=Imię nazwisko`, `B=Telefon`, `C=Email`, `D=Miasto`, `E=Adres`, `F=Status="Nowy lead"`, `G=Produkt` (tylko typ), `H=Notatki` (wszystko inne, w tym moc/metraż/dach), `I=Data pierwszego kontaktu=dziś`, `J=Data ostatniego kontaktu=dziś`, `K=Następny krok` (z dropdowna, pusty chyba że user podał), `L=Data następnego kroku` (pusta chyba że user podał), `M=Źródło pozyskania` (jeśli parser wyciągnął), `N/O` (puste przy zwykłym `add_client`; uzupełniane przez photo upload), `P=ID wydarzenia Kalendarz` (per D8: event_id jeśli `add_client` utworzył Calendar event przez podany follow-up; pusty gdy add_client bez follow-upu lub gdy follow-up to no-event K value)
 
 **Efekt w Kalendarzu (po `✅ Zapisać`):**
 - Jeśli user podał datę follow-upu ("zadzwonię jutro", "wyślę ofertę za tydzień") → wydarzenie typu `phone_call`/`doc_followup`/`in_person` zależnie od słów kluczowych.
@@ -355,6 +369,53 @@ Typ: rozmowa telefoniczna
 
 ---
 
+### 4.7. `offer_send` — wysyłka gotowego szablonu oferty
+
+To flow generatora ofert, a nie standardowa intencja CRM.
+
+**Wejścia:**
+- `jakie mam oferty?` → lista gotowych ofert z aktualną numeracją.
+- `wyślij ofertę nr 2 Janowi Kowalskiemu Warszawa` → wybór szablonu + klient.
+- `wygeneruj ofertę dla Jana Kowalskiego` bez numeru → agent pokazuje listę
+  gotowych ofert i czeka na odpowiedź numerem.
+
+**Rozróżnienie z Kalendarzem:**
+- Jeśli komenda zawiera przyszłą datę/godzinę (`jutro`, `w piątek o 12`,
+  `za tydzień`) → `add_meeting(offer_email)`, nie generator.
+- Jeśli nie ma przyszłej daty/godziny → generator ofert.
+
+**Karta potwierdzenia wysyłki:**
+
+```
+📨 Wysłać ofertę?
+Klient: Jan Kowalski, Warszawa
+Oferta: 2. PV 6,2 kWp — dom jednorodzinny
+Odbiorcy: jan@example.pl
+Pominięte adresy: zly-email
+Mail: krótki preview treści
+
+[✅ Wysłać] [❌ Anulować]
+```
+
+**Zasady:**
+- Jedna komenda wysyłki = jeden klient.
+- Karta używa tylko `✅ Wysłać` / `❌ Anulować`. Nie ma `➕ Dopisać`.
+- Gmail/PDF ma priorytet. Przed `✅ Wysłać` nie ma maila i nie ma zmian w Sheets.
+- Jeśli klient nie ma poprawnego maila, agent pyta o email.
+- Jeśli klient nie istnieje w Sheets, flow się kończy bez tworzenia klienta.
+- Jeśli numer oferty nie istnieje, agent pokazuje aktualną listę gotowych ofert.
+- Jeśli mail podany w komendzie nie istnieje w Sheets, po udanej wysyłce agent
+  próbuje dopisać go średnikiem.
+- Po udanym Gmailu agent próbuje ustawić status `Oferta wysłana`, ale nie cofa
+  terminalnych/późniejszych statusów: `Podpisane`, `Zamontowana`,
+  `Rezygnacja z umowy`, `Nieaktywny`, `Odrzucone`.
+- `Data ostatniego kontaktu` zmienia się tylko wtedy, gdy status faktycznie
+  zmienia się na `Oferta wysłana`.
+- Po skutecznej wysyłce agent tylko potwierdza. R7 nie odpala.
+- Idempotencja jest obowiązkowa: ta sama karta/callback nie może wysłać dwóch maili.
+
+---
+
 ## 5. State machine pending flow (R1)
 
 ### 5.0. Karta potwierdzenia — 3 przyciski (zamrożone 11.04.2026)
@@ -420,8 +481,13 @@ Nie pokazujemy pustych pól. Nie pokazujemy surowych danych technicznych (`_row`
 | Duplicate resolution | `[Nowy]` `[Aktualizuj]` |
 | Proste pytanie binarne (nie karta zapisu) | `[Tak]` `[Nie]` dopuszczalne — np. potwierdzenie fuzzy match ("Chodziło o Kowalskiego z Warszawy?"), potwierdzenie transkrypcji voice |
 | Karta read-only (show_client, show_day_plan) | Brak przycisków |
+| Karta wysyłki oferty (generator) | `[✅ Wysłać]` `[❌ Anulować]` |
 
 `[Tak]` / `[Nie]` **NIE zastępuje** karty zapisu do Sheets/Calendar/Drive. Jest dopuszczalne tylko w pytaniach binarnych nie-mutacyjnych.
+
+Offer-send card jest wyjątkiem od standardowej karty mutacyjnej, bo nie służy
+do edycji pending danych. Potwierdza realną wysyłkę Gmail + PDF i późniejsze
+best-effort Sheets effects. Nie ma `➕ Dopisać`.
 
 Każda intencja mutująca przechodzi przez **3 stany**: `parsed → pending → committed` (lub `cancelled`).
 
@@ -516,8 +582,8 @@ Kolumny w arkuszu "OZE Klienci", w kolejności. Ten schemat jest **zgodny 1:1 z 
 | K | Następny krok | enum | **TAK** (7 opcji) | Dropdown: Telefon, Spotkanie, Wysłać ofertę, Follow-up dokumentowy, Czekać na decyzję klienta, Nic — zamknięte, Inne. |
 | L | Data następnego kroku | date / datetime | — | `DD.MM.YYYY` lub `DD.MM.YYYY HH:MM`. Wypełniana automatycznie przy `add_meeting` (z daty wydarzenia) albo ręcznie przez handlowca. |
 | M | Źródło pozyskania | string | — | Np. "Facebook", "polecenie", "targi", "strona www". Opcjonalne. |
-| N | Zdjęcia | int / string | — | **POST-MVP (photo flow)**. W MVP pole puste. |
-| O | Link do zdjęć | url | — | **POST-MVP (photo flow)**. W MVP pole puste. |
+| N | Zdjęcia | int / string | — | Liczba zdjęć zapisanych przez aktywny photo upload. Upload zdjęcia nie aktualizuje `Data ostatniego kontaktu`. |
+| O | Link do zdjęć | url | — | Link do folderu Google Drive klienta. Folder tworzony/używany przez photo upload. |
 | P | ID wydarzenia Kalendarz | string | — | **W MVP populated** dla Calendar-backed next steps (per D8) — zapisujemy `event_id` zwrócony przez `events.insert`. Pole puste tylko dla no-event K values (`Czekać na decyzję klienta`, `Nic — zamknięte`, `Inne`). Reverse-lookup Calendar → Sheets to przyszły flow (vision-only), jeśli zostanie zatwierdzony. |
 
 **Wiersz 1 (nagłówki) jest chroniony** (Protected range `A1:P1`) — handlowiec ani agent nie mogą go przepisywać, bo mapowanie kolumn przez `get_sheet_headers()` zależy od tego, żeby `H` zawsze zawierało dokładnie `"Notatki"`.
@@ -554,10 +620,11 @@ Plan dnia filtruje po **dedykowanym OZE calendar** (events tworzone tylko w tym 
 | `edit_client` | Pokrycie przez `add_note` + `change_status` wystarczy na MVP. Pełna edycja pola wymaga dodatkowego parsera i walidacji. |
 | `lejek_sprzedazowy` | Funkcja dashboardowa, czeka na dashboard Next.js. W bocie zostaje jako referencja. |
 | `multi-meeting` | Batch kilku spotkań w jednej wiadomości. MVP obsługuje single meeting tylko. |
-| `Drive photos` | Zdjęcia z terenu → Drive folder klienta. Kolumny N i O w Sheets zostają puste w MVP. |
 | `proactive morning brief` | Scheduler-driven, wymaga APScheduler + dedupy. |
 
 > **Active post-MVP slice (live od 25.04.2026):** Voice transcription jako input adapter — Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) i podlega standardowej intent classification. Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
+
+> **Active post-MVP slice:** Google Drive photo upload. Zdjęcie z podpisem `Jan Kowalski Warszawa` pomija pytanie "do którego klienta?", ale nadal wymaga karty `✅ Zapisać`. Pierwszy zapis tworzy/używa folderu Drive klienta, aktualizuje Sheets N/O i otwiera 15-minutową sesję kolejnych zdjęć do tego klienta. Zmiana klienta w trakcie sesji wymaga podpisu `zdjęcia do [imię nazwisko miasto]` albo jednoznacznego imię+nazwisko+miasto.
 
 ### 8.2. Product vision only — wymaga osobnej decyzji Maana
 

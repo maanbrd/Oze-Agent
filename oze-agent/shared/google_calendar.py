@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 WORKING_HOURS_START = 9   # 09:00
 WORKING_HOURS_END = 18    # 18:00
 EVENT_TYPE_VALUES = {"in_person", "phone_call", "offer_email", "doc_followup"}
+OZE_CALENDAR_BACKGROUND_COLOR = "#3DFF7A"
+OZE_CALENDAR_FOREGROUND_COLOR = "#000000"
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -80,6 +82,22 @@ def _update_event_type_metadata(event: dict, event_type: Optional[str]) -> None:
     private["event_type"] = event_type
 
 
+def _calendar_branding_body() -> dict:
+    return {
+        "backgroundColor": OZE_CALENDAR_BACKGROUND_COLOR,
+        "foregroundColor": OZE_CALENDAR_FOREGROUND_COLOR,
+        "selected": True,
+    }
+
+
+def _apply_calendar_branding_sync(service, calendar_id: str) -> None:
+    service.calendarList().patch(
+        calendarId=calendar_id,
+        colorRgbFormat=True,
+        body=_calendar_branding_body(),
+    ).execute()
+
+
 # ── Public async API ──────────────────────────────────────────────────────────
 
 
@@ -98,13 +116,40 @@ async def create_calendar(user_id: str, name: str) -> Optional[str]:
             cal = service.calendars().insert(
                 body={"summary": name, "timeZone": "Europe/Warsaw"}
             ).execute()
-            return cal.get("id")
+            calendar_id = cal.get("id")
+            if calendar_id:
+                try:
+                    _apply_calendar_branding_sync(service, calendar_id)
+                except Exception as e:
+                    logger.warning("create_calendar(%s): branding skipped: %s", user_id, e)
+            return calendar_id
 
         calendar_id = await asyncio.to_thread(_create)
         return calendar_id
     except Exception as e:
         logger.error("create_calendar(%s): %s", user_id, e)
         return None
+
+
+async def apply_calendar_branding(user_id: str) -> bool:
+    """Apply OZE-Agent calendar colors to an existing user's OZE calendar."""
+    try:
+        user = get_user_by_id(user_id)
+        if not user or not user.get("google_calendar_id"):
+            return False
+        calendar_id = user["google_calendar_id"]
+
+        def _apply():
+            service = _get_calendar_service_sync(user_id)
+            if not service:
+                return False
+            _apply_calendar_branding_sync(service, calendar_id)
+            return True
+
+        return await asyncio.to_thread(_apply)
+    except Exception as e:
+        logger.error("apply_calendar_branding(%s): %s", user_id, e)
+        return False
 
 
 async def get_events_for_date(user_id: str, day: date) -> list[dict]:

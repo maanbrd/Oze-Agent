@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   createGoogleResources,
@@ -9,6 +10,8 @@ import {
 } from "@/lib/api/onboarding";
 import { getCurrentAccount } from "@/lib/api/account";
 import {
+  checkoutConfigErrorMessage,
+  envValue,
   getStripe,
   requireStripeEnv,
   resolveStripePriceId,
@@ -20,6 +23,51 @@ type BillingPlan = "monthly" | "yearly";
 function encoded(path: string, message: string) {
   const params = new URLSearchParams({ message });
   return `${path}?${params.toString()}`;
+}
+
+function firstHeaderValue(value: string | null) {
+  return value?.split(",")[0]?.trim() ?? "";
+}
+
+function isLocalhost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function isTrustedReturnHost(hostname: string, fallbackAppUrl: string | null) {
+  if (isLocalhost(hostname) || hostname.endsWith(".vercel.app")) return true;
+  if (!fallbackAppUrl) return false;
+
+  try {
+    return hostname === new URL(fallbackAppUrl).hostname;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveCheckoutReturnBaseUrl(fallbackAppUrl: string | null) {
+  const requestHeaders = await headers();
+  const host = firstHeaderValue(
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"),
+  );
+
+  if (!host) {
+    if (fallbackAppUrl) return fallbackAppUrl;
+    throw new Error("Missing request host and NEXT_PUBLIC_APP_URL");
+  }
+
+  const protocolHeader = firstHeaderValue(requestHeaders.get("x-forwarded-proto"));
+  const candidateProtocol =
+    protocolHeader === "http" && (host.startsWith("localhost") || host.startsWith("127.0.0.1"))
+      ? "http"
+      : "https";
+
+  const candidateUrl = new URL(`${candidateProtocol}://${host}`);
+  if (!isTrustedReturnHost(candidateUrl.hostname, fallbackAppUrl)) {
+    if (fallbackAppUrl) return fallbackAppUrl;
+    throw new Error(`Untrusted checkout return host: ${candidateUrl.hostname}`);
+  }
+
+  return candidateUrl.origin.replace(/\/$/, "");
 }
 
 function planFromForm(formData: FormData): BillingPlan {
@@ -49,6 +97,7 @@ export async function createCheckoutSession(formData: FormData) {
   try {
     const { activationPrice, monthlyPrice, yearlyPrice, appUrl } =
       requireStripeEnv();
+    const returnBaseUrl = await resolveCheckoutReturnBaseUrl(appUrl);
     const stripe = getStripe();
     const recurringPriceRef = plan === "yearly" ? yearlyPrice : monthlyPrice;
     const [recurringPriceId, activationPriceId] = await Promise.all([
@@ -68,18 +117,18 @@ export async function createCheckoutSession(formData: FormData) {
         auth_user_id: account.profile.auth_user_id,
         user_id: account.profile.id,
         plan,
-        source: "web_onboarding_0c",
+        source: "web_onboarding",
       },
       subscription_data: {
         metadata: {
           auth_user_id: account.profile.auth_user_id,
           user_id: account.profile.id,
           plan,
-          source: "web_onboarding_0c",
+          source: "web_onboarding",
         },
       },
-      success_url: `${appUrl}/onboarding/sukces?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/onboarding/anulowano`,
+      success_url: `${returnBaseUrl}/onboarding/sukces?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${returnBaseUrl}/onboarding/anulowano`,
     });
 
     checkoutUrl = session.url;
@@ -88,7 +137,7 @@ export async function createCheckoutSession(formData: FormData) {
     redirect(
       encoded(
         "/onboarding/platnosc",
-        "Nie udało się uruchomić płatności. Sprawdź konfigurację Stripe.",
+        checkoutConfigErrorMessage(error),
       ),
     );
   }
@@ -115,7 +164,10 @@ export async function createCheckoutSession(formData: FormData) {
 export async function startGoogleOAuthAction() {
   let url: string;
   try {
-    url = await startGoogleOAuth();
+    const returnBaseUrl = await resolveCheckoutReturnBaseUrl(
+      envValue("NEXT_PUBLIC_APP_URL"),
+    );
+    url = await startGoogleOAuth(`${returnBaseUrl}/onboarding/google/sukces`);
   } catch (error) {
     console.error("startGoogleOAuthAction failed", error);
     redirect(

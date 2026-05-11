@@ -176,11 +176,13 @@ def test_is_cancel_message_rejects_unrelated():
 
 def test_is_not_found():
     assert is_not_found("Nie znalazłem klienta E2E-Beta-NieIstnieje") is True
+    assert is_not_found('Nie mam "E2E-Beta-NieIstnieje" w bazie.') is True
     assert is_not_found("Found you") is False
 
 
 def test_is_not_understood():
     assert is_not_understood("Nie zrozumiałem, powiedz to inaczej.") is True
+    assert is_not_understood("Co chcesz zrobić?") is True
     assert is_not_understood("OK") is False
 
 

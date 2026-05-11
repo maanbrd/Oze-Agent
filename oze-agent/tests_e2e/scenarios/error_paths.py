@@ -52,13 +52,16 @@ async def run_change_status_invalid_client(
             )
             return result
 
-        # Should be either "Nie znalazłem" (preferred — client doesn't exist)
-        # or an "Nie znam statusu" error. Either way, NO mutation card.
+        # Should be either "Nie znalazłem" (client doesn't exist) or an
+        # invalid-status error ("nieprawidłowy status / nie znam / nieznany").
+        # Either way, NO mutation card.
         any_msg = replies[-1]
+        text_lo = any_msg.text.lower()
         not_found_or_invalid = (
             is_not_found(any_msg.text)
-            or "nie znam" in any_msg.text.lower()
-            or "nieznany" in any_msg.text.lower()
+            or "nie znam" in text_lo
+            or "nieznany" in text_lo
+            or "nieprawidłowy" in text_lo
         )
         result.add(
             "reply_is_error_class",

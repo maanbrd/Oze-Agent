@@ -13,6 +13,11 @@ export type OnboardingStatus = {
     resources: boolean;
     telegram: boolean;
   };
+  access?: {
+    active: boolean;
+    type: "paid" | "beta" | null;
+    betaEligible: boolean;
+  };
   profile: Record<string, unknown> | null;
 };
 
@@ -27,7 +32,10 @@ const FASTAPI_ONBOARDING_TIMEOUT_MS = 8000;
 
 async function fetchOnboarding(url: string, init: RequestInit) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FASTAPI_ONBOARDING_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    FASTAPI_ONBOARDING_TIMEOUT_MS,
+  );
 
   try {
     return await fetch(url, {
@@ -77,10 +85,18 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
   }
 }
 
-export async function startGoogleOAuth(): Promise<string> {
-  const response = await authedFetch("/api/onboarding/google/oauth-url", {
+export async function activateBetaAccess(): Promise<OnboardingStatus> {
+  const response = await authedFetch("/api/onboarding/beta-access", {
     method: "POST",
     body: "{}",
+  });
+  return (await response.json()) as OnboardingStatus;
+}
+
+export async function startGoogleOAuth(returnUrl?: string): Promise<string> {
+  const response = await authedFetch("/api/onboarding/google/oauth-url", {
+    method: "POST",
+    body: JSON.stringify({ returnUrl }),
   });
   const payload = (await response.json()) as { url: string };
   return payload.url;
@@ -107,11 +123,15 @@ export async function generateTelegramCode(): Promise<TelegramPairingStatus> {
 
 export async function getTelegramStatus(): Promise<TelegramPairingStatus | null> {
   try {
-    const response = await authedFetch("/api/onboarding/telegram-status");
-    return (await response.json()) as TelegramPairingStatus;
+    return await getTelegramStatusOrThrow();
   } catch {
     return null;
   }
+}
+
+export async function getTelegramStatusOrThrow(): Promise<TelegramPairingStatus> {
+  const response = await authedFetch("/api/onboarding/telegram-status");
+  return (await response.json()) as TelegramPairingStatus;
 }
 
 export async function updateAccount(input: { name?: string; phone?: string }) {

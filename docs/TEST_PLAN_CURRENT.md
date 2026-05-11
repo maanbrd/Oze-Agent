@@ -1,10 +1,110 @@
 # OZE-Agent — Test Plan
 
-_Last updated: 14.04.2026_
+_Last updated: 04.05.2026_
 
 This is the test plan for the new behavior layer (selective rewrite). Not for the old patch-track.
 
 Tests are manual Telegram tests unless stated otherwise.
+
+---
+
+## Test Environments
+
+Primary manual testing happens on the test bot first:
+- Telegram: `t.me/OZEAgentTestBot`
+- Railway service: `bot-test`
+- Branch: `develop`
+
+Production smoke happens only after the tested commit is promoted to `main`:
+- Railway service: `bot`
+- Branch: `main`
+
+Important: `bot-test` has a separate Telegram token, but may still use the same
+Google Sheets / Calendar / Supabase resources as production. Use fictional
+clients and obvious test names until backend resources are explicitly separated.
+
+---
+
+## Current Smoke Pack — Agent Stabilization
+
+Run these on `bot-test` after each agent behavior fix. Use fictional data.
+
+| # | Message | Expected |
+|---|---------|----------|
+| SM-1 | `Dodaj spotkanie z Janem Testowym na jutro o 14. Mieszka w Markach na ulicy Zielonej 28. Telefon 600-100-200. Interesuje go fotowoltaika i magazyn energii.` | First card is `✅ Dodać spotkanie?`, not `Dodać klienta?`. Shows date tomorrow, 14:00, Marki / ul. Zielona 28. After `Zapisać`, client draft is preseeded with phone, city, address, product. |
+| SM-2 | Voice message containing the same content as SM-1 | Bot shows transcription card first. After `✅ Zapisz`, flow is the same as SM-1. |
+| SM-3 | `Dodaj klienta Jan Telefoniczny, telefon 600100200, jutro podeślę dane` | Does not force `ADD_MEETING`; should route as add_client or ask for client confirmation, not create a Calendar meeting. |
+| SM-4 | `Zadzwoń do Marka Testowego pojutrze o 10` | Routes to add_meeting as `phone_call`, not add_client. |
+| SM-5 | During any pending mutation card, send `/cancel` | Pending flow cancels in one step; no Sheets / Calendar write. |
+| SM-6 | `co mam jutro?` | Routes to show_day_plan, not add_meeting. |
+| SM-7 | Add meeting for a non-existing fictional client, then choose `Zapisać` | Calendar event is created; follow-up add_client draft carries all recognized client data from the meeting message. |
+| SM-8 | Repeat SM-1 on production only after `bot-test` passes | Same behavior as test bot; no classifier PII in Railway logs. |
+| SM-9 | Create/show `Jan R6 Testowy`, then send `dodaj notatkę: zainteresowany pompą` | Bot uses R6 active client and shows add_note card for Jan R6 Testowy. After `Zapisać`, Sheets Notatki contains the note. |
+| SM-10 | Repeat SM-9 after the 30-minute memory window expires | Bot asks which client / requires identification instead of using stale context. |
+| SM-11 | Send a photo with caption `Jan Foto Testowy Warszawa` | Bot skips "do którego klienta?", shows `✅ Zapisać` Drive card with 15-minute session copy. Before click: no Drive/Sheets write. After click: Drive folder/file exists, Sheets N/O updated. |
+
+Expected Railway classifier log shape after SM-1 / SM-2:
+
+```text
+intent classify: tool=record_add_meeting preflight_meeting_hint=True message_len=...
+```
+
+Log must not contain client names, phone numbers, addresses, or `message_prefix`.
+
+---
+
+## Offer Generator — Web/API/Bot
+
+Run on fictional clients and controlled email addresses only.
+
+Automated checks when offer-generator code changes:
+
+```bash
+cd oze-agent
+PYTHONPATH=. pytest tests/offers -q
+
+cd ..
+node --test web/tests/offer-email-template-ui.test.mjs web/tests/offer-navigation.test.mjs web/tests/offer-pdf-encoding.test.mjs
+cd web
+npm run lint
+npm run build
+```
+
+Manual web smoke at `http://127.0.0.1:3000/oferty`:
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| OF-W1 | Create draft | Draft appears below ready offers, no number |
+| OF-W2 | Fill required PV fields and publish/save ready offer | Offer appears in ready list with next number |
+| OF-W3 | Remove required field from ready offer and save | Save blocked with clear UI message |
+| OF-W4 | Reorder ready offers | Numbers follow current order |
+| OF-W5 | Delete ready offer | List closes numbering gap |
+| OF-W6 | Duplicate ready offer | New draft without number |
+| OF-W7 | Upload logo and set company | Values persist after refresh and appear in preview/test PDF |
+| OF-W8 | Email body editor | Natural text + draggable/removable variable chips; unknown tokens blocked on save |
+| OF-W9 | Test PDF | Dark preview-style PDF, no upper-right price block, no `Oferta informacyjna`, no accent field |
+
+Telegram/Gmail smoke:
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| OF-B1 | `jakie mam oferty?` | Numbered list of ready offers only |
+| OF-B2 | Send with valid number + one client | Card shows client, offer, recipients, short email preview, buttons `✅ Wysłać` / `❌ Anulować` |
+| OF-B3 | Send without number | Bot lists ready offers and waits for number |
+| OF-B4 | Wrong offer number | Bot shows current ready-offer list |
+| OF-B5 | Client missing email | Bot asks for email; no Gmail send yet |
+| OF-B6 | Multiple emails in Sheets | One Gmail message to all valid addresses; invalid addresses shown as skipped |
+| OF-B7 | Email supplied in command | Sends to Sheets emails + command email; after success tries to append new email to Sheets |
+| OF-B8 | Terminal/past-funnel status | Gmail can send; Sheets status is not regressed |
+| OF-B9 | Gmail failure | No Sheets write attempted |
+| OF-B10 | Gmail success + Sheets partial failure | Agent confirms email sent and says briefly what Sheets write failed |
+| OF-B11 | Double-click `✅ Wysłać` | Only one Gmail message; idempotent callback |
+| OF-B12 | Voice → transcript → send offer | Same flow as text after voice confirmation |
+
+Manual external check:
+- Controlled recipient receives the PDF.
+- Gmail Sent contains one sent message with expected subject and attachment name.
+- PDF uses current template/company/logo/email data.
 
 ---
 
@@ -43,6 +143,23 @@ Tests are manual Telegram tests unless stated otherwise.
 | SC-2 | "pokaż Kowalski" (bare last name) | Disambiguation list |
 | SC-3 | All filled columns visible | Every non-empty column from Sheets appears on card, except Zdjęcia/Link do zdjęć/ID wydarzenia |
 | SC-4 | Date fields formatted | DD.MM.YYYY (Dzień tygodnia), not ISO, not Excel serial |
+
+---
+
+## photo_upload
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| PH-1 | Photo with caption `Jan Kowalski Warszawa` | Skips "Do którego klienta?", shows Drive mutation card with `✅ Zapisać` / `➕ Dopisać` / `❌ Anulować` |
+| PH-2 | Photo without caption | Bot asks: `Do którego klienta przypisać zdjęcie? Podaj imię, nazwisko i miasto.` |
+| PH-3 | Check Drive/Sheets before clicking `✅ Zapisać` | No Drive upload, no Sheets N/O update |
+| PH-4 | Click `✅ Zapisać` | Creates/reuses folder, uploads photo, sets `Zdjęcia` count and `Link do zdjęć`, opens 15-minute session |
+| PH-5 | During session send photo without caption | Uploads directly to same client and confirms `📸 Dodane do: ...` |
+| PH-6 | During session caption `dach północny` | Uploads to same client; caption becomes Drive description |
+| PH-7 | During session caption `zdjęcia do Anna Nowak Kraków` | Does not upload to old client; starts confirmation for Anna |
+| PH-8 | Unknown client, choose add | Enters add_client flow; final `✅ Zapisać` creates Sheets row and uploads first photo |
+| PH-9 | `❌ Anulować` on photo card | Writes nothing to Drive/Sheets |
+| PH-10 | `/cancel` during active photo session | Clears pending photo flow and active session |
 
 ---
 

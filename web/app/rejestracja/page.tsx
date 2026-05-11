@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signup } from "@/app/auth/actions";
-import { createClient } from "@/lib/supabase/server";
+import { AuthConfigError } from "@/components/auth/auth-config-error";
+import { createClient, missingSupabaseEnvMessage } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Rejestracja | Agent-OZE",
@@ -15,6 +18,11 @@ export default async function RegistrationPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
+  const supabaseEnvError = missingSupabaseEnvMessage();
+  if (supabaseEnvError) {
+    return <AuthConfigError detail={supabaseEnvError} />;
+  }
+
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
 
@@ -53,7 +61,10 @@ export default async function RegistrationPage({
               </div>
             </div>
 
-            <form action={signup} className="rounded-[8px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30">
+            <form
+              action={signup}
+              className="rounded-[8px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30"
+            >
               {params.message ? (
                 <p className="mb-5 rounded-[8px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-zinc-200">
                   {params.message}
@@ -217,7 +228,7 @@ function Header() {
         href="/"
         className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
       >
-        Landing
+        Strona główna
       </Link>
     </header>
   );

@@ -1,52 +1,56 @@
-"""Internal billing routes called by trusted web infrastructure."""
+"""Internal billing event ingestion routes."""
 
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
-import logging
-import time
+import os
 from datetime import datetime, timezone
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 
-from bot.config import Config
 from shared.database import get_supabase_client
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_SIGNATURE_AGE_SECONDS = 300
-ACTIVE_STRIPE_STATUSES = {"active", "trialing"}
-PAST_DUE_STRIPE_STATUSES = {"past_due", "unpaid", "incomplete"}
+SUPPORTED_EVENTS = {
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "invoice.payment_succeeded",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+}
 
 
-def _expected_signature(raw_body: bytes, timestamp: str, secret: str) -> str:
-    signed_payload = timestamp.encode("utf-8") + b"." + raw_body
-    digest = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
-    return f"sha256={digest}"
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
 
 
-def verify_internal_signature(
-    raw_body: bytes,
-    timestamp: str | None,
-    signature: str | None,
-    now: int | None = None,
-) -> None:
-    """Verify Vercel -> FastAPI HMAC over the exact JSON body."""
-    secret = Config.BILLING_INTERNAL_SECRET
+def _env_value(name: str) -> str | None:
+    value = (os.getenv(name) or "").strip()
+    return value if value and value not in {'""', "''"} else None
+
+
+def _billing_secret() -> str:
+    secret = _env_value("BILLING_INTERNAL_SECRET")
     if not secret:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Billing internal secret is not configured.",
         )
+    return secret
 
-    if not timestamp or not signature:
+
+def _verify_internal_signature(body: bytes, headers: dict[str, str]) -> None:
+    timestamp = headers.get("x-oze-timestamp")
+    signature = headers.get("x-oze-signature", "")
+    if not timestamp or not signature.startswith("sha256="):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing billing signature headers.",
+            detail="Missing billing signature.",
         )
 
     try:
@@ -57,385 +61,211 @@ def verify_internal_signature(
             detail="Invalid billing timestamp.",
         ) from exc
 
-    current_time = int(time.time()) if now is None else now
-    if abs(current_time - timestamp_int) > MAX_SIGNATURE_AGE_SECONDS:
+    now = int(datetime.now(tz=timezone.utc).timestamp())
+    if abs(now - timestamp_int) > MAX_SIGNATURE_AGE_SECONDS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Stale billing signature.",
+            detail="Expired billing signature.",
         )
 
-    expected = _expected_signature(raw_body, timestamp, secret)
-    if not hmac.compare_digest(expected, signature):
+    expected = hmac.new(
+        _billing_secret().encode(),
+        f"{timestamp}.".encode() + body,
+        hashlib.sha256,
+    ).hexdigest()
+    actual = signature.removeprefix("sha256=")
+    if not hmac.compare_digest(expected, actual):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid billing signature.",
         )
 
 
-def _iso_from_stripe_timestamp(value: Any) -> str | None:
-    if not isinstance(value, int):
-        return None
-    return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+def _event_object(event: dict[str, Any]) -> dict[str, Any]:
+    event_object = event.get("object")
+    if not isinstance(event_object, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Stripe event object is missing.",
+        )
+    return event_object
 
 
-def _coerce_money_pln(cents: Any) -> float:
-    if not isinstance(cents, int):
-        return 0.0
-    return round(cents / 100, 2)
+def _metadata(value: dict[str, Any]) -> dict[str, Any]:
+    metadata = value.get("metadata")
+    return metadata if isinstance(metadata, dict) else {}
 
 
-def _subscription_status(stripe_status: str | None, deleted: bool = False) -> str:
-    if deleted or stripe_status == "canceled":
-        return "expired"
-    if stripe_status in ACTIVE_STRIPE_STATUSES:
-        return "active"
-    if stripe_status in PAST_DUE_STRIPE_STATUSES:
-        return "past_due"
-    return "pending_payment"
-
-
-def _metadata_user_id(stripe_object: dict[str, Any]) -> str | None:
-    for metadata in _metadata_sources(stripe_object):
-        user_id = metadata.get("user_id")
-        if isinstance(user_id, str) and user_id:
-            return user_id
-    return None
-
-
-def _metadata_plan(stripe_object: dict[str, Any]) -> str | None:
-    for metadata in _metadata_sources(stripe_object):
-        plan = metadata.get("plan")
-        if plan in {"monthly", "yearly"}:
-            return plan
-    return None
-
-
-def _stripe_id(value: Any) -> str | None:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict) and isinstance(value.get("id"), str):
-        return value["id"]
-    return None
-
-
-def _metadata_sources(stripe_object: dict[str, Any]) -> list[dict[str, Any]]:
-    sources: list[dict[str, Any]] = []
-
-    metadata = stripe_object.get("metadata")
-    if isinstance(metadata, dict):
-        sources.append(metadata)
-
-    parent = stripe_object.get("parent")
-    if isinstance(parent, dict):
-        subscription_details = parent.get("subscription_details")
-        if isinstance(subscription_details, dict):
-            parent_metadata = subscription_details.get("metadata")
-            if isinstance(parent_metadata, dict):
-                sources.append(parent_metadata)
-
-    return sources
-
-
-def _parent_subscription_id(parent: Any) -> str | None:
-    if not isinstance(parent, dict):
-        return None
-
-    for details_key in (
-        "subscription_details",
-        "invoice_item_details",
-        "subscription_item_details",
-    ):
-        details = parent.get(details_key)
-        if isinstance(details, dict):
-            subscription_id = _stripe_id(details.get("subscription"))
-            if subscription_id:
-                return subscription_id
-
-    return None
-
-
-def _subscription_id(stripe_object: dict[str, Any]) -> str | None:
-    if stripe_object.get("object") == "subscription":
-        return _stripe_id(stripe_object)
-
-    direct_subscription_id = _stripe_id(stripe_object.get("subscription"))
-    if direct_subscription_id:
-        return direct_subscription_id
-
-    parent_subscription_id = _parent_subscription_id(stripe_object.get("parent"))
-    if parent_subscription_id:
-        return parent_subscription_id
-
-    lines = stripe_object.get("lines")
-    line_items = lines.get("data") if isinstance(lines, dict) else None
-    if isinstance(line_items, list):
-        for line_item in line_items:
-            if not isinstance(line_item, dict):
-                continue
-            line_subscription_id = _stripe_id(line_item.get("subscription"))
-            if line_subscription_id:
-                return line_subscription_id
-            line_parent_subscription_id = _parent_subscription_id(line_item.get("parent"))
-            if line_parent_subscription_id:
-                return line_parent_subscription_id
-
-    return None
-
-
-def _find_user_id_by_subscription(subscription_id: str | None) -> str | None:
-    if not subscription_id:
-        return None
+def _find_user_by_id(user_id: str) -> dict[str, Any]:
     result = (
         get_supabase_client()
         .table("users")
-        .select("id")
+        .select("*")
+        .eq("id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return result.data[0]
+
+
+def _update_user(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    update_payload = {
+        key: value for key, value in payload.items() if value is not None
+    }
+    update_payload["updated_at"] = _now_iso()
+    result = (
+        get_supabase_client()
+        .table("users")
+        .update(update_payload)
+        .eq("id", user_id)
+        .execute()
+    )
+    return result.data[0] if result.data else update_payload
+
+
+def _log_event(event: dict[str, Any], processed: bool) -> None:
+    try:
+        get_supabase_client().table("webhook_log").insert(
+            {
+                "source": "stripe",
+                "payload": event,
+                "processed": processed,
+                "duplicate": False,
+            }
+        ).execute()
+    except Exception:
+        # Billing state must not fail because observability storage is unavailable.
+        return
+
+
+def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
+    metadata = _metadata(session)
+    user_id = metadata.get("user_id") or session.get("client_reference_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Checkout session has no user reference.",
+        )
+
+    if (
+        session.get("object") != "checkout.session"
+        or session.get("mode") != "subscription"
+        or session.get("status") != "complete"
+        or session.get("payment_status") != "paid"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Checkout session is not paid.",
+        )
+
+    user = _find_user_by_id(str(user_id))
+    metadata_auth_user_id = metadata.get("auth_user_id")
+    if metadata_auth_user_id and metadata_auth_user_id != user.get("auth_user_id"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Checkout session does not match the authenticated user.",
+        )
+
+    return _update_user(
+        user["id"],
+        {
+            "subscription_status": "active",
+            "subscription_plan": metadata.get("plan"),
+            "activation_paid": True,
+            "stripe_customer_id": session.get("customer"),
+            "stripe_subscription_id": session.get("subscription"),
+            "stripe_checkout_session_id": session.get("id"),
+            "subscription_current_period_end": session.get(
+                "subscription_current_period_end"
+            ),
+        },
+    )
+
+
+def _update_from_subscription(
+    subscription: dict[str, Any],
+    *,
+    deleted: bool = False,
+) -> dict[str, Any] | None:
+    subscription_id = subscription.get("id")
+    if not subscription_id:
+        return None
+
+    result = (
+        get_supabase_client()
+        .table("users")
+        .select("*")
         .eq("stripe_subscription_id", subscription_id)
         .limit(1)
         .execute()
     )
-    if result.data:
-        return result.data[0]["id"]
-    return None
+    if not result.data:
+        return None
 
-
-def _find_user_id(stripe_object: dict[str, Any]) -> str | None:
-    return _metadata_user_id(stripe_object) or _find_user_id_by_subscription(
-        _subscription_id(stripe_object)
-    )
-
-
-def _get_existing_log(event_id: str) -> dict[str, Any] | None:
-    result = (
-        get_supabase_client()
-        .table("webhook_log")
-        .select("id, processed")
-        .eq("source", "stripe")
-        .eq("stripe_event_id", event_id)
-        .limit(1)
-        .execute()
-    )
-    return result.data[0] if result.data else None
-
-
-def _insert_log(payload: dict[str, Any]) -> str | None:
-    result = (
-        get_supabase_client()
-        .table("webhook_log")
-        .insert(
-            {
-                "source": "stripe",
-                "stripe_event_id": payload["id"],
-                "stripe_event_type": payload["type"],
-                "payload": payload,
-                "processed": False,
-                "duplicate": False,
-            }
-        )
-        .execute()
-    )
-    if result.data:
-        return result.data[0].get("id")
-    return None
-
-
-def _mark_log_processed(log_id: str | None) -> None:
-    if not log_id:
-        return
-    get_supabase_client().table("webhook_log").update(
-        {"processed": True, "processed_at": datetime.now(tz=timezone.utc).isoformat()}
-    ).eq("id", log_id).execute()
-
-
-def _insert_outbox(user_id: str, event_id: str, event_type: str, payload: dict[str, Any]) -> None:
-    existing = (
-        get_supabase_client()
-        .table("billing_outbox")
-        .select("id")
-        .eq("stripe_event_id", event_id)
-        .limit(1)
-        .execute()
-    )
-    if existing.data:
-        return
-
-    get_supabase_client().table("billing_outbox").insert(
+    status_value = "canceled" if deleted else subscription.get("status")
+    return _update_user(
+        result.data[0]["id"],
         {
-            "user_id": user_id,
-            "stripe_event_id": event_id,
-            "event_type": event_type,
-            "payload": payload,
-        }
-    ).execute()
-
-
-def _insert_payment_history(
-    user_id: str,
-    event_id: str,
-    stripe_object: dict[str, Any],
-    payment_type: str,
-) -> None:
-    existing = (
-        get_supabase_client()
-        .table("payment_history")
-        .select("id")
-        .eq("stripe_event_id", event_id)
-        .limit(1)
-        .execute()
+            "subscription_status": "canceled"
+            if status_value == "canceled"
+            else "active",
+            "activation_paid": status_value != "canceled",
+            "stripe_subscription_id": subscription_id,
+        },
     )
-    if existing.data:
-        return
-
-    amount = _coerce_money_pln(
-        stripe_object.get("amount_total") or stripe_object.get("amount_paid")
-    )
-    get_supabase_client().table("payment_history").insert(
-        {
-            "user_id": user_id,
-            "amount_pln": amount,
-            "type": payment_type,
-            "status": "paid",
-            "stripe_event_id": event_id,
-            "stripe_checkout_session_id": _stripe_id(stripe_object)
-            if stripe_object.get("object") == "checkout.session"
-            else None,
-            "stripe_invoice_id": _stripe_id(stripe_object)
-            if stripe_object.get("object") == "invoice"
-            else None,
-            "stripe_subscription_id": _subscription_id(stripe_object),
-            "stripe_customer_id": _stripe_id(stripe_object.get("customer")),
-            "currency": stripe_object.get("currency"),
-        }
-    ).execute()
 
 
-def _handle_checkout_paid(payload: dict[str, Any], stripe_object: dict[str, Any]) -> dict[str, Any]:
-    if stripe_object.get("payment_status") != "paid":
-        return {"processed": True, "activated": False, "reason": "payment_not_paid"}
-
-    user_id = _metadata_user_id(stripe_object)
-    if not user_id:
-        raise HTTPException(status_code=422, detail="Stripe session has no user_id metadata.")
-
-    plan = _metadata_plan(stripe_object)
-    update_data = {
-        "subscription_status": "active",
-        "subscription_plan": plan,
-        "activation_paid": True,
-        "stripe_customer_id": _stripe_id(stripe_object.get("customer")),
-        "stripe_subscription_id": _stripe_id(stripe_object.get("subscription")),
-        "stripe_checkout_session_id": _stripe_id(stripe_object),
-        "updated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
-    get_supabase_client().table("users").update(update_data).eq("id", user_id).execute()
-    _insert_payment_history(user_id, payload["id"], stripe_object, "stripe_checkout")
-    _insert_outbox(user_id, payload["id"], "billing_activated", payload)
-    return {"processed": True, "activated": True, "user_id": user_id}
-
-
-def _handle_invoice(payload: dict[str, Any], stripe_object: dict[str, Any], paid: bool) -> dict[str, Any]:
-    user_id = _find_user_id(stripe_object)
-    if not user_id:
-        raise HTTPException(status_code=422, detail="Invoice user could not be resolved.")
-
-    update_data = {
-        "subscription_status": "active" if paid else "past_due",
-        "stripe_customer_id": _stripe_id(stripe_object.get("customer")),
-        "stripe_subscription_id": _subscription_id(stripe_object),
-        "subscription_current_period_end": _iso_from_stripe_timestamp(
-            stripe_object.get("period_end")
-        ),
-        "updated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
-    get_supabase_client().table("users").update(update_data).eq("id", user_id).execute()
-
-    if paid:
-        _insert_payment_history(user_id, payload["id"], stripe_object, "stripe_invoice")
-
-    _insert_outbox(
-        user_id,
-        payload["id"],
-        "billing_invoice_paid" if paid else "billing_payment_failed",
-        payload,
-    )
-    return {"processed": True, "user_id": user_id, "status": update_data["subscription_status"]}
-
-
-def _handle_subscription(
-    payload: dict[str, Any],
-    stripe_object: dict[str, Any],
-    deleted: bool = False,
+async def process_signed_stripe_event(
+    body: bytes,
+    headers: dict[str, str],
 ) -> dict[str, Any]:
-    user_id = _find_user_id(stripe_object)
-    if not user_id:
-        raise HTTPException(status_code=422, detail="Subscription user could not be resolved.")
+    _verify_internal_signature(body, {key.lower(): value for key, value in headers.items()})
+    try:
+        event = json.loads(body.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Stripe event JSON.",
+        ) from exc
 
-    status_value = _subscription_status(stripe_object.get("status"), deleted=deleted)
-    update_data = {
-        "subscription_status": status_value,
-        "subscription_plan": _metadata_plan(stripe_object),
-        "stripe_customer_id": _stripe_id(stripe_object.get("customer")),
-        "stripe_subscription_id": _stripe_id(stripe_object),
-        "subscription_current_period_end": _iso_from_stripe_timestamp(
-            stripe_object.get("current_period_end")
-        ),
-        "updated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
-    get_supabase_client().table("users").update(update_data).eq("id", user_id).execute()
-    _insert_outbox(user_id, payload["id"], "billing_subscription_changed", payload)
-    return {"processed": True, "user_id": user_id, "status": status_value}
+    event_type = event.get("type")
+    if event_type not in SUPPORTED_EVENTS:
+        _log_event(event, processed=False)
+        return {"received": True, "processed": False}
 
-
-def process_stripe_event(payload: dict[str, Any]) -> dict[str, Any]:
-    event_type = payload.get("type")
-    stripe_object = payload.get("object")
-    if not isinstance(payload.get("id"), str) or not isinstance(event_type, str):
-        raise HTTPException(status_code=400, detail="Invalid Stripe event payload.")
-    if not isinstance(stripe_object, dict):
-        raise HTTPException(status_code=400, detail="Stripe event object is missing.")
-    if payload.get("livemode") is True:
-        raise HTTPException(status_code=400, detail="Live Stripe events are disabled in Phase 0C.")
-
-    existing_log = _get_existing_log(payload["id"])
-    if existing_log and existing_log.get("processed"):
-        return {"processed": False, "duplicate": True}
-
-    log_id = existing_log.get("id") if existing_log else _insert_log(payload)
-
-    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
-        result = _handle_checkout_paid(payload, stripe_object)
+    event_object = _event_object(event)
+    updated: dict[str, Any] | None = None
+    if event_type in {
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+    }:
+        updated = _activate_from_checkout_session(event_object)
     elif event_type == "invoice.payment_succeeded":
-        result = _handle_invoice(payload, stripe_object, paid=True)
-    elif event_type == "invoice.payment_failed":
-        result = _handle_invoice(payload, stripe_object, paid=False)
+        subscription_id = event_object.get("subscription")
+        if subscription_id:
+            updated = _update_from_subscription({"id": subscription_id, "status": "active"})
     elif event_type == "customer.subscription.updated":
-        result = _handle_subscription(payload, stripe_object)
+        updated = _update_from_subscription(event_object)
     elif event_type == "customer.subscription.deleted":
-        result = _handle_subscription(payload, stripe_object, deleted=True)
-    else:
-        result = {"processed": False, "ignored": True}
+        updated = _update_from_subscription(event_object, deleted=True)
 
-    _mark_log_processed(log_id)
-    return result
+    _log_event(event, processed=updated is not None)
+    return {
+        "received": True,
+        "processed": updated is not None,
+        "eventId": event.get("id"),
+        "type": event_type,
+    }
 
 
 @router.post("/stripe-event")
-async def receive_stripe_event(
-    request: Request,
-    x_oze_timestamp: Annotated[str | None, Header()] = None,
-    x_oze_signature: Annotated[str | None, Header()] = None,
-):
-    raw_body = await request.body()
-    verify_internal_signature(raw_body, x_oze_timestamp, x_oze_signature)
-
-    try:
-        payload = json.loads(raw_body.decode("utf-8"))
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
-
-    try:
-        return process_stripe_event(payload)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Stripe billing event failed")
-        raise HTTPException(status_code=500, detail="Billing event failed.") from exc
+async def stripe_event(request: Request):
+    return await process_signed_stripe_event(
+        await request.body(),
+        {
+            "x-oze-timestamp": request.headers.get("x-oze-timestamp", ""),
+            "x-oze-signature": request.headers.get("x-oze-signature", ""),
+        },
+    )

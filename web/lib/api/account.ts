@@ -1,6 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { fastApiBaseUrl } from "@/lib/api/base-url";
+import { createClient } from "@/lib/supabase/server";
 
 export type AccountProfile = {
   id: string;
@@ -61,7 +61,10 @@ export type CurrentAccount =
 
 async function fetchAccount(url: string, accessToken: string) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FASTAPI_ACCOUNT_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    FASTAPI_ACCOUNT_TIMEOUT_MS,
+  );
 
   try {
     return await fetch(url, {
@@ -113,9 +116,9 @@ async function fetchProfileFromSupabase(
 
 export async function getCurrentAccount(): Promise<CurrentAccount> {
   const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
 
-  if (!claimsData?.claims) {
+  if (userError || !userData.user) {
     return {
       authenticated: false,
       email: null,
@@ -126,26 +129,34 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
   }
 
   const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
+  const accessToken = sessionData.session?.access_token ?? "";
+  const authUserId = userData.user.id;
+  const authEmail = userData.user.email ?? null;
 
   if (!accessToken) {
+    const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: String(claimsData.claims.email ?? ""),
-      profile: null,
+      email: fallbackProfile?.email ?? authEmail,
+      profile: fallbackProfile,
       accessToken: "",
-      error: "Brak tokenu sesji.",
+      error: fallbackProfile
+        ? "Brak tokenu sesji. Profil pobrano z Supabase."
+        : "Brak tokenu sesji.",
     };
   }
 
   const baseUrl = fastApiBaseUrl();
   if (!baseUrl) {
+    const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: String(claimsData.claims.email ?? ""),
-      profile: null,
+      email: fallbackProfile?.email ?? authEmail,
+      profile: fallbackProfile,
       accessToken,
-      error: "Brak konfiguracji FASTAPI_INTERNAL_BASE_URL.",
+      error: fallbackProfile
+        ? "Brak konfiguracji FASTAPI_INTERNAL_BASE_URL. Profil pobrano z Supabase."
+        : "Brak konfiguracji FASTAPI_INTERNAL_BASE_URL.",
     };
   }
 
@@ -154,13 +165,10 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
   try {
     response = await fetchAccount(accountApiUrl, accessToken);
   } catch {
-    const fallbackProfile = await fetchProfileFromSupabase(
-      supabase,
-      String(claimsData.claims.sub ?? ""),
-    );
+    const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? String(claimsData.claims.email ?? ""),
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -175,13 +183,10 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
       statusText: response.statusText,
       url: safeUrlLogParts(accountApiUrl),
     });
-    const fallbackProfile = await fetchProfileFromSupabase(
-      supabase,
-      String(claimsData.claims.sub ?? ""),
-    );
+    const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? String(claimsData.claims.email ?? ""),
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -194,13 +199,10 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
   try {
     account = (await response.json()) as AccountResponse;
   } catch {
-    const fallbackProfile = await fetchProfileFromSupabase(
-      supabase,
-      String(claimsData.claims.sub ?? ""),
-    );
+    const fallbackProfile = await fetchProfileFromSupabase(supabase, authUserId);
     return {
       authenticated: true,
-      email: fallbackProfile?.email ?? String(claimsData.claims.email ?? ""),
+      email: fallbackProfile?.email ?? authEmail,
       profile: fallbackProfile,
       accessToken,
       error: fallbackProfile
@@ -211,14 +213,16 @@ export async function getCurrentAccount(): Promise<CurrentAccount> {
 
   return {
     authenticated: true,
-    email: account.email,
+    email: account.email ?? authEmail,
     profile: account.profile,
     accessToken,
     error: null,
   };
 }
 
-export async function requireCurrentAccount(nextPath: string): Promise<CurrentAccount> {
+export async function requireCurrentAccount(
+  nextPath: string,
+): Promise<CurrentAccount> {
   const account = await getCurrentAccount();
   if (!account.authenticated) {
     redirect(`/login?next=${encodeURIComponent(nextPath)}`);

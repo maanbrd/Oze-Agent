@@ -2,26 +2,25 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
 import inspect
-import json
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 
 from api.auth import AuthUser, get_current_auth_user
-from bot.config import Config
 from shared.database import get_supabase_client
-from shared.google_calendar import create_calendar
 from shared.google_auth import build_oauth_url
+from shared.google_calendar import create_calendar
 from shared.google_drive import create_root_folder
 from shared.google_sheets import create_spreadsheet
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+TELEGRAM_LINK_CODE_TTL_SECONDS = 90
 
 USER_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
@@ -30,6 +29,9 @@ USER_SELECT = (
     "google_sheets_id, google_sheets_name, google_calendar_id, "
     "google_calendar_name, google_drive_folder_id, telegram_id, "
     "telegram_link_code, telegram_link_code_expires, onboarding_completed"
+)
+BETA_GRANT_SELECT = (
+    "id, email, status, auth_user_id, claimed_at, revoked_at, note"
 )
 
 
@@ -69,12 +71,71 @@ def _has_payment(user: dict[str, Any]) -> bool:
     )
 
 
+def _normalize_email(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _query_active_beta_grant(key: str, value: str | None) -> dict[str, Any] | None:
+    if not value:
+        return None
+    try:
+        result = (
+            get_supabase_client()
+            .table("beta_access_grants")
+            .select(BETA_GRANT_SELECT)
+            .eq(key, value)
+            .eq("status", "active")
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Beta access lookup failed: %s", exc)
+        return None
+    return result.data[0] if result.data else None
+
+
+def _active_beta_grant(
+    user: dict[str, Any],
+    auth_user: AuthUser,
+) -> dict[str, Any] | None:
+    grant = _query_active_beta_grant("auth_user_id", auth_user.user_id)
+    if grant:
+        return grant
+    email = _normalize_email(user.get("email") or auth_user.email)
+    return _query_active_beta_grant("email", email)
+
+
+def _access_state(user: dict[str, Any], auth_user: AuthUser) -> dict[str, Any]:
+    if _has_payment(user):
+        return {"active": True, "type": "paid", "betaEligible": False}
+
+    grant = _active_beta_grant(user, auth_user)
+    if not grant:
+        return {"active": False, "type": None, "betaEligible": False}
+
+    beta_is_claimed = grant.get("auth_user_id") == auth_user.user_id
+    return {
+        "active": beta_is_claimed,
+        "type": "beta" if beta_is_claimed else None,
+        "betaEligible": True,
+    }
+
+
+def _has_access(user: dict[str, Any], auth_user: AuthUser) -> bool:
+    return bool(_access_state(user, auth_user)["active"])
+
+
 def _has_telegram(user: dict[str, Any]) -> bool:
     return bool(user.get("telegram_id"))
 
 
-def _next_step(user: dict[str, Any]) -> str:
-    if not _has_payment(user):
+def _next_step(
+    user: dict[str, Any],
+    auth_user: AuthUser,
+    access: dict[str, Any] | None = None,
+) -> str:
+    access = access if access is not None else _access_state(user, auth_user)
+    if not access["active"]:
         return "/onboarding/platnosc"
     if not _has_google_tokens(user):
         return "/onboarding/google"
@@ -85,9 +146,10 @@ def _next_step(user: dict[str, Any]) -> str:
     return "/dashboard"
 
 
-def _status_payload(user: dict[str, Any]) -> dict[str, Any]:
+def _status_payload(user: dict[str, Any], auth_user: AuthUser) -> dict[str, Any]:
+    access = _access_state(user, auth_user)
     steps = {
-        "payment": _has_payment(user),
+        "payment": access["active"],
         "google": _has_google_tokens(user),
         "resources": _has_resources(user),
         "telegram": _has_telegram(user),
@@ -95,9 +157,10 @@ def _status_payload(user: dict[str, Any]) -> dict[str, Any]:
     completed = all(steps.values())
     return {
         "fetchedAt": _now_iso(),
-        "nextStep": "/dashboard" if completed else _next_step(user),
+        "nextStep": "/dashboard" if completed else _next_step(user, auth_user, access),
         "completed": completed,
         "steps": steps,
+        "access": access,
         "profile": {
             "id": user.get("id"),
             "auth_user_id": user.get("auth_user_id"),
@@ -119,58 +182,6 @@ def _status_payload(user: dict[str, Any]) -> dict[str, Any]:
             "onboarding_completed": user.get("onboarding_completed"),
         },
     }
-
-
-def _oauth_state_secret() -> str:
-    secret = Config.GOOGLE_OAUTH_STATE_SECRET or Config.BILLING_INTERNAL_SECRET
-    if not secret:
-        raise HTTPException(
-            status_code=500,
-            detail="OAuth state secret is not configured.",
-        )
-    return secret
-
-
-def encode_oauth_state(user_id: str) -> str:
-    payload = {
-        "user_id": user_id,
-        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
-    }
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    body = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-    sig = hmac.new(
-        _oauth_state_secret().encode("utf-8"),
-        body.encode("ascii"),
-        hashlib.sha256,
-    ).hexdigest()
-    return f"{body}.{sig}"
-
-
-def decode_oauth_state(state: str, max_age_seconds: int = 900) -> str:
-    try:
-        body, sig = state.split(".", 1)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid OAuth state.") from exc
-
-    expected = hmac.new(
-        _oauth_state_secret().encode("utf-8"),
-        body.encode("ascii"),
-        hashlib.sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(expected, sig):
-        raise HTTPException(status_code=400, detail="Invalid OAuth state signature.")
-
-    padded = body + "=" * (-len(body) % 4)
-    payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
-    iat = int(payload.get("iat", 0))
-    now = int(datetime.now(tz=timezone.utc).timestamp())
-    if now - iat > max_age_seconds:
-        raise HTTPException(status_code=400, detail="OAuth state expired.")
-
-    user_id = payload.get("user_id")
-    if not isinstance(user_id, str) or not user_id:
-        raise HTTPException(status_code=400, detail="OAuth state missing user.")
-    return user_id
 
 
 def _resource_name(payload: dict[str, Any], key: str, fallback: str) -> str:
@@ -197,13 +208,13 @@ def _persist_user_update(user: dict[str, Any], update_data: dict[str, Any]) -> N
 @router.get("/status")
 async def get_onboarding_status(auth_user: AuthUser = Depends(get_current_auth_user)):
     user = _get_user_for_auth(auth_user)
-    payload = _status_payload(user)
+    payload = _status_payload(user, auth_user)
     if payload["completed"] and not user.get("onboarding_completed"):
         get_supabase_client().table("users").update(
             {"onboarding_completed": True, "updated_at": _now_iso()}
         ).eq("id", user["id"]).execute()
         user["onboarding_completed"] = True
-        payload = _status_payload(user)
+        payload = _status_payload(user, auth_user)
     return payload
 
 
@@ -237,16 +248,56 @@ async def update_account(
     return {"profile": updated}
 
 
-@router.post("/google/oauth-url")
-async def start_google_oauth(auth_user: AuthUser = Depends(get_current_auth_user)):
+@router.post("/beta-access")
+async def activate_beta_access(auth_user: AuthUser = Depends(get_current_auth_user)):
     user = _get_user_for_auth(auth_user)
-    if not _has_payment(user):
+    grant = _active_beta_grant(user, auth_user)
+    if not grant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Beta access is not available for this account.",
+        )
+
+    grant_auth_user_id = grant.get("auth_user_id")
+    if grant_auth_user_id and grant_auth_user_id != auth_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Beta access is already claimed by another account.",
+        )
+
+    if not grant_auth_user_id:
+        claimed_at = _now_iso()
+        result = (
+            get_supabase_client()
+            .table("beta_access_grants")
+            .update(
+                {
+                    "auth_user_id": auth_user.user_id,
+                    "claimed_at": claimed_at,
+                    "updated_at": claimed_at,
+                }
+            )
+            .eq("id", grant["id"])
+            .execute()
+        )
+        grant.update(result.data[0] if result.data else {})
+
+    return _status_payload(user, auth_user)
+
+
+@router.post("/google/oauth-url")
+async def start_google_oauth(
+    payload: dict[str, Any] | None = Body(default=None),
+    auth_user: AuthUser = Depends(get_current_auth_user),
+):
+    user = _get_user_for_auth(auth_user)
+    if not _has_access(user, auth_user):
         raise HTTPException(
             status_code=402,
             detail="Payment is required before Google OAuth.",
         )
-    state = encode_oauth_state(user["id"])
-    return {"url": build_oauth_url(user["id"], state=state)}
+    return_url = str((payload or {}).get("returnUrl") or "").strip() or None
+    return {"url": build_oauth_url(user["id"], return_url=return_url)}
 
 
 @router.post("/resources")
@@ -255,7 +306,7 @@ async def create_google_resources(
     auth_user: AuthUser = Depends(get_current_auth_user),
 ):
     user = _get_user_for_auth(auth_user)
-    if not _has_payment(user):
+    if not _has_access(user, auth_user):
         raise HTTPException(
             status_code=402,
             detail="Payment is required before resource creation.",
@@ -319,7 +370,7 @@ async def create_google_resources(
             "calendarId": calendar_id,
             "driveFolderId": drive_folder_id,
         },
-        "nextStep": _next_step(user),
+        "nextStep": _next_step(user, auth_user),
     }
 
 
@@ -330,7 +381,11 @@ def _telegram_code() -> str:
 @router.post("/telegram-code")
 async def generate_telegram_code(auth_user: AuthUser = Depends(get_current_auth_user)):
     user = _get_user_for_auth(auth_user)
-    if not _has_payment(user) or not _has_google_tokens(user) or not _has_resources(user):
+    if (
+        not _has_access(user, auth_user)
+        or not _has_google_tokens(user)
+        or not _has_resources(user)
+    ):
         raise HTTPException(
             status_code=409,
             detail="Complete payment and Google setup before Telegram pairing.",
@@ -344,7 +399,9 @@ async def generate_telegram_code(auth_user: AuthUser = Depends(get_current_auth_
         }
 
     code = _telegram_code()
-    expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=15)
+    expires_at = datetime.now(tz=timezone.utc) + timedelta(
+        seconds=TELEGRAM_LINK_CODE_TTL_SECONDS
+    )
     get_supabase_client().table("users").update(
         {
             "telegram_link_code": code,

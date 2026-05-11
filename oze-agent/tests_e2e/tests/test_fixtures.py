@@ -231,3 +231,17 @@ async def test_cleanup_returns_counts():
     assert report["sheets_deleted"] == 2
     assert report["calendar_events_found"] == 1
     assert report["calendar_deleted"] == 1
+    assert report["cleanup_safe"] is True
+
+
+@pytest.mark.asyncio
+async def test_cleanup_reports_sheets_discovery_failure_as_unsafe():
+    with patch("tests_e2e.fixtures.resolve_user_id", new=AsyncMock(return_value="uuid")), \
+         patch(
+             "tests_e2e.fixtures.find_synthetic_rows",
+             new=AsyncMock(side_effect=RuntimeError("timeout")),
+         ):
+        report = await cleanup_synthetic_data(999)
+
+    assert report["cleanup_safe"] is False
+    assert "sheets_discovery_failed" in report["cleanup_error"]

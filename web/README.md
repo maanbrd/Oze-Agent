@@ -3,7 +3,7 @@
 Panel webowy dla Agent-OZE. Web app jest osobnym Next.js appem w monorepo,
 deployowanym docelowo na Vercel z root directory `web/`.
 
-Phase 0A zawiera:
+Aktualny web app zawiera:
 
 - Next.js 16 App Router
 - TypeScript
@@ -13,37 +13,57 @@ Phase 0A zawiera:
 - statyczne placeholder routes: `/rejestracja`, `/login`, `/regulamin`,
   `/polityka-prywatnosci`
 - `/healthz` jako JSON healthcheck
-
-Phase 0B dodaje:
-
-- Supabase SSR Auth przez `@supabase/ssr`
-- realne formularze `/login` i `/rejestracja`
-- chroniony `/dashboard`
-- odświeżanie sesji w `proxy.ts`
-- migrację `users.auth_user_id` + trigger profilu + RLS baseline
-
-Phase 0C dodaje:
-
-- onboarding step 1-2: rejestracja + płatność
-- Stripe Checkout sandbox (aktywacja + plan miesięczny/roczny)
-- webhook Stripe w Next.js z weryfikacją podpisu
-- trwały zapis billing state przez FastAPI internal endpoint
-
-Phase 0F / Phase 1 dodaje:
-
-- Google OAuth z web app przez FastAPI
-- tworzenie zasobów Google: Sheets, Calendar, Drive
-- ekran parowania Telegrama krótkotrwałym kodem
-- read-only dashboard z jawnie oznaczonym źródłem danych CRM
-- ustawienia konta zapisujące wyłącznie dane systemowe, nie CRM
-
-Stan na 29.04.2026: Phase 0C/0D/0E/0F/Phase 1 są code-complete na branchu
-`feat/web-phase-0c` / PR #5. Następny etap to Phase 1B rollout/readiness:
-sandbox env, migracje, Stripe smoke/replay, Google OAuth/resource smoke,
-Telegram pairing smoke i browser smoke. Nie oznaczaj web app jako live-ready
-tylko dlatego, że build przechodzi.
+- `/oferty` — generator szablonów ofert PV / magazyn energii / PV + magazyn,
+  seller profile, logo, treść emaila, preview i testowy PDF
 
 ## Getting Started
+
+Wymagane env dla lokalnego auth/onboardingu:
+
+```bash
+cd web
+npm run env:pull
+```
+
+Nie uruchamiaj bezpośrednio `vercel env pull .env.local`, bo nadpisuje lokalny
+plik bez kopii. `npm run env:pull` robi backup aktualnego `web/.env.local` w
+`/tmp/agent-oze-env-backups/` i dopiero potem pobiera env z Vercela. Jeśli
+potrzebujesz pliku tymczasowego zamiast nadpisania lokalnego env, użyj:
+
+```bash
+node scripts/pull-vercel-env-safe.mjs preview /tmp/oze-agent-preview.env
+```
+
+Jeśli wpisujesz wartości ręcznie, lokalny `web/.env.local` musi zawierać:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+FASTAPI_INTERNAL_BASE_URL=...
+```
+
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` jest preferowane. Starszy
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` działa jako fallback. Po stronie serwera web app
+akceptuje też istniejące `SUPABASE_URL` i `SUPABASE_KEY` z preview env.
+`web/.env.local` jest gitignored i nie wolno go commitować.
+
+Płatność wymaga dodatkowo Stripe:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...     # wymagane dla webhooka po płatności
+STRIPE_PRICE_ACTIVATION=price_...   # albo puste: użyje lookup key agent_oze_activation_199
+STRIPE_PRICE_MONTHLY=price_...      # albo puste: użyje lookup key agent_oze_monthly_49
+STRIPE_PRICE_YEARLY=price_...       # albo puste: użyje lookup key agent_oze_yearly_350
+```
+
+Jeśli ceny nie istnieją w Stripe, utwórz aktywne Prices albo wpisz istniejące
+`price_...` do `STRIPE_PRICE_*`.
+
+Jeśli Stripe działał lokalnie i nagle przestał po pullu envów, najpierw sprawdź
+backup w `/tmp/agent-oze-env-backups/`. Puste wartości w stylu
+`STRIPE_SECRET_KEY=""` i `STRIPE_WEBHOOK_SECRET=""` są traktowane jak brak
+aktywnej konfiguracji.
 
 Uruchom lokalnie:
 
@@ -53,60 +73,17 @@ npm install
 npm run dev
 ```
 
-Wymagane env dla auth:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-FASTAPI_INTERNAL_BASE_URL=http://localhost:8000
-BILLING_INTERNAL_SECRET=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_ACTIVATION=agent_oze_activation_199
-STRIPE_PRICE_MONTHLY=agent_oze_monthly_49
-STRIPE_PRICE_YEARLY=agent_oze_yearly_350
-```
-
-Stripe price env vars can be either direct `price_...` IDs or stable lookup
-keys. Prefer lookup keys for editable pricing: create a new Price in Stripe,
-move the same lookup key to the new active Price, and the app will pick it up
-without a code change.
-
-Stripe rollout is gated by the canonical checklist in
-`../docs/STRIPE_PHASE_0C_ROLLOUT.md`. Do not treat `npm run build` as enough for
-billing readiness; sandbox Checkout, webhook delivery, FastAPI writes, and DB
-idempotency must be smoked before Phase 0C is marked live.
-
-Phase 1B readiness starts locally with `npm run check:phase1b-env`, but full
-Stripe webhook readiness requires deployed staging services. The local checker
-loads `.env.local` / `.env` when present and also accepts `--env-file=<path>`.
-It does not require `STRIPE_WEBHOOK_SECRET`; staging checks do:
-
-```bash
-npm run check:phase1b-env -- --scope=staging
-npm run check:phase1b-env -- --env-file=.env.staging.local --scope=staging
-```
-
 Adresy:
 
 - `http://localhost:3000` — cinematic landing
 - `http://localhost:3000/healthz` — healthcheck JSON
-- `http://localhost:3000/rejestracja` — rejestracja Supabase Auth
-- `http://localhost:3000/onboarding/platnosc` — wybór planu i Stripe Checkout
-- `http://localhost:3000/onboarding/google` — Google OAuth step
-- `http://localhost:3000/onboarding/zasoby` — Sheets/Calendar/Drive setup
-- `http://localhost:3000/onboarding/telegram` — Telegram pairing code
-- `http://localhost:3000/login` — logowanie Supabase Auth
-- `http://localhost:3000/dashboard` — chroniony panel startowy
+- `http://localhost:3000/rejestracja` — placeholder onboardingu
+- `http://localhost:3000/login` — placeholder logowania
+- `http://localhost:3000/oferty` — generator ofert
 
 ## Scripts
 
 ```bash
-npm run check:phase1b-env
-npm run test:invariants
-npm run smoke:phase1b-local -- --base-url=http://127.0.0.1:3000
 npm run lint
 npm run build
 ```
@@ -117,32 +94,9 @@ Turbopacka służy `npm run build:turbo`.
 
 ## Scope
 
-Web używa Supabase tylko do Auth/session cookies przez publishable/anon key.
-Dane biznesowe i Google API mają iść przez FastAPI. Bot w `../oze-agent/`
-pozostaje osobnym procesem.
-
-Vercel nie dostaje `SUPABASE_SERVICE_KEY`. Stripe webhook po weryfikacji
-podpisu wywołuje FastAPI `/internal/billing/stripe-event` z HMAC
-`BILLING_INTERNAL_SECRET`; dopiero FastAPI zapisuje `users`, `payment_history`,
-`webhook_log` i `billing_outbox`.
-
-Current hosted Checkout is server-side, so no `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-is required in Phase 0C. Add it later only for Stripe Elements, Billing Portal,
-or client-side Stripe JS.
-
-Phase 0F/1 onboarding calls FastAPI `/api/onboarding/*` with the Supabase
-access token. FastAPI resolves `auth_user_id`, writes system setup fields with
-the service key, and keeps CRM data in Google.
-
-Logged-in CRM pages call the read-only adapter in `lib/crm/adapters.ts`. Source
-states are explicit:
-
-- `live` — FastAPI returned Google-backed Sheets/Calendar data,
-- `demo` — account is unauthenticated or onboarding is incomplete,
-- `unavailable` — completed account could not fetch Google data.
-
-CRM edits must stay outside web forms. The UI points users to Google
-Sheets/Calendar links or Telegram flows.
+Generator ofert komunikuje się z backendem FastAPI w `../oze-agent/` dla
+szablonów, profilu, logo, zmiennych emaila i testowego PDF. Webapp nie wysyła
+ofert do klientów; realna wysyłka idzie przez Telegram + Gmail.
 
 Landing używa animacji Midjourney dostarczonej przez usera:
 `public/media/hero-bg.mp4`. Pliki medialne trzymaj w `public/media/`.

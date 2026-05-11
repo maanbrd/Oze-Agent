@@ -32,6 +32,51 @@ async def test_commit_add_client_success():
 
 
 @pytest.mark.asyncio
+async def test_commit_add_client_defaults_blank_status_to_new_lead():
+    source = {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa"}
+    with patch(
+        "shared.mutations.add_client.create_client_row",
+        new=AsyncMock(return_value=42),
+    ) as mock_create:
+        result = await commit_add_client("u1", source)
+
+    assert result.success is True
+    mock_create.assert_awaited_once_with(
+        "u1",
+        {
+            "Imię i nazwisko": "Jan Kowalski",
+            "Miasto": "Warszawa",
+            "Status": "Nowy lead",
+        },
+    )
+    assert source == {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa"}
+
+
+@pytest.mark.asyncio
+async def test_commit_add_client_preserves_explicit_status():
+    with patch(
+        "shared.mutations.add_client.create_client_row",
+        new=AsyncMock(return_value=42),
+    ) as mock_create:
+        result = await commit_add_client(
+            "u1",
+            {
+                "Imię i nazwisko": "Jan Kowalski",
+                "Status": "Oferta wysłana",
+            },
+        )
+
+    assert result.success is True
+    mock_create.assert_awaited_once_with(
+        "u1",
+        {
+            "Imię i nazwisko": "Jan Kowalski",
+            "Status": "Oferta wysłana",
+        },
+    )
+
+
+@pytest.mark.asyncio
 async def test_commit_add_client_sheets_fail_returns_google_down():
     with patch(
         "shared.mutations.add_client.create_client_row",

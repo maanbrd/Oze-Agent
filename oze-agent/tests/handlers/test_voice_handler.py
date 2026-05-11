@@ -301,6 +301,7 @@ async def test_voice_confirm_yes_routes_to_handle_text_with_exact_text():
     # path, no Message.text mutation (would AttributeError on PTB ≥21).
     call_kwargs = mock_handle.await_args.kwargs
     assert call_kwargs.get("text_override") == "dodaj klienta Jan Kowalski"
+    assert call_kwargs.get("message_type_override") == "voice"
 
 
 @pytest.mark.asyncio

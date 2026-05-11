@@ -1,8 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeLocalPath } from "@/lib/routes";
-import { createClient } from "@/lib/supabase/server";
+import {
+  createClient,
+  missingSupabaseEnvRedirectMessage,
+} from "@/lib/supabase/server";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -22,14 +26,26 @@ export async function login(formData: FormData) {
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
   const next = safeLocalPath(value(formData, "next"));
+  const configError = missingSupabaseEnvRedirectMessage();
+
+  if (configError) {
+    redirect(encodedWithNext("/login", configError, next));
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(encodedWithNext("/login", "Nie udało się zalogować. Sprawdź email i hasło.", next));
+    redirect(
+      encodedWithNext(
+        "/login",
+        "Nie udało się zalogować. Sprawdź email i hasło.",
+        next,
+      ),
+    );
   }
 
+  revalidatePath("/", "layout");
   redirect(next);
 }
 
@@ -49,6 +65,11 @@ export async function signup(formData: FormData) {
 
   if (!terms) {
     redirect(encoded("/rejestracja", "Regulamin jest wymagany."));
+  }
+
+  const configError = missingSupabaseEnvRedirectMessage();
+  if (configError) {
+    redirect(encoded("/rejestracja", configError));
   }
 
   const name = `${firstName} ${lastName}`.trim();
@@ -75,18 +96,27 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    redirect(encoded("/rejestracja", "Nie udało się założyć konta. Spróbuj ponownie."));
+    redirect(
+      encoded("/rejestracja", "Nie udało się założyć konta. Spróbuj ponownie."),
+    );
   }
 
   if (!data.session) {
     redirect(encoded("/login", "Konto utworzone. Sprawdź email i zaloguj się."));
   }
 
+  revalidatePath("/", "layout");
   redirect("/onboarding/platnosc");
 }
 
 export async function logout() {
+  const configError = missingSupabaseEnvRedirectMessage();
+  if (configError) {
+    redirect(encoded("/login", configError));
+  }
+
   const supabase = await createClient();
   await supabase.auth.signOut();
+  revalidatePath("/", "layout");
   redirect("/login");
 }

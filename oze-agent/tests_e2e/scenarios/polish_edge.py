@@ -90,12 +90,15 @@ async def run_polish_slang_pv_pompeczka_parsing(
         ok, detail = assert_no_internal_leak(card_msg.text)
         result.add("no_internal_field_leak", ok, detail)
 
-        # Parser must preserve slang verbatim (don't auto-translate to
-        # "fotowoltaika" / "pompa ciepła") — that's the whole point.
+        # Parser must preserve slang (don't auto-translate to "fotowoltaika"
+        # / "pompa ciepła") — that's the whole point. Accept any inflection
+        # of "PV-ka" since user said "ma PV-kę" (akusativ); preserving the
+        # verb form is the right behavior, not changing case.
+        text_lo = card_msg.text.lower()
         result.add(
             "card_preserves_pv_ka_slang",
-            "PV-ka" in card_msg.text or "pv-ka" in card_msg.text.lower(),
-            detail=f"expected 'PV-ka' verbatim; got: {card_msg.text[:200]!r}",
+            "pv-k" in text_lo,
+            detail=f"expected 'PV-k...' (any inflection); got: {card_msg.text[:200]!r}",
         )
         result.add(
             "card_preserves_pompeczka_slang",

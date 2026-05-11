@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.config import Config
+from bot.utils.conversation_reply import reply_text
 from shared.proactive.morning_brief import run_morning_brief
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,9 @@ async def debug_brief_command(
 
     if not message or not user or not admin_id or user.id != admin_id:
         if message:
-            await message.reply_text("Brak dostępu.")
+            await reply_text(update, "Brak dostępu.")
         return
 
-    await message.reply_text("Uruchamiam morning brief debug...")
+    await reply_text(update, "Uruchamiam morning brief debug...")
     result = await run_morning_brief(context.bot)
-    await message.reply_text(f"Debug brief zakończony: {result}")
+    await reply_text(update, f"Debug brief zakończony: {result}")

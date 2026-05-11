@@ -61,12 +61,44 @@ class _EventsService:
         return _UpdateExecute(self)
 
 
+class _CalendarsService:
+    def __init__(self):
+        self.insert_kwargs = None
+
+    def insert(self, **kwargs):
+        self.insert_kwargs = kwargs
+        return _Execute({"id": "cal-1"})
+
+
+class _CalendarListService:
+    def __init__(self, patch_error: Exception | None = None):
+        self.patch_error = patch_error
+        self.patch_kwargs = None
+
+    def patch(self, **kwargs):
+        self.patch_kwargs = kwargs
+        return _Execute({"id": kwargs.get("calendarId"), **kwargs.get("body", {})}, self.patch_error)
+
+
 class _CalendarService:
-    def __init__(self, events: _EventsService):
+    def __init__(
+        self,
+        events: _EventsService,
+        calendars: _CalendarsService | None = None,
+        calendar_list: _CalendarListService | None = None,
+    ):
         self._events = events
+        self._calendars = calendars or _CalendarsService()
+        self._calendar_list = calendar_list or _CalendarListService()
 
     def events(self):
         return self._events
+
+    def calendars(self):
+        return self._calendars
+
+    def calendarList(self):
+        return self._calendar_list
 
 
 def _calendar_patches(events: _EventsService):
@@ -74,6 +106,62 @@ def _calendar_patches(events: _EventsService):
         patch("shared.google_calendar.get_user_by_id", return_value={"google_calendar_id": "cal-1"}),
         patch("shared.google_calendar._get_calendar_service_sync", return_value=_CalendarService(events)),
     )
+
+
+# ── calendar branding ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_calendar_applies_oze_brand_color_to_calendar_list():
+    from shared.google_calendar import create_calendar
+
+    events = _EventsService()
+    calendars = _CalendarsService()
+    calendar_list = _CalendarListService()
+    service = _CalendarService(events, calendars, calendar_list)
+
+    with patch("shared.google_calendar._get_calendar_service_sync", return_value=service):
+        calendar_id = await create_calendar("user-1", "OZE Spotkania")
+
+    assert calendar_id == "cal-1"
+    assert calendars.insert_kwargs["body"] == {
+        "summary": "OZE Spotkania",
+        "timeZone": "Europe/Warsaw",
+    }
+    assert calendar_list.patch_kwargs == {
+        "calendarId": "cal-1",
+        "colorRgbFormat": True,
+        "body": {
+            "backgroundColor": "#3DFF7A",
+            "foregroundColor": "#000000",
+            "selected": True,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_apply_calendar_branding_updates_existing_calendar_color():
+    from shared.google_calendar import apply_calendar_branding
+
+    calendar_list = _CalendarListService()
+    service = _CalendarService(_EventsService(), calendar_list=calendar_list)
+
+    with patch(
+        "shared.google_calendar.get_user_by_id",
+        return_value={"google_calendar_id": "cal-1"},
+    ), patch("shared.google_calendar._get_calendar_service_sync", return_value=service):
+        ok = await apply_calendar_branding("user-1")
+
+    assert ok is True
+    assert calendar_list.patch_kwargs == {
+        "calendarId": "cal-1",
+        "colorRgbFormat": True,
+        "body": {
+            "backgroundColor": "#3DFF7A",
+            "foregroundColor": "#000000",
+            "selected": True,
+        },
+    }
 
 
 # ── strict proactive fetch ────────────────────────────────────────────────────

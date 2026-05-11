@@ -17,7 +17,12 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from shared.database import delete_pending_flow, get_pending_flow
+from bot.utils.conversation_reply import reply_text
+from shared.database import (
+    delete_active_photo_session,
+    delete_pending_flow,
+    get_pending_flow,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +34,7 @@ async def handle_cancel_command(update: Update, context: ContextTypes.DEFAULT_TY
 
     telegram_id = update.effective_user.id
     flow = get_pending_flow(telegram_id)
+    delete_active_photo_session(telegram_id)
 
     if flow:
         flow_type = flow.get("flow_type", "unknown")
@@ -37,8 +43,8 @@ async def handle_cancel_command(update: Update, context: ContextTypes.DEFAULT_TY
             "handle_cancel_command: cancelled flow_type=%s for user %s",
             flow_type, telegram_id,
         )
-        await update.effective_message.reply_text("❌ Anulowane.")
+        await reply_text(update, "❌ Anulowane.")
     else:
-        await update.effective_message.reply_text(
+        await reply_text(update,
             "Nie ma żadnej aktywnej operacji do anulowania."
         )

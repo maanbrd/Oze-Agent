@@ -304,6 +304,116 @@ def delete_pending_flow(telegram_id: int) -> None:
         logger.error("delete_pending_flow(%s): %s", telegram_id, e)
 
 
+# ── Active photo upload sessions ─────────────────────────────────────────────
+
+
+def _is_missing_photo_upload_sessions_table(error: Exception) -> bool:
+    payload = getattr(error, "_raw_error", None)
+    if not isinstance(payload, dict):
+        payload = next((arg for arg in error.args if isinstance(arg, dict)), {})
+    code = getattr(error, "code", None)
+    if code is None and isinstance(payload, dict):
+        code = payload.get("code")
+    message = getattr(error, "message", None)
+    if not message and isinstance(payload, dict):
+        message = payload.get("message")
+    if not message:
+        message = str(error)
+    return (
+        "photo_upload_sessions" in message
+        and (
+            code == "PGRST205"
+            or "schema cache" in message
+            or "Could not find the table" in message
+            or "Could not find the table" in str(error)
+        )
+    )
+
+
+def save_active_photo_session(
+    telegram_id: int,
+    user_id: str,
+    client_row: int,
+    folder_id: str,
+    folder_link: str,
+    display_label: str,
+    expires_at: datetime,
+) -> None:
+    """Upsert the 15-minute same-client photo upload session."""
+    try:
+        get_supabase_client().table("photo_upload_sessions").upsert(
+            {
+                "telegram_id": telegram_id,
+                "user_id": user_id,
+                "client_row": client_row,
+                "folder_id": folder_id,
+                "folder_link": folder_link,
+                "display_label": display_label,
+                "expires_at": expires_at.isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).execute()
+    except Exception as e:
+        if _is_missing_photo_upload_sessions_table(e):
+            logger.warning(
+                "photo_upload_sessions table missing; skipping save_active_photo_session(%s)",
+                telegram_id,
+            )
+            return
+        logger.error("save_active_photo_session(%s): %s", telegram_id, e)
+
+
+def get_active_photo_session(telegram_id: int) -> Optional[dict]:
+    """Return a non-expired active photo session, or None."""
+    try:
+        result = (
+            get_supabase_client()
+            .table("photo_upload_sessions")
+            .select("*")
+            .eq("telegram_id", telegram_id)
+            .single()
+            .execute()
+        )
+        session = result.data
+        if not session:
+            return None
+
+        expires_raw = session.get("expires_at")
+        if expires_raw:
+            expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= datetime.now(timezone.utc):
+                delete_active_photo_session(telegram_id)
+                return None
+        return session
+    except Exception as e:
+        if _is_missing_photo_upload_sessions_table(e):
+            logger.debug(
+                "photo_upload_sessions table missing; get_active_photo_session(%s) skipped",
+                telegram_id,
+            )
+            return None
+        logger.debug("get_active_photo_session(%s): %s", telegram_id, e)
+        return None
+
+
+def delete_active_photo_session(telegram_id: int) -> None:
+    """Clear active photo upload session for this user."""
+    try:
+        get_supabase_client().table("photo_upload_sessions").delete().eq(
+            "telegram_id", telegram_id
+        ).execute()
+    except Exception as e:
+        if _is_missing_photo_upload_sessions_table(e):
+            logger.debug(
+                "photo_upload_sessions table missing; delete_active_photo_session(%s) skipped",
+                telegram_id,
+            )
+            return
+        logger.error("delete_active_photo_session(%s): %s", telegram_id, e)
+
+
 # ── Pending follow-ups ────────────────────────────────────────────────────────
 
 

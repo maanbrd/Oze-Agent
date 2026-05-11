@@ -26,6 +26,14 @@ call `run_debug_brief` as a tool — same logic, different driver.
 If you are adding a new check, put it in a scenario module, not in
 `mcp_server.py`.
 
+For Codex, register the local server with the wrapper that keeps secrets out
+of config:
+
+```toml
+[mcp_servers.oze-e2e]
+command = "/Users/mansoniasty/workflows/Agent-OZE/oze-agent/tests_e2e/run_mcp_server.sh"
+```
+
 ---
 
 ## Setup (one-time, per test account)
@@ -63,10 +71,12 @@ Required variables (also documented in `.env.example`):
 |---|---|
 | `TELEGRAM_E2E_API_ID` | Telethon app id (from my.telegram.org) |
 | `TELEGRAM_E2E_API_HASH` | Telethon app hash |
-| `TELEGRAM_E2E_BOT_USERNAME` | Bot to test, e.g. `@OzeAgentBot` |
+| `TELEGRAM_E2E_BOT_USERNAME` | Bot to test, usually `@OZEAgentTestBot` |
+| `TELEGRAM_E2E_RAILWAY_SERVICE` | Railway service for env, usually `bot-test` |
 | `TELEGRAM_E2E_ADMIN_ID` | Numeric Telegram id of the test user |
 | `TELEGRAM_E2E_SESSION` | Path prefix for the Telethon session file |
 | `TELEGRAM_E2E_REPORT` | (Optional) override for the report file path |
+| `TELEGRAM_E2E_SUPABASE_USER_ID` | (Optional) Supabase UUID for local Sheets/Calendar verification when Supabase env cannot resolve `TELEGRAM_E2E_ADMIN_ID` |
 
 The harness reads plain env (no `.env` auto-load) — use `set -a; source
 tests_e2e/.env; set +a` or your favourite dotenv runner when invoking.
@@ -77,6 +87,39 @@ tests_e2e/.env; set +a` or your favourite dotenv runner when invoking.
 set -a; source tests_e2e/.env; set +a
 python -m tests_e2e.runner debug_brief
 ```
+
+## Smoke E2E 500 campaign
+
+The campaign planner lives in `tests_e2e/campaign.py`. It keeps the 500-run
+matrix explicit and assumes the configured bot, Google resources and Supabase
+project are test resources.
+
+```bash
+python -m tests_e2e.campaign --plan
+python -m tests_e2e.campaign --pilot --limit 50 --report test_results_smoke_pilot.md
+```
+
+Full Telethon execution is gated:
+
+```bash
+python -m tests_e2e.campaign --telethon-full --confirm-test-environment
+```
+
+Important boundaries:
+
+- The written 500-run plan's bucket counts add up to 540. The campaign runner
+  preserves every surface and normalizes the repeat-heavy `core_mutations`
+  bucket from 240 to 200 so the campaign total is exactly 500.
+- The Python CLI runs only Telethon-owned units. Drive photo, Gmail offer-send
+  and local dashboard browser checks are listed in the manifest and must be
+  executed by Codex connectors/browser tooling before the whole campaign can
+  be marked complete.
+- Dashboard/browser checks target the `feat/web-bootstrap` deployment, supplied
+  through `TELEGRAM_E2E_DASHBOARD_URL`; they do not use a local web server.
+- `TELEGRAM_E2E_OFFER_RECIPIENT` must point at a controlled inbox before real
+  offer-send Gmail checks are run.
+- Gmail Sent verification is valid only when the connected Gmail connector
+  account matches the Google account used by the bot-test sender.
 
 Telethon will prompt for the test account's phone number and the SMS OTP
 code. After login a `.session` file is written at

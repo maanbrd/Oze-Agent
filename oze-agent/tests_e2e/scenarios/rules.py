@@ -576,10 +576,13 @@ async def run_r8_frustration_calm_response(
             detail=f"got {len(reply_lines)} lines: {msg.text[:200]!r}",
         )
 
-        # Calm-question marker — accept any of the spec-suggested forms.
+        # Calm-question marker — accept any short concrete question that
+        # asks for clarification without apologizing. Bot wording varies:
+        # "Co konkretnie nie działa?", "Co nie działa?", "Co chcesz?".
         calm_markers = (
-            "co chcesz", "co chcesz zrobić", "co dalej", "powiedz",
-            "podaj", "zacznijmy",
+            "co chcesz", "co chcesz zrobić", "co dalej", "co konkretnie",
+            "co nie działa", "co nie",
+            "powiedz", "podaj", "zacznijmy",
         )
         has_calm = any(m in msg.text.lower() for m in calm_markers)
         result.add(

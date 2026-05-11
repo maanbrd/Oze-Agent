@@ -5,6 +5,7 @@ Exposes the same scenarios as the CLI (tests_e2e/runner.py) as MCP tools.
 Tools (Phase 7A + 7B-final):
     e2e_status            — config health (no Telegram contact)
     list_scenarios        — registered scenarios + categories
+    e2e_campaign_plan     — 500-run smoke campaign manifest + gates
     run_debug_brief       — convenience for the most-used scenario
     run_scenario(name)    — run one scenario by name
     run_category(name)    — run every scenario in a category
@@ -144,6 +145,18 @@ def _build_server():
         for s in items:
             lines.append(f"  [{s.category:14}] {s.name:40}  {s.description}")
         return "\n".join(lines)
+
+    @mcp.tool()
+    async def e2e_campaign_plan() -> str:
+        """Render the 500-run smoke campaign manifest and execution gates.
+
+        This is intentionally read-only. Long campaign execution stays in the
+        CLI because a full sweep would exceed MCP per-call timeouts and the
+        Drive/Gmail/dashboard checks require Codex connector/browser steps.
+        """
+        from tests_e2e.campaign import build_campaign_units, render_plan
+
+        return render_plan(build_campaign_units())
 
     @mcp.tool()
     async def run_debug_brief() -> str:

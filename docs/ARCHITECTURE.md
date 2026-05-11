@@ -1,30 +1,12 @@
 # OZE-Agent — Architecture
 
-_Last updated: 29.04.2026_
+_Last updated: 04.05.2026_
 
 ---
 
 ## Current State
 
-Two parallel deployment tracks share Supabase (auth + RLS) and Google APIs:
-
-| Track | Code | Hosting | Role |
-|---|---|---|---|
-| **Bot** (Telegram + FastAPI) | `oze-agent/` | Railway | The only mutation surface for CRM data (R1: confirm-before-write). Voice + text + future photo. |
-| **Web app** (Next.js 16) | `web/` | Vercel — `oze-agent.vercel.app` | Read-only dashboard, billing, onboarding wizard, settings. **No web chat in MVP.** |
-
-The current Python behavior layer is **legacy/reference**. Bot rewrite (selective) starts from the `.md` specs. Web app is greenfield.
-
-### Web app architecture (29.04.2026)
-
-- **Auth**: Supabase Auth via `@supabase/ssr` server actions (`web/lib/supabase/server.ts`). Publishable / anon key only on the client; service key never reaches Next.js (G1).
-- **Auth boundary**: Next.js owns sessions. Dashboard / business data goes through FastAPI (`oze-agent/api/`) via `Authorization: Bearer <Supabase JWT>`; FastAPI validates JWT against Supabase JWKS. RLS protects browser access; FastAPI uses service key + per-endpoint authorization on JWT subject.
-- **Routes implemented on `feat/web-phase-0c`**: `/` landing, `/rejestracja`, `/login`, `/healthz`, legal pages, `/onboarding/platnosc`, `/onboarding/google`, `/onboarding/google/sukces`, `/onboarding/zasoby`, `/onboarding/telegram`, and logged-in app routes `/dashboard`, `/klienci`, `/kalendarz`, `/platnosci`, `/ustawienia`, `/import`, `/instrukcja`, `/faq`.
-- **Email confirmation**: currently OFF in Supabase (Auth → Providers → Email) for MVP. Built-in SMTP free-tier rate limit (~2/h) blocks signup with confirmation on. Custom SMTP (Resend) enabled in Phase 7 per `~/.claude/plans/przeczytaj-oba-pliki-md-twinkling-oasis.md`.
-- **Billing boundary (Phase 0C)**: Next.js creates Stripe Checkout Sessions and verifies Stripe webhooks, but never stores `SUPABASE_SERVICE_KEY`. Vercel forwards verified Stripe events to FastAPI `/internal/billing/stripe-event` with HMAC (`BILLING_INTERNAL_SECRET`). FastAPI owns durable billing writes (`users`, `payment_history`, `webhook_log`, `billing_outbox`) and only activates access after paid Stripe events.
-- **Onboarding boundary (Phase 0F/1)**: Next.js calls FastAPI `/api/onboarding/*` server-side with the Supabase access token. FastAPI resolves `public.users.auth_user_id`, creates/stores system setup metadata, and owns Google operations. Signed OAuth state prevents trusting a public path `user_id`.
-- **CRM dashboard boundary (Phase 1)**: Next.js reads CRM data through `web/lib/crm/adapters.ts`, which targets FastAPI `/api/dashboard/crm`. FastAPI reads Google Sheets and Calendar via existing wrappers and returns DTOs plus `source/sourceMessage`. The frontend exposes `live`, `demo`, and `unavailable` source states. Completed users must not silently receive demo CRM as if it were live.
-- **CRM mutation boundary**: the web app has no CRM mutation forms. It may show direct Google Sheets/Calendar/Drive links. CRM edits happen in Google directly or through Telegram confirmation flows.
+The current Python behavior layer is **legacy/reference**. We do not trust it as the behavior contract. We can recover stable fragments from it, but the rewrite starts from the `.md` specs.
 
 ---
 
@@ -62,7 +44,26 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 | Component | Files | Status |
 |-----------|-------|--------|
 | Voice transcription | `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py` | Live since 25.04.2026 — Whisper STT + Polish name post-pass (Claude haiku), 2-button confirm card (Zapisz/Anuluj), transcription flows through normal text path via `handle_text(text_override=...)` |
+| Photo upload | `bot/handlers/photo.py`, `shared/google_drive.py`, `shared/google_sheets.py`, `shared/database.py` | Active post-MVP slice — R1 Drive confirmation, Sheets N/O metadata, 15-minute active client photo session |
 | Global cancel | `bot/handlers/cancel.py` | Live since 25.04.2026 — universal escape hatch for any pending flow |
+| R6 conversation memory | `shared/conversation_format.py`, `shared/active_client.py`, `bot/utils/conversation_reply.py` | Live since 27.04.2026 — 10 messages / 30 min rolling history, assistant replies persisted from handler wrappers, active client derive'owany just-in-time |
+
+## Active product slice — Offer Generator
+
+The offer generator is an integrated web + backend + Telegram/Gmail slice,
+baseline `09e0957 feat: add offer generator`.
+
+| Layer | Files / Data | Responsibility |
+|-------|--------------|----------------|
+| Web UI | `web/app/oferty/`, `web/components/offers/` | Create templates, manage drafts/ready offers, seller profile, logo, email body template, preview and test PDF |
+| API | `oze-agent/api/routes/offers.py` | Thin FastAPI endpoints for templates, profile, logo, PDF and email variables |
+| Shared logic | `oze-agent/shared/offers/` | Validation, pricing, PDF rendering, email rendering, Gmail MIME sender, send pipeline, idempotency |
+| Bot | Telegram handlers / callbacks touching offers | List offers, select offer, resolve one client, confirm send, call send pipeline |
+| Supabase | `offer_templates`, `offer_seller_profiles`, `offer_send_attempts`, bucket `offer-logos` | System data and technical logs only |
+| Google | Sheets + Gmail | Client source data and real email delivery |
+
+Offer templates are system data. Customer identity, emails and funnel status stay
+in Google Sheets. PDFs are generated for preview/send but are not archived in MVP.
 
 ---
 
@@ -70,10 +71,9 @@ These modules are stable infrastructure. Audit before reuse, but don't rewrite w
 
 | Component | Current Location | Problem |
 |-----------|-----------------|---------|
-| Photo flow | `bot/handlers/photo.py` | Drive upload, not fully tested |
 | Multi-meeting | Handlers / parser fragments (not centralized) | Batch of several meetings in one message |
 
-Current photo code and any batch/multi-meeting fragments are legacy reference only — not the contract. These flows are POST-MVP roadmap candidates.
+Batch/multi-meeting fragments are legacy reference only — not the contract.
 
 ---
 
@@ -83,6 +83,7 @@ Current photo code and any batch/multi-meeting fragments are legacy reference on
 shared/
   google/              # Stable wrappers (sheets, calendar, drive, auth)
   clients/             # Client CRUD: search, add, update, duplicate detection
+  offers/              # Offer templates, pricing, PDF, email rendering, Gmail send
   intent/              # Intent router: classify, extract entities
   pending/             # Pending state machine: create, route, cancel, confirm
   cards/               # Card builders: mutation cards, read-only cards, disambiguation
@@ -95,7 +96,10 @@ bot/
   utils/               # Telegram helpers: buttons, typing indicators
 ```
 
-`shared/photo/` is a POST-MVP module candidate, not part of the core first-version behavior layer. Voice work currently lives in `shared/voice_postproc.py` + `shared/whisper_stt.py` + `bot/handlers/voice.py` — could be moved into `shared/voice/` if/when refactor is needed.
+Photo upload currently lives in `bot/handlers/photo.py` with stable wrapper support in `shared/google_drive.py`, `shared/google_sheets.py`, and `shared/database.py`. Voice work currently lives in `shared/voice_postproc.py` + `shared/whisper_stt.py` + `bot/handlers/voice.py` — could be moved into `shared/voice/` if/when refactor is needed.
+
+Offer-generator business rules should stay in `shared/offers/`; web/API/bot
+layers are adapters around that shared logic.
 
 ---
 
@@ -126,32 +130,14 @@ bot/
 └─────────────────────────────────┘
 ```
 
-### Web Boundary Diagram
+Offer generator has a second entry point:
 
 ```
-┌─────────────────────────────────┐
-│        Browser / Next UI         │  web/app/, web/components/
-│  auth, onboarding, read-only CRM │
-└──────────────┬──────────────────┘
-               │ Supabase session cookie / access token
-               ▼
-┌─────────────────────────────────┐
-│        Next.js Server            │  web/lib/api/*, server actions
-│  Stripe Checkout + webhook verify│
-└──────────────┬──────────────────┘
-               │ Bearer Supabase JWT / HMAC internal billing
-               ▼
-┌─────────────────────────────────┐
-│          FastAPI                 │  api/routes/*
-│  service-role writes + Google ops│
-└──────────────┬──────────────────┘
-               │
-               ▼
-┌─────────────────────────────────┐
-│ Supabase system data + Google CRM│
-│ users/billing/onboarding + Sheets│
-│ Calendar/Drive                  │
-└─────────────────────────────────┘
+Web /oferty ──► FastAPI offers route ──► shared/offers ──► Supabase
+                                      │
+Telegram send callback ───────────────┘
+                                      ├──► Gmail API
+                                      └──► Google Sheets follow-up writes
 ```
 
 ---
@@ -168,5 +154,7 @@ bot/
 8. **Mutations are atomic pipelines** — Sheets → Calendar → response, with error handling
 9. **Unified 3-button mutation cards** — all mutation intents (`add_client`, `add_note`, `change_status`, `add_meeting`) use the same pattern: `[✅ Zapisać] [➕ Dopisać] [❌ Anulować]`. `❌ Anulować` is one-click.
 10. **Duplicate resolution is explicit** — a first name + last name + city match routes through `[Nowy]` / `[Aktualizuj]` before any mutation card. No default merge.
-11. **Web app is read-only for CRM** — account/billing/onboarding mutations are allowed; CRM rows/events/notes/statuses are not mutated from web.
-12. **Operational UI states are explicit** — web CRM must label live/demo/unavailable data sources and show direct Google links where edits happen.
+11. **Offer-send confirmation is explicit** — offer delivery uses `[✅ Wysłać] [❌ Anulować]`, no `➕ Dopisać`, Gmail first, Sheets writes only after Gmail success.
+12. **Web offer setup is not CRM mutation** — `/oferty` writes system data
+    (templates/profile/logo/email template) to Supabase; it does not create or
+    edit client rows in Sheets.

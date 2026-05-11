@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireCurrentAccount } from "@/lib/api/account";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
 
+export const dynamic = "force-dynamic";
+
 export default async function GoogleSuccessPage() {
   await requireCurrentAccount("/onboarding/google/sukces");
   const status = await getOnboardingStatus();

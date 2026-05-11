@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentAccount } from "@/lib/api/account";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Płatność anulowana | Agent-OZE",
 };

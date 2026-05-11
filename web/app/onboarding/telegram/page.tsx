@@ -1,11 +1,24 @@
 import Link from "next/link";
-import { generateTelegramCodeAction } from "@/app/onboarding/actions";
-import { TelegramStatusPoller } from "@/components/telegram-status-poller";
-import { requireCurrentAccount } from "@/lib/api/account";
-import {
-  getOnboardingStatus,
-  getTelegramStatus,
-} from "@/lib/api/onboarding";
+import { LogoutLink } from "@/components/auth/logout-link";
+import { TelegramPairingCard } from "@/components/onboarding/telegram-pairing-card";
+import { requireOnboardingStep } from "@/lib/auth/guards";
+import { getTelegramStatus } from "@/lib/api/onboarding";
+
+export const dynamic = "force-dynamic";
+
+const DEFAULT_TELEGRAM_BOT_HANDLE = "@AgentOZE_Bot";
+
+function telegramBotHandle() {
+  const raw =
+    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ??
+    process.env.TELEGRAM_BOT_USERNAME ??
+    DEFAULT_TELEGRAM_BOT_HANDLE;
+  const handle = raw.trim();
+  if (!handle) {
+    return DEFAULT_TELEGRAM_BOT_HANDLE;
+  }
+  return handle.startsWith("@") ? handle : `@${handle}`;
+}
 
 export default async function TelegramOnboardingPage({
   searchParams,
@@ -13,16 +26,17 @@ export default async function TelegramOnboardingPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
-  await requireCurrentAccount("/onboarding/telegram");
-  const [status, pairing] = await Promise.all([
-    getOnboardingStatus(),
-    getTelegramStatus(),
-  ]);
+  const { onboardingStatus: status } =
+    await requireOnboardingStep("/onboarding/telegram");
+  const pairing = await getTelegramStatus();
   const paired = pairing?.paired || status?.steps.telegram;
 
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-zinc-100">
-      <section className="mx-auto max-w-3xl">
+      <section className="mx-auto max-w-5xl">
+        <div className="mb-8 flex justify-end">
+          <LogoutLink />
+        </div>
         <p className="text-xs font-semibold uppercase text-[#3DFF7A]">Krok 5</p>
         <h1 className="mt-3 text-4xl font-semibold text-white">
           Połącz Telegrama.
@@ -57,28 +71,11 @@ export default async function TelegramOnboardingPage({
             </Link>
           </div>
         ) : (
-          <div className="mt-6 rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-sm text-zinc-300">Kod parowania</p>
-            <p className="mt-3 text-5xl font-semibold tracking-[0.2em] text-white">
-              {pairing?.code ?? "------"}
-            </p>
-            <p className="mt-5 text-sm text-zinc-300">
-              Wyślij do bota w Telegramie:
-            </p>
-            <code className="mt-2 block rounded-[8px] bg-black/40 px-4 py-3 text-lg text-white">
-              /start {pairing?.code ?? "KOD"}
-            </code>
-            <p className="mt-3 text-sm text-zinc-400">
-              Kod jest krótkotrwały. Po wpisaniu w Telegramie ta strona pokaże
-              status automatycznie.
-            </p>
-            <TelegramStatusPoller />
-            <form action={generateTelegramCodeAction} className="mt-5">
-              <button className="rounded-full border border-[#3DFF7A]/40 px-5 py-3 text-sm font-semibold text-[#3DFF7A]">
-                Wygeneruj nowy kod
-              </button>
-            </form>
-          </div>
+          <TelegramPairingCard
+            botHandle={telegramBotHandle()}
+            code={pairing?.code ?? null}
+            expiresAt={pairing?.expiresAt ?? null}
+          />
         )}
       </section>
     </main>

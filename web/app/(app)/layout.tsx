@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
+import { CrmShell } from "@/components/crm-shell";
 import { getCurrentAccount } from "@/lib/api/account";
+import { getDecisionsCount } from "@/lib/api/decisions";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
+import { safeLocalPath } from "@/lib/routes";
 
 export default async function LoggedInLayout({
   children,
@@ -14,10 +16,19 @@ export default async function LoggedInLayout({
   }
 
   const onboardingStatus = await getOnboardingStatus();
+  const completed = onboardingStatus
+    ? onboardingStatus.completed
+    : Boolean(account.profile?.onboarding_completed);
+
+  if (!completed) {
+    redirect(safeLocalPath(onboardingStatus?.nextStep, "/onboarding/platnosc"));
+  }
+
+  const decisionsCount = await getDecisionsCount();
 
   return (
-    <AppShell account={account} onboardingStatus={onboardingStatus}>
+    <CrmShell account={account} decisionsCount={decisionsCount}>
       {children}
-    </AppShell>
+    </CrmShell>
   );
 }

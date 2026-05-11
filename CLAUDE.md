@@ -1,6 +1,6 @@
 # Current Project: OZE-Agent
 
-AI-powered sales assistant for B2C renewable energy salespeople in Poland. Telegram bot + FastAPI backend + Next.js web app.
+AI-powered sales assistant for B2C renewable energy salespeople in Poland. Telegram bot + FastAPI backend + Next.js webapp.
 
 Current project owner: Maan  
 User-facing language: Polish  
@@ -14,17 +14,10 @@ The previous bug-by-bug patching track is closed.
 
 Current strategy:
 
-**Two parallel tracks: selective behavior-layer rewrite + functional web app.**
+**Selective rewrite of the behavior layer.**
 
 The strongest part of this project is the documentation in `docs/`.
 The current Python behavior layer is useful as reference, but not trusted as the final behavior contract.
-
-The active web branch is `feat/web-phase-0c` / PR #5. It contains the Phase
-0C/0D/0E/0F/Phase 1 functional spine: Stripe sandbox billing boundary, logged-in
-app shell, read-only CRM pages, Google OAuth/resource onboarding, Telegram
-pairing, onboarding gate, CRM source states, and account-only settings. This is
-code-complete on the branch, but not live until the Stripe/Google/Supabase
-rollout checklist and browser smoke pass.
 
 ### Keep where stable
 
@@ -47,6 +40,10 @@ rollout checklist and browser smoke pass.
 
 Photo flow and multi-meeting are POST-MVP and not on the current rewrite list. Voice transcription (Whisper STT + Polish name post-pass + 2-button confirm card) is live as of 25.04.2026 — `bot/handlers/voice.py` + `shared/voice_postproc.py`.
 
+Offer generator is an approved integrated product slice as of 04.05.2026:
+webapp `/oferty` creates templates/test PDFs; Telegram + Gmail performs real
+customer send after `✅ Wysłać`.
+
 Do not delete large parts of the codebase without explicit approval from Maan.
 
 ---
@@ -68,7 +65,6 @@ Then read task-specific docs:
 
 - Implementation roadmap / phasing / priorities:
   - `docs/IMPLEMENTATION_PLAN.md`
-  - `docs/STRIPE_PHASE_0C_ROLLOUT.md` for billing/live rollout gates
 
 - Multi-agent / subagent workflow rules:
   - `docs/AGENT_WORKFLOW.md`
@@ -141,6 +137,7 @@ System data lives in Supabase:
 - pending state
 - conversation history
 - technical metadata
+- offer templates, seller profiles, offer-send attempts and offer logo storage
 
 Never store CRM source-of-truth data in Supabase.
 
@@ -213,31 +210,61 @@ If tests cannot be run locally, explain why and provide exact manual test steps.
 
 Do not claim behavior works unless it was tested or the limitation is clearly stated.
 
+### Smoke tests / fixtures — realistic data only
+
+Smoke tests, demo runs, and fixture data must use realistic, production-shaped
+values: real-looking Polish names (`Marek Kowalski`, `Anna Nowak`), real cities
+(`Kraków`, `Wrocław`), plausible phone numbers (`+48 600 123 456`), sensible
+kWh / pricing / wattage figures.
+
+Never use placeholders like `test test`, `Klient Testowy`, `foo bar`,
+`asdf asdf`, `xxx`, `123 456 789`, `string string`.
+
+Why: smoke output is reviewed visually, screenshotted, and sometimes shared
+with Maan. Junk data makes regressions harder to spot, looks unprofessional,
+and hides UX issues (truncation, diacritics rendering, layout overflow on
+real names).
+
 ---
 
 ## Repository Map
 
-Monorepo with two parallel tracks:
+Monorepo with siblings in root:
 
-**Bot track** (`oze-agent/`) — Telegram bot + FastAPI on Railway:
-- `oze-agent/bot/` — Telegram bot handlers and user interaction
-- `oze-agent/api/` — FastAPI backend
-- `oze-agent/shared/` — shared business logic, wrappers, services
-- `oze-agent/tests/` — automated tests
-
-**Web track** (`web/`) — Next.js 16 web app on Vercel (`oze-agent.vercel.app`):
-- `web/app/` — App Router routes for public pages, auth, onboarding, Stripe webhooks, and logged-in app pages
-- `web/components/` — landing, app shell, read-only CRM notices, onboarding gate
-- `web/lib/api/` — server-side FastAPI clients using Supabase access tokens
-- `web/lib/crm/` — read-only CRM DTOs/adapters with live/demo/unavailable source states
-- `web/lib/supabase/` — `@supabase/ssr` Auth client (publishable key only — server actions + middleware)
-- `web/CLAUDE.md` — web-specific rules: Polish UI, dark app shell, no chat, no CRM mutation forms, FastAPI data boundary
-
-Shared:
+- `oze-agent/` — Python: Telegram bot + FastAPI backend (Railway deploy)
+  - `bot/` — Telegram handlers
+  - `api/` — FastAPI: Google OAuth, internal endpoints for web/billing
+  - `shared/` — shared business logic, wrappers (Sheets/Calendar/Drive/Supabase/encryption/offers)
+  - `tests/` — automated tests
+- `web/` — Next.js 15 web app (Vercel deploy) — added in Phase 0 of plan
+- `services/billing/` — Python billing service (Railway deploy) — added in Phase 0 of plan
+- `supabase/` — managed migrations (`supabase init` in Phase 1)
 - `docs/` — active project documentation
 - `docs/archive/` — historical documents only
 
-Bot business logic lives in `oze-agent/shared/`. Bot and API layers should call shared logic instead of duplicating it. Web app **does not write CRM data** — CRM edits happen in Google Sheets/Calendar directly or through Telegram confirmation flows.
+Business logic should live in `oze-agent/shared/` where possible.
+Bot and API layers should call shared logic instead of duplicating it.
+
+Web app uses its own thin TypeScript wrappers in `web/lib/google/` for read-only access. Web does NOT call Python wrappers directly — only via FastAPI internal endpoints when needed (token decrypt, resource creation).
+
+## Local Development — secrets
+
+Lokalny `oze-agent/.env` **został usunięty 26.04.2026** (Phase 0.8 cleanup). Sekrety produkcyjne żyją wyłącznie w Railway env vars.
+
+Dla local dev używaj:
+
+```bash
+cd oze-agent
+railway run --service bot --environment production python -m bot      # local bot z prod env
+railway run --service bot --environment production pytest             # testy z prod env
+railway run --service bot --environment production python script.py   # dowolny skrypt
+```
+
+`railway run` zaciąga env z Railway live do procesu lokalnego. Klucze nigdy nie lądują na dysku.
+
+Jeśli potrzebujesz lokalnego override (np. inny Telegram bot dla testów) — utwórz `oze-agent/.env.local` (gitignored, nie zastępuje produkcyjnych): `railway run` honoruje tylko Railway env. Dla mieszanego flow użyj `dotenv` ręcznie. **Nie twórz `.env`** ze skopiowanymi prod kluczami.
+
+Po Phase 0.4 plan migruje resztę środowisk (staging Vercel + Supabase + Railway) — wtedy `--environment staging` będzie alternatywą dla testów które nie powinny dotykać prod data.
 
 ---
 
@@ -287,3 +314,4 @@ At the current stage, the expected direction is:
 1. active documentation synchronized with 13-14.04 decisions (done)
 2. `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`, `AGENT_WORKFLOW.md`, `TEST_PLAN_CURRENT.md` in place (done)
 3. selective rewrite of the behavior layer per `docs/IMPLEMENTATION_PLAN.md` — next
+4. controlled offer-generator smoke per `docs/TEST_PLAN_CURRENT.md` before real customer sends

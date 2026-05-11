@@ -51,7 +51,7 @@ async def test_find_event_by_summary_returns_first_match():
         _make_event(summary="E2E-Beta-Tester-X", eid="b"),
     ]
     with patch(
-        "tests_e2e.calendar_verify.get_events_for_range",
+        "tests_e2e.calendar_verify.get_events_for_range_for_e2e",
         new=AsyncMock(return_value=events),
     ):
         e = await find_event_by_summary_in_window(
@@ -66,7 +66,7 @@ async def test_find_event_by_summary_returns_first_match():
 @pytest.mark.asyncio
 async def test_find_event_by_summary_no_match_returns_none():
     with patch(
-        "tests_e2e.calendar_verify.get_events_for_range",
+        "tests_e2e.calendar_verify.get_events_for_range_for_e2e",
         new=AsyncMock(return_value=[]),
     ):
         e = await find_event_by_summary_in_window(
@@ -175,17 +175,22 @@ def test_assert_event_duration_outside_tolerance():
 async def test_find_synthetic_events_excludes_non_e2e():
     events = [
         _make_event(summary="E2E-Beta-Tester-143052-B06"),
+        {
+            **_make_event(summary="Spotkanie — Anna Nowak", eid="email"),
+            "description": "Email: e2e.test.143052.b06@e2e-noinbox.local",
+        },
         _make_event(summary="Real meeting", eid="real"),
         _make_event(summary="E2E-Beta-Fixture-Conflict-Slot", eid="fixture"),
     ]
     with patch(
-        "tests_e2e.calendar_verify.get_events_for_range",
+        "tests_e2e.calendar_verify.get_events_for_range_for_e2e",
         new=AsyncMock(return_value=events),
     ):
         out = await find_synthetic_events("uid")
     titles = [e["title"] for e in out]
     assert "Real meeting" not in titles
     assert any("143052" in t for t in titles)
+    assert "Spotkanie — Anna Nowak" in titles
     # Fixture excluded by default
     assert not any("Fixture" in t for t in titles)
 
@@ -195,14 +200,18 @@ async def test_find_synthetic_events_run_id_filter():
     events = [
         _make_event(summary="E2E-Beta-Tester-143052-B06", eid="a"),
         _make_event(summary="E2E-Beta-Tester-150000-B07", eid="b"),
+        {
+            **_make_event(summary="Telefon — Anna Nowak", eid="c"),
+            "description": "Email: e2e.test.143052.n01@e2e-noinbox.local",
+        },
     ]
     with patch(
-        "tests_e2e.calendar_verify.get_events_for_range",
+        "tests_e2e.calendar_verify.get_events_for_range_for_e2e",
         new=AsyncMock(return_value=events),
     ):
         out = await find_synthetic_events("uid", run_id="143052")
-    assert len(out) == 1
-    assert out[0]["id"] == "a"
+    assert len(out) == 2
+    assert {event["id"] for event in out} == {"a", "c"}
 
 
 # ── delete_synthetic_events ─────────────────────────────────────────────────

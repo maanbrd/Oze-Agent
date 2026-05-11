@@ -1,0 +1,8 @@
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-01-hook.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-02-voice.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-03-save-card.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-04-google.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-05-offer-voice.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-06-offer-card.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-07-sent.mp4'
+file '/Users/mansoniasty/workflows/Agent-OZE/deliverables/facebook-ads/oze-agent-voice-ad/build/segment-08-cta.mp4'

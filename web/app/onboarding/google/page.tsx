@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { startGoogleOAuthAction } from "@/app/onboarding/actions";
-import { getOnboardingStatus } from "@/lib/api/onboarding";
-import { requireCurrentAccount } from "@/lib/api/account";
+import { LogoutLink } from "@/components/auth/logout-link";
+import { requireOnboardingStep } from "@/lib/auth/guards";
+
+export const dynamic = "force-dynamic";
 
 export default async function GoogleOnboardingPage({
   searchParams,
@@ -9,13 +11,16 @@ export default async function GoogleOnboardingPage({
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const params = await searchParams;
-  await requireCurrentAccount("/onboarding/google");
-  const status = await getOnboardingStatus();
+  const { onboardingStatus: status } =
+    await requireOnboardingStep("/onboarding/google");
   const connected = status?.steps.google;
 
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-zinc-100">
       <section className="mx-auto max-w-3xl">
+        <div className="mb-8 flex justify-end">
+          <LogoutLink />
+        </div>
         <p className="text-xs font-semibold uppercase text-[#3DFF7A]">Krok 3</p>
         <h1 className="mt-3 text-4xl font-semibold text-white">
           Połącz Google.
