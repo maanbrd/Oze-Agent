@@ -210,6 +210,21 @@ If tests cannot be run locally, explain why and provide exact manual test steps.
 
 Do not claim behavior works unless it was tested or the limitation is clearly stated.
 
+### Smoke tests / fixtures — realistic data only
+
+Smoke tests, demo runs, and fixture data must use realistic, production-shaped
+values: real-looking Polish names (`Marek Kowalski`, `Anna Nowak`), real cities
+(`Kraków`, `Wrocław`), plausible phone numbers (`+48 600 123 456`), sensible
+kWh / pricing / wattage figures.
+
+Never use placeholders like `test test`, `Klient Testowy`, `foo bar`,
+`asdf asdf`, `xxx`, `123 456 789`, `string string`.
+
+Why: smoke output is reviewed visually, screenshotted, and sometimes shared
+with Maan. Junk data makes regressions harder to spot, looks unprofessional,
+and hides UX issues (truncation, diacritics rendering, layout overflow on
+real names).
+
 ---
 
 ## Repository Map

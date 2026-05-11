@@ -54,7 +54,7 @@ async def test_find_client_row_exact_match_with_city():
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 5},
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 6},
     ]
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=rows)):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         row = await find_client_row("uid", "Jan Kowalski", "Warszawa")
     assert row is not None
     assert row["_row"] == 5
@@ -63,7 +63,7 @@ async def test_find_client_row_exact_match_with_city():
 @pytest.mark.asyncio
 async def test_find_client_row_case_insensitive():
     rows = [{"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 5}]
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=rows)):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         row = await find_client_row("uid", "jan kowalski", "WARSZAWA")
     assert row is not None
 
@@ -73,7 +73,7 @@ async def test_find_client_row_no_city_picks_first_name_match():
     rows = [
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 5},
     ]
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=rows)):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         row = await find_client_row("uid", "Jan Kowalski")
     assert row is not None
     assert row["Miasto"] == "Kraków"
@@ -81,7 +81,7 @@ async def test_find_client_row_no_city_picks_first_name_match():
 
 @pytest.mark.asyncio
 async def test_find_client_row_returns_none_when_no_match():
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=[])):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=[])):
         row = await find_client_row("uid", "Nieistniejący")
     assert row is None
 
@@ -139,14 +139,16 @@ def test_assert_row_field_equals_substring_does_not_match():
 async def test_find_synthetic_rows_excludes_non_e2e():
     rows = [
         {"Imię i nazwisko": "E2E-Beta-Tester-143052-B01", "Miasto": "X", "_row": 1},
+        {"Imię i nazwisko": "Anna Nowak", "Email": "e2e.test.143052.b01@e2e-noinbox.local", "_row": 4},
         {"Imię i nazwisko": "Real Client Name", "Miasto": "Y", "_row": 2},
         {"Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski", "Miasto": "Z", "_row": 3},
     ]
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=rows)):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         out = await find_synthetic_rows("uid")
     names = [r["Imię i nazwisko"] for r in out]
     assert "Real Client Name" not in names
     assert "E2E-Beta-Tester-143052-B01" in names
+    assert "Anna Nowak" in names
     # Fixture excluded by default
     assert "E2E-Beta-Fixture-Jan-Kowalski" not in names
 
@@ -156,7 +158,7 @@ async def test_find_synthetic_rows_include_fixtures_true():
     rows = [
         {"Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski", "_row": 3},
     ]
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=rows)):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         out = await find_synthetic_rows("uid", include_fixtures=True)
     assert len(out) == 1
 
@@ -166,11 +168,12 @@ async def test_find_synthetic_rows_run_id_filter():
     rows = [
         {"Imię i nazwisko": "E2E-Beta-Tester-143052-B01", "_row": 1},
         {"Imię i nazwisko": "E2E-Beta-Tester-150000-B02", "_row": 2},
+        {"Imię i nazwisko": "Anna Nowak", "Email": "e2e.test.143052.b03@e2e-noinbox.local", "_row": 3},
     ]
-    with patch("tests_e2e.sheets_verify.get_all_clients", new=AsyncMock(return_value=rows)):
+    with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         out = await find_synthetic_rows("uid", run_id="143052")
-    assert len(out) == 1
-    assert "143052" in out[0]["Imię i nazwisko"]
+    assert len(out) == 2
+    assert {row["_row"] for row in out} == {1, 3}
 
 
 # ── delete_synthetic_rows ───────────────────────────────────────────────────

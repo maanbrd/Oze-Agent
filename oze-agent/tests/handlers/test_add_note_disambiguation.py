@@ -41,6 +41,45 @@ def _patched_lookup(result: ClientLookupResult):
 
 
 @pytest.mark.asyncio
+async def test_add_note_multiline_colon_request_is_parsed_without_llm():
+    upd = _update()
+    note_text = (
+        "- klient zainteresowany pompą ciepła 12kW\n"
+        "- umówiona wizyta techniczna w przyszłym tygodniu"
+    )
+    client = {
+        "_row": 7,
+        "Imię i nazwisko": "Jan Kowalski",
+        "Miasto": "Warszawa",
+        "Notatki": "",
+    }
+    result = ClientLookupResult(
+        status="unique",
+        clients=[client],
+        normalized_query="jan kowalski",
+    )
+
+    with patch("bot.handlers.text.extract_note_data", new=AsyncMock()) as extract, \
+         _patched_lookup(result), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_note(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {}},
+            f"dodaj notatkę do Jan Kowalski, Warszawa:\n{note_text}",
+        )
+
+    extract.assert_not_awaited()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_NOTE
+    assert saved_flow.flow_data["row"] == 7
+    assert saved_flow.flow_data["client_name"] == "Jan Kowalski"
+    assert saved_flow.flow_data["city"] == "Warszawa"
+    assert saved_flow.flow_data["note_text"] == note_text
+
+
+@pytest.mark.asyncio
 async def test_add_note_without_client_uses_active_client():
     upd = _update()
     extract = AsyncMock(return_value={

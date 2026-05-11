@@ -25,6 +25,7 @@ from shared.google_calendar import create_event
 from shared.google_sheets import add_client
 
 from tests_e2e.calendar_verify import (
+    delete_event,
     delete_synthetic_events,
     find_event_by_summary_in_window,
     find_synthetic_events,
@@ -176,22 +177,74 @@ async def cleanup_synthetic_data(
     if not user_id:
         return {"error": f"no Supabase user found for telegram_id={telegram_id}"}
 
-    rows = await find_synthetic_rows(
-        user_id, run_id=run_id, include_fixtures=include_fixtures,
-    )
+    try:
+        rows = await find_synthetic_rows(
+            user_id, run_id=run_id, include_fixtures=include_fixtures,
+        )
+    except Exception as e:
+        logger.exception("cleanup_synthetic_data: Sheets discovery failed")
+        return {
+            "user_id": user_id,
+            "run_id": run_id,
+            "include_fixtures": include_fixtures,
+            "cleanup_safe": False,
+            "cleanup_error": f"sheets_discovery_failed: {type(e).__name__}: {e}",
+            "sheets_rows_found": None,
+            "sheets_deleted": 0,
+            "calendar_events_found": None,
+            "calendar_deleted": 0,
+        }
+    linked_event_ids = {
+        str(row.get("ID wydarzenia") or row.get("Event ID") or "").strip()
+        for row in rows
+        if str(row.get("ID wydarzenia") or row.get("Event ID") or "").strip()
+    }
+
+    linked_calendar_deleted = 0
+    deleted_linked_event_ids: set[str] = set()
+    for event_id in sorted(linked_event_ids):
+        if await delete_event(user_id, event_id):
+            linked_calendar_deleted += 1
+            deleted_linked_event_ids.add(event_id)
+
     sheets_deleted = await delete_synthetic_rows(user_id, rows)
 
-    events = await find_synthetic_events(
-        user_id, run_id=run_id, include_fixtures=include_fixtures,
+    try:
+        events = await find_synthetic_events(
+            user_id, run_id=run_id, include_fixtures=include_fixtures,
+        )
+    except Exception as e:
+        logger.exception("cleanup_synthetic_data: Calendar discovery failed")
+        return {
+            "user_id": user_id,
+            "run_id": run_id,
+            "include_fixtures": include_fixtures,
+            "cleanup_safe": False,
+            "cleanup_error": f"calendar_discovery_failed: {type(e).__name__}: {e}",
+            "sheets_rows_found": len(rows),
+            "sheets_deleted": sheets_deleted,
+            "calendar_events_found": None,
+            "linked_calendar_events_found": len(linked_event_ids),
+            "linked_calendar_deleted": linked_calendar_deleted,
+            "calendar_deleted": linked_calendar_deleted,
+        }
+    events = [e for e in events if e.get("id") not in deleted_linked_event_ids]
+    unlinked_calendar_deleted = await delete_synthetic_events(user_id, events)
+    calendar_deleted = linked_calendar_deleted + unlinked_calendar_deleted
+    cleanup_safe = (
+        sheets_deleted == len(rows)
+        and unlinked_calendar_deleted == len(events)
     )
-    calendar_deleted = await delete_synthetic_events(user_id, events)
 
     return {
         "user_id": user_id,
         "run_id": run_id,
         "include_fixtures": include_fixtures,
+        "cleanup_safe": cleanup_safe,
         "sheets_rows_found": len(rows),
         "sheets_deleted": sheets_deleted,
+        "linked_calendar_events_found": len(linked_event_ids),
+        "linked_calendar_deleted": linked_calendar_deleted,
         "calendar_events_found": len(events),
         "calendar_deleted": calendar_deleted,
     }

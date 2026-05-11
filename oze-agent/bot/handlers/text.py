@@ -758,6 +758,50 @@ _NOTE_PREFIX_RE = re.compile(
 )
 
 
+def _extract_prefixed_add_note_request(message_text: str) -> Optional[dict]:
+    """Parse explicit `dodaj notatkę do X, Miasto: ...` without an LLM."""
+    colon_idx = message_text.find(":")
+    if colon_idx == -1:
+        return None
+
+    head = re.sub(r"\s+", " ", message_text[:colon_idx]).strip(" ,.;")
+    note = message_text[colon_idx + 1 :].strip()
+    if not head or not note:
+        return None
+
+    prefix = re.compile(
+        r"^(?:dodaj|dopisz|zapisz)?\s*notatk[ęe]\s*(?:do\s+)?",
+        flags=re.IGNORECASE,
+    )
+    match = prefix.match(head)
+    if not match:
+        return None
+
+    subject = head[match.end() :].strip(" ,.;")
+    if not subject:
+        return None
+
+    city = ""
+    name = subject
+    if "," in subject:
+        name, city = [part.strip(" ,.;") for part in subject.rsplit(",", 1)]
+    else:
+        city_match = re.match(
+            rf"(.+?)\s+z\s+([{_POLISH_LETTERS}][{_POLISH_LETTERS}\- ]+)$",
+            subject,
+            flags=re.IGNORECASE,
+        )
+        if city_match:
+            name = city_match.group(1).strip(" ,.;")
+            city = city_match.group(2).strip(" ,.;")
+        else:
+            return None
+
+    if not name:
+        return None
+    return {"client_name": name, "city": city, "note": note}
+
+
 def _extract_note_from_compound_trigger(message_text: str) -> Optional[str]:
     """Pull the note part from a compound 'add note + meeting' trigger.
 
@@ -1737,8 +1781,10 @@ async def handle_add_note(
 
     await send_typing(context, telegram_id)
 
-    history = get_history_unless_pending(telegram_id)
-    result = await extract_note_data(message_text, history=history)
+    result = _extract_prefixed_add_note_request(message_text)
+    if result is None:
+        history = get_history_unless_pending(telegram_id)
+        result = await extract_note_data(message_text, history=history)
     client_name = result.get("client_name", "")
     city = result.get("city", "")
     note_text = result.get("note", "")

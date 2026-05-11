@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from tests_e2e.harness import TelegramE2EHarness, _ObservedMessage
+from tests_e2e.scenarios._realistic_names import realistic_e2e_client
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,11 @@ def e2e_beta_name(suffix: str = "", run_id: str | None = None) -> str:
 E2E_BETA_CITY = "E2E-Beta-City"
 
 
+def e2e_realistic_client(suffix: str, run_id: str | None = None):
+    """Return deterministic realistic Polish synthetic data for new E2E rows."""
+    return realistic_e2e_client(run_id or make_run_id(), suffix)
+
+
 # ── Sleep between scenario triggers (Telegram rate-limit politeness) ─────────
 
 
@@ -132,6 +138,33 @@ def find_card_message(messages: list[_ObservedMessage]) -> _ObservedMessage | No
         if m.button_labels:
             return m
     return None
+
+
+async def wait_for_card_messages(
+    harness: TelegramE2EHarness,
+    *,
+    timeout_s: float = 25.0,
+) -> list[_ObservedMessage]:
+    """Collect replies until a message with inline buttons arrives.
+
+    Some bot paths emit a plain text lead-in before the confirmation card.
+    Waiting for a fixed count makes fast paths slow; waiting for one message
+    can miss the actual card. This stops as soon as the card is observed.
+    """
+    messages: list[_ObservedMessage] = []
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout_s
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            break
+        batch = await harness.wait_for_messages(count=1, timeout_s=remaining)
+        if not batch:
+            break
+        messages.extend(batch)
+        if find_card_message(messages) is not None:
+            break
+    return messages
 
 
 # ── Save-flow markers (mutation confirmation) ────────────────────────────────
@@ -357,7 +390,7 @@ async def setup_existing_client(
     setup_trigger = f"dodaj klienta {name}, {city}, {extra_fields}"
     result.context["setup_trigger"] = setup_trigger
     await harness.send(setup_trigger)
-    setup_replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
+    setup_replies = await wait_for_card_messages(harness, timeout_s=25.0)
     setup_card = find_card_message(setup_replies)
     if setup_card is None:
         result.add_blocker(
@@ -367,7 +400,11 @@ async def setup_existing_client(
         )
         return False
 
-    save_label, confirm_replies = await click_save_and_collect(harness, setup_card)
+    save_label, confirm_replies = await click_save_and_collect(
+        harness,
+        setup_card,
+        duration_s=12.0,
+    )
     if save_label is None:
         result.add_blocker(
             "setup_save_button_present",
@@ -413,7 +450,7 @@ async def verify_sheets_row(
     Adds one check per scenario: `{check_key}` (PASS if row found and all
     expected fields match), plus optional per-field sub-checks.
 
-    Settles 1.5s before reading to absorb Sheets eventual-consistency.
+    Settles 3s before reading to absorb Sheets eventual-consistency.
     Returns the row dict (with `_row` key) on success, None otherwise.
     """
     # Local import: avoid module-load cost when scenarios don't verify.
@@ -421,7 +458,7 @@ async def verify_sheets_row(
         assert_row_field, find_client_row, resolve_user_id,
     )
 
-    await asyncio.sleep(1.5)  # eventual consistency cushion
+    await asyncio.sleep(3.0)  # eventual consistency cushion
     user_id = await resolve_user_id(telegram_id)
     if not user_id:
         result.add(check_key, False, detail=f"no Supabase user for telegram_id={telegram_id}",
@@ -461,7 +498,7 @@ async def verify_calendar_event(
     """Verify a Calendar event matching `summary_marker` exists in
     [start_window, end_window). Optionally check event_type / start / duration.
 
-    Settles 1.5s before reading. Returns the event dict on success.
+    Settles 3s before reading. Returns the event dict on success.
     """
     from tests_e2e.calendar_verify import (
         assert_event_at_time,
@@ -471,7 +508,7 @@ async def verify_calendar_event(
     )
     from tests_e2e.sheets_verify import resolve_user_id
 
-    await asyncio.sleep(1.5)
+    await asyncio.sleep(3.0)
     user_id = await resolve_user_id(telegram_id)
     if not user_id:
         result.add(check_key, False, detail=f"no Supabase user for telegram_id={telegram_id}",

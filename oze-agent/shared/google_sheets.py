@@ -718,7 +718,13 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
         if "Data pierwszego kontaktu" not in client_data:
             client_data["Data pierwszego kontaktu"] = date.today().strftime("%Y-%m-%d")
 
-        row = [client_data.get(h, "") for h in headers]
+        def _value_for_header(header: str):
+            value = client_data.get(header, "")
+            if header == "Status" and not str(value).strip():
+                return "Nowy lead"
+            return value
+
+        row = [_value_for_header(h) for h in headers]
 
         def _append():
             service = _get_sheets_service_sync(user_id)

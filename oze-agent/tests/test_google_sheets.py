@@ -385,6 +385,26 @@ async def test_add_client_allows_exact_sheet_schema():
 
 
 @pytest.mark.asyncio
+async def test_add_client_defaults_missing_status_at_sheets_boundary():
+    from shared.google_sheets import DEFAULT_COLUMNS, add_client
+
+    values = _ValuesService(get_result={"values": [DEFAULT_COLUMNS]})
+
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=_SheetsService(values),
+    ), patch("shared.google_sheets.update_user"):
+        row = await add_client("user-1", {"Imię i nazwisko": "Jan Kowalski"})
+
+    assert row == 2
+    appended = values.append_kwargs["body"]["values"][0]
+    assert appended[DEFAULT_COLUMNS.index("Status")] == "Nowy lead"
+
+
+@pytest.mark.asyncio
 async def test_get_all_clients_returns_empty_on_error():
     with patch("shared.google_sheets.get_user_by_id", side_effect=Exception("DB down")):
         from shared.google_sheets import get_all_clients

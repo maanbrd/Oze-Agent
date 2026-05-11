@@ -16,9 +16,16 @@ export default async function PaymentStepPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
-  const { account } = await requireOnboardingStep("/onboarding/platnosc");
+  const { account, onboardingStatus } =
+    await requireOnboardingStep("/onboarding/platnosc");
 
-  const isActive = account.profile?.subscription_status === "active";
+  const betaEligible = Boolean(onboardingStatus?.access?.betaEligible);
+  const isBetaActive = onboardingStatus?.access?.type === "beta";
+  const isPaidActive = Boolean(
+    account.profile?.subscription_status === "active" &&
+      account.profile?.activation_paid,
+  );
+  const isActive = Boolean(onboardingStatus?.access?.active || isPaidActive);
 
   return (
     <main className="min-h-screen bg-[#050607] text-zinc-100">
@@ -69,11 +76,12 @@ export default async function PaymentStepPage({
             ) : isActive ? (
               <div className="mt-8 rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 p-5">
                 <p className="text-sm font-semibold text-white">
-                  Subskrypcja aktywna.
+                  {isBetaActive ? "Dostęp beta aktywny." : "Subskrypcja aktywna."}
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-300">
-                  Płatność jest zaksięgowana. Następny etap to Google OAuth,
-                  zasoby Google i parowanie Telegrama.
+                  {isBetaActive
+                    ? "Możesz przejść dalej bez Stripe. Następny etap to Google OAuth, zasoby Google i parowanie Telegrama."
+                    : "Płatność jest zaksięgowana. Następny etap to Google OAuth, zasoby Google i parowanie Telegrama."}
                 </p>
                 <Link
                   href="/onboarding/google"
@@ -83,20 +91,23 @@ export default async function PaymentStepPage({
                 </Link>
               </div>
             ) : (
-              <div className="mt-8 grid gap-4 md:grid-cols-2">
-                <PlanCard
-                  plan="monthly"
-                  title="Miesięcznie"
-                  price="49 zł"
-                  note="Najmniejszy próg wejścia. Rezygnujesz kiedy chcesz."
-                />
-                <PlanCard
-                  plan="yearly"
-                  title="Rocznie"
-                  price="350 zł"
-                  badge="Oszczędzasz 238 zł"
-                  note="Jedna płatność za rok pracy agenta."
-                />
+              <div className="mt-8 space-y-4">
+                {betaEligible ? <BetaAccessCard /> : null}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <PlanCard
+                    plan="monthly"
+                    title="Miesięcznie"
+                    price="49 zł"
+                    note="Najmniejszy próg wejścia. Rezygnujesz kiedy chcesz."
+                  />
+                  <PlanCard
+                    plan="yearly"
+                    title="Rocznie"
+                    price="350 zł"
+                    badge="Oszczędzasz 238 zł"
+                    note="Jedna płatność za rok pracy agenta."
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -118,6 +129,32 @@ export default async function PaymentStepPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function BetaAccessCard() {
+  return (
+    <form
+      action="/onboarding/beta-access"
+      method="post"
+      className="rounded-[8px] border border-[#3DFF7A]/25 bg-[#3DFF7A]/10 p-5"
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Dostęp beta</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
+            Twój email jest na liście beta testerów. Możesz przejść dalej bez
+            płatności Stripe i skonfigurować Google oraz Telegram.
+          </p>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98]"
+        >
+          Kontynuuj jako beta tester
+        </button>
+      </div>
+    </form>
   );
 }
 

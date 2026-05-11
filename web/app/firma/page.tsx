@@ -174,26 +174,6 @@ export default function FirmaPage() {
                 </div>
               ))}
             </div>
-            <a
-              href="#formularz"
-              style={{
-                marginTop: 34,
-                height: 56,
-                padding: "0 28px",
-                borderRadius: 999,
-                background: G,
-                color: "#000",
-                fontWeight: 800,
-                fontSize: 16,
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 10px 28px rgba(0,0,0,0.32)",
-              }}
-            >
-              Umów się na rozmowę
-            </a>
           </div>
 
           <FirmaContactForm />

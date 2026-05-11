@@ -26,6 +26,7 @@ const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 const stripeServerSource = readSource("../lib/stripe/server.ts");
 const stripeWebhookRouteSource = readSource("../app/api/webhooks/stripe/route.ts");
 const checkoutRouteSource = readSource("../app/onboarding/checkout/route.ts");
+const betaAccessRouteSource = readSource("../app/onboarding/beta-access/route.ts");
 const paymentSuccessPageSource = readSource("../app/onboarding/sukces/page.tsx");
 const checkoutReconcileSource = readSource("../lib/billing/checkout-reconcile.ts");
 const stripeEventForwardSource = readSource("../lib/billing/stripe-events.ts");
@@ -41,7 +42,7 @@ test("private app pages require completed onboarding", () => {
   assert.match(crmLayoutSource, /getCurrentAccount/);
   assert.match(crmLayoutSource, /redirect\("\/login\?next=\/dashboard"\)/);
   assert.match(crmLayoutSource, /getOnboardingStatus/);
-  assert.match(crmLayoutSource, /account\.profile\?\.onboarding_completed/);
+  assert.match(crmLayoutSource, /onboardingStatus\s*\?\s*onboardingStatus\.completed\s*:\s*Boolean\(account\.profile\?\.onboarding_completed\)/);
   assert.match(crmLayoutSource, /safeLocalPath\(onboardingStatus\?\.nextStep, "\/onboarding\/platnosc"\)/);
   assert.match(dashboardPageSource, /getCrmDashboardData/);
   assert.equal(existsSync(flatOffersPath), false);
@@ -50,7 +51,7 @@ test("private app pages require completed onboarding", () => {
 
 test("offer generator route is inside the CRM shell", () => {
   assert.match(crmShellSource, /\["Oferty", "\/oferty"\]/);
-  assert.match(crmLayoutSource, /<CrmShell account=\{account\}>/);
+  assert.match(crmLayoutSource, /<CrmShell account=\{account\} decisionsCount=\{decisionsCount\}>/);
   assert.equal(offersPageSource.includes("AppShell"), false);
   assert.equal(offersPageSource.includes("requireCompletedOnboarding"), false);
 });
@@ -65,7 +66,7 @@ test("central gate redirects unauthenticated and incomplete accounts correctly",
   assert.match(guardSource, /redirect\(`\/login\?next=\$\{encodeURIComponent\(currentPath\)\}`\)/);
   assert.match(guardSource, /getOnboardingStatus/);
   assert.match(guardSource, /safeLocalPath\(status\?\.nextStep, "\/onboarding\/platnosc"\)/);
-  assert.match(guardSource, /account\.profile\?\.onboarding_completed/);
+  assert.match(guardSource, /status\s*\?\s*status\.completed\s*:\s*Boolean\(account\.profile\?\.onboarding_completed\)/);
 });
 
 test("login preserves next path without bypassing onboarding gate", () => {
@@ -136,6 +137,23 @@ test("payment plans use a route handler post so checkout keeps browser cookies",
   assert.match(checkoutRouteSource, /export async function POST/);
   assert.match(checkoutRouteSource, /getCurrentAccount/);
   assert.match(checkoutRouteSource, /NextResponse\.redirect/);
+});
+
+test("beta access uses a separate server route without touching Stripe checkout", () => {
+  assert.match(onboardingApiSource, /activateBetaAccess/);
+  assert.match(betaAccessRouteSource, /export async function POST/);
+  assert.match(betaAccessRouteSource, /activateBetaAccess/);
+  assert.match(betaAccessRouteSource, /NextResponse\.redirect/);
+  assert.match(betaAccessRouteSource, /\/onboarding\/google/);
+  assert.equal(betaAccessRouteSource.includes("/onboarding/checkout"), false);
+  assert.equal(checkoutRouteSource.includes("beta-access"), false);
+});
+
+test("payment page exposes beta option only from backend eligibility", () => {
+  assert.match(paymentPageSource, /onboardingStatus\?\.access\?\.betaEligible/);
+  assert.match(paymentPageSource, /action="\/onboarding\/beta-access"/);
+  assert.match(paymentPageSource, /Kontynuuj jako beta tester/);
+  assert.match(paymentPageSource, /Dostęp beta aktywny/);
 });
 
 test("stripe checkout reports actionable configuration failures", () => {

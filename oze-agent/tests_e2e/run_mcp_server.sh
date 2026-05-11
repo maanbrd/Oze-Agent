@@ -28,5 +28,6 @@ PY=".venv/bin/python"
 # Per CLAUDE.md (Phase 0.8 cleanup): production secrets live ONLY in
 # Railway env vars — not in tests_e2e/.env, which keeps only Telethon
 # credentials (TELEGRAM_E2E_*).
-exec railway run --service bot --environment production -- \
+RAILWAY_E2E_SERVICE="${TELEGRAM_E2E_RAILWAY_SERVICE:-bot-test}"
+exec railway run --service "$RAILWAY_E2E_SERVICE" --environment production -- \
     "$PY" -m tests_e2e.mcp_server "$@"

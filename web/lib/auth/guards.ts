@@ -13,9 +13,9 @@ export async function requireCompletedOnboarding(currentPath: string) {
   }
 
   const status = await getOnboardingStatus();
-  const completed = Boolean(
-    status?.completed || account.profile?.onboarding_completed,
-  );
+  const completed = status
+    ? status.completed
+    : Boolean(account.profile?.onboarding_completed);
 
   if (!completed) {
     redirect(safeLocalPath(status?.nextStep, "/onboarding/platnosc"));
@@ -32,9 +32,9 @@ export async function requireOnboardingStep(currentPath: string) {
   }
 
   const status = await getOnboardingStatus();
-  const completed = Boolean(
-    status?.completed || account.profile?.onboarding_completed,
-  );
+  const completed = status
+    ? status.completed
+    : Boolean(account.profile?.onboarding_completed);
 
   if (completed) {
     redirect("/dashboard");

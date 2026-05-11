@@ -16,9 +16,9 @@ export default async function LoggedInLayout({
   }
 
   const onboardingStatus = await getOnboardingStatus();
-  const completed = Boolean(
-    onboardingStatus?.completed || account.profile?.onboarding_completed,
-  );
+  const completed = onboardingStatus
+    ? onboardingStatus.completed
+    : Boolean(account.profile?.onboarding_completed);
 
   if (!completed) {
     redirect(safeLocalPath(onboardingStatus?.nextStep, "/onboarding/platnosc"));

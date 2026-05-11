@@ -19,9 +19,16 @@ import os
 from typing import Optional
 
 from shared.database import get_user_by_telegram_id
-from shared.google_sheets import delete_client, get_all_clients
+from shared.google_sheets import (
+    delete_client,
+    get_all_clients,
+    get_all_clients_or_raise,
+)
 
 logger = logging.getLogger(__name__)
+
+_SHEETS_READ_ATTEMPTS = 4
+_SHEETS_READ_RETRY_DELAY_S = 2.0
 
 
 # ── User-id resolution ──────────────────────────────────────────────────────
@@ -60,6 +67,33 @@ async def resolve_user_id(telegram_id: int) -> Optional[str]:
 # ── Client row read ─────────────────────────────────────────────────────────
 
 
+async def get_all_clients_for_e2e(user_id: str) -> list[dict]:
+    """Strict Google Sheets read for E2E verification and cleanup.
+
+    The production wrapper intentionally returns [] on Google API errors.
+    That is unsafe for smoke cleanup because a transient timeout looks the
+    same as "no synthetic rows". Use the strict wrapper with retries here.
+    """
+    last_error: Exception | None = None
+    for attempt in range(1, _SHEETS_READ_ATTEMPTS + 1):
+        try:
+            return await get_all_clients_or_raise(user_id)
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "get_all_clients_for_e2e(%s): attempt %s/%s failed: %s",
+                user_id,
+                attempt,
+                _SHEETS_READ_ATTEMPTS,
+                e,
+            )
+            if attempt < _SHEETS_READ_ATTEMPTS:
+                await asyncio.sleep(_SHEETS_READ_RETRY_DELAY_S * attempt)
+    raise RuntimeError(
+        f"strict Sheets read failed after {_SHEETS_READ_ATTEMPTS} attempts: {last_error}"
+    )
+
+
 async def find_client_row(
     user_id: str, name: str, city: Optional[str] = None,
 ) -> Optional[dict]:
@@ -68,7 +102,7 @@ async def find_client_row(
     If `city` is given, also requires `Miasto` to match. Comparison is
     case-insensitive. Returns the row dict (with `_row` key) or None.
     """
-    clients = await get_all_clients(user_id)
+    clients = await get_all_clients_for_e2e(user_id)
     name_lo = name.lower()
     city_lo = city.lower() if city else None
     for c in clients:
@@ -105,6 +139,7 @@ def assert_row_field_equals(row: dict, field: str, expected: str) -> tuple[bool,
 
 _SYNTHETIC_PREFIX = "E2E-Beta-"
 _FIXTURE_PREFIX = "E2E-Beta-Fixture-"
+_SYNTHETIC_EMAIL_DOMAIN = "@e2e-noinbox.local"
 
 
 async def find_synthetic_rows(
@@ -113,21 +148,26 @@ async def find_synthetic_rows(
     run_id: Optional[str] = None,
     include_fixtures: bool = False,
 ) -> list[dict]:
-    """Return all rows whose `Imię i nazwisko` starts with `E2E-Beta-`.
+    """Return all E2E synthetic rows.
 
-    `run_id` filters by substring in name (run_id is embedded in synthetic
-    names like `E2E-Beta-Tester-{run_id}-B01`). `include_fixtures=False`
-    excludes rows starting with `E2E-Beta-Fixture-`.
+    New realistic-name scenarios are anchored by Email ending in
+    `@e2e-noinbox.local`. Legacy rows are still discovered by the
+    `E2E-Beta-` name prefix. `run_id` filters by substring in either
+    the email or legacy name.
     """
-    clients = await get_all_clients(user_id)
+    clients = await get_all_clients_for_e2e(user_id)
     out: list[dict] = []
     for c in clients:
         name = c.get("Imię i nazwisko", "")
-        if not name.startswith(_SYNTHETIC_PREFIX):
+        email = c.get("Email", "").lower()
+        is_legacy_synthetic = name.startswith(_SYNTHETIC_PREFIX)
+        is_email_synthetic = email.endswith(_SYNTHETIC_EMAIL_DOMAIN)
+        if not (is_legacy_synthetic or is_email_synthetic):
             continue
-        if not include_fixtures and name.startswith(_FIXTURE_PREFIX):
+        is_fixture = name.startswith(_FIXTURE_PREFIX) or "fixture" in email
+        if not include_fixtures and is_fixture:
             continue
-        if run_id is not None and run_id not in name:
+        if run_id is not None and run_id not in name and run_id not in email:
             continue
         out.append(c)
     return out

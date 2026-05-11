@@ -30,6 +30,7 @@ from tests_e2e.scenarios._helpers import (
     card_mentions_date_pl_str,
     check_pl_date_or_drift,
     click_save_and_collect,
+    e2e_realistic_client,
     e2e_beta_name,
     find_card_message,
     fmt_pl_date,
@@ -71,17 +72,25 @@ async def run_add_note_pure_short_save(
     harness: TelegramE2EHarness,
 ) -> ScenarioResult:
     result = new_result("add_note_pure_short_save", CATEGORY)
-    name = e2e_beta_name("N01")
+    client = e2e_realistic_client("N01")
+    name = client.name
     note_content = "ma duży dom"
     result.context["client_name"] = name
+    result.context["client_email"] = client.email
     result.context["note_content"] = note_content
     try:
         await reset_pending(harness)
-        if not await setup_existing_client(harness, result, name):
+        if not await setup_existing_client(
+            harness,
+            result,
+            name,
+            city=client.city,
+            extra_fields=f"{client.phone}, {client.email}, PV",
+        ):
             return result
 
         # Flow A trigger: "{name}: ma duży dom"
-        trigger = f"{name}: {note_content}"
+        trigger = f"{name}, {client.city}: {note_content}"
         result.context["trigger"] = trigger
         await harness.send(trigger)
         replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
@@ -124,7 +133,7 @@ async def run_add_note_pure_short_save(
         admin_id = _verify_admin_id(harness, result)
         if admin_id is not None:
             await verify_sheets_row(
-                result, admin_id, name, E2E_BETA_CITY,
+                result, admin_id, name, client.city,
                 expected_fields={"Notatki": note_content},
             )
     except Exception as e:

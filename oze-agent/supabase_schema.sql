@@ -61,6 +61,19 @@ CREATE TABLE promo_codes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE beta_access_grants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+    auth_user_id UUID,
+    claimed_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT beta_access_grants_email_lowercase CHECK (email = lower(email))
+);
+
 CREATE TABLE conversation_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     telegram_id BIGINT NOT NULL,
@@ -231,6 +244,8 @@ CREATE TABLE offer_send_attempts (
 -- ============================================================
 
 CREATE INDEX idx_users_telegram_id ON users(telegram_id);
+CREATE INDEX idx_beta_access_grants_auth_user_id ON beta_access_grants(auth_user_id);
+CREATE INDEX idx_beta_access_grants_status ON beta_access_grants(status);
 CREATE INDEX idx_conversation_history_telegram_id ON conversation_history(telegram_id, created_at DESC);
 CREATE INDEX idx_interaction_log_telegram_id ON interaction_log(telegram_id, created_at DESC);
 CREATE INDEX idx_pending_followups_status ON pending_followups(status, event_end_time);
@@ -249,6 +264,7 @@ CREATE INDEX idx_offer_send_attempts_user_created ON offer_send_attempts(user_id
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE beta_access_grants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pending_followups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pending_flows ENABLE ROW LEVEL SECURITY;

@@ -3,7 +3,6 @@
 import { type CSSProperties, type FormEvent, useState } from "react";
 
 const contactEmail = "kontakt@oze-agent.pl";
-const socialUrl = "https://t.me/OZEAgentBot";
 
 export function FirmaContactForm() {
   const [submitted, setSubmitted] = useState(false);
@@ -19,6 +18,7 @@ export function FirmaContactForm() {
       `Firma: ${form.get("company") ?? ""}`,
       `Telefon: ${form.get("phone") ?? ""}`,
       `Email: ${form.get("email") ?? ""}`,
+      `Strona / social media: ${form.get("websiteOrSocial") ?? ""}`,
       `Liczba handlowców: ${form.get("teamSize") ?? ""}`,
       "",
       "Wiadomość:",
@@ -85,7 +85,7 @@ export function FirmaContactForm() {
             textWrap: "balance" as CSSProperties["textWrap"],
           }}
         >
-          Może będziemy mogli zautomatyzować inne procesy w firmie.
+          Skontaktuj się z nami
         </h2>
 
         <div style={{ display: "grid", gap: 14 }}>
@@ -93,6 +93,11 @@ export function FirmaContactForm() {
           <Field label="Firma" name="company" autoComplete="organization" />
           <Field label="Telefon" name="phone" type="tel" autoComplete="tel" />
           <Field label="Email" name="email" type="email" autoComplete="email" />
+          <Field
+            label="Strona internetowa albo social media"
+            name="websiteOrSocial"
+            autoComplete="url"
+          />
           <label style={{ display: "grid", gap: 8, color: "rgba(255,255,255,0.82)", fontSize: 14 }}>
             Liczba handlowców
             <select
@@ -145,22 +150,6 @@ export function FirmaContactForm() {
         >
           Umów się na rozmowę
         </button>
-
-        <a
-          href={socialUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            marginTop: 14,
-            color: "#3DFF7A",
-            fontSize: 13,
-            fontWeight: 700,
-            textDecoration: "none",
-          }}
-        >
-          Social media →
-        </a>
 
         {submitted ? (
           <p

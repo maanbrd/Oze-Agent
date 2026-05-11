@@ -13,6 +13,11 @@ export type OnboardingStatus = {
     resources: boolean;
     telegram: boolean;
   };
+  access?: {
+    active: boolean;
+    type: "paid" | "beta" | null;
+    betaEligible: boolean;
+  };
   profile: Record<string, unknown> | null;
 };
 
@@ -78,6 +83,14 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
   } catch {
     return null;
   }
+}
+
+export async function activateBetaAccess(): Promise<OnboardingStatus> {
+  const response = await authedFetch("/api/onboarding/beta-access", {
+    method: "POST",
+    body: "{}",
+  });
+  return (await response.json()) as OnboardingStatus;
 }
 
 export async function startGoogleOAuth(returnUrl?: string): Promise<string> {

@@ -196,3 +196,17 @@ def test_e2e_beta_name_two_calls_differ_or_same():
     n2 = e2e_beta_name()
     # Either identical (same second) or different (different second). Both valid.
     assert n1 == n2 or n1 != n2  # tautology — just verifying call doesn't crash
+
+
+def test_realistic_e2e_client_uses_polish_name_city_and_cleanup_email():
+    from tests_e2e.scenarios._realistic_names import realistic_e2e_client
+
+    client = realistic_e2e_client("143052", "B01")
+
+    assert client.name.count(" ") == 1
+    assert not client.name.startswith("E2E-")
+    assert client.city
+    assert not client.city.startswith("E2E-")
+    assert client.phone.isdigit()
+    assert len(client.phone) == 9
+    assert client.email == "e2e.test.143052.b01@e2e-noinbox.local"
