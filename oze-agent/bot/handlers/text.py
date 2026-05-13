@@ -29,6 +29,16 @@ from bot.utils.telegram_helpers import (
 )
 from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from shared.active_client import derive_active_client
+from shared.behavior.action_type import (
+    action_label,
+    calendar_title,
+    confirmation_heading,
+    description_prefix as action_description_prefix,
+    success_message as action_success_message,
+)
+from shared.behavior.client_field_update import parse_client_field_update
+from shared.behavior.meeting_location import resolve_meeting_location
+from shared.behavior.next_step import NextStepDecisionKind, classify_next_step_reply
 from shared.claude_ai import (
     call_claude_with_tools,
     extract_client_data,
@@ -44,11 +54,13 @@ from shared.pending import (
     AddMeetingDisambiguationPayload,
     AddMeetingPayload,
     AddNotePayload,
+    AwaitingNextStepPayload,
     ChangeStatusPayload,
+    ClientContextPayload,
+    ClientFieldUpdateConfirmPayload,
     DisambiguationPayload,
     PendingFlow,
     PendingFlowType,
-    R7PromptPayload,
     payload_to_flow_data,
     save as save_pending,
 )
@@ -105,7 +117,6 @@ SYSTEM_FIELDS = {
 # can use them without importing from the handler layer. Aliased back to the
 # underscored names for existing call-sites in this module.
 from shared.mutations import (
-    EVENT_TYPE_TO_NEXT_STEP_LABEL as _EVENT_TYPE_TO_NEXT_STEP_LABEL,
     STATUS_MEETING_AUTO_UPGRADE_FROM as _STATUS_MEETING_AUTO_UPGRADE_FROM,
     STATUS_MEETING_BOOKED as _STATUS_MEETING_BOOKED,
     STATUS_NEW_LEAD as _STATUS_NEW_LEAD,
@@ -120,14 +131,6 @@ _EVENT_TYPE_DEFAULT_DURATION = {
     "phone_call": 15,
     "offer_email": 15,
     "doc_followup": 15,
-}
-
-# Slice 5.4.1b — first line of Calendar event description when event_type has
-# a non-obvious action. in_person skipped: the meeting itself IS the action.
-_EVENT_TYPE_DESCRIPTION_PREFIX = {
-    "offer_email": "📧 Wyślij ofertę klientowi.",
-    "phone_call": "📞 Zadzwoń do klienta.",
-    "doc_followup": "📋 Follow-up dokumentowy.",
 }
 
 _NEXT_STEP_DEFINED_FIELDS = {
@@ -312,8 +315,57 @@ _R7_EDITABLE_FIELDS = {
 
 
 def _client_data_updates_from_r7_reply(message_text: str) -> dict:
+    parsed = parse_client_field_update(message_text)
+    if parsed:
+        return {k: v for k, v in parsed.updates.items() if k in _R7_EDITABLE_FIELDS and v}
     facts = _extract_inline_client_facts(message_text)
     return {k: v for k, v in facts.items() if k in _R7_EDITABLE_FIELDS and v}
+
+
+def _context_flow_data_from_client(
+    *,
+    client_name: str,
+    city: str = "",
+    client_row: Optional[int] = None,
+    current_status: Optional[str] = None,
+) -> dict:
+    return payload_to_flow_data(ClientContextPayload(
+        client_name=client_name,
+        city=city or "",
+        client_row=client_row,
+        current_status=current_status or "",
+    ))
+
+
+def _awaiting_next_step_flow_data(flow_data: dict) -> dict:
+    return payload_to_flow_data(AwaitingNextStepPayload(
+        client_name=flow_data.get("client_name", ""),
+        city=flow_data.get("city", ""),
+        client_row=flow_data.get("client_row"),
+        current_status=flow_data.get("current_status") or "",
+    ))
+
+
+def _save_client_context(
+    telegram_id: int,
+    *,
+    client_name: str,
+    city: str = "",
+    client_row: Optional[int] = None,
+    current_status: Optional[str] = None,
+) -> None:
+    if not client_row:
+        return
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.CLIENT_CONTEXT,
+        flow_data=_context_flow_data_from_client(
+            client_name=client_name,
+            city=city,
+            client_row=client_row,
+            current_status=current_status,
+        ),
+    ))
 
 
 async def _start_r7_client_update_confirmation(
@@ -325,12 +377,61 @@ async def _start_r7_client_update_confirmation(
     client_row = r7_data.get("client_row")
     client_name = r7_data.get("client_name") or "klient"
     city = r7_data.get("city") or ""
-    save_pending_flow(telegram_id, "edit_client", {
-        "row": client_row,
-        "updates": updates,
-        "old_values": {field: "" for field in updates},
-        "append_fields": [],
+    return_flow_type = "awaiting_next_step"
+    return_flow_data = _awaiting_next_step_flow_data({
+        **r7_data,
+        "client_name": client_name,
+        "city": city,
     })
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.CLIENT_FIELD_UPDATE_CONFIRM,
+        flow_data=payload_to_flow_data(ClientFieldUpdateConfirmPayload(
+            row=client_row,
+            updates=updates,
+            client_name=client_name,
+            city=city,
+            return_flow_type=return_flow_type,
+            return_flow_data=return_flow_data,
+        )),
+    ))
+    city_part = f" ({city})" if city else ""
+    lines = [f"Zaktualizować {client_name}{city_part} o:"]
+    lines.extend(f"{field}: {value}" for field, value in updates.items())
+    lines.append("Zapisać?")
+    await reply_text(
+        update,
+        "\n".join(lines),
+        reply_markup=build_mutation_buttons("confirm"),
+    )
+
+
+async def _start_client_context_update_confirmation(
+    update: Update,
+    telegram_id: int,
+    flow_data: dict,
+    updates: dict,
+) -> None:
+    client_row = flow_data.get("client_row")
+    client_name = flow_data.get("client_name") or "klient"
+    city = flow_data.get("city") or ""
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.CLIENT_FIELD_UPDATE_CONFIRM,
+        flow_data=payload_to_flow_data(ClientFieldUpdateConfirmPayload(
+            row=client_row,
+            updates=updates,
+            client_name=client_name,
+            city=city,
+            return_flow_type="client_context",
+            return_flow_data=_context_flow_data_from_client(
+                client_name=client_name,
+                city=city,
+                client_row=client_row,
+                current_status=flow_data.get("current_status") or "",
+            ),
+        )),
+    ))
     city_part = f" ({city})" if city else ""
     lines = [f"Zaktualizować {client_name}{city_part} o:"]
     lines.extend(f"{field}: {value}" for field, value in updates.items())
@@ -1164,7 +1265,15 @@ def _format_add_meeting_flow_card(flow_data: dict) -> str:
             f"{status_update.get('old_value', '')} → "
             f"{status_update.get('new_value', '')}"
         )
-    return format_confirmation("add_meeting", details)
+    card = format_confirmation("add_meeting", details)
+    event_type = flow_data.get("event_type") or "in_person"
+    heading = confirmation_heading(event_type)
+    if heading.startswith("✅ "):
+        heading = heading[2:].strip()
+    lines = card.splitlines()
+    if lines:
+        lines[0] = f"✅ *{escape_markdown_v2(heading)}*"
+    return "\n".join(lines)
 
 
 # ── Guards ─────────────────────────────────────────────────────────────────────
@@ -1398,6 +1507,20 @@ async def _route_pending_flow(
             command_text=command_text,
         )
         return True
+    elif flow_type == "client_context":
+        telegram_id = update.effective_user.id
+        flow_data = flow.get("flow_data", {})
+        updates = _client_data_updates_from_r7_reply(message_text)
+        if updates and flow_data.get("client_row") is not None:
+            await _start_client_context_update_confirmation(
+                update,
+                telegram_id,
+                flow_data,
+                updates,
+            )
+            return True
+        delete_pending_flow(telegram_id)
+        return False
     elif flow_type == "photo_upload":
         from bot.handlers.photo import handle_photo_text_reply
 
@@ -1827,42 +1950,40 @@ async def _route_pending_flow(
             meeting_text,
         )
         return True
-    elif flow_type == "r7_prompt":
-        # R7 next-action response. The pending_flows table uses telegram_id as
-        # PK, so any successful downstream save_pending(...) UPSERTs over the
-        # R7 row. Strategy: only delete R7 explicitly on cancel or fully-unclear
-        # replies. For temporal-but-incomplete replies (e.g. bare "Spotkanie"),
-        # leave R7 alive so the next message can still recover client context
-        # from flow_data — pending flow is the source of truth, not history.
+    elif flow_type in {"r7_prompt", "awaiting_next_step"}:
+        # Deterministic R7/next-step state. Legacy r7_prompt is accepted for
+        # old rows, but new writes use awaiting_next_step.
         telegram_id = update.effective_user.id
-        _cancel_single = {"nie", "anuluj", "stop", "nic", "later"}
-        _cancel_phrases = {"nie wiem", "odłóż", "odłożyć"}
-        text_words = set(text_lower.split())
-        if (text_words & _cancel_single) or any(p in text_lower for p in _cancel_phrases):
-            delete_pending_flow(telegram_id)
-            return True
-        # Slice 5.1d.2: accept bare event-type words ("telefon", "mail", "oferta")
-        # as meeting intent. handle_add_meeting will ask for time via its own
-        # path if one isn't in the message.
         r7_data = flow.get("flow_data", {})
-        if r7_data.get("client_row") is not None:
-            client_updates = _client_data_updates_from_r7_reply(message_text)
-            if client_updates:
+        decision = classify_next_step_reply(message_text)
+        if decision.kind is NextStepDecisionKind.CLOSE:
+            delete_pending_flow(telegram_id)
+            await reply_text(update, "OK, bez następnego kroku.")
+            return True
+        if decision.kind is NextStepDecisionKind.FIELD_UPDATE:
+            if r7_data.get("client_row") is not None and decision.field_update:
                 await _start_r7_client_update_confirmation(
                     update,
                     telegram_id,
                     r7_data,
-                    client_updates,
+                    decision.field_update.updates,
                 )
                 return True
-        has_meeting_intent = (
+            await reply_text(update, "Nie wiem, którego klienta zaktualizować.")
+            return True
+
+        has_meeting_intent = decision.kind is NextStepDecisionKind.ACTION or (
             any(w in text_lower for w in _TEMPORAL_MARKERS)
             or bool(_TIME_RE.search(text_lower))
             or any(w in text_lower for w in _R7_EVENT_TYPE_MARKERS)
         )
         if has_meeting_intent:
             meeting_text = _message_with_r7_client_context(message_text, r7_data)
-            entities = {"event_type": _infer_meeting_event_type(message_text)}
+            event_type = _infer_meeting_event_type(
+                message_text,
+                default=decision.event_type if decision.kind is NextStepDecisionKind.ACTION else "in_person",
+            )
+            entities = {"event_type": event_type}
             intent_data_r7: dict = {"entities": entities}
             # Slice 5.1d.1: carry the row resolved by the preceding mutation
             # so handle_add_meeting can skip _enrich_meeting's lookup.
@@ -2566,13 +2687,18 @@ def _build_enriched_from_client(
     current_status = (client.get("Status") or "").strip()
     client_city = client.get("Miasto", client.get("Miejscowość", "")) or ""
 
-    location = location_hint
+    location_resolution = resolve_meeting_location(
+        event_type=event_type,
+        command_location=location_hint,
+        existing_client=client,
+    )
+    location = location_resolution.location
     addr = client.get("Adres", "")
-    if not location:
+    if not location and not location_resolution.needs_address:
         location = ", ".join(p for p in [addr, client_city] if p)
 
     parts = []
-    prefix = _EVENT_TYPE_DESCRIPTION_PREFIX.get(event_type)
+    prefix = action_description_prefix(event_type)
     if prefix:
         parts.append(prefix)
     if client.get("Telefon"):
@@ -2583,12 +2709,13 @@ def _build_enriched_from_client(
         parts.append(f"Produkt: {prod}" + (f" {power} kW" if power else ""))
     if client.get("Notatki"):
         parts.append(f"Notatki: {client['Notatki']}")
-    if client.get("Następny krok"):
+    if event_type:
+        parts.append(f"Następny krok: {action_label(event_type)}")
+    elif client.get("Następny krok"):
         parts.append(f"Następny krok: {client['Następny krok']}")
     description = "\n".join(parts)
 
-    label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
-    title = f"{label} — {full_name}" if full_name else label
+    title = calendar_title(event_type, full_name)
     return {
         "title": title,
         "location": location,
@@ -2600,6 +2727,7 @@ def _build_enriched_from_client(
         "client_city": client_city,
         "existing_client_data": client,
         "ambiguous_client": False,
+        "needs_address": location_resolution.needs_address,
         # Slice 5.1d.3: unique path — no disambiguation needed.
         "ambiguous_candidates": [],
     }
@@ -2665,11 +2793,15 @@ async def _enrich_meeting(
                 if c.get("_row") is not None
             ]
 
-    label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
-    title = f"{label} — {full_name}" if full_name else label
+    location_resolution = resolve_meeting_location(
+        event_type=event_type,
+        command_location=location,
+        existing_client=None,
+    )
+    title = calendar_title(event_type, full_name)
     return {
         "title": title,
-        "location": location,
+        "location": location_resolution.location or location,
         "description": description,
         "full_name": full_name,
         "client_found": client_found,
@@ -2677,6 +2809,7 @@ async def _enrich_meeting(
         "current_status": current_status,
         "client_city": client_city,
         "ambiguous_client": ambiguous_client,
+        "needs_address": location_resolution.needs_address,
         "ambiguous_candidates": ambiguous_candidates,
     }
 
@@ -2853,6 +2986,13 @@ async def handle_add_meeting(
             status_update = _normalize_compound_status_update(raw_status_update, enriched)
         else:
             status_update = _auto_status_update_from_enriched(enriched, event_type)
+
+        if enriched.get("needs_address") and event_type == "in_person":
+            await reply_text(
+                update,
+                f"Podaj adres spotkania dla {enriched_client_name}, np. 'ul. Cicha 18'.",
+            )
+            return
 
         conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
@@ -3346,7 +3486,14 @@ async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) 
 
     await reply_text(update, "✅ Zapisane.")
     if not _should_send_r7_after_add_client(flow_data, client_data):
-        return False
+        _save_client_context(
+            telegram_id,
+            client_name=name,
+            city=city,
+            client_row=result.row,
+            current_status=client_data.get("Status") or _STATUS_NEW_LEAD,
+        )
+        return True
     await send_next_action_prompt(
         update, telegram_id, name, city,
         client_row=result.row,
@@ -3470,6 +3617,22 @@ async def handle_confirm(
 
             skip_delete = await confirm_photo_upload(update, context, user, flow_data)
 
+        elif flow_type == "client_field_update_confirm":
+            ok = await update_client(user_id, flow_data["row"], flow_data["updates"])
+            if ok:
+                await reply_text(update, "✅ Zapisane.")
+                return_flow_type = flow_data.get("return_flow_type")
+                return_flow_data = flow_data.get("return_flow_data") or {}
+                if return_flow_type:
+                    save_pending(PendingFlow(
+                        telegram_id=telegram_id,
+                        flow_type=PendingFlowType(return_flow_type),
+                        flow_data=return_flow_data,
+                    ))
+                    skip_delete = True
+            else:
+                await reply_markdown_v2(update, format_error("google_down"))
+
         elif flow_type == "edit_client":
             updates = flow_data["updates"]
             append_fields = flow_data.get("append_fields", [])
@@ -3501,7 +3664,7 @@ async def handle_confirm(
             client_data = flow_data.get("client_data") or {}
             client_name = flow_data.get("client_name") or client_data.get("Imię i nazwisko", "")
             event_type = flow_data.get("event_type") or "in_person"
-            correct_label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
+            correct_label = action_label(event_type)
             title = flow_data.get("title") or correct_label
             # Legacy override: pre-5.4.1 pendings stored title="Spotkanie — X" even
             # for phone_call/offer_email. Rewrite bare generic labels and the
@@ -3511,7 +3674,10 @@ async def handle_confirm(
             # pre-5.4.1 flows stored "Spotkanie - Jan" without em-dash.
             if client_name:
                 stripped = title.strip()
-                generic_labels = set(_EVENT_TYPE_TO_NEXT_STEP_LABEL.values())
+                generic_labels = {
+                    action_label(label_event_type)
+                    for label_event_type in ("in_person", "phone_call", "offer_email", "doc_followup")
+                }
                 is_overridable = stripped in generic_labels or any(
                     stripped in (f"{lbl} — {client_name}", f"{lbl} - {client_name}")
                     for lbl in generic_labels
@@ -3577,7 +3743,7 @@ async def handle_confirm(
                 # Gate A fallback — stays in handler because the pipeline
                 # doesn't know about the disambiguation UX.
                 await reply_text(update,
-                    f"✅ Spotkanie dodane do kalendarza. Klient '{client_name}' ma "
+                    f"{action_success_message(event_type)} Klient '{client_name}' ma "
                     f"≥2 wpisy w arkuszu — nie synchronizuję, uściślij przy add_note/change_status."
                 )
             elif not result.sheets_attempted and client_name:
@@ -3604,21 +3770,21 @@ async def handle_confirm(
                 missing = canonical_missing_client_fields(sheet_columns, draft_client_data)
                 card = format_add_client_card(draft_client_data, missing)
                 await reply_text(update,
-                    f"✅ Spotkanie dodane.\n{card}",
+                    f"{action_success_message(event_type)}\n{card}",
                     reply_markup=build_mutation_buttons("confirm"),
                 )
                 skip_delete = True
             elif result.sheets_attempted and not result.sheets_synced:
                 # Partial: Calendar event created, Sheets sync failed.
                 await reply_text(update,
-                    "✅ Spotkanie dodane do kalendarza. Nie udało się zaktualizować arkusza."
+                    f"{action_success_message(event_type)} Nie udało się zaktualizować arkusza."
                 )
             elif result.status_updated:
                 await reply_text(update,
-                    f"✅ Spotkanie dodane do kalendarza. Status klienta: {result.status_new_value}."
+                    f"{action_success_message(event_type)} Status klienta: {result.status_new_value}."
                 )
             else:
-                await reply_text(update, "✅ Spotkanie dodane do kalendarza.")
+                await reply_text(update, action_success_message(event_type))
 
         elif flow_type == "add_meetings":
             created = []
@@ -3760,7 +3926,7 @@ async def send_next_action_prompt(
 ) -> None:
     """R7: send open-ended next-action prompt after a committed mutation.
 
-    Saves an r7_prompt pending flow. The user's reply is handled in
+    Saves an awaiting_next_step pending flow. The user's reply is handled in
     _route_pending_flow: temporal → add_meeting, otherwise → close silently.
 
     client_row / current_status carry the row resolved by the preceding mutation
@@ -3770,8 +3936,8 @@ async def send_next_action_prompt(
     name_city = f"{client_name} ({city})" if city else client_name
     save_pending(PendingFlow(
         telegram_id=telegram_id,
-        flow_type=PendingFlowType.R7_PROMPT,
-        flow_data=payload_to_flow_data(R7PromptPayload(
+        flow_type=PendingFlowType.AWAITING_NEXT_STEP,
+        flow_data=payload_to_flow_data(AwaitingNextStepPayload(
             client_name=client_name,
             city=city,
             client_row=client_row,

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from bot.handlers.text import _enrich_meeting
+from bot.handlers.text import _enrich_meeting, _format_add_meeting_flow_card
 from shared.clients import ClientLookupResult
 
 
@@ -106,6 +106,49 @@ async def test_enrich_meeting_title_uses_event_type_when_known_row_resolves():
     assert enriched["title"] == "Wysłać ofertę — Anna Testowa"
 
 
+@pytest.mark.asyncio
+async def test_enrich_meeting_reuses_existing_address_when_command_only_has_city():
+    client = {
+        "_row": 7,
+        "Imię i nazwisko": "Zbigniew Testowy",
+        "Miasto": "Zielonka",
+        "Adres": "Czeska 20D",
+    }
+    result = ClientLookupResult(status="unique", clients=[client], normalized_query="zbigniew testowy")
+
+    with _patched_lookup(result):
+        enriched = await _enrich_meeting(
+            "u1",
+            "Zbigniew Testowy",
+            "Zielonka",
+            event_type="in_person",
+        )
+
+    assert enriched["location"] == "Czeska 20D, Zielonka"
+
+
+@pytest.mark.asyncio
+async def test_enrich_meeting_requests_address_when_command_city_differs_from_saved_city():
+    client = {
+        "_row": 7,
+        "Imię i nazwisko": "Zbigniew Testowy",
+        "Miasto": "Zielonka",
+        "Adres": "Czeska 20D",
+    }
+    result = ClientLookupResult(status="unique", clients=[client], normalized_query="zbigniew testowy")
+
+    with _patched_lookup(result):
+        enriched = await _enrich_meeting(
+            "u1",
+            "Zbigniew Testowy",
+            "Marki",
+            event_type="in_person",
+        )
+
+    assert enriched["location"] == ""
+    assert enriched["needs_address"] is True
+
+
 # ── Slice 5.4.1b — description prefix per event_type ─────────────────────────
 
 
@@ -144,3 +187,18 @@ async def test_enrich_meeting_description_no_prefix_for_in_person_or_none(event_
     assert enriched["description"].startswith("Tel: 600123456")
     for prefix in ("📧", "📞", "📋"):
         assert prefix not in enriched["description"]
+
+
+def test_add_meeting_card_uses_phone_confirmation_heading():
+    card = _format_add_meeting_flow_card({
+        "title": "Telefon — Zbigniew Testowy",
+        "start": "2027-05-10T10:00:00+02:00",
+        "end": "2027-05-10T10:15:00+02:00",
+        "client_name": "Zbigniew Testowy",
+        "location": "telefonicznie",
+        "description": "",
+        "event_type": "phone_call",
+    })
+
+    assert "Dodać telefon" in card
+    assert "Dodać spotkanie" not in card

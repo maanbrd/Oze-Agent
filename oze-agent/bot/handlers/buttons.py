@@ -7,7 +7,6 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.text import (
-    _EVENT_TYPE_TO_NEXT_STEP_LABEL,
     _auto_status_update_from_enriched,
     _build_enriched_from_client,
     _client_data_summary,
@@ -23,6 +22,7 @@ from bot.utils.telegram_helpers import (
     is_private_chat,
 )
 from bot.utils.conversation_reply import edit_message_text, reply_markdown_v2, reply_text
+from shared.behavior.action_type import calendar_title, confirmation_heading
 from shared.database import (
     delete_pending_flow,
     get_pending_flow,
@@ -32,10 +32,10 @@ from shared.pending import (
     AddClientPayload,
     AddMeetingPayload,
     AddNotePayload,
+    AwaitingNextStepPayload,
     ChangeStatusPayload,
     PendingFlow,
     PendingFlowType,
-    R7PromptPayload,
     payload_to_flow_data,
     save as save_pending,
 )
@@ -382,8 +382,8 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
         name_city = f"{client_name} ({city})" if city else (client_name or "klient")
         save_pending(PendingFlow(
             telegram_id=telegram_id,
-            flow_type=PendingFlowType.R7_PROMPT,
-            flow_data=payload_to_flow_data(R7PromptPayload(
+            flow_type=PendingFlowType.AWAITING_NEXT_STEP,
+            flow_data=payload_to_flow_data(AwaitingNextStepPayload(
                 client_name=client_name,
                 city=city,
                 client_row=duplicate_row,
@@ -436,6 +436,7 @@ async def _send_add_meeting_confirmation_card(
     end_iso: str,
     source_client_data: dict | None,
     status_update: dict | None,
+    event_type: str | None,
 ) -> None:
     """Slice 5.1d.3: render the same add_meeting confirm card handle_add_meeting
     produces, so the disambiguation-resume and skip-client paths stay visually
@@ -471,7 +472,14 @@ async def _send_add_meeting_confirmation_card(
             f"{status_update.get('old_value', '')} → "
             f"{status_update.get('new_value', '')}"
         )
-    msg = format_confirmation("add_meeting", details) + conflict_warning
+    msg = format_confirmation("add_meeting", details)
+    heading = confirmation_heading(event_type)
+    if heading.startswith("✅ "):
+        heading = heading[2:].strip()
+    lines = msg.splitlines()
+    if lines:
+        lines[0] = f"✅ *{escape_markdown_v2(heading)}*"
+    msg = "\n".join(lines) + conflict_warning
     await reply_markdown_v2(query,
         msg, reply_markup=build_mutation_buttons("confirm")
     )
@@ -578,6 +586,7 @@ async def _resume_add_meeting_disambiguation(
         flow_data["end"],
         source_client_data,
         status_update,
+        flow_data.get("event_type"),
     )
 
 
@@ -595,9 +604,8 @@ async def _resume_add_meeting_skip_client(
     """
     client_name = flow_data.get("client_name", "")
     event_type = flow_data.get("event_type")
-    label = _EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
     enriched_no_client = {
-        "title": flow_data.get("title") or (f"{label} — {client_name}" if client_name else label),
+        "title": flow_data.get("title") or calendar_title(event_type, client_name),
         "location": flow_data.get("location", ""),
         "description": "",
         "full_name": client_name,
@@ -635,4 +643,5 @@ async def _resume_add_meeting_skip_client(
         flow_data["end"],
         source_client_data,
         None,
+        flow_data.get("event_type"),
     )

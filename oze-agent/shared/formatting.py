@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+from shared.behavior.action_type import schedule_entry_suffix
+
 # ── MarkdownV2 escaping ───────────────────────────────────────────────────────
 
 # Characters that must be escaped in MarkdownV2
@@ -327,6 +329,15 @@ def format_schedule_entry(event: dict) -> str:
     title = event.get("title", "Spotkanie")
     location = event.get("location", "")
     description = event.get("description", "")
+    event_type = (event.get("event_type") or "").strip()
+    if not event_type:
+        title_lower = title.lower()
+        if title_lower.startswith("telefon"):
+            event_type = "phone_call"
+        elif title_lower.startswith("wysłać ofertę") or title_lower.startswith("mail"):
+            event_type = "offer_email"
+        else:
+            event_type = "in_person"
 
     # Time HH:MM
     time_str = start[11:16] if len(start) >= 16 else "??:??"
@@ -347,7 +358,12 @@ def format_schedule_entry(event: dict) -> str:
 
     # Build main line
     city_part = f" \\({_e(city)}\\)" if city else ""
-    main_line = f"{_e(time_str)} 🤝 {_e(client)}{city_part} — spotkanie"
+    emoji = {
+        "phone_call": "📞",
+        "offer_email": "📧",
+        "doc_followup": "📋",
+    }.get(event_type, "🤝")
+    main_line = f"{_e(time_str)} {emoji} {_e(client)}{city_part} — {schedule_entry_suffix(event_type)}"
 
     # Build detail line (address + product) for in-person meetings
     details = []

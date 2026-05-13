@@ -15,6 +15,9 @@ class PendingFlowType(str, Enum):
     ADD_MEETING_DISAMBIGUATION = "add_meeting_disambiguation"
     DISAMBIGUATION = "disambiguation"
     R7_PROMPT = "r7_prompt"
+    CLIENT_CONTEXT = "client_context"
+    CLIENT_FIELD_UPDATE_CONFIRM = "client_field_update_confirm"
+    AWAITING_NEXT_STEP = "awaiting_next_step"
 
 
 @dataclass

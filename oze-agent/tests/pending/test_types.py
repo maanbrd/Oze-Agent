@@ -12,6 +12,9 @@ _EXPECTED_VALUES = {
     PendingFlowType.ADD_MEETING_DISAMBIGUATION: "add_meeting_disambiguation",
     PendingFlowType.DISAMBIGUATION: "disambiguation",
     PendingFlowType.R7_PROMPT: "r7_prompt",
+    PendingFlowType.CLIENT_CONTEXT: "client_context",
+    PendingFlowType.CLIENT_FIELD_UPDATE_CONFIRM: "client_field_update_confirm",
+    PendingFlowType.AWAITING_NEXT_STEP: "awaiting_next_step",
 }
 
 
@@ -27,6 +30,7 @@ def test_enum_covers_exactly_the_mvp_types():
 def test_str_enum_equality_with_raw_string():
     assert PendingFlowType.ADD_CLIENT == "add_client"
     assert PendingFlowType.R7_PROMPT == "r7_prompt"
+    assert PendingFlowType.AWAITING_NEXT_STEP == "awaiting_next_step"
 
 
 def test_pending_flow_defaults():

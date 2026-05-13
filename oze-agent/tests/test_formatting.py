@@ -131,3 +131,18 @@ def test_format_edit_comparison_empty_old_value_shows_em_dash():
     assert "→" in result                   # arrow (separate char)
     assert "Podpisane" in result
     assert "Status:  →" not in result      # no double-space regression
+
+
+def test_format_schedule_entry_uses_phone_event_type_label():
+    from shared.formatting import format_schedule_entry
+
+    rendered = format_schedule_entry({
+        "start": "2026-05-14T10:00:00+02:00",
+        "title": "Telefon — Krzysztof Ziobro",
+        "location": "telefonicznie",
+        "event_type": "phone_call",
+        "description": "Produkt: PV + Magazyn energii",
+    })
+
+    assert "— telefon" in rendered
+    assert "— spotkanie" not in rendered

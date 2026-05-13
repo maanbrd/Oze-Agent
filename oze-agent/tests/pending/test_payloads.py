@@ -9,7 +9,10 @@ from shared.pending import (
     AddMeetingDisambiguationPayload,
     AddMeetingPayload,
     AddNotePayload,
+    AwaitingNextStepPayload,
     ChangeStatusPayload,
+    ClientContextPayload,
+    ClientFieldUpdateConfirmPayload,
     DisambiguationPayload,
     PendingFlowType,
     R7PromptPayload,
@@ -35,6 +38,9 @@ def test_payload_map_class_per_type():
         PendingFlowType.ADD_MEETING_DISAMBIGUATION: AddMeetingDisambiguationPayload,
         PendingFlowType.DISAMBIGUATION: DisambiguationPayload,
         PendingFlowType.R7_PROMPT: R7PromptPayload,
+        PendingFlowType.CLIENT_CONTEXT: ClientContextPayload,
+        PendingFlowType.CLIENT_FIELD_UPDATE_CONFIRM: ClientFieldUpdateConfirmPayload,
+        PendingFlowType.AWAITING_NEXT_STEP: AwaitingNextStepPayload,
     }
     assert PAYLOAD_BY_FLOW_TYPE == expected
 
@@ -121,6 +127,28 @@ def test_payload_map_class_per_type():
             {"client_name": "Jan", "city": "Warszawa"},
             R7PromptPayload,
         ),
+        (
+            PendingFlowType.CLIENT_CONTEXT,
+            {"client_name": "Jan", "city": "Warszawa", "client_row": 12},
+            ClientContextPayload,
+        ),
+        (
+            PendingFlowType.AWAITING_NEXT_STEP,
+            {"client_name": "Jan", "city": "Warszawa", "client_row": 12},
+            AwaitingNextStepPayload,
+        ),
+        (
+            PendingFlowType.CLIENT_FIELD_UPDATE_CONFIRM,
+            {
+                "row": 12,
+                "client_name": "Jan",
+                "city": "Warszawa",
+                "updates": {"Email": "jan@example.com"},
+                "return_flow_type": "awaiting_next_step",
+                "return_flow_data": {"client_name": "Jan", "client_row": 12},
+            },
+            ClientFieldUpdateConfirmPayload,
+        ),
     ],
 )
 def test_payload_round_trip(flow_type, flow_data, expected_cls):
@@ -200,6 +228,13 @@ def test_add_note_optional_fields_default_to_empty_string():
 def test_r7_prompt_optional_city_defaults_to_empty_string():
     payload = payload_from_flow_data(
         PendingFlowType.R7_PROMPT, {"client_name": "Jan"}
+    )
+    assert payload.city == ""
+
+
+def test_awaiting_next_step_optional_city_defaults_to_empty_string():
+    payload = payload_from_flow_data(
+        PendingFlowType.AWAITING_NEXT_STEP, {"client_name": "Jan"}
     )
     assert payload.city == ""
 

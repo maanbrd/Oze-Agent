@@ -329,7 +329,12 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
             "ID wydarzenia Kalendarz": "event-1",
         },
     )
-    upd.effective_message.reply_text.assert_awaited_once_with("✅ Spotkanie dodane do kalendarza.")
+    expected_message = {
+        "phone_call": "✅ Telefon dodany do kalendarza.",
+        "offer_email": "✅ Mail dodany do kalendarza.",
+        "doc_followup": "✅ Follow-up dodany do kalendarza.",
+    }[event_type]
+    upd.effective_message.reply_text.assert_awaited_once_with(expected_message)
 
 
 @pytest.mark.asyncio
@@ -381,7 +386,7 @@ async def test_add_meeting_confirm_applies_compound_status_update():
         },
     )
     upd.effective_message.reply_text.assert_awaited_once_with(
-        "✅ Spotkanie dodane do kalendarza. Status klienta: Podpisane."
+        "✅ Telefon dodany do kalendarza. Status klienta: Podpisane."
     )
 
 

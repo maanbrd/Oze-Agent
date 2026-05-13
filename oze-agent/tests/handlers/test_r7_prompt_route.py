@@ -174,7 +174,7 @@ async def test_r7_email_reply_with_resolved_row_opens_edit_confirmation_not_meet
             "current_status": "Nowy lead",
         },
     }
-    with patch("bot.handlers.text.save_pending_flow") as mock_save, \
+    with patch("bot.handlers.text.save_pending") as mock_save, \
          patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
          patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
         consumed = await _route_pending_flow(
@@ -188,20 +188,68 @@ async def test_r7_email_reply_with_resolved_row_opens_edit_confirmation_not_meet
     assert consumed is True
     mock_meeting.assert_not_called()
     mock_delete.assert_not_called()
-    mock_save.assert_called_once_with(
-        123,
-        "edit_client",
-        {
-            "row": 11,
-            "updates": {"Email": "maciej.mitura@gmail.com"},
-            "old_values": {"Email": ""},
-            "append_fields": [],
-        },
-    )
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type.value == "client_field_update_confirm"
+    assert saved_flow.flow_data["row"] == 11
+    assert saved_flow.flow_data["updates"] == {"Email": "maciej.mitura@gmail.com"}
+    assert saved_flow.flow_data["return_flow_type"] == "awaiting_next_step"
     text = upd.effective_message.reply_text.await_args.args[0]
     assert "Maciej Mitura" in text
     assert "Email" in text
     assert "maciej.mitura@gmail.com" in text
+
+
+@pytest.mark.asyncio
+async def test_r7_source_reply_with_resolved_row_opens_field_update_confirmation():
+    upd = _update()
+    flow = {
+        "flow_type": "awaiting_next_step",
+        "flow_data": {
+            "client_name": "Zbigniew Borek",
+            "city": "Zielonka",
+            "client_row": 22,
+            "current_status": "Spotkanie umówione",
+        },
+    }
+    with patch("bot.handlers.text.save_pending") as mock_save, \
+         patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
+         patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": "u1"},
+            flow,
+            "źródło pozyskania D2D",
+        )
+
+    assert consumed is True
+    mock_meeting.assert_not_called()
+    mock_delete.assert_not_called()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type.value == "client_field_update_confirm"
+    assert saved_flow.flow_data["row"] == 22
+    assert saved_flow.flow_data["updates"] == {"Źródło pozyskania": "D2D"}
+
+
+@pytest.mark.asyncio
+async def test_awaiting_next_step_close_phrase_replies_and_deletes_flow():
+    upd = _update()
+    flow = {
+        "flow_type": "awaiting_next_step",
+        "flow_data": {"client_name": "Anna Panelowa", "city": "Zielonka", "client_row": 8},
+    }
+    with patch("bot.handlers.text.delete_pending_flow") as mock_delete:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": "u1"},
+            flow,
+            "Nie wiem jeszcze",
+        )
+
+    assert consumed is True
+    mock_delete.assert_called_once_with(123)
+    upd.effective_message.reply_text.assert_awaited_once_with("OK, bez następnego kroku.")
 
 
 @pytest.mark.asyncio

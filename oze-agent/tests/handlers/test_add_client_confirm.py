@@ -95,7 +95,7 @@ async def test_add_client_success_can_suppress_r7_for_meeting_seeded_client():
     ), patch(
         "bot.handlers.text.commit_add_client",
         new=AsyncMock(return_value=AddClientResult(success=True, row=42)),
-    ), patch(
+    ), patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.send_next_action_prompt",
         new=AsyncMock(),
     ) as mock_r7, patch("bot.handlers.text.delete_pending_flow") as mock_delete:
@@ -103,11 +103,14 @@ async def test_add_client_success_can_suppress_r7_for_meeting_seeded_client():
 
     upd.effective_message.reply_text.assert_awaited_once_with("✅ Zapisane.")
     mock_r7.assert_not_called()
-    mock_delete.assert_called_once_with(123)
+    mock_delete.assert_not_called()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type.value == "client_context"
+    assert saved_flow.flow_data["client_row"] == 42
 
 
 @pytest.mark.asyncio
-async def test_add_client_success_skips_r7_when_next_step_already_defined():
+async def test_add_client_success_keeps_client_context_when_next_step_already_defined():
     """Meeting-seeded clients must stay closed even if the legacy suppress flag
     was lost while the user tapped Dopisać and added another field.
     """
@@ -130,7 +133,7 @@ async def test_add_client_success_skips_r7_when_next_step_already_defined():
     ), patch(
         "bot.handlers.text.commit_add_client",
         new=AsyncMock(return_value=AddClientResult(success=True, row=42)),
-    ), patch(
+    ), patch("bot.handlers.text.save_pending") as mock_save, patch(
         "bot.handlers.text.send_next_action_prompt",
         new=AsyncMock(),
     ) as mock_r7, patch("bot.handlers.text.delete_pending_flow") as mock_delete:
@@ -138,7 +141,12 @@ async def test_add_client_success_skips_r7_when_next_step_already_defined():
 
     upd.effective_message.reply_text.assert_awaited_once_with("✅ Zapisane.")
     mock_r7.assert_not_called()
-    mock_delete.assert_called_once_with(123)
+    mock_delete.assert_not_called()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type.value == "client_context"
+    assert saved_flow.flow_data["client_row"] == 42
+    assert saved_flow.flow_data["client_name"] == "Zbigniew Ziomek"
+    assert saved_flow.flow_data["city"] == "Marki"
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Optional
 
+from shared.behavior.action_type import action_label
 from shared.clients import update_client_row_touching_contact
 from shared.google_calendar import create_event
 
@@ -35,10 +36,8 @@ STATUS_MEETING_BOOKED = "Spotkanie umówione"
 STATUS_MEETING_AUTO_UPGRADE_FROM = {"", STATUS_NEW_LEAD}
 
 EVENT_TYPE_TO_NEXT_STEP_LABEL = {
-    "in_person": "Spotkanie",
-    "phone_call": "Telefon",
-    "offer_email": "Wysłać ofertę",
-    "doc_followup": "Follow-up dokumentowy",
+    event_type: action_label(event_type)
+    for event_type in ("in_person", "phone_call", "offer_email", "doc_followup")
 }
 
 
@@ -141,7 +140,7 @@ async def commit_add_meeting(
 
     # Step 3: Build Sheets payload
     sheet_updates: dict = {
-        "Następny krok": EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
+        "Następny krok": action_label(event_type),
         "Data następnego kroku": format_next_step_date_for_sheets(start),
     }
     if calendar_event_id:

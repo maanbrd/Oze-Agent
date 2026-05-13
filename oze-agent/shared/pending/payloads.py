@@ -102,6 +102,32 @@ class R7PromptPayload:
 
 
 @dataclass
+class ClientContextPayload:
+    client_name: str
+    city: str = ""
+    client_row: Optional[int] = None
+    current_status: Optional[str] = None
+
+
+@dataclass
+class AwaitingNextStepPayload:
+    client_name: str
+    city: str = ""
+    client_row: Optional[int] = None
+    current_status: Optional[str] = None
+
+
+@dataclass
+class ClientFieldUpdateConfirmPayload:
+    row: int
+    updates: dict
+    client_name: str = ""
+    city: str = ""
+    return_flow_type: Optional[str] = None
+    return_flow_data: Optional[dict] = None
+
+
+@dataclass
 class AddMeetingDisambiguationPayload:
     # Slice 5.1d.3: carries the full meeting spec when lookup_client returns
     # multi, so the user can pick a candidate before we show the confirm card.
@@ -130,6 +156,9 @@ PendingFlowPayload = Union[
     AddMeetingDisambiguationPayload,
     DisambiguationPayload,
     R7PromptPayload,
+    ClientContextPayload,
+    ClientFieldUpdateConfirmPayload,
+    AwaitingNextStepPayload,
 ]
 
 
@@ -142,6 +171,9 @@ PAYLOAD_BY_FLOW_TYPE: dict[PendingFlowType, type] = {
     PendingFlowType.ADD_MEETING_DISAMBIGUATION: AddMeetingDisambiguationPayload,
     PendingFlowType.DISAMBIGUATION: DisambiguationPayload,
     PendingFlowType.R7_PROMPT: R7PromptPayload,
+    PendingFlowType.CLIENT_CONTEXT: ClientContextPayload,
+    PendingFlowType.CLIENT_FIELD_UPDATE_CONFIRM: ClientFieldUpdateConfirmPayload,
+    PendingFlowType.AWAITING_NEXT_STEP: AwaitingNextStepPayload,
 }
 
 

@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Iterable, Optional
 
 from .add_meeting import (
-    EVENT_TYPE_TO_NEXT_STEP_LABEL,
     STATUS_MEETING_BOOKED,
     format_next_step_date_for_sheets,
 )
+from shared.behavior.action_type import action_label
 
 
 IMPORTANT_MISSING_CLIENT_FIELDS = (
@@ -61,7 +61,7 @@ def build_meeting_seeded_client_data(
     if event_type == "in_person":
         draft["Status"] = STATUS_MEETING_BOOKED
 
-    draft["Następny krok"] = EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie")
+    draft["Następny krok"] = action_label(event_type)
     draft["Data następnego kroku"] = format_next_step_date_for_sheets(start)
     if _has_value(calendar_event_id):
         draft["ID wydarzenia Kalendarz"] = calendar_event_id

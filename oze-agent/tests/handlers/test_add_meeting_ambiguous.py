@@ -197,7 +197,7 @@ async def test_handle_confirm_ambiguous_with_compound_status_update_syncs_on_exp
         },
     )
     upd.effective_message.reply_text.assert_awaited_once_with(
-        "✅ Spotkanie dodane do kalendarza. Status klienta: Podpisane."
+        "✅ Telefon dodany do kalendarza. Status klienta: Podpisane."
     )
 
 
