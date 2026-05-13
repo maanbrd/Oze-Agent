@@ -6,7 +6,7 @@ import { getTelegramStatus } from "@/lib/api/onboarding";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_TELEGRAM_BOT_HANDLE = "@OzeAgentBot";
+const DEFAULT_TELEGRAM_BOT_HANDLE = "@AgentOZE_Bot";
 
 function telegramBotHandle() {
   const raw =

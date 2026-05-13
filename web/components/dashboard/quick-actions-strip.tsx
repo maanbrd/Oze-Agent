@@ -3,7 +3,7 @@ import Link from "next/link";
 import { BriefJutraModal } from "@/components/dashboard/brief-jutra-modal";
 import type { CrmClient, CrmEvent } from "@/lib/crm/types";
 
-export const TELEGRAM_BOT_URL = "https://t.me/OzeAgentBot";
+export const TELEGRAM_BOT_URL = "https://t.me/AgentOZE_Bot";
 
 export function QuickActionsStrip({
   tomorrowKey,
@@ -28,7 +28,7 @@ export function QuickActionsStrip({
         className="group flex h-full flex-col items-start gap-2 rounded-[8px] border border-white/10 bg-white/[0.04] p-4 transition hover:border-[#3DFF7A]/40 hover:bg-white/[0.06]"
       >
         <span className="text-2xl" aria-hidden="true">✈️</span>
-        <span className="font-semibold text-white">Otwórz @OzeAgentBot</span>
+        <span className="font-semibold text-white">Otwórz @AgentOZE_Bot</span>
         <span className="text-xs text-zinc-400">
           Telegram w nowej karcie. Dyktuj klienta, notatkę, status.
         </span>

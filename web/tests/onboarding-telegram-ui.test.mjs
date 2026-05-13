@@ -20,10 +20,11 @@ test("telegram onboarding uses a dedicated pairing card and keeps completed redi
 
 test("telegram pairing page resolves the configured bot handle and exact command", () => {
   assert.equal(telegramPageSource.includes("DEFAULT_TELEGRAM_BOT_HANDLE"), true);
-  assert.equal(telegramPageSource.includes("@OzeAgentBot"), true);
+  assert.equal(telegramPageSource.includes("@AgentOZE_Bot"), true);
   assert.equal(telegramPageSource.includes("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME"), true);
   assert.equal(pairingCardSource.includes("botHandle"), true);
   assert.equal(pairingCardSource.includes("@OZEAGENTBot"), false);
+  assert.equal(pairingCardSource.includes("@OzeAgentBot"), false);
   assert.equal(pairingCardSource.includes('/start ${code ?? "KOD"}'), false);
   assert.equal(pairingCardSource.includes("/start KOD"), false);
   assert.match(pairingCardSource, /\/start \$\{code\}/);

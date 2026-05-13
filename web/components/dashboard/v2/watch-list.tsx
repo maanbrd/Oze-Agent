@@ -131,7 +131,7 @@ export function WatchList({ urgentClients, tomorrowEvents, offers, now }: WatchL
       )}
 
       <a
-        href="https://t.me/OzeAgentBot"
+        href="https://t.me/AgentOZE_Bot"
         target="_blank"
         rel="noopener noreferrer"
         className="mt-auto pt-5 text-sm font-mono font-medium tracking-wider text-[#3DFF7A] hover:text-[#6BFFA0]"

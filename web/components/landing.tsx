@@ -449,7 +449,7 @@ function HeroPhone({ compact = false }: { compact?: boolean }) {
             <span style={{ fontSize: 14 }}>‹</span> Chats
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 14.5, fontWeight: 600 }}>@OZEAgentBot</div>
+            <div style={{ fontSize: 14.5, fontWeight: 600 }}>@AgentOZE_Bot</div>
             <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.45)" }}>bot</div>
           </div>
           <div
@@ -1989,7 +1989,7 @@ function FooterMin() {
             heading="Kontakt"
             links={[
               { label: "Email: kontakt@oze-agent.pl", href: "mailto:kontakt@oze-agent.pl" },
-              { label: "Telegram: @OZEAgentBot", href: "https://t.me/OZEAgentBot" },
+              { label: "Telegram: @AgentOZE_Bot", href: "https://t.me/AgentOZE_Bot" },
             ]}
           />
           <FooterColumn
