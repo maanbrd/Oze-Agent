@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from bot.config import Config
 from shared.database import (
     get_daily_interaction_count,
+    get_supabase_client,
     get_user_by_telegram_id,
     increment_daily_interaction_count,
     log_interaction,
@@ -64,7 +65,31 @@ async def check_user_registered(telegram_id: int) -> Optional[dict]:
 
 async def check_subscription_active(user: dict) -> bool:
     """Return True if the user's subscription is currently active."""
-    return user.get("subscription_status") == "active" and not user.get("is_suspended", False)
+    if user.get("is_suspended", False):
+        return False
+
+    if user.get("subscription_status") == "active":
+        return True
+
+    auth_user_id = str(user.get("auth_user_id") or "").strip()
+    if not auth_user_id:
+        return False
+
+    try:
+        result = (
+            get_supabase_client()
+            .table("beta_access_grants")
+            .select("id")
+            .eq("auth_user_id", auth_user_id)
+            .eq("status", "active")
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("check_subscription_active beta grant lookup failed: %s", exc)
+        return False
+
+    return bool(result.data)
 
 
 async def check_interaction_limit(telegram_id: int) -> dict:
