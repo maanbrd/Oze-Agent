@@ -177,7 +177,7 @@ async def test_add_client_augment_preserves_meeting_seeded_closed_context():
                 "Telefon": "725235242",
                 "Status": "Spotkanie umówione",
                 "Następny krok": "Spotkanie",
-                "Data następnego kroku": "2026-05-14",
+                "Data następnego kroku": "14.05.2026",
                 "ID wydarzenia Kalendarz": "event-1",
             },
         },
@@ -200,5 +200,5 @@ async def test_add_client_augment_preserves_meeting_seeded_closed_context():
     saved_flow = mock_save.call_args.args[0]
     assert saved_flow.flow_data["client_data"]["Email"] == "zbigniewziomek@gmail.com"
     assert saved_flow.flow_data["client_data"]["Następny krok"] == "Spotkanie"
-    assert saved_flow.flow_data["client_data"]["Data następnego kroku"] == "2026-05-14"
+    assert saved_flow.flow_data["client_data"]["Data następnego kroku"] == "14.05.2026"
     assert saved_flow.flow_data["suppress_r7_after_save"] is True

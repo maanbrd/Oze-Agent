@@ -90,6 +90,9 @@ async def test_add_meeting_confirm_new_client_draft_keeps_full_meeting_client_da
             "Miasto": "Marki",
             "Adres": "ul. Markowa 25",
             "Produkt": "PV + Magazyn energii",
+            "Następny krok": "Spotkanie godz. 14:00",
+            "Data następnego kroku": "2027-04-20T14:00:00+02:00",
+            "ID wydarzenia Kalendarz": "stale-event",
         },
     }
     upd = _update()
@@ -107,7 +110,11 @@ async def test_add_meeting_confirm_new_client_draft_keeps_full_meeting_client_da
             upd,
             MagicMock(),
             {"id": 1, "sheet_columns": [
-                "Imię i nazwisko", "Telefon", "Email", "Miasto", "Adres", "Produkt", "Status",
+                "Imię i nazwisko", "Telefon", "Email", "Miasto", "Adres", "Status",
+                "Produkt", "Notatki", "Data pierwszego kontaktu",
+                "Data ostatniego kontaktu", "Następny krok",
+                "Data następnego kroku", "Źródło pozyskania",
+                "Zdjęcia", "Link do zdjęć", "ID wydarzenia Kalendarz",
             ]},
             {},
             "",
@@ -122,7 +129,7 @@ async def test_add_meeting_confirm_new_client_draft_keeps_full_meeting_client_da
     assert draft["Produkt"] == "PV + Magazyn energii"
     assert draft["Status"] == "Spotkanie umówione"
     assert draft["Następny krok"] == "Spotkanie"
-    assert draft["Data następnego kroku"] == "2027-04-20"
+    assert draft["Data następnego kroku"] == "20.04.2027"
     assert draft["ID wydarzenia Kalendarz"] == "event-1"
     assert saved_flow.flow_data["suppress_r7_after_save"] is True
     response = upd.effective_message.reply_text.call_args.args[0]
@@ -132,6 +139,10 @@ async def test_add_meeting_confirm_new_client_draft_keeps_full_meeting_client_da
     assert "Miasto" not in missing_line
     assert "Adres" not in missing_line
     assert "Produkt" not in missing_line
+    assert "Notatki" not in missing_line
+    assert "ID wydarzenia Kalendarz" not in response
+    assert "event-1" not in response
+    assert "Data następnego kroku: 20.04.2027 (wtorek)" in response
     mock_delete.assert_not_called()
 
 
@@ -223,7 +234,7 @@ async def test_add_meeting_confirm_updates_existing_new_lead_status():
         7,
         {
             "Następny krok": "Spotkanie",
-            "Data następnego kroku": "2026-04-17",
+            "Data następnego kroku": "17.04.2026",
             "ID wydarzenia Kalendarz": "event-1",
             "Status": "Spotkanie umówione",
         },
@@ -267,7 +278,7 @@ async def test_add_meeting_confirm_does_not_downgrade_advanced_status():
         7,
         {
             "Następny krok": "Spotkanie",
-            "Data następnego kroku": "2026-04-17",
+            "Data następnego kroku": "17.04.2026",
             "ID wydarzenia Kalendarz": "event-1",
         },
     )
@@ -314,7 +325,7 @@ async def test_add_meeting_confirm_skips_status_for_non_in_person_event_types(ev
         7,
         {
             "Następny krok": expected_label,
-                "Data następnego kroku": "2026-04-17",
+                "Data następnego kroku": "17.04.2026",
             "ID wydarzenia Kalendarz": "event-1",
         },
     )
@@ -364,7 +375,7 @@ async def test_add_meeting_confirm_applies_compound_status_update():
         7,
         {
             "Następny krok": "Telefon",
-            "Data następnego kroku": "2026-04-17",
+            "Data następnego kroku": "17.04.2026",
             "ID wydarzenia Kalendarz": "event-1",
             "Status": "Podpisane",
         },
@@ -412,7 +423,7 @@ async def test_add_meeting_confirm_syncs_to_enriched_client_row():
         7,
         {
             "Następny krok": "Spotkanie",
-            "Data następnego kroku": "2026-04-17",
+            "Data następnego kroku": "17.04.2026",
             "ID wydarzenia Kalendarz": "event-1",
             "Status": "Spotkanie umówione",
         },
@@ -467,7 +478,7 @@ async def test_add_meeting_confirm_no_first_name_match_creates_add_client_draft(
     assert saved_flow.flow_data["client_data"]["Telefon"] == "746938764"
     assert saved_flow.flow_data["client_data"]["Status"] == "Spotkanie umówione"
     assert saved_flow.flow_data["client_data"]["Następny krok"] == "Spotkanie"
-    assert saved_flow.flow_data["client_data"]["Data następnego kroku"] == "2026-04-17"
+    assert saved_flow.flow_data["client_data"]["Data następnego kroku"] == "17.04.2026"
     assert saved_flow.flow_data["client_data"]["ID wydarzenia Kalendarz"] == "event-1"
     assert saved_flow.flow_data["suppress_r7_after_save"] is True
     mock_delete.assert_not_called()

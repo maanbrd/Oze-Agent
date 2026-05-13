@@ -191,7 +191,7 @@ async def test_handle_confirm_ambiguous_with_compound_status_update_syncs_on_exp
         11,
         {
             "Następny krok": "Telefon",
-                "Data następnego kroku": "2027-04-17",
+                "Data następnego kroku": "17.04.2027",
             "ID wydarzenia Kalendarz": "event-2",
             "Status": "Podpisane",
         },

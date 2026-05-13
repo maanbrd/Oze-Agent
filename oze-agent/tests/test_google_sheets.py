@@ -1,7 +1,9 @@
 """Unit tests for shared/google_sheets.py — Google API and DB calls are mocked."""
 
-import pytest
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class _Execute:
@@ -402,6 +404,9 @@ async def test_add_client_defaults_missing_status_at_sheets_boundary():
     assert row == 2
     appended = values.append_kwargs["body"]["values"][0]
     assert appended[DEFAULT_COLUMNS.index("Status")] == "Nowy lead"
+    today = date.today().strftime("%Y-%m-%d")
+    assert appended[DEFAULT_COLUMNS.index("Data pierwszego kontaktu")] == today
+    assert appended[DEFAULT_COLUMNS.index("Data ostatniego kontaktu")] == today
 
 
 @pytest.mark.asyncio

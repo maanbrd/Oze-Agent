@@ -80,6 +80,16 @@ _FIELD_LABEL = {
     "Następny krok": "Następny krok",
 }
 
+_ADD_CLIENT_CARD_SKIP_FIELDS = {
+    "_row",
+    "Wiersz",
+    "Zdjęcia",
+    "Link do zdjęć",
+    "ID wydarzenia Kalendarz",
+    "Data pierwszego kontaktu",
+    "Data ostatniego kontaktu",
+}
+
 
 def _find(client_data: dict, candidates: list[str]) -> str:
     for key in candidates:
@@ -158,7 +168,7 @@ def format_add_client_card(client_data: dict, missing: list[str]) -> str:
     # Remaining fields: every non-empty field not already shown above
     _FOLLOWUP_FIELDS = {"Następny krok", "Data następnego kroku"}
     for field, value in client_data.items():
-        if field not in rendered and value:
+        if field not in rendered and field not in _ADD_CLIENT_CARD_SKIP_FIELDS and value:
             label = _FIELD_LABEL.get(field, field)
             display = _fmt_followup(value) if field in _FOLLOWUP_FIELDS else value
             lines.append(f"{label}: {display}")
@@ -192,6 +202,18 @@ def _fmt_date(serial) -> str:
             return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
     except (TypeError, ValueError):
         pass
+    if serial and isinstance(serial, str):
+        match = re.fullmatch(r"\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*", serial)
+        if match:
+            try:
+                dt = _datetime(
+                    int(match.group(3)),
+                    int(match.group(2)),
+                    int(match.group(1)),
+                )
+                return dt.strftime("%d.%m.%Y") + f" ({_DAYS_PL[dt.weekday()]})"
+            except ValueError:
+                pass
     # Handle ISO string "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM"
     if serial and isinstance(serial, str) and len(serial) >= 10 and serial[4:5] == "-":
         try:

@@ -25,6 +25,10 @@ from .add_meeting import (
 )
 from .add_note import AddNoteResult, commit_add_note
 from .change_status import ChangeStatusResult, commit_change_status
+from .meeting_client_flow import (
+    build_meeting_seeded_client_data,
+    canonical_missing_client_fields,
+)
 
 __all__ = [
     "AddClientResult",
@@ -42,6 +46,8 @@ __all__ = [
     "commit_add_note",
     "commit_change_status",
     "commit_update_client_fields",
+    "build_meeting_seeded_client_data",
+    "canonical_missing_client_fields",
     "format_next_step_date_for_sheets",
     "with_default_client_status",
 ]

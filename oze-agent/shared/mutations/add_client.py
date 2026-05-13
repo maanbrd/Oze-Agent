@@ -49,9 +49,10 @@ async def commit_add_client(
 ) -> AddClientResult:
     """Append a new client row to Sheets.
 
-    Callers can safely reuse their local inputs. Column I ("Data
-    pierwszego kontaktu") is auto-populated by google_sheets.add_client.
-    Column F ("Status") defaults to "Nowy lead" unless explicitly supplied.
+    Callers can safely reuse their local inputs. Columns I/J ("Data
+    pierwszego kontaktu" / "Data ostatniego kontaktu") are auto-populated
+    by google_sheets.add_client. Column F ("Status") defaults to
+    "Nowy lead" unless explicitly supplied.
     """
     row = await create_client_row(user_id, with_default_client_status(client_data))
     if row is None:

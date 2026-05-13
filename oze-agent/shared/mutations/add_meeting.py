@@ -45,10 +45,10 @@ EVENT_TYPE_TO_NEXT_STEP_LABEL = {
 def format_next_step_date_for_sheets(start: datetime) -> str:
     """Return the Sheets K/L date value for a Calendar-backed next step.
 
-    Calendar keeps the exact time. Sheets column L stays date-only so it
-    renders like the contact date columns in the CRM table.
+    Calendar keeps the exact time. Sheets column L gets the same visible
+    date format as the contact date columns in the CRM table.
     """
-    return start.date().isoformat()
+    return start.strftime("%d.%m.%Y")
 
 
 # ── Result dataclass ─────────────────────────────────────────────────────────

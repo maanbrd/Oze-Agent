@@ -120,7 +120,7 @@ async def test_add_client_success_skips_r7_when_next_step_already_defined():
             "Email": "zbigniewziomek@gmail.com",
             "Status": "Spotkanie umówione",
             "Następny krok": "Spotkanie",
-            "Data następnego kroku": "2026-05-14",
+            "Data następnego kroku": "14.05.2026",
             "ID wydarzenia Kalendarz": "event-1",
         },
     })

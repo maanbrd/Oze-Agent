@@ -317,7 +317,7 @@ Typ: rozmowa telefoniczna
 
 **Efekt w Sheets (po [Tak]):**
 - Kolumna `K=Następny krok`: enum label typu spotkania per D4 (`Spotkanie` dla `in_person`, `Telefon` dla `phone_call`, `Wysłać ofertę` dla `offer_email`, `Follow-up dokumentowy` dla `doc_followup`). **K nigdy nie przechowuje daty.**
-- Kolumna `L=Data następnego kroku`: data wydarzenia jako date-only ISO (`YYYY-MM-DD`), tak żeby Sheets wyświetlał ją jak kolumny I/J. Dokładna godzina zostaje w Calendar event.
+- Kolumna `L=Data następnego kroku`: data wydarzenia w formacie jak kolumny I/J (`DD.MM.YYYY`). Dokładna godzina zostaje w Calendar event.
 - Kolumna `P=ID wydarzenia Kalendarz`: Calendar event `id` zwrócony przez `events.insert` (per D8).
 - Kolumna `J=Data ostatniego kontaktu`: aktualizowana na dziś
 - Jeśli to spotkanie fizyczne i klient jest w statusie `Nowy lead` → **auto-przejście statusu na `Spotkanie umówione`** (bo status lejka powinien odzwierciedlać fakt że spotkanie jest w kalendarzu). Karta pokaże to w polu "Status: Nowy lead → Spotkanie umówione".

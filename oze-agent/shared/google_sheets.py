@@ -715,8 +715,11 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
         if not headers:
             return None
 
+        today = date.today().strftime("%Y-%m-%d")
         if "Data pierwszego kontaktu" not in client_data:
-            client_data["Data pierwszego kontaktu"] = date.today().strftime("%Y-%m-%d")
+            client_data["Data pierwszego kontaktu"] = today
+        if "Data ostatniego kontaktu" not in client_data:
+            client_data["Data ostatniego kontaktu"] = today
 
         def _value_for_header(header: str):
             value = client_data.get(header, "")

@@ -109,9 +109,10 @@ from shared.mutations import (
     STATUS_MEETING_AUTO_UPGRADE_FROM as _STATUS_MEETING_AUTO_UPGRADE_FROM,
     STATUS_MEETING_BOOKED as _STATUS_MEETING_BOOKED,
     STATUS_NEW_LEAD as _STATUS_NEW_LEAD,
+    build_meeting_seeded_client_data,
+    canonical_missing_client_fields,
     commit_add_client,
     commit_update_client_fields,
-    format_next_step_date_for_sheets,
     with_default_client_status,
 )
 _EVENT_TYPE_DEFAULT_DURATION = {
@@ -1424,10 +1425,7 @@ async def _route_pending_flow(
             )),
         ))
         sheet_columns = user.get("sheet_columns") or headers
-        missing = [
-            col for col in sheet_columns
-            if col and not client_data.get(col) and col not in SYSTEM_FIELDS
-        ]
+        missing = canonical_missing_client_fields(sheet_columns, client_data)
         card = format_add_client_card(client_data, missing)
         await reply_text(
             update,
@@ -1482,7 +1480,7 @@ async def _route_pending_flow(
         if not new_data:
             # Claude extracted nothing — re-show existing card unchanged
             sheet_columns = user.get("sheet_columns") or headers
-            missing = [col for col in sheet_columns if col and not old_client_data.get(col) and col not in SYSTEM_FIELDS]
+            missing = canonical_missing_client_fields(sheet_columns, old_client_data)
             card = format_add_client_card(old_client_data, missing)
             await reply_text(update, card, reply_markup=build_mutation_buttons("confirm"))
             return True
@@ -1492,7 +1490,7 @@ async def _route_pending_flow(
         new_name = new_data.get("Imię i nazwisko", "").strip()
         if old_name and new_name and old_name.lower() != new_name.lower():
             sheet_columns = user.get("sheet_columns") or headers
-            missing = [col for col in sheet_columns if col and not new_data.get(col) and col not in SYSTEM_FIELDS]
+            missing = canonical_missing_client_fields(sheet_columns, new_data)
             save_pending(PendingFlow(
                 telegram_id=telegram_id,
                 flow_type=PendingFlowType.ADD_CLIENT,
@@ -1505,7 +1503,7 @@ async def _route_pending_flow(
         merged = {**old_client_data, **new_data}
         logger.info("augment add_client: merged=%s", merged)
         sheet_columns = user.get("sheet_columns") or headers
-        missing = [col for col in sheet_columns if col and not merged.get(col) and col not in SYSTEM_FIELDS]
+        missing = canonical_missing_client_fields(sheet_columns, merged)
         logger.info("augment add_client: missing=%s", missing)
 
         if not missing:
@@ -2114,7 +2112,7 @@ async def handle_add_client(
     # No duplicate → new-client flow
     # Always compute missing from actual sheet column names (never trust Claude's guesses)
     sheet_columns = user.get("sheet_columns") or headers
-    missing = [col for col in sheet_columns if col and not client_data.get(col) and col not in SYSTEM_FIELDS]
+    missing = canonical_missing_client_fields(sheet_columns, client_data)
 
     save_pending(PendingFlow(
         telegram_id=telegram_id,
@@ -3587,14 +3585,13 @@ async def handle_confirm(
                 # Covers new flow_data (ambiguous_client=False, client_row=None)
                 # AND legacy pendings without the new fields — no second
                 # search_clients lookup (silent-pick regression guard).
-                draft_client_data = dict(client_data)
-                draft_client_data.setdefault("Imię i nazwisko", client_name)
-                if event_type == "in_person":
-                    draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
-                draft_client_data.setdefault("Następny krok", correct_label)
-                draft_client_data.setdefault("Data następnego kroku", format_next_step_date_for_sheets(start))
-                if result.calendar_event_id:
-                    draft_client_data.setdefault("ID wydarzenia Kalendarz", result.calendar_event_id)
+                draft_client_data = build_meeting_seeded_client_data(
+                    client_data=client_data,
+                    client_name=client_name,
+                    event_type=event_type,
+                    start=start,
+                    calendar_event_id=result.calendar_event_id,
+                )
                 save_pending(PendingFlow(
                     telegram_id=telegram_id,
                     flow_type=PendingFlowType.ADD_CLIENT,
@@ -3604,10 +3601,7 @@ async def handle_confirm(
                     )),
                 ))
                 sheet_columns = user.get("sheet_columns") or await get_sheet_headers(user_id)
-                missing = [
-                    col for col in sheet_columns
-                    if col and not draft_client_data.get(col) and col not in SYSTEM_FIELDS
-                ]
+                missing = canonical_missing_client_fields(sheet_columns, draft_client_data)
                 card = format_add_client_card(draft_client_data, missing)
                 await reply_text(update,
                     f"✅ Spotkanie dodane.\n{card}",
