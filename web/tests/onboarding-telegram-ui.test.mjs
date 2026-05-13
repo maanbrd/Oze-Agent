@@ -35,8 +35,9 @@ test("telegram pairing card makes QR and deep link the primary path", () => {
   assert.match(pairingCardSource, /https:\/\/t\.me\/\$\{botUsername\}\?start=\$\{encodeURIComponent\(code\)\}/);
   assert.equal(pairingCardSource.includes("telegramDeepLink"), true);
   assert.equal(pairingCardSource.includes("QRCodeSVG"), true);
-  assert.equal(pairingCardSource.includes("Zeskanuj QR telefonem."), true);
-  assert.equal(pairingCardSource.includes("Otwórz Telegrama"), true);
+  assert.equal(pairingCardSource.includes("QR wysyła kod automatycznie."), true);
+  assert.equal(pairingCardSource.includes("Otwórz Telegrama z kodem"), true);
+  assert.equal(pairingCardSource.includes("Nie wpisuj kodu ponownie"), true);
   assert.equal(pairingCardSource.includes("Kopiuj komendę"), true);
 });
 
@@ -49,12 +50,12 @@ test("telegram pairing card exposes a real 90 second countdown and expired state
 
 test("telegram pairing card gives cross-device steps in plain language", () => {
   for (const text of [
-    "Zeskanuj QR telefonem albo kliknij Otwórz Telegrama.",
+    "Zeskanuj QR telefonem albo kliknij Otwórz Telegrama z kodem.",
     "Telegram otworzy czat z botem ${botHandle}.",
     "Kliknij Start, jeśli Telegram pokaże taki przycisk.",
-    "Jeśli kod nie wklei się sam, skopiuj komendę z tej strony.",
-    "Awaryjnie wyślij w Telegramie komendę",
+    "Jeśli w czacie widzisz tylko /start, to normalne - kod jest w linku.",
     "Wróć tutaj. Panel sam sprawdzi, czy konto jest połączone.",
+    "Tylko awaryjnie skopiuj ręcznie komendę z pola po lewej.",
   ]) {
     assert.equal(pairingCardSource.includes(text), true);
   }
@@ -63,7 +64,7 @@ test("telegram pairing card gives cross-device steps in plain language", () => {
 test("telegram pairing card uses the live command in the visual process representation", () => {
   assert.equal(pairingCardSource.includes("telegram-pairing-flow.png"), false);
   assert.equal(pairingCardSource.includes("commandLabel"), true);
-  for (const text of ["Telegram", "Komenda", "Połączenie", "Panel"]) {
+  for (const text of ["Telefon", "Bot", "Kod w linku", "Połączenie", "Panel CRM"]) {
     assert.equal(pairingCardSource.includes(text), true);
   }
 });

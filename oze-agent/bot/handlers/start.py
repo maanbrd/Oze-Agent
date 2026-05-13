@@ -13,7 +13,7 @@ from shared.database import get_supabase_client, get_user_by_telegram_id, update
 
 logger = logging.getLogger(__name__)
 
-_WELCOME_MESSAGE = """👋 Witaj w OZE-Agent!
+_WELCOME_MESSAGE = """✅ Kod z linku odebrany automatycznie.
 
 Twoje konto Telegram zostało pomyślnie połączone z OZE-Agent.
 

@@ -149,12 +149,12 @@ export function TelegramPairingCard({
             </div>
             <div>
               <h2 className="text-2xl font-semibold text-white">
-                Zeskanuj QR telefonem.
+                QR wysyła kod automatycznie.
               </h2>
               <p className="mt-3 text-sm leading-6 text-zinc-300">
-                QR otworzy właściwego bota w Telegramie i przekaże kod
-                parowania automatycznie. Zostaw tę stronę otwartą, status
-                połączenia sprawdzi się sam.
+                Otwórz Telegrama, kliknij Start i wróć tutaj. Telegram może
+                pokazać tylko /start, ale pełny kod parowania jest ukryty w
+                linku i trafia do bota automatycznie.
               </p>
               <a
                 href={telegramDeepLink}
@@ -167,7 +167,7 @@ export function TelegramPairingCard({
                 }
                 aria-disabled={!code || expired}
               >
-                Otwórz Telegrama
+                Otwórz Telegrama z kodem
               </a>
             </div>
           </div>
@@ -193,7 +193,7 @@ export function TelegramPairingCard({
             <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
               {timerLabel}
             </p>
-            <p className="mt-1 text-xs text-zinc-400">90 sekund na wpisanie kodu</p>
+            <p className="mt-1 text-xs text-zinc-400">90 sekund na kliknięcie Start</p>
           </div>
         </div>
 
@@ -205,7 +205,9 @@ export function TelegramPairingCard({
         </div>
 
         <div className="mt-4 rounded-[8px] border border-white/10 bg-black/45 p-4">
-          <p className="text-sm text-zinc-400">Awaryjnie wyślij tę komendę</p>
+          <p className="text-sm text-zinc-400">
+            Awaryjnie, jeśli link nie zadziała
+          </p>
           <code className="mt-2 block overflow-x-auto whitespace-nowrap text-xl font-semibold text-white">
             {commandLabel}
           </code>
@@ -229,8 +231,8 @@ export function TelegramPairingCard({
           </p>
         ) : (
           <p className="mt-4 text-sm leading-6 text-zinc-400">
-            Nie zamykaj tej strony. Po otwarciu bota w Telegramie wróć tutaj,
-            jeśli panel nie przejdzie dalej automatycznie.
+            Nie wpisuj kodu ponownie, jeśli Telegram pokazał samo /start. Wróć
+            tutaj i poczekaj kilka sekund na automatyczne potwierdzenie.
           </p>
         )}
 
@@ -276,7 +278,7 @@ export function TelegramPairingCard({
           </div>
           <div className="rounded-[8px] border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 p-3">
             <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
-              Komenda
+              Kod w linku
             </p>
             <code className="mt-4 block overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-white">
               {commandLabel}
@@ -292,12 +294,12 @@ export function TelegramPairingCard({
 
         <ol className="mt-5 space-y-3 text-sm leading-6 text-zinc-300">
           {[
-            "Zeskanuj QR telefonem albo kliknij Otwórz Telegrama.",
+            "Zeskanuj QR telefonem albo kliknij Otwórz Telegrama z kodem.",
             `Telegram otworzy czat z botem ${botHandle}.`,
             "Kliknij Start, jeśli Telegram pokaże taki przycisk.",
-            "Jeśli kod nie wklei się sam, skopiuj komendę z tej strony.",
-            `Awaryjnie wyślij w Telegramie komendę ${command}.`,
+            "Jeśli w czacie widzisz tylko /start, to normalne - kod jest w linku.",
             "Wróć tutaj. Panel sam sprawdzi, czy konto jest połączone.",
+            "Tylko awaryjnie skopiuj ręcznie komendę z pola po lewej.",
           ].map((step, index) => (
             <li key={step} className="flex gap-3">
               <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#3DFF7A]/30 text-xs font-semibold text-[#3DFF7A]">

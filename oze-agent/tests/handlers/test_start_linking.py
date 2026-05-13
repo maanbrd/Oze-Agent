@@ -71,6 +71,7 @@ async def test_linking_code_updates_user_and_confirms_success(monkeypatch):
 
     await start._handle_linking_code(update, telegram_id=987654, linking_code="123456")
 
+    assert "Kod z linku odebrany automatycznie" in replies[0]
     assert "pomyślnie połączone" in replies[0]
 
 
