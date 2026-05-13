@@ -1,5 +1,6 @@
 import { createGoogleResourcesAction } from "@/app/onboarding/actions";
 import { LogoutLink } from "@/components/auth/logout-link";
+import { ResourceSubmitButton } from "@/components/onboarding/resource-submit-button";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
@@ -51,9 +52,7 @@ export default async function ResourcesPage({
               className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
             />
           </label>
-          <button className="w-fit rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black">
-            Utwórz brakujące zasoby
-          </button>
+          <ResourceSubmitButton />
         </form>
       </section>
     </main>

@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -122,40 +123,34 @@ async def test_google_oauth_url_uses_authenticated_user(monkeypatch):
         ]
     )
     monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
-    monkeypatch.setattr(
-        onboarding.Config,
-        "GOOGLE_OAUTH_STATE_SECRET",
-        "state-secret",
-        raising=False,
-    )
-    monkeypatch.setattr(
-        onboarding,
-        "build_oauth_url",
-        lambda user_id, state=None: f"https://google.test?state={state}&user={user_id}",
-        raising=False,
-    )
+    captured: dict[str, str | None] = {}
+
+    def fake_build_oauth_url(user_id: str, return_url: str | None = None) -> str:
+        captured["user_id"] = user_id
+        captured["return_url"] = return_url
+        return f"https://google.test?user={user_id}"
+
+    monkeypatch.setattr(onboarding, "build_oauth_url", fake_build_oauth_url)
 
     result = await onboarding.start_google_oauth(
+        {"returnUrl": "https://app.example/onboarding/google/sukces"},
         AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
     )
 
-    assert result["url"].startswith("https://google.test")
-    assert "user=user-1" in result["url"]
+    assert result == {"url": "https://google.test?user=user-1"}
+    assert captured == {
+        "user_id": "user-1",
+        "return_url": "https://app.example/onboarding/google/sukces",
+    }
     assert "auth-1" not in result["url"]
 
 
-def test_oauth_state_roundtrip(monkeypatch):
-    from api.routes import onboarding
+def test_oauth_state_roundtrip():
+    from shared.google_auth import build_oauth_state, parse_oauth_state
 
-    monkeypatch.setattr(
-        onboarding.Config,
-        "GOOGLE_OAUTH_STATE_SECRET",
-        "state-secret",
-        raising=False,
-    )
-    state = onboarding.encode_oauth_state("user-1")
+    state = build_oauth_state("user-1")
 
-    assert onboarding.decode_oauth_state(state) == "user-1"
+    assert parse_oauth_state(state)["user_id"] == "user-1"
 
 
 @pytest.mark.asyncio
@@ -206,6 +201,113 @@ async def test_create_google_resources_only_creates_missing(monkeypatch):
     assert result["resources"]["driveFolderId"] == "drive-1"
     assert fake.rows[0]["google_calendar_id"] == "calendar-1"
     assert fake.rows[0]["google_drive_folder_id"] == "drive-1"
+
+
+@pytest.mark.asyncio
+async def test_create_google_resources_rechecks_user_between_resource_steps(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "name": "Jan Test",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "google_refresh_token": "encrypted",
+                "google_sheets_id": None,
+                "google_sheets_name": None,
+                "google_calendar_id": None,
+                "google_calendar_name": None,
+                "google_drive_folder_id": "existing-drive",
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+
+    async def create_sheet(_user_id, _name):
+        fake.rows[0]["google_calendar_id"] = "calendar-from-other-request"
+        fake.rows[0]["google_calendar_name"] = "Existing Calendar"
+        return "sheet-1"
+
+    monkeypatch.setattr(onboarding, "create_spreadsheet", create_sheet)
+    monkeypatch.setattr(onboarding, "create_calendar", pytest.fail)
+    monkeypatch.setattr(onboarding, "create_root_folder", pytest.fail)
+
+    result = await onboarding.create_google_resources(
+        {"sheetsName": "Agent-OZE CRM", "calendarName": "Agent-OZE Calendar"},
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={}),
+    )
+
+    assert result["resources"]["sheetsId"] == "sheet-1"
+    assert result["resources"]["calendarId"] == "calendar-from-other-request"
+    assert result["resources"]["driveFolderId"] == "existing-drive"
+
+
+@pytest.mark.asyncio
+async def test_create_google_resources_serializes_concurrent_requests(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "name": "Jan Test",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "google_refresh_token": "encrypted",
+                "google_sheets_id": None,
+                "google_sheets_name": None,
+                "google_calendar_id": None,
+                "google_calendar_name": None,
+                "google_drive_folder_id": None,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+    calls = {"sheets": 0, "calendar": 0, "drive": 0}
+
+    async def create_sheet(_user_id, _name):
+        calls["sheets"] += 1
+        await asyncio.sleep(0.01)
+        return "sheet-1"
+
+    async def create_cal(_user_id, _name):
+        calls["calendar"] += 1
+        await asyncio.sleep(0.01)
+        return "calendar-1"
+
+    async def create_drive(_user_id):
+        calls["drive"] += 1
+        await asyncio.sleep(0.01)
+        return "drive-1"
+
+    monkeypatch.setattr(onboarding, "create_spreadsheet", create_sheet)
+    monkeypatch.setattr(onboarding, "create_calendar", create_cal)
+    monkeypatch.setattr(onboarding, "create_root_folder", create_drive)
+
+    results = await asyncio.gather(
+        onboarding.create_google_resources(
+            {"sheetsName": "Agent-OZE CRM", "calendarName": "Agent-OZE Calendar"},
+            AuthUser(user_id="auth-1", email="jan@example.pl", claims={}),
+        ),
+        onboarding.create_google_resources(
+            {"sheetsName": "Agent-OZE CRM", "calendarName": "Agent-OZE Calendar"},
+            AuthUser(user_id="auth-1", email="jan@example.pl", claims={}),
+        ),
+    )
+
+    assert calls == {"sheets": 1, "calendar": 1, "drive": 1}
+    assert [result["resources"] for result in results] == [
+        {"sheetsId": "sheet-1", "calendarId": "calendar-1", "driveFolderId": "drive-1"},
+        {"sheetsId": "sheet-1", "calendarId": "calendar-1", "driveFolderId": "drive-1"},
+    ]
 
 
 @pytest.mark.asyncio

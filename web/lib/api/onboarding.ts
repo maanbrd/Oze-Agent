@@ -29,13 +29,16 @@ export type TelegramPairingStatus = {
 };
 
 const FASTAPI_ONBOARDING_TIMEOUT_MS = 8000;
+const RESOURCE_CREATION_TIMEOUT_MS = 60000;
 
-async function fetchOnboarding(url: string, init: RequestInit) {
+async function fetchOnboarding(
+  url: string,
+  init: RequestInit,
+  options: { timeoutMs?: number } = {},
+) {
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    FASTAPI_ONBOARDING_TIMEOUT_MS,
-  );
+  const timeoutMs = options.timeoutMs ?? FASTAPI_ONBOARDING_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(url, {
@@ -48,7 +51,11 @@ async function fetchOnboarding(url: string, init: RequestInit) {
   }
 }
 
-async function authedFetch(path: string, init: RequestInit = {}) {
+async function authedFetch(
+  path: string,
+  init: RequestInit = {},
+  options: { timeoutMs?: number } = {},
+) {
   const account = await getCurrentAccount();
   const baseUrl = fastApiBaseUrl();
 
@@ -64,10 +71,14 @@ async function authedFetch(path: string, init: RequestInit = {}) {
   headers.set("Authorization", `Bearer ${account.accessToken}`);
   headers.set("Content-Type", "application/json");
 
-  const response = await fetchOnboarding(`${baseUrl}${path}`, {
-    ...init,
-    headers,
-  });
+  const response = await fetchOnboarding(
+    `${baseUrl}${path}`,
+    {
+      ...init,
+      headers,
+    },
+    options,
+  );
 
   if (!response.ok) {
     throw new Error(`API error ${response.status}`);
@@ -106,10 +117,16 @@ export async function createGoogleResources(input: {
   sheetsName?: string;
   calendarName?: string;
 }) {
-  const response = await authedFetch("/api/onboarding/resources", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const response = await authedFetch(
+    "/api/onboarding/resources",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    {
+      timeoutMs: RESOURCE_CREATION_TIMEOUT_MS,
+    },
+  );
   return response.json();
 }
 

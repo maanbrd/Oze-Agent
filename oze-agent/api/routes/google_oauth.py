@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from bot.config import Config
 from shared.google_auth import build_oauth_url, handle_oauth_callback
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ _SUCCESS_HTML = """
 <head><meta charset="UTF-8"><title>OZE-Agent — autoryzacja Google</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:60px">
   <h2>✅ Google połączony!</h2>
-  <p>Autoryzacja zakończona pomyślnie. Wróć do Telegrama i kontynuuj.</p>
+  <p>Autoryzacja zakończona pomyślnie. Wróć do panelu i kontynuuj onboarding.</p>
 </body>
 </html>
 """
@@ -45,6 +46,13 @@ async def get_oauth_url(user_id: str):
         raise HTTPException(status_code=500, detail="Nie udało się wygenerować URL autoryzacji.")
 
 
+def _configured_dashboard_google_success_url() -> str | None:
+    base_url = (Config.DASHBOARD_URL or "").strip().rstrip("/")
+    if not base_url:
+        return None
+    return f"{base_url}/onboarding/google/sukces"
+
+
 @router.get("/google/callback")
 async def google_callback(code: str, state: str):
     """Handle Google OAuth redirect. state = user_id."""
@@ -53,7 +61,7 @@ async def google_callback(code: str, state: str):
         if not user:
             logger.error("google_callback: handle_oauth_callback returned None for state=%s", state)
             return HTMLResponse(content=_ERROR_HTML, status_code=400)
-        return_url = user.get("_oauth_return_url")
+        return_url = user.get("_oauth_return_url") or _configured_dashboard_google_success_url()
         if return_url:
             return RedirectResponse(str(return_url))
         return HTMLResponse(content=_SUCCESS_HTML)

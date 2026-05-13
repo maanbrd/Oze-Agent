@@ -21,6 +21,33 @@ def test_google_oauth_state_preserves_current_preview_return_url():
     assert parsed["return_url"] == return_url
 
 
+def test_google_oauth_state_preserves_configured_production_return_url(monkeypatch):
+    from shared.google_auth import build_oauth_state, parse_oauth_state
+    from bot.config import Config
+
+    monkeypatch.setattr(Config, "DASHBOARD_URL", "https://agent-oze.pl", raising=False)
+    return_url = "https://agent-oze.pl/onboarding/google/sukces"
+
+    state = build_oauth_state("user-1", return_url)
+    parsed = parse_oauth_state(state)
+
+    assert parsed["user_id"] == "user-1"
+    assert parsed["return_url"] == return_url
+
+
+def test_google_oauth_state_rejects_unconfigured_vercel_app_return_url():
+    from shared.google_auth import build_oauth_state, parse_oauth_state
+
+    state = build_oauth_state(
+        "user-1",
+        "https://random-project.vercel.app/onboarding/google/sukces",
+    )
+    parsed = parse_oauth_state(state)
+
+    assert parsed["user_id"] == "user-1"
+    assert parsed["return_url"] is None
+
+
 def test_google_oauth_url_forces_consent_so_google_returns_refresh_token(monkeypatch):
     from bot.config import Config
     from shared.google_auth import build_oauth_url
@@ -79,6 +106,24 @@ async def test_google_callback_redirects_to_state_return_url(monkeypatch):
 
     assert response.status_code in {302, 307}
     assert response.headers["location"] == return_url
+
+
+@pytest.mark.asyncio
+async def test_google_callback_redirects_to_configured_dashboard_when_state_has_no_return_url(monkeypatch):
+    from api.routes import google_oauth
+    from bot.config import Config
+
+    monkeypatch.setattr(Config, "DASHBOARD_URL", "https://app.example", raising=False)
+    monkeypatch.setattr(
+        google_oauth,
+        "handle_oauth_callback",
+        lambda code, state: {"id": "user-1"},
+    )
+
+    response = await google_oauth.google_callback(code="code", state="legacy-state")
+
+    assert response.status_code in {302, 307}
+    assert response.headers["location"] == "https://app.example/onboarding/google/sukces"
 
 
 def test_store_google_tokens_rejects_missing_refresh_token(monkeypatch):

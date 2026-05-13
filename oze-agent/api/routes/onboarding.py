@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import secrets
@@ -21,6 +22,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 TELEGRAM_LINK_CODE_TTL_SECONDS = 90
+_RESOURCE_CREATION_LOCKS: dict[str, asyncio.Lock] = {}
 
 USER_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
@@ -189,6 +191,14 @@ def _resource_name(payload: dict[str, Any], key: str, fallback: str) -> str:
     return value[:120] if value else fallback
 
 
+def _resource_creation_lock(user_id: str) -> asyncio.Lock:
+    lock = _RESOURCE_CREATION_LOCKS.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _RESOURCE_CREATION_LOCKS[user_id] = lock
+    return lock
+
+
 async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
@@ -317,10 +327,28 @@ async def create_google_resources(
             detail="Google OAuth is required before resource creation.",
         )
 
+    async with _resource_creation_lock(user["id"]):
+        return await _create_google_resources_locked(payload, auth_user)
+
+
+async def _create_google_resources_locked(
+    payload: dict[str, Any],
+    auth_user: AuthUser,
+) -> dict[str, Any]:
+    user = _get_user_for_auth(auth_user)
+    if not _has_access(user, auth_user):
+        raise HTTPException(
+            status_code=402,
+            detail="Payment is required before resource creation.",
+        )
+    if not _has_google_tokens(user):
+        raise HTTPException(
+            status_code=409,
+            detail="Google OAuth is required before resource creation.",
+        )
+
     label = user.get("name") or user.get("email") or user["id"]
     sheets_id = user.get("google_sheets_id")
-    calendar_id = user.get("google_calendar_id")
-    drive_folder_id = user.get("google_drive_folder_id")
 
     if not sheets_id:
         sheets_name = _resource_name(payload, "sheetsName", f"Agent-OZE CRM - {label}")
@@ -335,6 +363,9 @@ async def create_google_resources(
             {"google_sheets_id": sheets_id, "google_sheets_name": sheets_name},
         )
 
+    user = _get_user_for_auth(auth_user)
+    label = user.get("name") or user.get("email") or user["id"]
+    calendar_id = user.get("google_calendar_id")
     if not calendar_id:
         calendar_name = _resource_name(
             payload,
@@ -355,6 +386,8 @@ async def create_google_resources(
             },
         )
 
+    user = _get_user_for_auth(auth_user)
+    drive_folder_id = user.get("google_drive_folder_id")
     if not drive_folder_id:
         drive_folder_id = await _maybe_await(create_root_folder(user["id"]))
         if not drive_folder_id:

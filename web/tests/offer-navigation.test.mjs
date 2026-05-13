@@ -14,7 +14,7 @@ test("offers page uses the CRM shell route group", () => {
   assert.equal(existsSync(groupedOffersPath), true);
   assert.match(groupedOffersSource, /<OfferGenerator \/>/);
   assert.equal(groupedOffersSource.includes("AppShell"), false);
-  assert.match(crmLayoutSource, /<CrmShell account=\{account\}>/);
+  assert.match(crmLayoutSource, /<CrmShell account=\{account\} decisionsCount=\{decisionsCount\}>/);
   assert.match(crmShellSource, /\["Oferty", "\/oferty"\]/);
 });
 
