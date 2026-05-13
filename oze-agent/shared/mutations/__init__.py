@@ -21,6 +21,7 @@ from .add_meeting import (
     STATUS_NEW_LEAD,
     AddMeetingResult,
     commit_add_meeting,
+    format_next_step_date_for_sheets,
 )
 from .add_note import AddNoteResult, commit_add_note
 from .change_status import ChangeStatusResult, commit_change_status
@@ -41,5 +42,6 @@ __all__ = [
     "commit_add_note",
     "commit_change_status",
     "commit_update_client_fields",
+    "format_next_step_date_for_sheets",
     "with_default_client_status",
 ]

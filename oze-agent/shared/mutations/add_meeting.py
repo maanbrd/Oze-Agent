@@ -42,6 +42,15 @@ EVENT_TYPE_TO_NEXT_STEP_LABEL = {
 }
 
 
+def format_next_step_date_for_sheets(start: datetime) -> str:
+    """Return the Sheets K/L date value for a Calendar-backed next step.
+
+    Calendar keeps the exact time. Sheets column L stays date-only so it
+    renders like the contact date columns in the CRM table.
+    """
+    return start.date().isoformat()
+
+
 # ── Result dataclass ─────────────────────────────────────────────────────────
 
 
@@ -133,7 +142,7 @@ async def commit_add_meeting(
     # Step 3: Build Sheets payload
     sheet_updates: dict = {
         "Następny krok": EVENT_TYPE_TO_NEXT_STEP_LABEL.get(event_type, "Spotkanie"),
-        "Data następnego kroku": start.isoformat(),
+        "Data następnego kroku": format_next_step_date_for_sheets(start),
     }
     if calendar_event_id:
         sheet_updates["ID wydarzenia Kalendarz"] = calendar_event_id

@@ -111,6 +111,7 @@ from shared.mutations import (
     STATUS_NEW_LEAD as _STATUS_NEW_LEAD,
     commit_add_client,
     commit_update_client_fields,
+    format_next_step_date_for_sheets,
     with_default_client_status,
 )
 _EVENT_TYPE_DEFAULT_DURATION = {
@@ -127,6 +128,52 @@ _EVENT_TYPE_DESCRIPTION_PREFIX = {
     "phone_call": "📞 Zadzwoń do klienta.",
     "doc_followup": "📋 Follow-up dokumentowy.",
 }
+
+_NEXT_STEP_DEFINED_FIELDS = {
+    "Następny krok",
+    "Data następnego kroku",
+    "ID wydarzenia Kalendarz",
+}
+
+
+def _client_data_defines_next_step(client_data: dict) -> bool:
+    return any(str(client_data.get(field) or "").strip() for field in _NEXT_STEP_DEFINED_FIELDS)
+
+
+def _should_send_r7_after_add_client(flow_data: dict, client_data: dict) -> bool:
+    """R7 only fires when the committed client still needs a next action.
+
+    This is deliberately data-driven. Meeting-seeded add_client flows remain
+    closed even if a later Dopisać rebuild loses legacy control flags.
+    """
+    if flow_data.get("suppress_r7_after_save"):
+        return False
+    if _client_data_defines_next_step(client_data):
+        return False
+    return True
+
+
+def _add_client_payload_from_existing(
+    old_flow_data: dict,
+    client_data: dict,
+    **overrides,
+) -> AddClientPayload:
+    """Rebuild an add_client pending payload without dropping flow metadata."""
+    return AddClientPayload(
+        client_data=client_data,
+        _offer_remaining=overrides.get(
+            "_offer_remaining",
+            old_flow_data.get("_offer_remaining") or None,
+        ),
+        photo_upload=overrides.get(
+            "photo_upload",
+            old_flow_data.get("photo_upload") or None,
+        ),
+        suppress_r7_after_save=overrides.get(
+            "suppress_r7_after_save",
+            old_flow_data.get("suppress_r7_after_save") or None,
+        ),
+    )
 
 
 def _default_duration_for_event_type(event_type: Optional[str], user_default: int) -> int:
@@ -1492,8 +1539,9 @@ async def _route_pending_flow(
         save_pending(PendingFlow(
             telegram_id=telegram_id,
             flow_type=PendingFlowType.ADD_CLIENT,
-            flow_data=payload_to_flow_data(AddClientPayload(
-                client_data=merged,
+            flow_data=payload_to_flow_data(_add_client_payload_from_existing(
+                old_flow_data,
+                merged,
                 _offer_remaining=offer_remaining,
             )),
         ))
@@ -3286,9 +3334,11 @@ async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) 
         save_pending(PendingFlow(
             telegram_id=telegram_id,
             flow_type=PendingFlowType.ADD_CLIENT,
-            flow_data=payload_to_flow_data(AddClientPayload(
-                client_data={"Imię i nazwisko": next_client},
+            flow_data=payload_to_flow_data(_add_client_payload_from_existing(
+                flow_data,
+                {"Imię i nazwisko": next_client},
                 _offer_remaining=new_remaining,
+                suppress_r7_after_save=None,
             )),
         ))
         await reply_text(update,
@@ -3297,7 +3347,7 @@ async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) 
         return True
 
     await reply_text(update, "✅ Zapisane.")
-    if flow_data.get("suppress_r7_after_save"):
+    if not _should_send_r7_after_add_client(flow_data, client_data):
         return False
     await send_next_action_prompt(
         update, telegram_id, name, city,
@@ -3542,7 +3592,7 @@ async def handle_confirm(
                 if event_type == "in_person":
                     draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
                 draft_client_data.setdefault("Następny krok", correct_label)
-                draft_client_data.setdefault("Data następnego kroku", flow_data["start"])
+                draft_client_data.setdefault("Data następnego kroku", format_next_step_date_for_sheets(start))
                 if result.calendar_event_id:
                     draft_client_data.setdefault("ID wydarzenia Kalendarz", result.calendar_event_id)
                 save_pending(PendingFlow(

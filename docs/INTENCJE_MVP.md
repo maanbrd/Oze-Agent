@@ -317,7 +317,7 @@ Typ: rozmowa telefoniczna
 
 **Efekt w Sheets (po [Tak]):**
 - Kolumna `K=Następny krok`: enum label typu spotkania per D4 (`Spotkanie` dla `in_person`, `Telefon` dla `phone_call`, `Wysłać ofertę` dla `offer_email`, `Follow-up dokumentowy` dla `doc_followup`). **K nigdy nie przechowuje daty.**
-- Kolumna `L=Data następnego kroku`: data wydarzenia w ISO (per D1 — `YYYY-MM-DD` albo `YYYY-MM-DDTHH:MM:SS+HH:MM` z offsetem); displayed PL jako `15.04.2026 (Środa) 14:00`.
+- Kolumna `L=Data następnego kroku`: data wydarzenia jako date-only ISO (`YYYY-MM-DD`), tak żeby Sheets wyświetlał ją jak kolumny I/J. Dokładna godzina zostaje w Calendar event.
 - Kolumna `P=ID wydarzenia Kalendarz`: Calendar event `id` zwrócony przez `events.insert` (per D8).
 - Kolumna `J=Data ostatniego kontaktu`: aktualizowana na dziś
 - Jeśli to spotkanie fizyczne i klient jest w statusie `Nowy lead` → **auto-przejście statusu na `Spotkanie umówione`** (bo status lejka powinien odzwierciedlać fakt że spotkanie jest w kalendarzu). Karta pokaże to w polu "Status: Nowy lead → Spotkanie umówione".
@@ -580,7 +580,7 @@ Kolumny w arkuszu "OZE Klienci", w kolejności. Ten schemat jest **zgodny 1:1 z 
 | I | Data pierwszego kontaktu | date | — | `DD.MM.YYYY` (bez dnia tygodnia — to do wyświetlania). Ustawiana raz przy `add_client`, potem się nie zmienia. |
 | J | Data ostatniego kontaktu | date | — | `DD.MM.YYYY`. Aktualizowana przy każdej intencji mutującej (add_note, change_status, add_meeting). |
 | K | Następny krok | enum | **TAK** (7 opcji) | Dropdown: Telefon, Spotkanie, Wysłać ofertę, Follow-up dokumentowy, Czekać na decyzję klienta, Nic — zamknięte, Inne. |
-| L | Data następnego kroku | date / datetime | — | `DD.MM.YYYY` lub `DD.MM.YYYY HH:MM`. Wypełniana automatycznie przy `add_meeting` (z daty wydarzenia) albo ręcznie przez handlowca. |
+| L | Data następnego kroku | date | — | Wyświetlana jak kolumny I/J (`DD.MM.YYYY`). Wypełniana automatycznie przy `add_meeting` z daty wydarzenia; dokładna godzina zostaje w Calendar. |
 | M | Źródło pozyskania | string | — | Np. "Facebook", "polecenie", "targi", "strona www". Opcjonalne. |
 | N | Zdjęcia | int / string | — | Liczba zdjęć zapisanych przez aktywny photo upload. Upload zdjęcia nie aktualizuje `Data ostatniego kontaktu`. |
 | O | Link do zdjęć | url | — | Link do folderu Google Drive klienta. Folder tworzony/używany przez photo upload. |

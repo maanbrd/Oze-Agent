@@ -105,7 +105,7 @@ async def test_path_a_client_row_without_autoupgrade_syncs_klp():
     assert row == 7
     assert updates == {
         "Następny krok": "Telefon",
-        "Data następnego kroku": _start().isoformat(),
+        "Data następnego kroku": _start().date().isoformat(),
         "ID wydarzenia Kalendarz": "ev-1",
     }
 

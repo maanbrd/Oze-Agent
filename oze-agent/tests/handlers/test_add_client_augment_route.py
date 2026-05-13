@@ -162,3 +162,43 @@ async def test_add_client_augment_phone_stays_client_data_path():
     assert consumed is True
     mock_extract.assert_awaited_once()
     mock_meeting.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_client_augment_preserves_meeting_seeded_closed_context():
+    upd = _update()
+    flow = {
+        "flow_type": "add_client",
+        "flow_data": {
+            "suppress_r7_after_save": True,
+            "client_data": {
+                "Imię i nazwisko": "Zbigniew Ziomek",
+                "Miasto": "Marki",
+                "Telefon": "725235242",
+                "Status": "Spotkanie umówione",
+                "Następny krok": "Spotkanie",
+                "Data następnego kroku": "2026-05-14",
+                "ID wydarzenia Kalendarz": "event-1",
+            },
+        },
+    }
+    with patch("bot.handlers.text.get_sheet_headers", new=AsyncMock(return_value=["Email"])), \
+         patch(
+             "bot.handlers.text.extract_client_data",
+             new=AsyncMock(return_value={"client_data": {"Email": "zbigniewziomek@gmail.com"}}),
+         ), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1, "sheet_columns": ["Email", "Źródło pozyskania"]},
+            flow,
+            "email zbigniewziomek@gmail.com",
+        )
+
+    assert consumed is True
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_data["client_data"]["Email"] == "zbigniewziomek@gmail.com"
+    assert saved_flow.flow_data["client_data"]["Następny krok"] == "Spotkanie"
+    assert saved_flow.flow_data["client_data"]["Data następnego kroku"] == "2026-05-14"
+    assert saved_flow.flow_data["suppress_r7_after_save"] is True

@@ -107,6 +107,41 @@ async def test_add_client_success_can_suppress_r7_for_meeting_seeded_client():
 
 
 @pytest.mark.asyncio
+async def test_add_client_success_skips_r7_when_next_step_already_defined():
+    """Meeting-seeded clients must stay closed even if the legacy suppress flag
+    was lost while the user tapped Dopisać and added another field.
+    """
+    upd = _update()
+    pending = _pending_add_client({
+        "client_data": {
+            "Imię i nazwisko": "Zbigniew Ziomek",
+            "Miasto": "Marki",
+            "Telefon": "725235242",
+            "Email": "zbigniewziomek@gmail.com",
+            "Status": "Spotkanie umówione",
+            "Następny krok": "Spotkanie",
+            "Data następnego kroku": "2026-05-14",
+            "ID wydarzenia Kalendarz": "event-1",
+        },
+    })
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value=pending,
+    ), patch(
+        "bot.handlers.text.commit_add_client",
+        new=AsyncMock(return_value=AddClientResult(success=True, row=42)),
+    ), patch(
+        "bot.handlers.text.send_next_action_prompt",
+        new=AsyncMock(),
+    ) as mock_r7, patch("bot.handlers.text.delete_pending_flow") as mock_delete:
+        await handle_confirm(upd, MagicMock(), {"id": "u1"}, {}, "")
+
+    upd.effective_message.reply_text.assert_awaited_once_with("✅ Zapisane.")
+    mock_r7.assert_not_called()
+    mock_delete.assert_called_once_with(123)
+
+
+@pytest.mark.asyncio
 async def test_add_client_failure_replies_google_down_and_deletes_pending():
     upd = _update()
     with patch(
