@@ -117,9 +117,7 @@ function phase1bEnvReport(selectedScope) {
     "FASTAPI_INTERNAL_BASE_URL",
     "BILLING_INTERNAL_SECRET",
     "STRIPE_SECRET_KEY",
-    "STRIPE_PRICE_ACTIVATION",
     "STRIPE_PRICE_MONTHLY",
-    "STRIPE_PRICE_YEARLY",
   ];
 
   if (selectedScope === "staging") {

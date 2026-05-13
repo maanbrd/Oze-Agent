@@ -16,10 +16,9 @@ export default async function PaymentsPage() {
       </div>
 
       <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <State label="Status" value={profile?.subscription_status ?? "brak"} hot={active} />
           <State label="Plan" value={profile?.subscription_plan ?? "nie wybrano"} />
-          <State label="Aktywacja" value={profile?.activation_paid ? "opłacona" : "czeka"} />
           <State
             label="Okres do"
             value={formatDate(profile?.subscription_current_period_end)}

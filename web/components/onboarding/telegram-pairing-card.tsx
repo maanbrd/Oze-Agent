@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { generateTelegramCodeAction } from "@/app/onboarding/actions";
 
 const PAIRING_TTL_SECONDS = 90;
@@ -39,8 +40,13 @@ export function TelegramPairingCard({
     remainingFromExpiry(expiresAt),
   );
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [copyLabel, setCopyLabel] = useState("Kopiuj komendę");
   const command = code ? `/start ${code}` : "";
   const commandLabel = command || "Wygeneruj kod, aby zobaczyć komendę";
+  const botUsername = botHandle.replace(/^@+/, "");
+  const telegramDeepLink = code
+    ? `https://t.me/${botUsername}?start=${encodeURIComponent(code)}`
+    : `https://t.me/${botUsername}`;
   const expired = remainingSeconds <= 0;
 
   useEffect(() => {
@@ -103,10 +109,71 @@ export function TelegramPairingCard({
     return `${minutes}:${seconds}`;
   }, [remainingSeconds]);
 
+  const copyCommand = useCallback(async () => {
+    if (!command) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopyLabel("Skopiowano");
+      window.setTimeout(() => setCopyLabel("Kopiuj komendę"), 1800);
+    } catch {
+      setCopyLabel("Skopiuj ręcznie");
+    }
+  }, [command]);
+
   return (
     <div className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
       <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="rounded-[8px] border border-[#3DFF7A]/25 bg-[#3DFF7A]/10 p-4">
+          <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
+            Najprościej na telefonie
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-[180px_1fr] sm:items-center">
+            <div className="grid aspect-square w-full max-w-[180px] place-items-center rounded-[8px] bg-white p-3">
+              {code && !expired ? (
+                <QRCodeSVG
+                  value={telegramDeepLink}
+                  size={156}
+                  bgColor="#ffffff"
+                  fgColor="#050607"
+                  level="M"
+                  marginSize={1}
+                />
+              ) : (
+                <div className="grid h-full w-full place-items-center rounded-[6px] bg-zinc-100 text-center text-xs font-semibold text-zinc-500">
+                  Wygeneruj kod
+                </div>
+              )}
+            </div>
+            <div>
+              <h2 className="text-2xl font-semibold text-white">
+                Zeskanuj QR telefonem.
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-300">
+                QR otworzy właściwego bota w Telegramie i przekaże kod
+                parowania automatycznie. Zostaw tę stronę otwartą, status
+                połączenia sprawdzi się sam.
+              </p>
+              <a
+                href={telegramDeepLink}
+                target="_blank"
+                rel="noreferrer"
+                className={
+                  code && !expired
+                    ? "mt-4 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98] sm:w-auto"
+                    : "pointer-events-none mt-4 inline-flex w-full items-center justify-center rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-zinc-500 sm:w-auto"
+                }
+                aria-disabled={!code || expired}
+              >
+                Otwórz Telegrama
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm text-zinc-300">Kod parowania</p>
             <p className="mt-3 text-5xl font-semibold tracking-[0.18em] text-white">
@@ -138,10 +205,18 @@ export function TelegramPairingCard({
         </div>
 
         <div className="mt-4 rounded-[8px] border border-white/10 bg-black/45 p-4">
-          <p className="text-sm text-zinc-400">Wyślij dokładnie tę komendę</p>
+          <p className="text-sm text-zinc-400">Awaryjnie wyślij tę komendę</p>
           <code className="mt-2 block overflow-x-auto whitespace-nowrap text-xl font-semibold text-white">
             {commandLabel}
           </code>
+          <button
+            type="button"
+            onClick={copyCommand}
+            disabled={!command}
+            className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-white/12 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:text-zinc-600 sm:w-auto"
+          >
+            {copyLabel}
+          </button>
         </div>
 
         {expired ? (
@@ -154,8 +229,8 @@ export function TelegramPairingCard({
           </p>
         ) : (
           <p className="mt-4 text-sm leading-6 text-zinc-400">
-            Nie zamykaj tej strony. Otwórz Telegrama w osobnej karcie albo w
-            telefonie i wyślij komendę do bota.
+            Nie zamykaj tej strony. Po otwarciu bota w Telegramie wróć tutaj,
+            jeśli panel nie przejdzie dalej automatycznie.
           </p>
         )}
 
@@ -182,13 +257,11 @@ export function TelegramPairingCard({
       </section>
 
       <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">
-        <p className="text-sm font-semibold text-white">
-          Jak połączyć swojego agenta
-        </p>
+        <p className="text-sm font-semibold text-white">Co zrobić krok po kroku</p>
         <div className="mt-5 grid gap-3 rounded-[8px] border border-white/10 bg-black/30 p-4 sm:grid-cols-4">
           <div className="rounded-[8px] border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs font-semibold uppercase text-[#3DFF7A]">
-              Telegram
+              Telefon
             </p>
             <div className="mt-4 h-2 rounded-full bg-white/15" />
             <div className="mt-2 h-2 w-2/3 rounded-full bg-[#3DFF7A]/70" />
@@ -219,15 +292,12 @@ export function TelegramPairingCard({
 
         <ol className="mt-5 space-y-3 text-sm leading-6 text-zinc-300">
           {[
-            "Otwórz Telegram.",
-            "Kliknij wyszukiwarkę u góry ekranu.",
-            `Wpisz ${botHandle}.`,
-            "Otwórz czat z botem.",
-            "Jeśli widzisz przycisk Start, kliknij go.",
-            "Skopiuj komendę z tej strony.",
-            `Wklej w Telegramie komendę ${command}.`,
-            "Wyślij wiadomość do bota.",
-            "Wróć tutaj i odśwież stronę, jeśli status nie zmieni się sam.",
+            "Zeskanuj QR telefonem albo kliknij Otwórz Telegrama.",
+            `Telegram otworzy czat z botem ${botHandle}.`,
+            "Kliknij Start, jeśli Telegram pokaże taki przycisk.",
+            "Jeśli kod nie wklei się sam, skopiuj komendę z tej strony.",
+            `Awaryjnie wyślij w Telegramie komendę ${command}.`,
+            "Wróć tutaj. Panel sam sprawdzi, czy konto jest połączone.",
           ].map((step, index) => (
             <li key={step} className="flex gap-3">
               <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#3DFF7A]/30 text-xs font-semibold text-[#3DFF7A]">

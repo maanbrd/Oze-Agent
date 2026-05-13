@@ -153,6 +153,14 @@ def test_oauth_state_roundtrip():
     assert parse_oauth_state(state)["user_id"] == "user-1"
 
 
+def test_resource_label_collapses_duplicated_signup_name():
+    from api.routes import onboarding
+
+    assert onboarding._resource_label(
+        {"id": "user-1", "name": "Maan Fathi Maan Fathi", "email": "maan@example.pl"}
+    ) == "Maan Fathi"
+
+
 @pytest.mark.asyncio
 async def test_create_google_resources_only_creates_missing(monkeypatch):
     from api.auth import AuthUser
@@ -184,15 +192,19 @@ async def test_create_google_resources_only_creates_missing(monkeypatch):
         lambda user_id, name: "calendar-1",
         raising=False,
     )
-    monkeypatch.setattr(
-        onboarding,
-        "create_root_folder",
-        lambda user_id: "drive-1",
-        raising=False,
-    )
+    captured_drive = {}
+
+    def create_drive(user_id, name):
+        captured_drive["args"] = (user_id, name)
+        return "drive-1"
+
+    monkeypatch.setattr(onboarding, "create_root_folder", create_drive, raising=False)
 
     result = await onboarding.create_google_resources(
-        {"calendarName": "Agent-OZE Calendar"},
+        {
+            "calendarName": "Agent-OZE Calendar",
+            "driveFolderName": "OZE Klienci - Jan Test",
+        },
         AuthUser(user_id="auth-1", email="jan@example.pl", claims={}),
     )
 
@@ -201,6 +213,7 @@ async def test_create_google_resources_only_creates_missing(monkeypatch):
     assert result["resources"]["driveFolderId"] == "drive-1"
     assert fake.rows[0]["google_calendar_id"] == "calendar-1"
     assert fake.rows[0]["google_drive_folder_id"] == "drive-1"
+    assert captured_drive["args"] == ("user-1", "OZE Klienci - Jan Test")
 
 
 @pytest.mark.asyncio
@@ -283,7 +296,7 @@ async def test_create_google_resources_serializes_concurrent_requests(monkeypatc
         await asyncio.sleep(0.01)
         return "calendar-1"
 
-    async def create_drive(_user_id):
+    async def create_drive(_user_id, _name):
         calls["drive"] += 1
         await asyncio.sleep(0.01)
         return "drive-1"
@@ -334,7 +347,7 @@ async def test_create_google_resources_persists_partial_success_before_later_fai
     )
     monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
     monkeypatch.setattr(onboarding, "create_calendar", lambda user_id, name: "calendar-1")
-    monkeypatch.setattr(onboarding, "create_root_folder", lambda user_id: None)
+    monkeypatch.setattr(onboarding, "create_root_folder", lambda *_args: None)
 
     with pytest.raises(HTTPException):
         await onboarding.create_google_resources(

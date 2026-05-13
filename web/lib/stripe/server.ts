@@ -5,9 +5,7 @@ import Stripe from "stripe";
 let stripeClient: Stripe | null = null;
 
 export const STRIPE_PRICE_LOOKUP_KEYS = {
-  activation: "agent_oze_activation_199",
-  monthly: "agent_oze_monthly_49",
-  yearly: "agent_oze_yearly_350",
+  monthly: "agent_oze_monthly_399",
 } as const;
 
 export function envValue(name: string) {
@@ -36,18 +34,12 @@ export function getStripe() {
 }
 
 export function requireStripeEnv() {
-  const activationPrice =
-    envValue("STRIPE_PRICE_ACTIVATION") ?? STRIPE_PRICE_LOOKUP_KEYS.activation;
   const monthlyPrice =
     envValue("STRIPE_PRICE_MONTHLY") ?? STRIPE_PRICE_LOOKUP_KEYS.monthly;
-  const yearlyPrice =
-    envValue("STRIPE_PRICE_YEARLY") ?? STRIPE_PRICE_LOOKUP_KEYS.yearly;
   const appUrl = envValue("NEXT_PUBLIC_APP_URL")?.replace(/\/$/, "") ?? null;
 
   return {
-    activationPrice,
     monthlyPrice,
-    yearlyPrice,
     appUrl,
   };
 }
@@ -86,11 +78,11 @@ export function checkoutConfigErrorMessage(error: unknown) {
   }
 
   if (message.includes("Missing Stripe price reference")) {
-    return "Lokalny env Stripe nie zawiera ceny ani lookup key dla wybranego planu. Przywróć STRIPE_PRICE_* z backupu albo Vercel env.";
+    return "Lokalny env Stripe nie zawiera ceny ani lookup key dla planu miesięcznego. Przywróć STRIPE_PRICE_MONTHLY z backupu albo Vercel env.";
   }
 
   if (message.includes("No active Stripe price found for lookup key")) {
-    return "Nie znaleziono aktywnej ceny Stripe dla zapisanego lookup key. Przywróć właściwe STRIPE_PRICE_* albo sprawdź ceny w Stripe.";
+    return "Nie znaleziono aktywnej ceny Stripe dla zapisanego lookup key. Przywróć właściwe STRIPE_PRICE_MONTHLY albo sprawdź ceny w Stripe.";
   }
 
   return "Nie udało się uruchomić płatności. Sprawdź konfigurację Stripe.";

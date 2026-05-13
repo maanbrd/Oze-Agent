@@ -125,6 +125,11 @@ test("Google resource creation tolerates slow Google APIs and blocks duplicate s
   assert.match(onboardingApiSource, /RESOURCE_CREATION_TIMEOUT_MS\s*=\s*60000/);
   assert.match(onboardingApiSource, /timeoutMs:\s*RESOURCE_CREATION_TIMEOUT_MS/);
   assert.match(resourcesPageSource, /ResourceSubmitButton/);
+  assert.match(resourcesPageSource, /cleanResourceOwnerName/);
+  assert.match(resourcesPageSource, /name="driveFolderName"/);
+  assert.match(resourcesPageSource, /OZE Klienci - \$\{defaultName\}/);
+  assert.match(onboardingActionsSource, /driveFolderName: String\(formData\.get\("driveFolderName"\)/);
+  assert.match(onboardingApiSource, /driveFolderName\?: string/);
   assert.match(resourceSubmitButtonSource, /useFormStatus/);
   assert.match(resourceSubmitButtonSource, /disabled=\{pending\}/);
 });
@@ -143,9 +148,16 @@ test("payment plans use a route handler post so checkout keeps browser cookies",
   assert.equal(paymentPageSource.includes("action={createCheckoutSession}"), false);
   assert.match(paymentPageSource, /action="\/onboarding\/checkout"/);
   assert.match(paymentPageSource, /method="post"/);
+  assert.match(paymentPageSource, /399 zł \/ mies\./);
+  assert.equal(paymentPageSource.includes("49 zł"), false);
+  assert.equal(paymentPageSource.includes("350 zł"), false);
+  assert.equal(paymentPageSource.includes("Aktywacja 199 zł"), false);
   assert.match(checkoutRouteSource, /export async function POST/);
   assert.match(checkoutRouteSource, /getCurrentAccount/);
   assert.match(checkoutRouteSource, /NextResponse\.redirect/);
+  assert.match(checkoutRouteSource, /line_items: \[\{ price: recurringPriceId, quantity: 1 \}\]/);
+  assert.equal(checkoutRouteSource.includes("activationPrice"), false);
+  assert.equal(checkoutRouteSource.includes("yearly"), false);
 });
 
 test("beta access uses a separate server route without touching Stripe checkout", () => {
@@ -167,6 +179,10 @@ test("payment page exposes beta option only from backend eligibility", () => {
 
 test("stripe checkout reports actionable configuration failures", () => {
   assert.match(stripeServerSource, /envValue\("STRIPE_SECRET_KEY"\)/);
+  assert.match(stripeServerSource, /STRIPE_PRICE_LOOKUP_KEYS = \{\s*monthly: "agent_oze_monthly_399"/);
+  assert.match(stripeServerSource, /envValue\("STRIPE_PRICE_MONTHLY"\)/);
+  assert.equal(stripeServerSource.includes("STRIPE_PRICE_ACTIVATION"), false);
+  assert.equal(stripeServerSource.includes("STRIPE_PRICE_YEARLY"), false);
   assert.match(stripeServerSource, /export function envValue/);
   assert.match(stripeServerSource, /value === `""`/);
   assert.match(stripeServerSource, /checkoutConfigErrorMessage/);

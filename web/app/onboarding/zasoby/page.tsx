@@ -5,6 +5,27 @@ import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
+function cleanResourceOwnerName(value: unknown) {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+
+  const parts = normalized.split(" ");
+  if (parts.length > 1 && parts.length % 2 === 0) {
+    const midpoint = parts.length / 2;
+    const left = parts.slice(0, midpoint).join(" ");
+    const right = parts.slice(midpoint).join(" ");
+    if (left.toLocaleLowerCase("pl-PL") === right.toLocaleLowerCase("pl-PL")) {
+      return left;
+    }
+  }
+
+  return normalized;
+}
+
 export default async function ResourcesPage({
   searchParams,
 }: {
@@ -14,7 +35,10 @@ export default async function ResourcesPage({
   const { onboardingStatus: status } =
     await requireOnboardingStep("/onboarding/zasoby");
   const profile = status?.profile;
-  const defaultName = String(profile?.name ?? profile?.email ?? "Agent-OZE");
+  const defaultName =
+    cleanResourceOwnerName(profile?.name) ||
+    cleanResourceOwnerName(profile?.email) ||
+    "Agent-OZE";
 
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-zinc-100">
@@ -49,6 +73,14 @@ export default async function ResourcesPage({
             <input
               name="calendarName"
               defaultValue={`Agent-OZE - ${defaultName}`}
+              className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
+            />
+          </label>
+          <label className="text-sm text-zinc-300">
+            Nazwa folderu Google Drive
+            <input
+              name="driveFolderName"
+              defaultValue={`OZE Klienci - ${defaultName}`}
               className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
             />
           </label>

@@ -18,7 +18,7 @@ import {
 } from "@/lib/stripe/server";
 import { trustedExternalUrl } from "@/lib/routes";
 
-type BillingPlan = "monthly" | "yearly";
+const BILLING_PLAN = "monthly";
 
 function encoded(path: string, message: string) {
   const params = new URLSearchParams({ message });
@@ -70,12 +70,8 @@ async function resolveCheckoutReturnBaseUrl(fallbackAppUrl: string | null) {
   return candidateUrl.origin.replace(/\/$/, "");
 }
 
-function planFromForm(formData: FormData): BillingPlan {
-  const plan = String(formData.get("plan") ?? "");
-  return plan === "yearly" ? "yearly" : "monthly";
-}
-
 export async function createCheckoutSession(formData: FormData) {
+  void formData;
   const account = await getCurrentAccount();
 
   if (!account.authenticated) {
@@ -91,39 +87,30 @@ export async function createCheckoutSession(formData: FormData) {
     );
   }
 
-  const plan = planFromForm(formData);
   let checkoutUrl: string | null = null;
 
   try {
-    const { activationPrice, monthlyPrice, yearlyPrice, appUrl } =
-      requireStripeEnv();
+    const { monthlyPrice, appUrl } = requireStripeEnv();
     const returnBaseUrl = await resolveCheckoutReturnBaseUrl(appUrl);
     const stripe = getStripe();
-    const recurringPriceRef = plan === "yearly" ? yearlyPrice : monthlyPrice;
-    const [recurringPriceId, activationPriceId] = await Promise.all([
-      resolveStripePriceId(recurringPriceRef),
-      resolveStripePriceId(activationPrice),
-    ]);
+    const recurringPriceId = await resolveStripePriceId(monthlyPrice);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer_email: account.email ?? account.profile.email ?? undefined,
       client_reference_id: account.profile.id,
-      line_items: [
-        { price: recurringPriceId, quantity: 1 },
-        { price: activationPriceId, quantity: 1 },
-      ],
+      line_items: [{ price: recurringPriceId, quantity: 1 }],
       metadata: {
         auth_user_id: account.profile.auth_user_id,
         user_id: account.profile.id,
-        plan,
+        plan: BILLING_PLAN,
         source: "web_onboarding",
       },
       subscription_data: {
         metadata: {
           auth_user_id: account.profile.auth_user_id,
           user_id: account.profile.id,
-          plan,
+          plan: BILLING_PLAN,
           source: "web_onboarding",
         },
       },
@@ -197,6 +184,7 @@ export async function createGoogleResourcesAction(formData: FormData) {
     await createGoogleResources({
       sheetsName: String(formData.get("sheetsName") ?? ""),
       calendarName: String(formData.get("calendarName") ?? ""),
+      driveFolderName: String(formData.get("driveFolderName") ?? ""),
     });
   } catch (error) {
     console.error("createGoogleResourcesAction failed", error);

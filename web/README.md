@@ -52,13 +52,11 @@ Płatność wymaga dodatkowo Stripe:
 ```bash
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...     # wymagane dla webhooka po płatności
-STRIPE_PRICE_ACTIVATION=price_...   # albo puste: użyje lookup key agent_oze_activation_199
-STRIPE_PRICE_MONTHLY=price_...      # albo puste: użyje lookup key agent_oze_monthly_49
-STRIPE_PRICE_YEARLY=price_...       # albo puste: użyje lookup key agent_oze_yearly_350
+STRIPE_PRICE_MONTHLY=price_...      # albo puste: użyje lookup key agent_oze_monthly_399
 ```
 
 Jeśli ceny nie istnieją w Stripe, utwórz aktywne Prices albo wpisz istniejące
-`price_...` do `STRIPE_PRICE_*`.
+`price_...` do `STRIPE_PRICE_MONTHLY`.
 
 Jeśli Stripe działał lokalnie i nagle przestał po pullu envów, najpierw sprawdź
 backup w `/tmp/agent-oze-env-backups/`. Puste wartości w stylu

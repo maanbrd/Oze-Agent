@@ -20,13 +20,23 @@ test("telegram onboarding uses a dedicated pairing card and keeps completed redi
 
 test("telegram pairing page resolves the configured bot handle and exact command", () => {
   assert.equal(telegramPageSource.includes("DEFAULT_TELEGRAM_BOT_HANDLE"), true);
-  assert.equal(telegramPageSource.includes("@AgentOZE_Bot"), true);
+  assert.equal(telegramPageSource.includes("@OzeAgentBot"), true);
   assert.equal(telegramPageSource.includes("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME"), true);
   assert.equal(pairingCardSource.includes("botHandle"), true);
   assert.equal(pairingCardSource.includes("@OZEAGENTBot"), false);
   assert.equal(pairingCardSource.includes('/start ${code ?? "KOD"}'), false);
   assert.equal(pairingCardSource.includes("/start KOD"), false);
   assert.match(pairingCardSource, /\/start \$\{code\}/);
+});
+
+test("telegram pairing card makes QR and deep link the primary path", () => {
+  assert.equal(pairingCardSource.includes('import { QRCodeSVG } from "qrcode.react"'), true);
+  assert.match(pairingCardSource, /https:\/\/t\.me\/\$\{botUsername\}\?start=\$\{encodeURIComponent\(code\)\}/);
+  assert.equal(pairingCardSource.includes("telegramDeepLink"), true);
+  assert.equal(pairingCardSource.includes("QRCodeSVG"), true);
+  assert.equal(pairingCardSource.includes("Zeskanuj QR telefonem."), true);
+  assert.equal(pairingCardSource.includes("Otwórz Telegrama"), true);
+  assert.equal(pairingCardSource.includes("Kopiuj komendę"), true);
 });
 
 test("telegram pairing card exposes a real 90 second countdown and expired state", () => {
@@ -36,17 +46,14 @@ test("telegram pairing card exposes a real 90 second countdown and expired state
   assert.match(pairingCardSource, /Math\.min\(PAIRING_TTL_SECONDS/);
 });
 
-test("telegram pairing card gives every small step in plain language", () => {
+test("telegram pairing card gives cross-device steps in plain language", () => {
   for (const text of [
-    "Otwórz Telegram.",
-    "Kliknij wyszukiwarkę u góry ekranu.",
-    "Wpisz ${botHandle}.",
-    "Otwórz czat z botem.",
-    "Jeśli widzisz przycisk Start, kliknij go.",
-    "Skopiuj komendę z tej strony.",
-    "Wklej w Telegramie komendę",
-    "Wyślij wiadomość do bota.",
-    "Wróć tutaj i odśwież stronę, jeśli status nie zmieni się sam.",
+    "Zeskanuj QR telefonem albo kliknij Otwórz Telegrama.",
+    "Telegram otworzy czat z botem ${botHandle}.",
+    "Kliknij Start, jeśli Telegram pokaże taki przycisk.",
+    "Jeśli kod nie wklei się sam, skopiuj komendę z tej strony.",
+    "Awaryjnie wyślij w Telegramie komendę",
+    "Wróć tutaj. Panel sam sprawdzi, czy konto jest połączone.",
   ]) {
     assert.equal(pairingCardSource.includes(text), true);
   }

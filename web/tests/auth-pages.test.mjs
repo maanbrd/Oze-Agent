@@ -80,6 +80,7 @@ test("registration form keeps the onboarding survey before consent", () => {
 test("signup creates a real auth account and sends the seller to payment onboarding", () => {
   assert.equal(authActionsSource.includes('"use server"'), true);
   assert.equal(authActionsSource.includes("signUp"), true);
+  assert.equal(authActionsSource.includes("name,"), false);
   assert.equal(authActionsSource.includes('redirect("/onboarding/platnosc")'), true);
   assert.equal(authActionsSource.includes('router.push("/oferty")'), false);
   assert.equal(authActionsSource.includes('redirect("/oferty")'), false);

@@ -8,9 +8,8 @@ import {
   resolveStripePriceId,
 } from "@/lib/stripe/server";
 
-type BillingPlan = "monthly" | "yearly";
-
 export const dynamic = "force-dynamic";
+const BILLING_PLAN = "monthly";
 
 function encoded(path: string, message: string) {
   const params = new URLSearchParams({ message });
@@ -64,11 +63,6 @@ function resolveCheckoutReturnBaseUrl(
   return candidateUrl.origin.replace(/\/$/, "");
 }
 
-function planFromForm(formData: FormData): BillingPlan {
-  const plan = String(formData.get("plan") ?? "");
-  return plan === "yearly" ? "yearly" : "monthly";
-}
-
 function localRedirect(request: Request, path: string) {
   return NextResponse.redirect(new URL(path, request.url), { status: 303 });
 }
@@ -90,40 +84,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const formData = await request.formData();
-  const plan = planFromForm(formData);
   let checkoutUrl: string | null = null;
 
   try {
-    const { activationPrice, monthlyPrice, yearlyPrice, appUrl } =
-      requireStripeEnv();
+    const { monthlyPrice, appUrl } = requireStripeEnv();
     const returnBaseUrl = resolveCheckoutReturnBaseUrl(request, appUrl);
     const stripe = getStripe();
-    const recurringPriceRef = plan === "yearly" ? yearlyPrice : monthlyPrice;
-    const [recurringPriceId, activationPriceId] = await Promise.all([
-      resolveStripePriceId(recurringPriceRef),
-      resolveStripePriceId(activationPrice),
-    ]);
+    const recurringPriceId = await resolveStripePriceId(monthlyPrice);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer_email: account.email ?? account.profile.email ?? undefined,
       client_reference_id: account.profile.id,
-      line_items: [
-        { price: recurringPriceId, quantity: 1 },
-        { price: activationPriceId, quantity: 1 },
-      ],
+      line_items: [{ price: recurringPriceId, quantity: 1 }],
       metadata: {
         auth_user_id: account.profile.auth_user_id,
         user_id: account.profile.id,
-        plan,
+        plan: BILLING_PLAN,
         source: "web_onboarding",
       },
       subscription_data: {
         metadata: {
           auth_user_id: account.profile.auth_user_id,
           user_id: account.profile.id,
-          plan,
+          plan: BILLING_PLAN,
           source: "web_onboarding",
         },
       },

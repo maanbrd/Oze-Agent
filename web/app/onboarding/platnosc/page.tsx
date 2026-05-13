@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Płatność | Agent-OZE",
-  description: "Wybór planu i płatność Stripe sandbox.",
+  description: "Miesięczna subskrypcja i płatność Stripe.",
 };
 
 export default async function PaymentStepPage({
@@ -44,11 +44,11 @@ export default async function PaymentStepPage({
               Krok 2
             </p>
             <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-white sm:text-5xl">
-              Wybierz plan i uruchom płatność.
+              Uruchom subskrypcję.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
-              Stripe sandbox obsłuży płatność. Aktywacja 199 zł jest doliczana
-              do pierwszej faktury, plan działa jako subskrypcja.
+              Jeden plan miesięczny. Stripe obsłuży płatność i odnowienia, a
+              konto aktywujemy po potwierdzeniu opłacenia sesji.
             </p>
 
             {params.message ? (
@@ -93,19 +93,11 @@ export default async function PaymentStepPage({
             ) : (
               <div className="mt-8 space-y-4">
                 {betaEligible ? <BetaAccessCard /> : null}
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="max-w-xl">
                   <PlanCard
-                    plan="monthly"
-                    title="Miesięcznie"
-                    price="49 zł"
-                    note="Najmniejszy próg wejścia. Rezygnujesz kiedy chcesz."
-                  />
-                  <PlanCard
-                    plan="yearly"
-                    title="Rocznie"
-                    price="350 zł"
-                    badge="Oszczędzasz 238 zł"
-                    note="Jedna płatność za rok pracy agenta."
+                    title="OZE-Agent"
+                    price="399 zł / mies."
+                    note="Pełny dostęp do agenta, panelu i generatora ofert. Rezygnujesz kiedy chcesz."
                   />
                 </div>
               </div>
@@ -115,9 +107,7 @@ export default async function PaymentStepPage({
           <aside className="h-fit rounded-[8px] border border-white/10 bg-white/[0.04] p-6">
             <p className="text-sm font-semibold text-white">Koszyk</p>
             <div className="mt-5 space-y-4 text-sm">
-              <Row label="Aktywacja" value="199 zł" />
-              <Row label="Plan miesięczny" value="49 zł / mies." muted />
-              <Row label="Plan roczny" value="350 zł / rok" muted />
+              <Row label="Subskrypcja miesięczna" value="399 zł / mies." />
             </div>
             <div className="mt-6 border-t border-white/10 pt-5">
               <p className="text-sm leading-6 text-zinc-400">
@@ -179,17 +169,13 @@ function Stepper() {
 }
 
 function PlanCard({
-  plan,
   title,
   price,
   note,
-  badge,
 }: {
-  plan: "monthly" | "yearly";
   title: string;
   price: string;
   note: string;
-  badge?: string;
 }) {
   return (
     <form
@@ -197,17 +183,11 @@ function PlanCard({
       method="post"
       className="rounded-[8px] border border-white/10 bg-black/20 p-5"
     >
-      <input type="hidden" name="plan" value={plan} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-white">{title}</p>
           <p className="mt-3 text-3xl font-semibold text-white">{price}</p>
         </div>
-        {badge ? (
-          <span className="rounded-full border border-[#3DFF7A]/30 bg-[#3DFF7A]/10 px-3 py-1 text-xs font-semibold text-[#3DFF7A]">
-            {badge}
-          </span>
-        ) : null}
       </div>
       <p className="mt-4 min-h-12 text-sm leading-6 text-zinc-400">{note}</p>
       <button

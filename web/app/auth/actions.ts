@@ -72,7 +72,6 @@ export async function signup(formData: FormData) {
     redirect(encoded("/rejestracja", configError));
   }
 
-  const name = `${firstName} ${lastName}`.trim();
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -81,7 +80,6 @@ export async function signup(formData: FormData) {
       data: {
         first_name: firstName,
         last_name: lastName,
-        name,
         phone,
         consent_terms: true,
         consent_marketing: formData.get("marketing") === "on",

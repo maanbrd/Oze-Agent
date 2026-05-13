@@ -191,6 +191,28 @@ def _resource_name(payload: dict[str, Any], key: str, fallback: str) -> str:
     return value[:120] if value else fallback
 
 
+def _clean_resource_label(value: Any) -> str:
+    normalized = " ".join(str(value or "").split())
+    if not normalized:
+        return ""
+    parts = normalized.split(" ")
+    if len(parts) > 1 and len(parts) % 2 == 0:
+        midpoint = len(parts) // 2
+        left = " ".join(parts[:midpoint])
+        right = " ".join(parts[midpoint:])
+        if left.casefold() == right.casefold():
+            return left
+    return normalized
+
+
+def _resource_label(user: dict[str, Any]) -> str:
+    return (
+        _clean_resource_label(user.get("name"))
+        or _clean_resource_label(user.get("email"))
+        or user["id"]
+    )
+
+
 def _resource_creation_lock(user_id: str) -> asyncio.Lock:
     lock = _RESOURCE_CREATION_LOCKS.get(user_id)
     if lock is None:
@@ -347,7 +369,7 @@ async def _create_google_resources_locked(
             detail="Google OAuth is required before resource creation.",
         )
 
-    label = user.get("name") or user.get("email") or user["id"]
+    label = _resource_label(user)
     sheets_id = user.get("google_sheets_id")
 
     if not sheets_id:
@@ -364,7 +386,7 @@ async def _create_google_resources_locked(
         )
 
     user = _get_user_for_auth(auth_user)
-    label = user.get("name") or user.get("email") or user["id"]
+    label = _resource_label(user)
     calendar_id = user.get("google_calendar_id")
     if not calendar_id:
         calendar_name = _resource_name(
@@ -387,9 +409,17 @@ async def _create_google_resources_locked(
         )
 
     user = _get_user_for_auth(auth_user)
+    label = _resource_label(user)
     drive_folder_id = user.get("google_drive_folder_id")
     if not drive_folder_id:
-        drive_folder_id = await _maybe_await(create_root_folder(user["id"]))
+        drive_folder_name = _resource_name(
+            payload,
+            "driveFolderName",
+            f"OZE Klienci - {label}",
+        )
+        drive_folder_id = await _maybe_await(
+            create_root_folder(user["id"], drive_folder_name)
+        )
         if not drive_folder_id:
             raise HTTPException(
                 status_code=502,

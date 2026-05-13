@@ -63,12 +63,12 @@ DECLARE
 BEGIN
   display_name := NULLIF(
     TRIM(
-      COALESCE(NEW.raw_user_meta_data->>'name', '') || ' ' ||
       COALESCE(NEW.raw_user_meta_data->>'first_name', '') || ' ' ||
       COALESCE(NEW.raw_user_meta_data->>'last_name', '')
     ),
     ''
   );
+  display_name := COALESCE(display_name, NULLIF(TRIM(COALESCE(NEW.raw_user_meta_data->>'name', '')), ''));
 
   survey := COALESCE(NEW.raw_user_meta_data->'onboarding_survey', '{}'::jsonb);
 

@@ -116,6 +116,7 @@ export async function startGoogleOAuth(returnUrl?: string): Promise<string> {
 export async function createGoogleResources(input: {
   sheetsName?: string;
   calendarName?: string;
+  driveFolderName?: string;
 }) {
   const response = await authedFetch(
     "/api/onboarding/resources",

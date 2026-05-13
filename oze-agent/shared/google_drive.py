@@ -58,6 +58,20 @@ def build_client_folder_name(client: dict) -> str:
     return " — ".join(part.strip() for part in parts if part and part.strip())
 
 
+def _clean_resource_label(value: str) -> str:
+    normalized = " ".join(str(value or "").split())
+    if not normalized:
+        return ""
+    parts = normalized.split(" ")
+    if len(parts) > 1 and len(parts) % 2 == 0:
+        midpoint = len(parts) // 2
+        left = " ".join(parts[:midpoint])
+        right = " ".join(parts[midpoint:])
+        if left.casefold() == right.casefold():
+            return left
+    return normalized
+
+
 # ── Public async API ──────────────────────────────────────────────────────────
 
 
@@ -66,7 +80,7 @@ async def get_drive_service(user_id: str):
     return await asyncio.to_thread(_get_drive_service_sync, user_id)
 
 
-async def create_root_folder(user_id: str) -> Optional[str]:
+async def create_root_folder(user_id: str, folder_name: str | None = None) -> Optional[str]:
     """Create 'OZE Klienci — [name]' root folder in user's Drive.
 
     Stores folder ID in users.google_drive_folder_id.
@@ -76,14 +90,17 @@ async def create_root_folder(user_id: str) -> Optional[str]:
         user = get_user_by_id(user_id)
         if not user:
             return None
-        folder_name = f"OZE Klienci — {user.get('name', user_id)}"
+        resolved_folder_name = (folder_name or "").strip()[:120]
+        if not resolved_folder_name:
+            label = _clean_resource_label(user.get("name", "")) or user_id
+            resolved_folder_name = f"OZE Klienci - {label}"
 
         def _create():
             service = _get_drive_service_sync(user_id)
             if not service:
                 return None
             metadata = {
-                "name": folder_name,
+                "name": resolved_folder_name,
                 "mimeType": "application/vnd.google-apps.folder",
             }
             folder = service.files().create(

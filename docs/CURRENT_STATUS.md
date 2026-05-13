@@ -124,6 +124,9 @@ Not yet proven end-to-end:
 - Controlled-address Gmail Sent check from staging/test user.
 - Deployed Supabase Storage bucket and logo upload in target environment.
 - Real Sheets partial-failure messaging after Gmail success.
+- Legal pages: `/regulamin` and `/polityka-prywatnosci` are currently
+  placeholder pages, not final legal documents. Final terms and privacy policy
+  must be created before public paid launch / Google OAuth verification.
 
 ### Operational environments — 27.04.2026
 
