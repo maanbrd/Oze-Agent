@@ -26,6 +26,7 @@ class AddClientPayload:
     client_data: dict
     _offer_remaining: Optional[list] = None
     photo_upload: Optional[dict] = None
+    suppress_r7_after_save: Optional[bool] = None
 
 
 @dataclass

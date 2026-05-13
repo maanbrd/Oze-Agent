@@ -163,6 +163,48 @@ async def test_r7_without_resolved_row_omits_propagation_keys():
 
 
 @pytest.mark.asyncio
+async def test_r7_email_reply_with_resolved_row_opens_edit_confirmation_not_meeting():
+    upd = _update()
+    flow = {
+        "flow_type": "r7_prompt",
+        "flow_data": {
+            "client_name": "Maciej Mitura",
+            "city": "Marki",
+            "client_row": 11,
+            "current_status": "Nowy lead",
+        },
+    }
+    with patch("bot.handlers.text.save_pending_flow") as mock_save, \
+         patch("bot.handlers.text.delete_pending_flow") as mock_delete, \
+         patch("bot.handlers.text.handle_add_meeting", new=AsyncMock()) as mock_meeting:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": "u1"},
+            flow,
+            "E-mail : maciej.mitura@gmail.com",
+        )
+
+    assert consumed is True
+    mock_meeting.assert_not_called()
+    mock_delete.assert_not_called()
+    mock_save.assert_called_once_with(
+        123,
+        "edit_client",
+        {
+            "row": 11,
+            "updates": {"Email": "maciej.mitura@gmail.com"},
+            "old_values": {"Email": ""},
+            "append_fields": [],
+        },
+    )
+    text = upd.effective_message.reply_text.await_args.args[0]
+    assert "Maciej Mitura" in text
+    assert "Email" in text
+    assert "maciej.mitura@gmail.com" in text
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["nic", "later", "nie wiem", "odłóż", "odłożyć"])
 async def test_r7_specific_cancel_phrase_deletes_flow(text):
     """R7-branch-specific cancel phrases (not caught by the global is_no

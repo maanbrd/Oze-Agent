@@ -252,6 +252,48 @@ def _is_client_data_reply(text_lower: str) -> bool:
     ))
 
 
+_R7_EDITABLE_FIELDS = {
+    "Telefon",
+    "Email",
+    "Adres",
+    "Miasto",
+    "Miejscowość",
+    "Produkt",
+    "Źródło pozyskania",
+}
+
+
+def _client_data_updates_from_r7_reply(message_text: str) -> dict:
+    facts = _extract_inline_client_facts(message_text)
+    return {k: v for k, v in facts.items() if k in _R7_EDITABLE_FIELDS and v}
+
+
+async def _start_r7_client_update_confirmation(
+    update: Update,
+    telegram_id: int,
+    r7_data: dict,
+    updates: dict,
+) -> None:
+    client_row = r7_data.get("client_row")
+    client_name = r7_data.get("client_name") or "klient"
+    city = r7_data.get("city") or ""
+    save_pending_flow(telegram_id, "edit_client", {
+        "row": client_row,
+        "updates": updates,
+        "old_values": {field: "" for field in updates},
+        "append_fields": [],
+    })
+    city_part = f" ({city})" if city else ""
+    lines = [f"Zaktualizować {client_name}{city_part} o:"]
+    lines.extend(f"{field}: {value}" for field, value in updates.items())
+    lines.append("Zapisać?")
+    await reply_text(
+        update,
+        "\n".join(lines),
+        reply_markup=build_mutation_buttons("confirm"),
+    )
+
+
 def _is_client_scoped_action_reply(message_text: str) -> bool:
     """Detect obvious next-step actions while preserving client-data updates.
 
@@ -674,19 +716,37 @@ def _infer_meeting_event_type(
     default: Optional[str] = "in_person",
 ) -> Optional[str]:
     text_lower = message_text.lower()
+    has_in_person = any(
+        marker in text_lower
+        for marker in ("spotkanie", "wizyta", "jadę do", "jade do")
+    )
+    has_contact_phone_value = bool(_PHONE_VALUE_RE.search(text_lower))
+    has_explicit_phone_action = any(marker in text_lower for marker in (
+        "zadzwoń", "zadzwo", "zadzwon", "zadzwonić", "zadzwonic",
+        "oddzwoń", "oddzwo", "oddzwon", "telefonicz",
+        "rozmowa telefoniczna", "spotkanie telefoniczne", "przez telefon",
+        "call",
+        "przypomn", "follow-up", "followup",
+    ))
+    has_bare_phone_action = bool(re.search(
+        r"\btelefon\b(?!\s*(?:u|do)?\s*(?:\d|:|-))",
+        text_lower,
+    ))
+    has_offer_action = any(marker in text_lower for marker in (
+        "ofert", "wycena", "wycen", "wyślij", "wyslij", "wyśle", "wysle",
+    ))
+    has_email_action = bool(
+        re.search(r"\b(?:mail|email|e-mail)\b", text_lower)
+        and not _EMAIL_VALUE_RE.search(text_lower)
+    )
     # Slice 5.4.2: doc_followup markers fold into phone_call — real user speech
     # for document reminders ("przypomnij o fakturze", "follow-up z Janem jutro")
     # is a call to remind, not a separate event type.
-    if any(marker in text_lower for marker in (
-        "zadzwoń", "zadzwo", "zadzwon", "zadzwonić", "zadzwonic",
-        "oddzwoń", "oddzwo", "oddzwon", "telefon", "telefonicz",
-        "rozmowa telefoniczna", "call",
-        "przypomn", "follow-up", "followup",
-    )):
+    if has_explicit_phone_action or (has_bare_phone_action and not (has_in_person and has_contact_phone_value)):
         return "phone_call"
-    if any(marker in text_lower for marker in ("ofert", "wycena", "wycen", "mail", "email")):
+    if has_offer_action or (has_email_action and not has_in_person):
         return "offer_email"
-    if any(marker in text_lower for marker in ("spotkanie", "wizyta", "jadę do", "jade do")):
+    if has_in_person:
         return "in_person"
     return default
 
@@ -856,7 +916,7 @@ def _extract_inline_client_facts(message_text: str) -> dict:
             else " + ".join(product_parts)
         )
 
-    if re.search(r"zużycie|zuzycie|\bkw\b|\bkwh\b|zainteresowan|magazyn", text_lower):
+    if re.search(r"zużycie|zuzycie|\bkw\b|\bkwh\b|\bkwp\b|\bmoc\b|metraż|metraz", text_lower):
         facts["Notatki"] = text
 
     address_prefix = re.match(r"\s*(?:adres|ul\.?|ulica)\s+(.+)", text, flags=re.IGNORECASE)
@@ -924,6 +984,23 @@ def _merge_client_data_prefer_extra(base: dict, extra: dict) -> dict:
     return merged
 
 
+def _norm_note_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip(" .,!?:;").casefold()
+
+
+def _clean_meeting_note_value(message_text: str, note_value: object) -> str:
+    note = str(note_value or "").strip()
+    if not note:
+        return ""
+    # In meeting extraction, LLM sometimes mirrors the full command into
+    # Notatki. Keep concise facts, but drop command-sized copies.
+    if _norm_note_text(note) == _norm_note_text(message_text):
+        return ""
+    if len(note) > 80 and _norm_note_text(message_text).startswith(_norm_note_text(note)[:40]):
+        return ""
+    return note
+
+
 async def _extract_meeting_client_data(
     user: dict,
     message_text: str,
@@ -944,6 +1021,12 @@ async def _extract_meeting_client_data(
         llm_data = {}
 
     client_data = _merge_client_data_prefer_extra(deterministic, llm_data)
+    if "Notatki" in client_data:
+        cleaned_note = _clean_meeting_note_value(message_text, client_data.get("Notatki"))
+        if cleaned_note:
+            client_data["Notatki"] = cleaned_note
+        else:
+            client_data.pop("Notatki", None)
     if client_name and not client_data.get("Imię i nazwisko"):
         client_data["Imię i nazwisko"] = client_name
     return client_data
@@ -1715,13 +1798,23 @@ async def _route_pending_flow(
         # Slice 5.1d.2: accept bare event-type words ("telefon", "mail", "oferta")
         # as meeting intent. handle_add_meeting will ask for time via its own
         # path if one isn't in the message.
+        r7_data = flow.get("flow_data", {})
+        if r7_data.get("client_row") is not None:
+            client_updates = _client_data_updates_from_r7_reply(message_text)
+            if client_updates:
+                await _start_r7_client_update_confirmation(
+                    update,
+                    telegram_id,
+                    r7_data,
+                    client_updates,
+                )
+                return True
         has_meeting_intent = (
             any(w in text_lower for w in _TEMPORAL_MARKERS)
             or bool(_TIME_RE.search(text_lower))
             or any(w in text_lower for w in _R7_EVENT_TYPE_MARKERS)
         )
         if has_meeting_intent:
-            r7_data = flow.get("flow_data", {})
             meeting_text = _message_with_r7_client_context(message_text, r7_data)
             entities = {"event_type": _infer_meeting_event_type(message_text)}
             intent_data_r7: dict = {"entities": entities}
@@ -3204,6 +3297,8 @@ async def _confirm_add_client(update, context, telegram_id, user_id, flow_data) 
         return True
 
     await reply_text(update, "✅ Zapisane.")
+    if flow_data.get("suppress_r7_after_save"):
+        return False
     await send_next_action_prompt(
         update, telegram_id, name, city,
         client_row=result.row,
@@ -3446,11 +3541,16 @@ async def handle_confirm(
                 draft_client_data.setdefault("Imię i nazwisko", client_name)
                 if event_type == "in_person":
                     draft_client_data.setdefault("Status", _STATUS_MEETING_BOOKED)
+                draft_client_data.setdefault("Następny krok", correct_label)
+                draft_client_data.setdefault("Data następnego kroku", flow_data["start"])
+                if result.calendar_event_id:
+                    draft_client_data.setdefault("ID wydarzenia Kalendarz", result.calendar_event_id)
                 save_pending(PendingFlow(
                     telegram_id=telegram_id,
                     flow_type=PendingFlowType.ADD_CLIENT,
                     flow_data=payload_to_flow_data(AddClientPayload(
                         client_data=draft_client_data,
+                        suppress_r7_after_save=True,
                     )),
                 ))
                 sheet_columns = user.get("sheet_columns") or await get_sheet_headers(user_id)

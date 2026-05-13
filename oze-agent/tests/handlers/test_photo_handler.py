@@ -66,6 +66,33 @@ async def test_photo_caption_matching_client_skips_which_client_question_and_wai
 
 
 @pytest.mark.asyncio
+async def test_photo_caption_name_only_matches_unique_client_and_waits_for_save():
+    update = _make_photo_update(caption="Jan Kowalski")
+    context = _make_context()
+
+    with patch("bot.handlers.photo.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.photo._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.photo.get_active_photo_session", return_value=None), \
+         patch("bot.handlers.photo.get_all_clients", new=AsyncMock(return_value=[_client()])), \
+         patch("bot.handlers.photo.save_pending_flow") as mock_save, \
+         patch("bot.handlers.photo.upload_photo_for_client", new=AsyncMock()) as mock_upload, \
+         patch("bot.handlers.photo.reply_text", new=AsyncMock()) as mock_reply:
+        from bot.handlers.photo import handle_photo
+
+        await handle_photo(update, context)
+
+    mock_upload.assert_not_called()
+    mock_save.assert_called_once()
+    assert mock_save.call_args.args[1] == "photo_upload"
+    saved = mock_save.call_args.args[2]
+    assert saved["client_row"] == 7
+    assert saved["caption"] == "Jan Kowalski"
+    reply_text = mock_reply.await_args.args[1]
+    assert "Do którego klienta" not in reply_text
+    assert "Zapisać zdjęcie do folderu" in reply_text
+
+
+@pytest.mark.asyncio
 async def test_photo_without_caption_asks_for_client_and_stores_file_id_only():
     update = _make_photo_update(caption=None)
     context = _make_context()

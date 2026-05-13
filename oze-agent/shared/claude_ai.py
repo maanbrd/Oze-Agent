@@ -297,9 +297,10 @@ Rozumiej polskie wyrażenia dat i czasu:
 - "wpół do ósmej" → 07:30, "za kwadrans dziesiąta" → 09:45, "kwadrans po szóstej" → 18:15
 Jeśli jedna wiadomość zawiera kilka spotkań (różni klienci lub różne godziny), zwróć wiele obiektów w liście.
 Jeśli czegoś brak, zostaw pusty string.
-Ustaw event_type dla KAŻDEGO obiektu (gdy markery się nakładają, wygrywa priorytet: phone_call > offer_email > in_person). Dostępne wartości: "phone_call", "offer_email", "in_person" (bez "doc_followup").
-- "zadzwoń", "zadzwonić", "oddzwoń", "telefon", "telefonicznie", "rozmowa telefoniczna", "call", "przypomnij", "follow-up", "followup" → "phone_call" (użytkownik dzwoni żeby przypomnieć/skontaktować się)
-- "wyślij ofertę", "oferta", "wycena", "mail", "email", "wyślij dokumenty", "przesłać dokumenty" → "offer_email"
+Ustaw event_type dla KAŻDEGO obiektu. Dostępne wartości: "phone_call", "offer_email", "in_person" (bez "doc_followup").
+- "zadzwoń", "zadzwonić", "oddzwoń", "telefonicznie", "rozmowa telefoniczna", "spotkanie telefoniczne", "przez telefon", "call", "przypomnij", "follow-up", "followup" → "phone_call" (użytkownik dzwoni żeby przypomnieć/skontaktować się)
+- Samo pole kontaktowe "numer telefonu", "telefon 600...", "tel. 600..." w komendzie ze słowem "spotkanie" NIE zmienia event_type — wtedy zostaje "in_person".
+- "wyślij ofertę", "oferta", "wycena", "mail", "email", "wyślij dokumenty", "przesłać dokumenty" → "offer_email"; samo pole kontaktowe z adresem e-mail w komendzie spotkania NIE zmienia event_type.
 - "spotkanie", "wizyta", "jadę do", "jade do" → "in_person"
 `duration_minutes` (int, OPCJONALNE): Dodaj to pole TYLKO gdy user jawnie podał czas trwania (np. "na 30 minut", "przez godzinę"=60, "45 min", "na pół godziny"=30, "1h"=60). W przeciwnym razie NIE dodawaj tego pola — system ustawi domyślny czas na podstawie event_type (phone_call/offer_email=15 min, in_person=60 min).
 Przykłady duration_minutes:

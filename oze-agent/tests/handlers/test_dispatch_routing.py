@@ -257,6 +257,16 @@ def test_infer_meeting_event_type_uses_d4_priority_order():
     assert _infer_meeting_event_type("Spotkanie z Janem jutro o 10") == "in_person"
 
 
+def test_infer_meeting_event_type_ignores_contact_phone_inside_physical_meeting():
+    text = (
+        "Zapisz w kalendarzu spotkanie na jutro na godzinę czternastą z Maciejem "
+        "Miturą, adres ulica Konwaliowa 28D w Markach, numer telefonu 725-225-252, "
+        "spotkanie na fotowoltaikę i magazyn energii."
+    )
+
+    assert _infer_meeting_event_type(text) == "in_person"
+
+
 # ── Slice 5.4.2 — runtime normalizer for dropped doc_followup ────────────────
 
 

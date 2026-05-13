@@ -88,10 +88,18 @@ def _client_matches_text(client: dict, text: str) -> bool:
     norm_text = normalize_polish(text)
     norm_name = normalize_polish(client.get("Imię i nazwisko", ""))
     norm_city = normalize_polish(client.get("Miasto", client.get("Miejscowość", "")))
-    if not norm_name or not norm_city:
+    if not norm_name:
         return False
     name_tokens = [token for token in norm_name.split() if len(token) > 1]
-    return all(token in norm_text.split() for token in name_tokens) and norm_city in norm_text.split()
+    text_tokens = norm_text.split()
+    if not all(token in text_tokens for token in name_tokens):
+        return False
+
+    extra_tokens = [token for token in text_tokens if token not in name_tokens]
+    if not extra_tokens:
+        return True
+
+    return bool(norm_city and norm_city in text_tokens)
 
 
 async def _resolve_clients_from_text(user_id: str, text: str) -> list[dict]:

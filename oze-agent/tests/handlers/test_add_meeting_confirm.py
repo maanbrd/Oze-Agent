@@ -121,6 +121,10 @@ async def test_add_meeting_confirm_new_client_draft_keeps_full_meeting_client_da
     assert draft["Adres"] == "ul. Markowa 25"
     assert draft["Produkt"] == "PV + Magazyn energii"
     assert draft["Status"] == "Spotkanie umówione"
+    assert draft["Następny krok"] == "Spotkanie"
+    assert draft["Data następnego kroku"] == "2027-04-20T14:00:00+02:00"
+    assert draft["ID wydarzenia Kalendarz"] == "event-1"
+    assert saved_flow.flow_data["suppress_r7_after_save"] is True
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "❓ Brakuje: Email" in response
     missing_line = next(line for line in response.splitlines() if line.startswith("❓ Brakuje:"))
@@ -462,6 +466,10 @@ async def test_add_meeting_confirm_no_first_name_match_creates_add_client_draft(
     assert saved_flow.flow_data["client_data"]["Imię i nazwisko"] == "Jurek Jurecki"
     assert saved_flow.flow_data["client_data"]["Telefon"] == "746938764"
     assert saved_flow.flow_data["client_data"]["Status"] == "Spotkanie umówione"
+    assert saved_flow.flow_data["client_data"]["Następny krok"] == "Spotkanie"
+    assert saved_flow.flow_data["client_data"]["Data następnego kroku"] == "2026-04-17T11:00:00+02:00"
+    assert saved_flow.flow_data["client_data"]["ID wydarzenia Kalendarz"] == "event-1"
+    assert saved_flow.flow_data["suppress_r7_after_save"] is True
     mock_delete.assert_not_called()
 
 

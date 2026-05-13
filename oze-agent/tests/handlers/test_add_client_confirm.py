@@ -87,6 +87,26 @@ async def test_add_client_success_replies_and_fires_r7_keeps_pending():
 
 
 @pytest.mark.asyncio
+async def test_add_client_success_can_suppress_r7_for_meeting_seeded_client():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.get_pending_flow",
+        return_value=_pending_add_client({"suppress_r7_after_save": True}),
+    ), patch(
+        "bot.handlers.text.commit_add_client",
+        new=AsyncMock(return_value=AddClientResult(success=True, row=42)),
+    ), patch(
+        "bot.handlers.text.send_next_action_prompt",
+        new=AsyncMock(),
+    ) as mock_r7, patch("bot.handlers.text.delete_pending_flow") as mock_delete:
+        await handle_confirm(upd, MagicMock(), {"id": "u1"}, {}, "")
+
+    upd.effective_message.reply_text.assert_awaited_once_with("✅ Zapisane.")
+    mock_r7.assert_not_called()
+    mock_delete.assert_called_once_with(123)
+
+
+@pytest.mark.asyncio
 async def test_add_client_failure_replies_google_down_and_deletes_pending():
     upd = _update()
     with patch(
