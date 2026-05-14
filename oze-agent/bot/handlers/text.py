@@ -1265,8 +1265,12 @@ def _format_add_meeting_flow_card(flow_data: dict) -> str:
             f"{status_update.get('old_value', '')} → "
             f"{status_update.get('new_value', '')}"
         )
-    card = format_confirmation("add_meeting", details)
     event_type = flow_data.get("event_type") or "in_person"
+    return _format_action_confirmation_card(event_type, details)
+
+
+def _format_action_confirmation_card(event_type: str | None, details: dict) -> str:
+    card = format_confirmation("add_meeting", details)
     heading = confirmation_heading(event_type)
     if heading.startswith("✅ "):
         heading = heading[2:].strip()
@@ -3090,7 +3094,7 @@ async def handle_add_meeting(
                 f"{status_update.get('old_value', '')} → "
                 f"{status_update.get('new_value', '')}"
             )
-        msg = format_confirmation("add_meeting", details) + conflict_warning
+        msg = _format_action_confirmation_card(event_type, details) + conflict_warning
         await reply_markdown_v2(update, msg, reply_markup=build_mutation_buttons("confirm"))
 
     else:

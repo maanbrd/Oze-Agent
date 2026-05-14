@@ -136,14 +136,13 @@ def test_detect_potential_duplicate_finds_typo():
     assert result["Imię i nazwisko"] == "Jan Kowalski"
 
 
-def test_detect_potential_duplicate_different_city_still_matches():
-    """Same full name in a different city is now flagged as a potential duplicate."""
+def test_detect_potential_duplicate_different_known_city_does_not_match():
+    """Same full name in a different known city is a separate client identity."""
     existing = [
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
     ]
     result = detect_potential_duplicate("Jan Kowalski", "Kraków", existing)
-    assert result is not None
-    assert result["Imię i nazwisko"] == "Jan Kowalski"
+    assert result is None
 
 
 def test_detect_potential_duplicate_no_match():
@@ -241,16 +240,15 @@ def test_detect_duplicate_candidates_city_narrows_to_same_city():
     assert result[0]["_row"] == 2
 
 
-def test_detect_duplicate_candidates_city_without_match_returns_cross_city():
-    """City provided but no same-city candidate — fall back to all name-only
-    matches so the cross-city duplicate warning is still raised."""
+def test_detect_duplicate_candidates_city_without_match_returns_empty_for_cross_city():
+    """City provided but no same-city candidate means no duplicate when all
+    candidates have a different known city."""
     existing = [
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2},
         {"Imię i nazwisko": "Jan Kowalski", "Miasto": "Kraków", "_row": 3},
     ]
     result = detect_duplicate_candidates("Jan Kowalski", "Gdańsk", existing)
-    assert len(result) == 2
-    assert {c["_row"] for c in result} == {2, 3}
+    assert result == []
 
 
 def test_detect_duplicate_candidates_miejscowosc_fallback():

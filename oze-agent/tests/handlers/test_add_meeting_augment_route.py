@@ -104,6 +104,53 @@ async def _single_meeting_flow_for_duration(
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_phone_call_confirmation_card_uses_phone_copy():
+    upd = _update()
+    meeting = {
+        "date": "2027-04-20",
+        "time": "10:00",
+        "client_name": "Jan Kowalski",
+        "location": "telefonicznie",
+        "event_type": "phone_call",
+    }
+
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={"meetings": [meeting]}),
+    ), patch(
+        "bot.handlers.text._extract_meeting_client_data",
+        new=AsyncMock(return_value={}),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Telefon — Jan Kowalski",
+            "location": "telefonicznie",
+            "description": "",
+            "full_name": "Jan Kowalski",
+            "client_found": True,
+            "client_row": 5,
+            "current_status": "Oferta wysłana",
+            "client_city": "Warszawa",
+            "existing_client_data": {},
+            "ambiguous_client": False,
+            "ambiguous_candidates": [],
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending"):
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "phone_call"}},
+            "Zadzwoń jutro o dziesiątej do Jana Kowalskiego",
+        )
+
+    msg = upd.effective_message.reply_markdown_v2.await_args.args[0]
+    assert "Dodać telefon" in msg
+    assert "Dodać spotkanie" not in msg
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_augment_product_details_go_to_client_data_not_description():
     upd = _update()
     with patch("bot.handlers.text.save_pending") as mock_save:

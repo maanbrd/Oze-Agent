@@ -111,9 +111,10 @@ def detect_duplicate_candidates(
 
     Match rule: full name (≥2 tokens) within Levenshtein distance 2.
     If `city` is provided and at least one candidate shares a same/similar city
-    (Levenshtein ≤1 on city), returns only same-city candidates. Otherwise
-    returns all name-only matches — cross-city included — preserving the
-    cross-city duplicate-warning contract.
+    (Levenshtein ≤1 on city), returns only same-city candidates. If every
+    matching row has a different known city, returns no duplicate: same full
+    name in another city is a separate client identity. Rows with missing city
+    still match because they may be incomplete duplicates.
 
     First-name-only inputs (e.g. "Jan") return an empty list to avoid
     overmatching; callers should treat empty as "no duplicate found".
@@ -124,8 +125,9 @@ def detect_duplicate_candidates(
         return []
     city_norm = normalize_polish(city or "")
 
-    name_matches: list[dict] = []
+    name_matches: list[tuple[dict, str]] = []
     same_city_matches: list[dict] = []
+    unknown_city_matches: list[dict] = []
     for client in existing_clients:
         existing_name = normalize_polish(client.get("Imię i nazwisko", ""))
         existing_city = normalize_polish(
@@ -133,19 +135,25 @@ def detect_duplicate_candidates(
         )
         if levenshtein_distance(name_norm, existing_name) > 2:
             continue
-        name_matches.append(client)
+        name_matches.append((client, existing_city))
         if (
             city_norm
             and existing_city
             and levenshtein_distance(city_norm, existing_city) <= 1
         ):
             same_city_matches.append(client)
+        elif city_norm and not existing_city:
+            unknown_city_matches.append(client)
 
     if not name_matches:
         return []
-    if city_norm and same_city_matches:
-        return same_city_matches
-    return name_matches
+    if city_norm:
+        if same_city_matches:
+            return same_city_matches
+        if unknown_city_matches:
+            return unknown_city_matches
+        return []
+    return [client for client, _ in name_matches]
 
 
 def detect_potential_duplicate(
