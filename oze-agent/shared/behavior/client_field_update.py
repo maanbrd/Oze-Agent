@@ -3,13 +3,14 @@
 from dataclasses import dataclass
 import re
 
+from shared.email_parsing import extract_email_addresses, normalize_spoken_email_text
+
 
 @dataclass(frozen=True)
 class ClientFieldUpdate:
     updates: dict[str, str]
 
 
-_EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w.-]+\.\w+\b")
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+?48[\s-]?)?(?:\d[\s-]?){9}(?!\d)")
 _NOTE_RE = re.compile(
     r"^\s*(?:notatka|notatki)\s*:|^\s*(?:dodaj|dopisz|zapisz)\s+notatk[ęe]\s*:",
@@ -53,11 +54,10 @@ def parse_client_field_update(message_text: str) -> ClientFieldUpdate | None:
 
     # Field updates win over note routing. Only explicit note markers below
     # are excluded after CRM field prefixes fail to match.
-    lower = text.casefold()
+    email = next(iter(extract_email_addresses(text)), None)
 
-    email_match = _EMAIL_RE.search(text)
-    if email_match and re.match(r"^\s*(?:e-?mail|mail)\b", text, re.IGNORECASE):
-        return ClientFieldUpdate({"Email": email_match.group(0)})
+    if email and re.match(r"^\s*(?:e-?mail|mail)\b", text, re.IGNORECASE):
+        return ClientFieldUpdate({"Email": email})
 
     phone_match = _PHONE_RE.search(text)
     if phone_match and re.match(r"^\s*(?:tel\.?|telefon|nr|numer)\b", text, re.IGNORECASE):
@@ -90,8 +90,7 @@ def parse_client_field_update(message_text: str) -> ClientFieldUpdate | None:
 
     # A bare email is a common post-save reply after the bot asked for missing
     # data; keep it deterministic and R1-safe.
-    if email_match and lower == email_match.group(0).casefold():
-        return ClientFieldUpdate({"Email": email_match.group(0)})
+    if email and normalize_spoken_email_text(text).strip().casefold() == email.casefold():
+        return ClientFieldUpdate({"Email": email})
 
     return None
-

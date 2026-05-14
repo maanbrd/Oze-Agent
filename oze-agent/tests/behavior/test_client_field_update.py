@@ -12,6 +12,18 @@ def test_email_reply_is_crm_field_update_not_note():
     assert is_explicit_note_request("email zbigniew.borek@tlen.pl") is False
 
 
+def test_spoken_polish_email_reply_is_crm_field_update():
+    parsed = parse_client_field_update("email maciej.mitura małpa gmail.com")
+
+    assert parsed is not None
+    assert parsed.updates == {"Email": "maciej.mitura@gmail.com"}
+
+    parsed_ascii = parse_client_field_update("mail anna malpa firma kropka pl")
+
+    assert parsed_ascii is not None
+    assert parsed_ascii.updates == {"Email": "anna@firma.pl"}
+
+
 def test_source_reply_is_crm_field_update():
     parsed = parse_client_field_update("źródło pozyskania D2D")
 

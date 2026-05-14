@@ -1047,9 +1047,9 @@ def _extract_inline_client_facts(message_text: str) -> dict:
         if len(digits) == 9:
             facts["Telefon"] = digits
 
-    email_match = re.search(r"\b[\w.+-]+@[\w.-]+\.\w+\b", text)
-    if email_match:
-        facts["Email"] = email_match.group(0)
+    emails = extract_email_addresses(text)
+    if emails:
+        facts["Email"] = emails[0]
 
     product_parts = []
     has_pv = bool(re.search(r"\bpv\b|fotowolta", text_lower))
@@ -1600,8 +1600,12 @@ async def _route_pending_flow(
             return True
 
         headers = await get_sheet_headers(user_id)
-        result = await extract_client_data(message_text, headers)
-        new_data = {k: v for k, v in _filter_invalid_products(result.get("client_data", {})).items() if v}
+        field_update = parse_client_field_update(message_text)
+        if field_update and set(field_update.updates) == {"Email"}:
+            new_data = field_update.updates
+        else:
+            result = await extract_client_data(message_text, headers)
+            new_data = {k: v for k, v in _filter_invalid_products(result.get("client_data", {})).items() if v}
         logger.info("augment add_client: new_data=%s", new_data)
 
         if not new_data:

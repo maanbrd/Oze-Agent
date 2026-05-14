@@ -165,6 +165,29 @@ async def test_add_client_augment_phone_stays_client_data_path():
 
 
 @pytest.mark.asyncio
+async def test_add_client_augment_accepts_spoken_polish_email_without_llm():
+    upd = _update()
+    with patch("bot.handlers.text.get_sheet_headers", new=AsyncMock(return_value=["Email"])), \
+         patch(
+             "bot.handlers.text.extract_client_data",
+             new=AsyncMock(return_value={"client_data": {}}),
+         ) as mock_extract, \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": 1, "sheet_columns": ["Telefon", "Email", "Produkt"]},
+            _flow(),
+            "email maciej.mitura małpa gmail.com",
+        )
+
+    assert consumed is True
+    mock_extract.assert_not_awaited()
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_data["client_data"]["Email"] == "maciej.mitura@gmail.com"
+
+
+@pytest.mark.asyncio
 async def test_add_client_augment_preserves_meeting_seeded_closed_context():
     upd = _update()
     flow = {

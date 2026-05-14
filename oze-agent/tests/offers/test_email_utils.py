@@ -13,6 +13,12 @@ def test_extract_email_addresses_from_free_text():
     ]
 
 
+def test_extract_email_addresses_understands_polish_spoken_tokens():
+    assert extract_email_addresses("wyślij na jan małpa example kropka pl") == [
+        "jan@example.pl",
+    ]
+
+
 def test_merge_offer_recipients_keeps_valid_unique_and_flags_invalid():
     result = merge_offer_recipients(
         sheet_email_field="jan@example.com; bledny@@x; ANNA@example.com",

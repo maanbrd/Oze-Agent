@@ -4,9 +4,13 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?![\w.+-])", re.I)
-EMAIL_TOKEN_RE = re.compile(r"\S+@\S+")
-VALID_EMAIL_RE = re.compile(r"^[^@\s;<>]+@[^@\s;<>]+\.[^@\s;<>]+$", re.I)
+from shared.email_parsing import (
+    EMAIL_TOKEN_RE,
+    extract_email_addresses,
+    is_valid_email,
+    normalize_email,
+    normalize_spoken_email_text,
+)
 
 
 @dataclass(frozen=True)
@@ -14,25 +18,6 @@ class RecipientMergeResult:
     recipients: list[str]
     invalid_recipients: list[str]
     new_emails_for_sheets: list[str]
-
-
-def normalize_email(value: str) -> str:
-    return value.strip().strip(".,;:<>[]()").lower()
-
-
-def is_valid_email(value: str) -> bool:
-    return bool(VALID_EMAIL_RE.match(normalize_email(value)))
-
-
-def extract_email_addresses(text: str) -> list[str]:
-    seen: set[str] = set()
-    addresses: list[str] = []
-    for match in EMAIL_RE.findall(text or ""):
-        email = normalize_email(match)
-        if email and email not in seen:
-            seen.add(email)
-            addresses.append(email)
-    return addresses
 
 
 def _split_email_field(value: str) -> list[str]:
@@ -43,7 +28,7 @@ def _split_email_field(value: str) -> list[str]:
 
 def _invalid_email_tokens(text: str) -> list[str]:
     invalid: list[str] = []
-    for token in EMAIL_TOKEN_RE.findall(text or ""):
+    for token in EMAIL_TOKEN_RE.findall(normalize_spoken_email_text(text or "")):
         normalized = normalize_email(token)
         if normalized and not is_valid_email(normalized) and normalized not in invalid:
             invalid.append(normalized)
