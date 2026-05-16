@@ -9,7 +9,6 @@ const navItems = [
   ["Klienci", "/klienci"],
   ["Kalendarz", "/kalendarz"],
   ["Płatności", "/platnosci"],
-  ["Ustawienia", "/ustawienia"],
   ["Import", "/import"],
   ["Instrukcja", "/instrukcja"],
   ["FAQ", "/faq"],

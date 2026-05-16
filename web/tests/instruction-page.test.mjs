@@ -39,7 +39,6 @@ test("instruction page covers the web app sections in plain language", () => {
     "Kalendarz",
     "Oferty",
     "Płatności",
-    "Ustawienia",
     "Import",
     "Arkusz Google",
     "Kalendarz Google",
@@ -47,6 +46,8 @@ test("instruction page covers the web app sections in plain language", () => {
   ]) {
     assert.equal(guideSource.includes(text), true, text);
   }
+
+  assert.equal(guideSource.includes("Ustawienia"), false);
 });
 
 test("instruction note example explains short follow-up notes without sounding rigid", () => {

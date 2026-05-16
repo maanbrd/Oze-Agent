@@ -5,7 +5,7 @@ const foundations = [
   },
   {
     title: "Panel web",
-    body: "Przeglądasz bazę, dzień pracy, klientów wymagających decyzji, płatności, ustawienia i szablony ofert. Panel prowadzi też do Twojego Google.",
+    body: "Przeglądasz bazę, dzień pracy, klientów wymagających decyzji, płatności i szablony ofert. Panel prowadzi też do Twojego Google.",
   },
   {
     title: "Google",
@@ -110,7 +110,6 @@ const webSections = [
   ["Kalendarz", "Spotkania i akcje z Kalendarza Google pogrupowane po dniach."],
   ["Oferty", "Tworzenie szablonów ofert, profil sprzedawcy, logo, treść maila i testowy PDF."],
   ["Płatności", "Status subskrypcji i przejście do płatności, gdy konto tego wymaga."],
-  ["Ustawienia", "Dane konta, telefon kontaktowy i linki do kolejnych kroków onboardingu."],
   ["Import", "Miejsce na przyszły import klientów z pliku. Teraz niczego tam nie wgrywasz."],
 ] as const;
 
