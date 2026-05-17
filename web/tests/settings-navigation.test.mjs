@@ -9,6 +9,7 @@ function readSource(path) {
 
 const crmShellSource = readSource("../components/crm-shell.tsx");
 const privateSettingsPath = new URL("../app/(app)/ustawienia/page.tsx", import.meta.url);
+const privateImportPath = new URL("../app/(app)/import/page.tsx", import.meta.url);
 const settingsPreviewPath = new URL("../app/ustawienia-preview/page.tsx", import.meta.url);
 const settingsPreviewComponentPath = new URL(
   "../components/settings-preview.tsx",
@@ -17,10 +18,13 @@ const settingsPreviewComponentPath = new URL(
 const panelPreviewPath = new URL("../app/panel-preview/page.tsx", import.meta.url);
 const panelPreviewSource = readSource("../app/panel-preview/page.tsx");
 
-test("settings stay hidden from the main CRM navigation", () => {
+test("settings and import stay hidden from the main CRM navigation", () => {
   assert.equal(existsSync(privateSettingsPath), true);
+  assert.equal(existsSync(privateImportPath), true);
   assert.equal(crmShellSource.includes('["Ustawienia", "/ustawienia"]'), false);
   assert.equal(crmShellSource.includes("/ustawienia"), false);
+  assert.equal(crmShellSource.includes('["Import", "/import"]'), false);
+  assert.equal(crmShellSource.includes("/import"), false);
 });
 
 test("rejected settings concept preview is removed", () => {
@@ -35,4 +39,5 @@ test("panel preview renders the CRM shell without requiring login in development
   assert.equal(panelPreviewSource.includes('process.env.NODE_ENV !== "development"'), true);
   assert.equal(panelPreviewSource.includes("notFound()"), true);
   assert.equal(panelPreviewSource.includes("getCurrentAccount"), false);
+  assert.equal(panelPreviewSource.includes("Płatności, import"), false);
 });

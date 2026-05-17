@@ -54,8 +54,8 @@ export default function PanelPreviewPage() {
             bieżący dzień.
           </PreviewCard>
           <PreviewCard title="Rzeczy pomocnicze">
-            Płatności, import, instrukcja i FAQ zostają dostępne tam, gdzie mają
-            konkretny cel.
+            Płatności, instrukcja i FAQ zostają dostępne tam, gdzie mają
+            konkretny cel w bieżącej wersji.
           </PreviewCard>
           <PreviewCard title="Sprzedaż">
             Oferty zostają osobnym, zatwierdzonym flow do szablonów i testowych

@@ -110,7 +110,6 @@ const webSections = [
   ["Kalendarz", "Spotkania i akcje z Kalendarza Google pogrupowane po dniach."],
   ["Oferty", "Tworzenie szablonów ofert, profil sprzedawcy, logo, treść maila i testowy PDF."],
   ["Płatności", "Status subskrypcji i przejście do płatności, gdy konto tego wymaga."],
-  ["Import", "Miejsce na przyszły import klientów z pliku. Teraz niczego tam nie wgrywasz."],
 ] as const;
 
 const doesNotDo = [
