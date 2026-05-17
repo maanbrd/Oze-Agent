@@ -45,7 +45,7 @@ export default async function RegistrationPage({
                 Załóż konto i przejdź do onboardingu.
               </h1>
               <p className="mt-7 max-w-2xl text-lg leading-8 text-zinc-300">
-                Ten krok tworzy bezpieczne konto. Płatność, Google OAuth i
+                Ten krok tworzy bezpieczne konto. Płatność, Google i
                 parowanie Telegrama będą kolejnymi krokami tego samego flow.
               </p>
               <div className="mt-9 grid gap-3 sm:grid-cols-3">

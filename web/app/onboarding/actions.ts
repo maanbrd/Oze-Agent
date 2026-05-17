@@ -130,7 +130,7 @@ export async function createCheckoutSession(formData: FormData) {
   }
 
   if (!checkoutUrl) {
-    redirect(encoded("/onboarding/platnosc", "Stripe nie zwrócił linku."));
+    redirect(encoded("/onboarding/platnosc", "Nie udało się utworzyć linku płatności."));
   }
 
   const trustedCheckoutUrl = trustedExternalUrl(checkoutUrl, [
@@ -140,7 +140,7 @@ export async function createCheckoutSession(formData: FormData) {
     redirect(
       encoded(
         "/onboarding/platnosc",
-        "Stripe zwrócił nieoczekiwany adres checkoutu.",
+        "Nie udało się bezpiecznie otworzyć płatności.",
       ),
     );
   }

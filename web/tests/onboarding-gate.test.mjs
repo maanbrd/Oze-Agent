@@ -187,7 +187,7 @@ test("stripe checkout reports actionable configuration failures", () => {
   assert.match(stripeServerSource, /value === `""`/);
   assert.match(stripeServerSource, /checkoutConfigErrorMessage/);
   assert.match(stripeServerSource, /Missing STRIPE_SECRET_KEY/);
-  assert.match(stripeServerSource, /web\/\.env\.local mógł zostać nadpisany/);
+  assert.match(stripeServerSource, /Płatność nie jest jeszcze skonfigurowana/);
   assert.match(stripeServerSource, /No active Stripe price found for lookup key/);
   assert.match(onboardingActionsSource, /checkoutConfigErrorMessage\(error\)/);
 });

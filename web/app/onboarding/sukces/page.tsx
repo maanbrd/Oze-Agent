@@ -40,12 +40,12 @@ export default async function PaymentSuccessPage({
           Płatność
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-white">
-          {active ? "Płatność zaksięgowana." : "Czekamy na potwierdzenie Stripe."}
+          {active ? "Płatność zaksięgowana." : "Czekamy na potwierdzenie płatności."}
         </h1>
         <p className="mt-4 text-sm leading-7 text-zinc-300">
           {active
-            ? "Konto ma aktywną subskrypcję. Następny etap to Google OAuth, zasoby Google i Telegram."
-            : "Checkout wrócił do panelu, ale konto nie ma jeszcze aktywnej subskrypcji. Odśwież za chwilę albo wróć do płatności, jeśli webhook nie dojdzie."}
+            ? "Konto ma aktywną subskrypcję. Następny etap to Google, zasoby Google i Telegram."
+            : "Wróciłeś do panelu, ale konto nie ma jeszcze aktywnej subskrypcji. Odśwież za chwilę albo wróć do płatności, jeśli status się nie zmieni."}
         </p>
         <Link
           href={active ? "/onboarding/google" : "/onboarding/platnosc"}

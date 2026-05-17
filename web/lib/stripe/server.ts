@@ -74,15 +74,15 @@ export function checkoutConfigErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "";
 
   if (message.includes("Missing STRIPE_SECRET_KEY")) {
-    return "Lokalny env nie zawiera aktywnego STRIPE_SECRET_KEY. Jeśli Stripe działał wcześniej, web/.env.local mógł zostać nadpisany. Przywróć klucz z backupu, Stripe Dashboard albo Vercel env.";
+    return "Płatność nie jest jeszcze skonfigurowana. Wróć później albo skontaktuj się z obsługą Agent-OZE.";
   }
 
   if (message.includes("Missing Stripe price reference")) {
-    return "Lokalny env Stripe nie zawiera ceny ani lookup key dla planu miesięcznego. Przywróć STRIPE_PRICE_MONTHLY z backupu albo Vercel env.";
+    return "Plan płatności nie jest jeszcze skonfigurowany. Wróć później albo skontaktuj się z obsługą Agent-OZE.";
   }
 
   if (message.includes("No active Stripe price found for lookup key")) {
-    return "Nie znaleziono aktywnej ceny Stripe dla zapisanego lookup key. Przywróć właściwe STRIPE_PRICE_MONTHLY albo sprawdź ceny w Stripe.";
+    return "Nie udało się znaleźć aktywnego planu płatności. Wróć później albo skontaktuj się z obsługą Agent-OZE.";
   }
 
   return "Nie udało się uruchomić płatności. Sprawdź konfigurację Stripe.";

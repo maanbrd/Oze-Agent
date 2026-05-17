@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Płatność | Agent-OZE",
-  description: "Miesięczna subskrypcja i płatność Stripe.",
+  description: "Miesięczna subskrypcja Agent-OZE.",
 };
 
 export default async function PaymentStepPage({
@@ -47,8 +47,8 @@ export default async function PaymentStepPage({
               Uruchom subskrypcję.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
-              Jeden plan miesięczny. Stripe obsłuży płatność i odnowienia, a
-              konto aktywujemy po potwierdzeniu opłacenia sesji.
+              Jeden plan miesięczny. Po opłaceniu subskrypcji przejdziesz dalej
+              do konfiguracji Google i Telegrama.
             </p>
 
             {params.message ? (
@@ -80,8 +80,8 @@ export default async function PaymentStepPage({
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-300">
                   {isBetaActive
-                    ? "Możesz przejść dalej bez Stripe. Następny etap to Google OAuth, zasoby Google i parowanie Telegrama."
-                    : "Płatność jest zaksięgowana. Następny etap to Google OAuth, zasoby Google i parowanie Telegrama."}
+                    ? "Możesz przejść dalej bez płatności. Następny etap to Google, zasoby Google i parowanie Telegrama."
+                    : "Płatność jest zaksięgowana. Następny etap to Google, zasoby Google i parowanie Telegrama."}
                 </p>
                 <Link
                   href="/onboarding/google"
@@ -111,8 +111,8 @@ export default async function PaymentStepPage({
             </div>
             <div className="mt-6 border-t border-white/10 pt-5">
               <p className="text-sm leading-6 text-zinc-400">
-                Stripe Checkout pobierze płatność i odeśle webhook. Konto
-                aktywujemy dopiero po potwierdzeniu opłacenia sesji.
+                Po płatności wrócisz do konfiguracji konta. Jeśli płatność nie
+                przejdzie, możesz wrócić tutaj i spróbować ponownie.
               </p>
             </div>
           </aside>
@@ -134,7 +134,7 @@ function BetaAccessCard() {
           <p className="text-sm font-semibold text-white">Dostęp beta</p>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
             Twój email jest na liście beta testerów. Możesz przejść dalej bez
-            płatności Stripe i skonfigurować Google oraz Telegram.
+            płatności i skonfigurować Google oraz Telegram.
           </p>
         </div>
         <button

@@ -130,7 +130,7 @@ export async function POST(request: Request) {
   if (!checkoutUrl) {
     return localRedirect(
       request,
-      encoded("/onboarding/platnosc", "Stripe nie zwrócił linku."),
+      encoded("/onboarding/platnosc", "Nie udało się utworzyć linku płatności."),
     );
   }
 
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
       request,
       encoded(
         "/onboarding/platnosc",
-        "Stripe zwrócił nieoczekiwany adres checkoutu.",
+        "Nie udało się bezpiecznie otworzyć płatności.",
       ),
     );
   }
