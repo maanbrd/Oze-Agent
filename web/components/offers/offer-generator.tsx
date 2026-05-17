@@ -1066,182 +1066,141 @@ export function OfferGenerator() {
     ));
 
   return (
-    <div className="oze-offers mx-auto max-w-7xl space-y-6 pb-14">
-      <header className="border-b border-white/10 pb-6">
-        <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#3DFF7A]">
-              Oferty
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold leading-tight text-white">
-              Generator ofert
-            </h1>
-            <p className="mt-4 text-sm leading-6 text-zinc-400">
-              Zarządzaj szablonami ofert, uzupełnij dane i wygeneruj testowy PDF.
-              Wysyłka do klienta nadal idzie przez Telegram po potwierdzeniu.
-            </p>
+    <div className="oze-offers mx-auto grid w-full max-w-[1500px] gap-5 px-4 py-5 xl:grid-cols-[minmax(560px,1fr)_520px]">
+      <section className="min-w-0">
+        <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+          <div className="sm:col-start-2">
+            <h1 className="text-2xl font-semibold tracking-[0] text-white">Generator ofert</h1>
           </div>
-
-          <div className="flex flex-wrap items-end gap-3 lg:justify-end">
-            <div className="rounded-[8px] border border-[#3DFF7A]/25 bg-[#3DFF7A]/10 px-4 py-3 shadow-[0_0_30px_rgba(61,255,122,0.06)]">
-              <p className="text-2xl font-semibold leading-none text-white">
-                {ready.length}
-              </p>
-              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-[#3DFF7A]">
-                gotowe
-              </p>
-            </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/[0.035] px-4 py-3">
-              <p className="text-2xl font-semibold leading-none text-white">
-                {drafts.length}
-              </p>
-              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
-                szkice
-              </p>
-            </div>
-            <button
-              onClick={() => void createDraft()}
-              className="h-11 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98]"
-            >
-              Nowy szkic
-            </button>
-          </div>
+          <button
+            onClick={() => void createDraft()}
+            className="h-10 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98] sm:col-start-3 sm:justify-self-end"
+          >
+            Nowy szkic
+          </button>
         </div>
-      </header>
+        {apiError ? (
+          <div className="mb-4 rounded-[8px] border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-300">
+            {apiError}
+          </div>
+        ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="min-w-0 space-y-4">
+        <OfferTable title="Gotowe oferty" empty="Brak gotowych ofert." rows={rows(ready, true)} />
+        <div className="h-5" />
+        <OfferTable title="Szkice" empty="Brak szkiców." rows={rows(drafts, false)} />
+      </section>
+
+      <aside className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.04]">
+        <div className="border-b border-white/10 p-4">
+          <div className="grid gap-3 sm:grid-cols-[1fr_150px]">
+            <label className="text-xs font-medium uppercase text-[#3DFF7A]">
+              Firma
+              <input
+                className="mt-1 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
+                value={profile.companyName}
+                onChange={(event) => setProfile((current) => ({ ...current, companyName: event.target.value }))}
+              />
+            </label>
+            <label className="text-xs font-medium uppercase text-[#3DFF7A]">
+              Logo
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="mt-1 block h-10 w-full text-xs text-zinc-400 file:mr-2 file:h-9 file:rounded-[8px] file:border-0 file:bg-white/[0.08] file:text-zinc-200 file:px-3 file:text-xs file:font-medium"
+                onChange={(event) => void handleLogo(event.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+          {logoError ? <p className="mt-2 text-sm text-red-300">{logoError}</p> : null}
+        </div>
+
+        {selected ? (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#3DFF7A]">
-              Szablony
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              Gotowe oferty i szkice
-            </h2>
-          </div>
-          {apiError ? (
-            <div className="rounded-[8px] border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-300">
-              {apiError}
+            <div className="flex gap-1 overflow-x-auto border-b border-white/10 p-2">
+              {steps.map((step) => (
+                <button
+                  key={step.key}
+                  data-active={activeStep === step.key ? "true" : "false"}
+                  onClick={() => setActiveStep(step.key)}
+                  className={[
+                    "h-9 rounded-[8px] px-3 text-sm font-medium",
+                    activeStep === step.key ? "bg-[#3DFF7A] text-black" : "text-zinc-400 hover:bg-white/[0.06]",
+                  ].join(" ")}
+                >
+                  {step.label}
+                </button>
+              ))}
             </div>
-          ) : null}
 
-          <OfferTable title="Gotowe oferty" empty="Brak gotowych ofert." rows={rows(ready, true)} />
-          <OfferTable title="Szkice" empty="Brak szkiców." rows={rows(drafts, false)} />
-        </section>
-
-        <aside className="relative min-w-0 overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(61,255,122,0.06)]">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#3DFF7A]/45 via-[#3DFF7A]/10 to-transparent" />
-          <div className="border-b border-white/10 p-4">
-            <div className="grid gap-3 sm:grid-cols-[1fr_150px]">
-              <label className="text-xs font-medium uppercase text-[#3DFF7A]">
-                Firma
-                <input
-                  className="mt-1 h-10 w-full rounded-[8px] border border-white/10 bg-black/30 px-3 text-sm text-white"
-                  value={profile.companyName}
-                  onChange={(event) => setProfile((current) => ({ ...current, companyName: event.target.value }))}
+            <div className="p-4">
+              {activeStep === "podstawy" ? (
+                <BasicsStep
+                  editor={editor}
+                  setEditor={setEditor}
                 />
-              </label>
-              <label className="text-xs font-medium uppercase text-[#3DFF7A]">
-                Logo
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="mt-1 block h-10 w-full text-xs text-zinc-400 file:mr-2 file:h-9 file:rounded-[8px] file:border-0 file:bg-white/[0.08] file:text-zinc-200 file:px-3 file:text-xs file:font-medium"
-                  onChange={(event) => void handleLogo(event.target.files?.[0] ?? null)}
+              ) : null}
+              {activeStep === "komponenty" ? <ComponentsStep editor={editor} setEditor={setEditor} /> : null}
+              {activeStep === "cena" ? <PriceStep editor={editor} setEditor={setEditor} price={price} /> : null}
+              {activeStep === "warunki" ? <TermsStep editor={editor} setEditor={setEditor} /> : null}
+              {activeStep === "tresc" ? (
+                <EmailContentStep
+                  profile={profile}
+                  setProfile={setProfile}
+                  emailVariables={emailVariables}
+                  emailEditorRef={emailEditorRef}
+                  insertEmailToken={insertEmailToken}
+                  emailUnknownTokens={emailUnknownTokens}
+                  profileErrors={profileErrors}
+                  apiReady={apiReady}
+                  saveProfile={saveProfile}
                 />
-              </label>
-            </div>
-            {logoError ? <p className="mt-2 text-sm text-red-300">{logoError}</p> : null}
-          </div>
+              ) : null}
+              {activeStep === "preview" ? <PreviewStep editor={editor} profile={profile} price={price} /> : null}
 
-          {selected ? (
-            <div>
-              <div className="flex gap-1 overflow-x-auto border-b border-white/10 p-2">
-                {steps.map((step) => (
-                  <button
-                    key={step.key}
-                    data-active={activeStep === step.key ? "true" : "false"}
-                    onClick={() => setActiveStep(step.key)}
-                    className={[
-                      "h-9 rounded-[8px] px-3 text-sm font-medium",
-                      activeStep === step.key ? "bg-[#3DFF7A] text-black" : "text-zinc-400 hover:bg-white/[0.06]",
-                    ].join(" ")}
-                  >
-                    {step.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-4">
-                {activeStep === "podstawy" ? (
-                  <BasicsStep
-                    editor={editor}
-                    setEditor={setEditor}
-                  />
-                ) : null}
-                {activeStep === "komponenty" ? <ComponentsStep editor={editor} setEditor={setEditor} /> : null}
-                {activeStep === "cena" ? <PriceStep editor={editor} setEditor={setEditor} price={price} /> : null}
-                {activeStep === "warunki" ? <TermsStep editor={editor} setEditor={setEditor} /> : null}
-                {activeStep === "tresc" ? (
-                  <EmailContentStep
-                    profile={profile}
-                    setProfile={setProfile}
-                    emailVariables={emailVariables}
-                    emailEditorRef={emailEditorRef}
-                    insertEmailToken={insertEmailToken}
-                    emailUnknownTokens={emailUnknownTokens}
-                    profileErrors={profileErrors}
-                    apiReady={apiReady}
-                    saveProfile={saveProfile}
-                  />
-                ) : null}
-                {activeStep === "preview" ? <PreviewStep editor={editor} profile={profile} price={price} /> : null}
-
-                {errors.length ? (
-                  <div className="mt-4 rounded-[8px] border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-300">
-                    {errors.map((error) => (
-                      <div key={error}>{error}</div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => void saveEditor()}
-                    className="h-10 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06]"
-                  >
-                    Zapisz
-                  </button>
-                  {editor.status === "draft" ? (
-                    <button
-                      onClick={() => void publishEditor()}
-                      className="h-10 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98]"
-                    >
-                      Publikuj
-                    </button>
-                  ) : null}
-                  <button
-                    disabled={!pdfAllowed}
-                    onClick={() => void downloadPdf(editor, profile)}
-                    className="h-10 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    Test PDF
-                  </button>
+              {errors.length ? (
+                <div className="mt-4 rounded-[8px] border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-300">
+                  {errors.map((error) => (
+                    <div key={error}>{error}</div>
+                  ))}
                 </div>
+              ) : null}
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  onClick={() => void saveEditor()}
+                  className="h-10 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06]"
+                >
+                  Zapisz
+                </button>
+                {editor.status === "draft" ? (
+                  <button
+                    onClick={() => void publishEditor()}
+                    className="h-10 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98]"
+                  >
+                    Publikuj
+                  </button>
+                ) : null}
+                <button
+                  disabled={!pdfAllowed}
+                  onClick={() => void downloadPdf(editor, profile)}
+                  className="h-10 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Test PDF
+                </button>
               </div>
             </div>
-          ) : (
-            <div className="p-5 text-sm text-zinc-400">Wybierz ofertę albo utwórz szkic.</div>
-          )}
-        </aside>
-      </div>
+          </div>
+        ) : (
+          <div className="p-5 text-sm text-zinc-400">Wybierz ofertę albo utwórz szkic.</div>
+        )}
+      </aside>
     </div>
   );
 }
 
 function OfferTable({ title, rows, empty }: { title: string; rows: React.ReactNode[]; empty: string }) {
   return (
-    <section className="overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.035]">
+    <section className="rounded-[8px] border border-white/10 bg-white/[0.04]">
       <div className="flex h-12 items-center border-b border-white/10 px-4">
         <h2 className="text-sm font-semibold text-white">{title}</h2>
       </div>
@@ -1249,11 +1208,11 @@ function OfferTable({ title, rows, empty }: { title: string; rows: React.ReactNo
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] table-fixed">
             <thead>
-              <tr className="bg-white/[0.045]">
-                <th className="w-14 border-b border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-[#3DFF7A]">Nr</th>
-                <th className="border-b border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-[#3DFF7A]">Oferta</th>
-                <th className="w-36 border-b border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-[#3DFF7A]">Cena</th>
-                <th className="w-64 border-b border-white/10 px-3 py-2 text-right text-xs font-semibold uppercase tracking-[0.12em] text-[#3DFF7A]">Akcje</th>
+              <tr className="bg-white/[0.06]">
+                <th className="w-14 border-b border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase text-[#3DFF7A]">Nr</th>
+                <th className="border-b border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase text-[#3DFF7A]">Oferta</th>
+                <th className="w-36 border-b border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase text-[#3DFF7A]">Cena</th>
+                <th className="w-64 border-b border-white/10 px-3 py-2 text-right text-xs font-semibold uppercase text-[#3DFF7A]">Akcje</th>
               </tr>
             </thead>
             <tbody>{rows}</tbody>
