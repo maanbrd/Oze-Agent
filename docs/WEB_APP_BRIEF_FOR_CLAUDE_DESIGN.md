@@ -136,7 +136,7 @@ Strona marketingowa. Cele: wyjaśnić co robi agent, pokazać demo, sprzedać su
 
 **Cennik (3 karty)**
 - **Aktywacja** — 199 zł jednorazowo (zakładamy Twoje arkusze, kalendarz, łączymy z Telegramem).
-- **Miesięcznie** — 49 zł / mies (rezygnujesz kiedy chcesz).
+- **Miesięcznie** — 399 zł / mies (rezygnujesz kiedy chcesz).
 - **Rocznie** — 350 zł / rok (oszczędność ~40%, badge „Najczęściej wybierane").
 - CTA każdej karty: „Wybierz".
 
@@ -173,7 +173,7 @@ To jest **najważniejszy flow w całym appie** — Maan chce żeby był prowadz�
 
 #### Krok 2 — Płatność
 
-- Wybór planu: Miesięcznie 49 zł / Rocznie 350 zł (z badge „Oszczędzasz 238 zł").
+- Wybór planu: Miesięcznie 399 zł.
 - Aktywacja 199 zł doliczona automatycznie (informacja widoczna).
 - Metoda: **Przelewy24** (BLIK domyślnie zaznaczony).
 - Sumaryzacja koszyka po prawej (sticky).

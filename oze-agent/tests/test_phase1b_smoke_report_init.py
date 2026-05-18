@@ -21,7 +21,7 @@ def _valid_manifest() -> dict:
         "stripe_mode": "test",
         "stripe_lookup_keys": {
             "activation": "agent_oze_activation_199",
-            "monthly": "agent_oze_monthly_49",
+            "monthly": "agent_oze_monthly_399",
             "yearly": "agent_oze_yearly_350",
         },
         "stripe_webhook_url": f"{web_url}/api/webhooks/stripe",
@@ -71,7 +71,7 @@ def test_report_contains_public_manifest_values_and_lookup_keys(tmp_path):
     assert "- Supabase project: https://project-ref.supabase.co" in report
     assert "- Stripe mode: test" in report
     assert "- Activation price ID / lookup key: agent_oze_activation_199" in report
-    assert "- Monthly price ID / lookup key: agent_oze_monthly_49" in report
+    assert "- Monthly price ID / lookup key: agent_oze_monthly_399" in report
     assert "- Yearly price ID / lookup key: agent_oze_yearly_350" in report
 
 

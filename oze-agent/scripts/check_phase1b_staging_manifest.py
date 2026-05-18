@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 EXPECTED_RAILWAY_API_START_COMMAND = "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
 EXPECTED_LOOKUP_KEYS = {
     "activation": "agent_oze_activation_199",
-    "monthly": "agent_oze_monthly_49",
+    "monthly": "agent_oze_monthly_399",
     "yearly": "agent_oze_yearly_350",
 }
 FORBIDDEN_SECRET_KEY_NAMES = {

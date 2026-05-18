@@ -1,8 +1,9 @@
 "use client";
 
 import { type CSSProperties, type FormEvent, useState } from "react";
+import { CONTACT_EMAIL } from "@/components/brand";
 
-const contactEmail = "kontakt@oze-agent.pl";
+const contactEmail = CONTACT_EMAIL;
 
 export function FirmaContactForm() {
   const [submitted, setSubmitted] = useState(false);

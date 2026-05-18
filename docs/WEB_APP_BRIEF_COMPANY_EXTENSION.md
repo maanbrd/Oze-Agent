@@ -395,7 +395,7 @@ Tabbed:
 | Team | do 15 | 35 zł | 320 zł | 499 zł |
 | Enterprise | 15+ | indywidualnie | indywidualnie | indywidualnie |
 
-**Założenie biznesowe:** plan firmowy jest tańszy per-seat niż konto indywidualne (49 zł), bo właściciel zobowiązuje się do zakupu wielu seats. Ale wyższa aktywacja (499 vs 199), bo wymaga więcej naszej pracy onboardingowej.
+**Założenie biznesowe:** plan firmowy jest tańszy per-seat niż konto indywidualne (399 zł), bo właściciel zobowiązuje się do zakupu wielu seats. Ale wyższa aktywacja (499 vs 199), bo wymaga więcej naszej pracy onboardingowej.
 
 **Opcjonalnie:**
 - 14-dniowy darmowy trial dla planów firmowych (POST-MVP, zarządzanie ryzykiem trial-abuse)
@@ -491,7 +491,7 @@ Pozostałe (kalendarz zespołowy, statystyki firmowe, ustawienia firmowe, FAQ ro
 
 Rozszerzenie firmowe jest decyzją produktową, która zmienia OZE-Agent z **narzędzia dla freelancerów handlowych** w **narzędzie zespołowe dla firm OZE w Polsce**. To są dwa różne rynki, z różnymi cyklami sprzedaży:
 
-- **Indywidualny handlowiec:** decyduje sam, kupuje kartą za 199+49 zł, używa od razu.
+- **Indywidualny handlowiec:** decyduje sam, kupuje kartą za 199+399 zł, używa od razu.
 - **Firma:** decyduje właściciel po rozmowie z paroma handlowcami, czeka na fakturę VAT, potrzebuje onboardingu zespołu.
 
 Cykl sprzedaży B2B jest dłuższy (2-4 tygodnie zamiast 24 godzin), ale LTV jest 5-10x wyższe. Warto rozważyć, czy nie warto **przed wdrożeniem rozszerzenia** dorobić małego sales pipeline'u po naszej stronie (formularz „Skontaktuj się ze sprzedażą firmową" zamiast samoobsługi w pierwszej rundzie). To jest decyzja go-to-market, nie produktu — ale spec o niej wspomina, żebyś o tym pamiętał.

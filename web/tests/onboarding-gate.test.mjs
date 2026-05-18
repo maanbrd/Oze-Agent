@@ -180,7 +180,12 @@ test("payment page exposes beta option only from backend eligibility", () => {
 test("stripe checkout reports actionable configuration failures", () => {
   assert.match(stripeServerSource, /envValue\("STRIPE_SECRET_KEY"\)/);
   assert.match(stripeServerSource, /STRIPE_PRICE_LOOKUP_KEYS = \{\s*monthly: "agent_oze_monthly_399"/);
+  assert.match(stripeServerSource, /EXPECTED_MONTHLY_UNIT_AMOUNT\s*=\s*39900/);
+  assert.match(stripeServerSource, /EXPECTED_MONTHLY_CURRENCY\s*=\s*"pln"/);
+  assert.match(stripeServerSource, /EXPECTED_MONTHLY_INTERVAL\s*=\s*"month"/);
   assert.match(stripeServerSource, /envValue\("STRIPE_PRICE_MONTHLY"\)/);
+  assert.match(stripeServerSource, /resolveStripeMonthlyPriceId/);
+  assert.match(stripeServerSource, /Resolved Stripe price does not match Agent OZE monthly 399 PLN/);
   assert.equal(stripeServerSource.includes("STRIPE_PRICE_ACTIVATION"), false);
   assert.equal(stripeServerSource.includes("STRIPE_PRICE_YEARLY"), false);
   assert.match(stripeServerSource, /export function envValue/);

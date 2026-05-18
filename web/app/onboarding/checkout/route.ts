@@ -5,7 +5,7 @@ import {
   checkoutConfigErrorMessage,
   getStripe,
   requireStripeEnv,
-  resolveStripePriceId,
+  resolveStripeMonthlyPriceId,
 } from "@/lib/stripe/server";
 
 export const dynamic = "force-dynamic";
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     const { monthlyPrice, appUrl } = requireStripeEnv();
     const returnBaseUrl = resolveCheckoutReturnBaseUrl(request, appUrl);
     const stripe = getStripe();
-    const recurringPriceId = await resolveStripePriceId(monthlyPrice);
+    const recurringPriceId = await resolveStripeMonthlyPriceId(monthlyPrice);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",

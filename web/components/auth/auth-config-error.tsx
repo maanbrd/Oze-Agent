@@ -3,32 +3,32 @@ import { BrandLink } from "@/components/brand";
 
 export function AuthConfigError({ detail }: { detail: string | null }) {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050607] text-zinc-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[#050607] text-zinc-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(61,255,122,0.2),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(20,184,166,0.14),transparent_32%),linear-gradient(180deg,#0b0d10_0%,#050607_72%)]" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8">
-        <header className="flex items-center justify-between">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl min-w-0 flex-col px-5 py-6 sm:px-8">
+        <header className="flex min-w-0 items-center justify-between gap-4">
           <BrandLink href="/" className="text-sm font-semibold text-white" />
           <Link
             href="/"
-            className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
+            className="shrink-0 rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
           >
             Landing
           </Link>
         </header>
 
         <section className="flex flex-1 items-center py-16">
-          <div className="max-w-2xl rounded-[8px] border border-[#3DFF7A]/20 bg-white/[0.04] p-6 shadow-2xl shadow-black/30">
+          <div className="max-w-2xl min-w-0 rounded-[8px] border border-[#3DFF7A]/20 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 sm:p-6">
             <p className="mb-4 text-xs font-semibold uppercase text-[#3DFF7A]">
               Konfiguracja
             </p>
-            <h1 className="text-4xl font-semibold leading-tight text-white">
+            <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl">
               Logowanie wymaga konfiguracji Supabase.
             </h1>
             <p className="mt-5 text-base leading-7 text-zinc-300">
               {detail ??
                 "Brak wymaganych zmiennych środowiskowych dla web appu."}
             </p>
-            <div className="mt-6 rounded-[8px] border border-white/10 bg-black/30 p-4 text-sm leading-7 text-zinc-300">
+            <div className="mt-6 overflow-x-auto rounded-[8px] border border-white/10 bg-black/30 p-4 text-sm leading-7 text-zinc-300">
               Uzupełnij lokalny plik{" "}
               <code className="rounded bg-white/10 px-1.5 py-0.5 text-zinc-100">
                 web/.env.local

@@ -25,27 +25,27 @@ export function PlaceholderPage({
   note,
 }: PlaceholderPageProps) {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050607] text-zinc-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[#050607] text-zinc-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(61,255,122,0.2),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(20,184,166,0.14),transparent_32%),linear-gradient(180deg,#0b0d10_0%,#050607_72%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#3DFF7A]/60 to-transparent" />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8">
-        <header className="flex items-center justify-between">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl min-w-0 flex-col px-5 py-6 sm:px-8">
+        <header className="flex min-w-0 items-center justify-between gap-4">
           <BrandLink href="/" className="text-sm font-semibold text-white" />
           <Link
             href="/"
-            className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
+            className="shrink-0 rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
           >
             Landing
           </Link>
         </header>
 
         <section className="flex flex-1 items-center py-16 sm:py-20">
-          <div className="max-w-3xl">
+          <div className="max-w-3xl min-w-0">
             <p className="mb-5 text-xs font-semibold uppercase text-[#3DFF7A]">
               {eyebrow}
             </p>
-            <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] text-white sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-3xl text-4xl font-semibold leading-[1.05] text-white sm:text-6xl sm:leading-[0.98] lg:text-7xl">
               {title}
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">

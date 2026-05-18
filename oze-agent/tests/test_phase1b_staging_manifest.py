@@ -18,7 +18,7 @@ def _valid_manifest() -> dict:
         "stripe_mode": "test",
         "stripe_lookup_keys": {
             "activation": "agent_oze_activation_199",
-            "monthly": "agent_oze_monthly_49",
+            "monthly": "agent_oze_monthly_399",
             "yearly": "agent_oze_yearly_350",
         },
         "stripe_webhook_url": f"{web_url}/api/webhooks/stripe",

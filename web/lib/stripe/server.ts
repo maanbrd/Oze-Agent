@@ -8,6 +8,10 @@ export const STRIPE_PRICE_LOOKUP_KEYS = {
   monthly: "agent_oze_monthly_399",
 } as const;
 
+const EXPECTED_MONTHLY_UNIT_AMOUNT = 39900;
+const EXPECTED_MONTHLY_CURRENCY = "pln";
+const EXPECTED_MONTHLY_INTERVAL = "month";
+
 export function envValue(name: string) {
   const value = process.env[name]?.trim();
   if (!value || value === `""` || value === "''") {
@@ -44,14 +48,14 @@ export function requireStripeEnv() {
   };
 }
 
-export async function resolveStripePriceId(priceRef: string) {
+async function findStripePrice(priceRef: string) {
   const cleanPriceRef = priceRef.trim();
   if (!cleanPriceRef) {
     throw new Error("Missing Stripe price reference");
   }
 
   if (cleanPriceRef.startsWith("price_")) {
-    return cleanPriceRef;
+    return getStripe().prices.retrieve(cleanPriceRef);
   }
 
   const prices = await getStripe().prices.list({
@@ -67,6 +71,42 @@ export async function resolveStripePriceId(priceRef: string) {
     );
   }
 
+  return price;
+}
+
+function isExpectedMonthlyPrice(price: Stripe.Price) {
+  return (
+    price.unit_amount === EXPECTED_MONTHLY_UNIT_AMOUNT &&
+    price.currency === EXPECTED_MONTHLY_CURRENCY &&
+    price.recurring?.interval === EXPECTED_MONTHLY_INTERVAL
+  );
+}
+
+function assertExpectedMonthlyPrice(price: Stripe.Price) {
+  if (isExpectedMonthlyPrice(price)) return;
+
+  throw new Error(
+    "Resolved Stripe price does not match Agent OZE monthly 399 PLN",
+  );
+}
+
+export async function resolveStripePriceId(priceRef: string) {
+  return (await findStripePrice(priceRef)).id;
+}
+
+export async function resolveStripeMonthlyPriceId(priceRef: string) {
+  const price = await findStripePrice(priceRef);
+  if (isExpectedMonthlyPrice(price)) {
+    return price.id;
+  }
+
+  if (priceRef.trim() !== STRIPE_PRICE_LOOKUP_KEYS.monthly) {
+    const fallbackPrice = await findStripePrice(STRIPE_PRICE_LOOKUP_KEYS.monthly);
+    assertExpectedMonthlyPrice(fallbackPrice);
+    return fallbackPrice.id;
+  }
+
+  assertExpectedMonthlyPrice(price);
   return price.id;
 }
 
@@ -83,6 +123,10 @@ export function checkoutConfigErrorMessage(error: unknown) {
 
   if (message.includes("No active Stripe price found for lookup key")) {
     return "Nie udało się znaleźć aktywnego planu płatności. Wróć później albo skontaktuj się z obsługą Agent OZE.";
+  }
+
+  if (message.includes("Resolved Stripe price does not match Agent OZE monthly 399 PLN")) {
+    return "Plan płatności ma niepoprawną kwotę. Wróć później albo skontaktuj się z obsługą Agent OZE.";
   }
 
   return "Nie udało się uruchomić płatności. Sprawdź konfigurację Stripe.";

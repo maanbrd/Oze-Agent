@@ -40,7 +40,7 @@ _Environment: staging_
 
 - Product ID: prod_123
 - Activation price ID / lookup key: agent_oze_activation_199
-- Monthly price ID / lookup key: agent_oze_monthly_49
+- Monthly price ID / lookup key: agent_oze_monthly_399
 - Yearly price ID / lookup key: agent_oze_yearly_350
 - Checkout Session ID: cs_test_123
 - Customer ID: cus_123

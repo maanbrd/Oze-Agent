@@ -34,7 +34,7 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050607] text-zinc-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[#050607] text-zinc-100">
       <video
         src="/media/login-hero.mp4"
         muted
@@ -46,12 +46,12 @@ export default async function LoginPage({
         style={{ filter: "brightness(0.55) contrast(1.05)" }}
       />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(61,255,122,0.2),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(20,184,166,0.14),transparent_32%)]" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl min-w-0 flex-col px-5 py-6 sm:px-8">
         <Header />
-        <section className="flex flex-1 items-center justify-center py-16">
+        <section className="flex flex-1 items-center justify-start py-10 sm:justify-center sm:py-16">
           <form
             action={login}
-            className="w-full max-w-md rounded-[8px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30"
+            className="w-full max-w-[330px] min-w-0 rounded-[8px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 sm:max-w-md sm:p-6"
           >
             {params.message ? (
               <p className="mb-5 rounded-[8px] border border-[#3DFF7A]/20 bg-[#3DFF7A]/10 px-4 py-3 text-sm leading-6 text-zinc-200">
@@ -59,24 +59,24 @@ export default async function LoginPage({
               </p>
             ) : null}
             <input type="hidden" name="next" value={nextPath} />
-            <label className="block text-sm font-medium text-zinc-200">
+            <label className="block min-w-0 text-sm font-medium text-zinc-200">
               Email
               <input
                 required
                 type="email"
                 name="email"
                 autoComplete="email"
-                className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+                className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
               />
             </label>
-            <label className="mt-5 block text-sm font-medium text-zinc-200">
+            <label className="mt-5 block min-w-0 text-sm font-medium text-zinc-200">
               Hasło
               <input
                 required
                 type="password"
                 name="password"
                 autoComplete="current-password"
-                className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+                className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
               />
             </label>
             <button
@@ -100,13 +100,14 @@ export default async function LoginPage({
 
 function Header() {
   return (
-    <header className="flex items-center justify-between">
+    <header className="flex min-w-0 items-center justify-between gap-4">
       <BrandLink href="/" className="text-sm font-semibold text-white" />
       <Link
         href="/"
-        className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
+        className="shrink-0 rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
       >
-        Strona główna
+        <span className="sm:hidden">Start</span>
+        <span className="hidden sm:inline">Strona główna</span>
       </Link>
     </header>
   );

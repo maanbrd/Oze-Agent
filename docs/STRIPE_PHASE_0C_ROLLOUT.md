@@ -64,7 +64,7 @@ Prefer lookup keys:
 | Purpose | Amount | Stripe type | Lookup key |
 |---|---:|---|---|
 | Activation | 19900 PLN | one-time | `agent_oze_activation_199` |
-| Monthly plan | 4900 PLN | recurring monthly | `agent_oze_monthly_49` |
+| Monthly plan | 39900 PLN | recurring monthly | `agent_oze_monthly_399` |
 | Yearly plan | 35000 PLN | recurring yearly | `agent_oze_yearly_350` |
 
 Stripe Price amounts are not edited in place. To change a price later, create a

@@ -64,7 +64,7 @@ class Config:
     # Pricing
     ACTIVATION_FEE_PLN = int(os.getenv("ACTIVATION_FEE_PLN", "199"))
     ACTIVATION_FEE_PROMO_PLN = int(os.getenv("ACTIVATION_FEE_PROMO_PLN", "20"))
-    MONTHLY_SUBSCRIPTION_PLN = int(os.getenv("MONTHLY_SUBSCRIPTION_PLN", "49"))
+    MONTHLY_SUBSCRIPTION_PLN = int(os.getenv("MONTHLY_SUBSCRIPTION_PLN", "399"))
     YEARLY_SUBSCRIPTION_PLN = int(os.getenv("YEARLY_SUBSCRIPTION_PLN", "350"))
     ADMIN_USD_PLN_RATE = float(os.getenv("ADMIN_USD_PLN_RATE", "4.00"))
 

@@ -2,10 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BrandLink } from "@/components/brand";
+import { BILLING_EMAIL, BrandLink, CONTACT_EMAIL, SUPPORT_EMAIL } from "@/components/brand";
 
 const G = "#3DFF7A"; // bright OZE green from cinematic hero design
 const VOICE_WAVE_HEIGHTS = [3, 9, 12, 7, 5, 11, 8, 4, 10, 12, 6, 5, 9, 11, 7];
+const MOBILE_HERO_TITLE_LINES = [
+  "Każdy",
+  "zapomniany",
+  "klient",
+  "to",
+  "5 000 –",
+  "10 000 zł,",
+  "które właśnie",
+  "wypłynęły",
+  "z Twojego konta.",
+] as const;
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
@@ -24,7 +35,7 @@ function useMediaQuery(query: string) {
 
 export function Landing() {
   return (
-    <div style={{ minHeight: "100vh", background: "#000", color: "#fff", overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: "#000", color: "#fff", overflowX: "clip" }}>
       <TopBar />
       <LandingNav />
       <CinematicHero />
@@ -52,7 +63,13 @@ function TopBar() {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexWrap: mobile ? "wrap" : "nowrap",
+        gap: 6,
+        width: "100%",
+        boxSizing: "border-box",
         background: hover ? "#0a0d10" : "#06080a",
         borderBottom: `1px solid ${G}2D`,
         padding: mobile ? "9px 14px" : "10px 16px",
@@ -64,11 +81,12 @@ function TopBar() {
         transition: "background .15s",
         position: "relative",
         zIndex: 50,
+        overflowWrap: "anywhere",
       }}
     >
-      <span aria-hidden="true" style={{ marginRight: 6 }}>🏢</span>
+      <span aria-hidden="true">🏢</span>
       {mobile ? (
-        <>Właścicielu firmy OZE? Zobacz, co Agent robi dla zespołu →</>
+        <>Firmy OZE? Agent dla zespołu →</>
       ) : (
         <>Jesteś właścicielem firmy OZE? Zobacz, co Agent OZE robi dla całego zespołu sprzedaży →</>
       )}
@@ -112,6 +130,7 @@ function LandingNav() {
           alignItems: "center",
           justifyContent: "space-between",
           gap: mobile ? 12 : 28,
+          minWidth: 0,
         }}
       >
         <BrandLink href="/" />
@@ -251,34 +270,59 @@ function CinematicHero() {
           gap: compact ? 34 : tablet ? 36 : 60,
           alignItems: "center",
           minHeight: compact ? "auto" : "calc(100vh - 96px)",
+          width: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
         }}
       >
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h1
             style={{
-              fontSize: compact ? "clamp(36px, 11vw, 50px)" : "clamp(40px, 5vw, 70px)",
+              fontSize: compact ? "clamp(34px, 10vw, 42px)" : "clamp(40px, 5vw, 70px)",
               lineHeight: 1.05,
               fontWeight: 600,
               margin: "0 0 28px",
-              maxWidth: compact ? 420 : 900,
+              maxWidth: compact ? "min(100%, 360px)" : 900,
+              overflowWrap: "break-word",
               textWrap: "balance" as React.CSSProperties["textWrap"],
             }}
           >
-            <span style={{ display: "block" }}>Każdy zapomniany klient</span>
-            <span style={{ display: "block" }}>
-              to{" "}
-              <span style={{ color: G, textShadow: `0 0 40px ${G}55` }}>5 000 – 10 000 zł</span>,
-            </span>
-            <span style={{ display: "block" }}>które właśnie wypłynęły</span>
-            <span style={{ display: "block" }}>z Twojego konta.</span>
+            {compact ? (
+              MOBILE_HERO_TITLE_LINES.map((line) => {
+                const highlighted = line.includes("000");
+                return (
+                  <span
+                    key={line}
+                    style={{
+                      display: "block",
+                      color: highlighted ? G : "#fff",
+                      textShadow: highlighted ? `0 0 40px ${G}55` : undefined,
+                    }}
+                  >
+                    {line}
+                  </span>
+                );
+              })
+            ) : (
+              <>
+                <span style={{ display: "block" }}>Każdy zapomniany klient</span>
+                <span style={{ display: "block" }}>
+                  to{" "}
+                  <span style={{ color: G, textShadow: `0 0 40px ${G}55` }}>5 000 – 10 000 zł</span>,
+                </span>
+                <span style={{ display: "block" }}>które właśnie wypłynęły</span>
+                <span style={{ display: "block" }}>z Twojego konta.</span>
+              </>
+            )}
           </h1>
           <p
             style={{
               fontSize: "clamp(15px, 1.4vw, 19px)",
               lineHeight: 1.55,
               color: "rgba(255,255,255,0.8)",
-              maxWidth: 540,
+              maxWidth: compact ? "min(100%, 340px)" : 540,
               margin: "0 0 36px",
+              overflowWrap: "break-word",
             }}
           >
             Agent OZE pilnuje Twoich leadów, follow-upów, zdjęć i ofert
@@ -291,6 +335,7 @@ function CinematicHero() {
               gap: 12,
               flexWrap: "wrap",
               alignItems: compact ? "stretch" : "center",
+              maxWidth: compact ? "min(100%, 340px)" : undefined,
             }}
           >
             <Link
@@ -310,6 +355,8 @@ function CinematicHero() {
                 justifyContent: "center",
                 gap: 8,
                 textDecoration: "none",
+                width: compact ? "100%" : undefined,
+                boxSizing: "border-box",
               }}
             >
               Zacznij pilnować leadów <span aria-hidden="true">→</span>
@@ -329,6 +376,8 @@ function CinematicHero() {
                 alignItems: "center",
                 justifyContent: "center",
                 textDecoration: "none",
+                width: compact ? "100%" : undefined,
+                boxSizing: "border-box",
               }}
             >
               Zobacz, jak to działa
@@ -1904,7 +1953,6 @@ function FinalCTA() {
 // ── FOOTER ────────────────────────────────────────────────────────────────
 function FooterMin() {
   const compact = useMediaQuery("(max-width: 860px)");
-  // TODO: kontakt@oze-agent.pl is a placeholder — swap to live address before launch
   return (
     <footer
       id="kontakt"
@@ -1953,7 +2001,9 @@ function FooterMin() {
           <FooterColumn
             heading="Kontakt"
             links={[
-              { label: "Email: kontakt@oze-agent.pl", href: "mailto:kontakt@oze-agent.pl" },
+              { label: `Email: ${CONTACT_EMAIL}`, href: `mailto:${CONTACT_EMAIL}` },
+              { label: `Wsparcie: ${SUPPORT_EMAIL}`, href: `mailto:${SUPPORT_EMAIL}` },
+              { label: `Faktury: ${BILLING_EMAIL}`, href: `mailto:${BILLING_EMAIL}` },
               { label: "Telegram: @AgentOZE_Bot", href: "https://t.me/AgentOZE_Bot" },
             ]}
           />

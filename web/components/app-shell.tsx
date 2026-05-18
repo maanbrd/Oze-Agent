@@ -7,7 +7,7 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <main className="oze-app relative min-h-screen overflow-hidden bg-[#050607] text-zinc-100">
+    <main className="oze-app relative min-h-screen overflow-x-clip bg-[#050607] text-zinc-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_8%,rgba(61,255,122,0.16),transparent_32%),radial-gradient(circle_at_82%_18%,rgba(20,184,166,0.12),transparent_30%),linear-gradient(180deg,#0b0d10_0%,#050607_72%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#3DFF7A]/60 to-transparent" />
       <BrandLink

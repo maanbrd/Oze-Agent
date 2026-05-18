@@ -33,11 +33,11 @@ def _user(**overrides):
 def test_owner_email_parser_is_case_insensitive():
     from shared.admin_dashboard import is_owner_admin_email, parse_owner_admin_emails
 
-    raw = " owner@agent-oze.pl, Admin@Agent-OZE.PL "
+    raw = " admin@agent-oze.pl, Owner@Example.COM "
 
     assert parse_owner_admin_emails(raw) == {
-        "owner@agent-oze.pl",
         "admin@agent-oze.pl",
+        "owner@example.com",
     }
     assert is_owner_admin_email("ADMIN@agent-oze.pl", raw) is True
     assert is_owner_admin_email("seller@example.com", raw) is False

@@ -120,7 +120,7 @@ Vercel/web env:
 - `STRIPE_SECRET_KEY=sk_test_...`
 - `STRIPE_WEBHOOK_SECRET=whsec_...`
 - `STRIPE_PRICE_ACTIVATION=agent_oze_activation_199`
-- `STRIPE_PRICE_MONTHLY=agent_oze_monthly_49`
+- `STRIPE_PRICE_MONTHLY=agent_oze_monthly_399`
 - `STRIPE_PRICE_YEARLY=agent_oze_yearly_350`
 
 Railway FastAPI env:

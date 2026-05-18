@@ -18,7 +18,7 @@ export default function FirmaPage() {
         background: "#000",
         color: "#fff",
         position: "relative",
-        overflow: "hidden",
+        overflowX: "clip",
       }}
     >
       <div

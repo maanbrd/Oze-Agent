@@ -3,6 +3,11 @@ import type { CSSProperties } from "react";
 
 export const BRAND_NAME = "Agent OZE";
 export const BRAND_GREEN = "#3DFF7A";
+export const BRAND_DOMAIN = "agent-oze.pl";
+export const ADMIN_EMAIL = "admin@agent-oze.pl";
+export const CONTACT_EMAIL = "kontakt@agent-oze.pl";
+export const SUPPORT_EMAIL = "support@agent-oze.pl";
+export const BILLING_EMAIL = "faktury@agent-oze.pl";
 
 type BrandMarkProps = {
   className?: string;

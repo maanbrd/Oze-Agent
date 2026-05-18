@@ -31,7 +31,7 @@ SECRET_PATTERNS = (
 EMPTY_OK = {"brak", "none", "n/a", "-", ""}
 EXPECTED_LOOKUP_KEYS = {
     "Activation price ID / lookup key": "agent_oze_activation_199",
-    "Monthly price ID / lookup key": "agent_oze_monthly_49",
+    "Monthly price ID / lookup key": "agent_oze_monthly_399",
     "Yearly price ID / lookup key": "agent_oze_yearly_350",
 }
 

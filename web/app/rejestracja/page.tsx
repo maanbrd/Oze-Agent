@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   description: "Założenie konta Agent OZE.",
 };
 
+const REGISTRATION_MOBILE_TITLE_LINES = ["Załóż konto", "i przejdź", "do onboardingu."] as const;
+
 export default async function RegistrationPage({
   searchParams,
 }: {
@@ -32,20 +34,27 @@ export default async function RegistrationPage({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050607] text-zinc-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[#050607] text-zinc-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(61,255,122,0.2),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(20,184,166,0.14),transparent_32%),linear-gradient(180deg,#0b0d10_0%,#050607_72%)]" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl min-w-0 flex-col px-5 py-6 sm:px-8">
         <Header />
-        <section className="flex flex-1 items-center py-16">
-          <div className="grid w-full gap-10 lg:grid-cols-[0.9fr_0.8fr] lg:items-start">
-            <div className="pt-2">
+        <section className="flex flex-1 items-center py-10 sm:py-16">
+          <div className="grid w-full min-w-0 max-w-[330px] gap-10 sm:max-w-none lg:grid-cols-[0.9fr_0.8fr] lg:items-start">
+            <div className="min-w-0 pt-2">
               <p className="mb-5 text-xs font-semibold uppercase text-[#3DFF7A]">
                 Rejestracja
               </p>
-              <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] text-white sm:text-6xl">
-                Załóż konto i przejdź do onboardingu.
+              <h1 className="max-w-3xl text-4xl font-semibold leading-[1.05] text-white sm:text-6xl sm:leading-[0.98]">
+                <span className="sm:hidden">
+                  {REGISTRATION_MOBILE_TITLE_LINES.map((line) => (
+                    <span key={line} className="block">
+                      {line}
+                    </span>
+                  ))}
+                </span>
+                <span className="hidden sm:block">Załóż konto i przejdź do onboardingu.</span>
               </h1>
-              <p className="mt-7 max-w-2xl text-lg leading-8 text-zinc-300">
+              <p className="mt-7 max-w-2xl text-base leading-7 text-zinc-300 sm:text-lg sm:leading-8">
                 Ten krok tworzy bezpieczne konto. Płatność, Google i
                 parowanie Telegrama będą kolejnymi krokami tego samego flow.
               </p>
@@ -64,14 +73,14 @@ export default async function RegistrationPage({
 
             <form
               action={signup}
-              className="rounded-[8px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30"
+              className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 sm:p-6"
             >
               {params.message ? (
                 <p className="mb-5 rounded-[8px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-zinc-200">
                   {params.message}
                 </p>
               ) : null}
-              <div className="grid gap-4 sm:grid-cols-2 [&>label]:mt-0">
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&>label]:mt-0">
                 <Field label="Imię" name="firstName" autoComplete="given-name" />
                 <Field label="Nazwisko" name="lastName" autoComplete="family-name" />
               </div>
@@ -170,12 +179,12 @@ function SelectField({
   options: string[];
 }) {
   return (
-    <label className="mt-4 block text-sm font-medium text-zinc-200">
+    <label className="mt-4 block min-w-0 text-sm font-medium text-zinc-200">
       {label}
       <select
         required
         name={name}
-        className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+        className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
       >
         <option value="">Wybierz</option>
         {options.map((option) => (
@@ -202,7 +211,7 @@ function Field({
   minLength?: number;
 }) {
   return (
-    <label className="mt-5 block text-sm font-medium text-zinc-200 first:mt-0">
+    <label className="mt-5 block min-w-0 text-sm font-medium text-zinc-200 first:mt-0">
       {label}
       <input
         required
@@ -210,7 +219,7 @@ function Field({
         name={name}
         autoComplete={autoComplete}
         minLength={minLength}
-        className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+        className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
       />
     </label>
   );
@@ -218,13 +227,14 @@ function Field({
 
 function Header() {
   return (
-    <header className="flex items-center justify-between">
+    <header className="flex min-w-0 items-center justify-between gap-4">
       <BrandLink href="/" className="text-sm font-semibold text-white" />
       <Link
         href="/"
-        className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
+        className="shrink-0 rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"
       >
-        Strona główna
+        <span className="sm:hidden">Start</span>
+        <span className="hidden sm:inline">Strona główna</span>
       </Link>
     </header>
   );

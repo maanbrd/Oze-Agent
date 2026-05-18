@@ -14,7 +14,7 @@ import {
   envValue,
   getStripe,
   requireStripeEnv,
-  resolveStripePriceId,
+  resolveStripeMonthlyPriceId,
 } from "@/lib/stripe/server";
 import { trustedExternalUrl } from "@/lib/routes";
 
@@ -93,7 +93,7 @@ export async function createCheckoutSession(formData: FormData) {
     const { monthlyPrice, appUrl } = requireStripeEnv();
     const returnBaseUrl = await resolveCheckoutReturnBaseUrl(appUrl);
     const stripe = getStripe();
-    const recurringPriceId = await resolveStripePriceId(monthlyPrice);
+    const recurringPriceId = await resolveStripeMonthlyPriceId(monthlyPrice);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
