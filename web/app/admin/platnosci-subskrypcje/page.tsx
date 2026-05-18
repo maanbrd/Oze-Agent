@@ -1,27 +1,12 @@
-import { OwnerSectionPage } from "@/components/owner/owner-section-page";
+import { OwnerBillingDashboard } from "@/components/owner/owner-admin-views";
+import { getCurrentAccount } from "@/lib/api/account";
+import { getOwnerDashboardData } from "@/lib/api/admin-dashboard";
 
-export default function OwnerBillingPage() {
-  return (
-    <OwnerSectionPage
-      title="Płatności i subskrypcje"
-      description="MRR, konta aktywne, pending payment, churn i historia rozliczeń z Supabase/Stripe."
-      cards={[
-        {
-          title: "MRR i aktywne konta",
-          metric: "Przychód",
-          body: "Podstawowy widok przychodu miesięcznego oraz liczby aktywnie płacących kont.",
-        },
-        {
-          title: "Pending payment",
-          metric: "Odzysk",
-          body: "Konta, które rozpoczęły płatność albo mają problem z opłaceniem subskrypcji.",
-        },
-        {
-          title: "Churn i canceled",
-          metric: "Retencja",
-          body: "Konta anulowane zostają w snapshotach, ale nie są dalej odświeżane w kalendarzu mirror.",
-        },
-      ]}
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default async function OwnerBillingPage() {
+  const account = await getCurrentAccount();
+  const data = await getOwnerDashboardData(account);
+
+  return <OwnerBillingDashboard data={data} />;
 }

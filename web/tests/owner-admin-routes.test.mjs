@@ -11,36 +11,47 @@ const crmLayoutSource = readSource("../app/(app)/layout.tsx");
 const ownerHelperSource = readSource("../lib/admin/owner-admin.ts");
 const ownerShellSource = readSource("../components/owner/owner-admin-shell.tsx");
 const ownerDashboardSource = readSource("../components/owner/owner-dashboard.tsx");
+const ownerAdminViewsSource = readSource("../components/owner/owner-admin-views.tsx");
 const adminApiSource = readSource("../lib/api/admin-dashboard.ts");
 const adminLayoutSource = readSource("../app/admin/layout.tsx");
 const adminMirrorPreviewPath = new URL("../app/admin-mirror-preview/page.tsx", import.meta.url);
+const ownerSectionPagePath = new URL("../components/owner/owner-section-page.tsx", import.meta.url);
 
 const adminRoutes = [
-  ["/admin", "../app/admin/page.tsx", "Centrum Właściciela"],
+  ["/admin", "../app/admin/page.tsx", "Centrum Właściciela", "OwnerDashboard"],
   [
     "/admin/analityka-danych-oze",
     "../app/admin/analityka-danych-oze/page.tsx",
     "Analityka danych OZE",
+    "OwnerAnalyticsDashboard",
   ],
   [
     "/admin/operacje-zdrowie",
     "../app/admin/operacje-zdrowie/page.tsx",
     "Operacje i zdrowie",
+    "OwnerOperationsDashboard",
   ],
-  ["/admin/klienci-konta", "../app/admin/klienci-konta/page.tsx", "Klienci i konta"],
+  [
+    "/admin/klienci-konta",
+    "../app/admin/klienci-konta/page.tsx",
+    "Klienci i konta",
+    "OwnerAccountsDashboard",
+  ],
   [
     "/admin/platnosci-subskrypcje",
     "../app/admin/platnosci-subskrypcje/page.tsx",
     "Płatności i subskrypcje",
+    "OwnerBillingDashboard",
   ],
   [
     "/admin/produkty-oferty",
     "../app/admin/produkty-oferty/page.tsx",
     "Produkty i oferty",
+    "OwnerProductsDashboard",
   ],
-  ["/admin/integracje", "../app/admin/integracje/page.tsx", "Integracje"],
-  ["/admin/raporty", "../app/admin/raporty/page.tsx", "Raporty"],
-  ["/admin/ustawienia", "../app/admin/ustawienia/page.tsx", "Ustawienia"],
+  ["/admin/integracje", "../app/admin/integracje/page.tsx", "Integracje", "OwnerIntegrationsDashboard"],
+  ["/admin/raporty", "../app/admin/raporty/page.tsx", "Raporty", "OwnerReportsDashboard"],
+  ["/admin/ustawienia", "../app/admin/ustawienia/page.tsx", "Ustawienia", "OwnerSettingsDashboard"],
 ];
 
 test("CRM private layout redirects owner admins before onboarding and before CrmShell", () => {
@@ -81,13 +92,34 @@ test("owner admin shell is separate from CrmShell and has real route tabs", () =
 
 test("all owner admin tabs are real subpages outside the CRM app layout", () => {
   for (const routeConfig of adminRoutes) {
-    const [, path, label] = routeConfig;
+    const [, path, label, componentName] = routeConfig;
     const url = new URL(path, import.meta.url);
     const source = readSource(path);
 
     assert.equal(existsSync(url), true, `missing ${path}`);
     assert.equal(source.includes("CrmShell"), false, `${label} must not use CrmShell`);
     assert.equal(source.includes("@/components/crm-shell"), false, `${label} must not import CrmShell`);
+    assert.equal(source.includes("OwnerSectionPage"), false, `${label} must not use placeholder section page`);
+    assert.match(source, new RegExp(componentName), `${label} must render its admin dashboard component`);
+  }
+});
+
+test("owner admin subpages use dashboard views and the old placeholder component is gone", () => {
+  assert.equal(existsSync(ownerSectionPagePath), false);
+  assert.match(ownerAdminViewsSource, /OwnerAnalyticsDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerOperationsDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerAccountsDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerBillingDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerProductsDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerIntegrationsDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerReportsDashboard/);
+  assert.match(ownerAdminViewsSource, /OwnerSettingsDashboard/);
+
+  for (const [, path, label] of adminRoutes.slice(1)) {
+    const source = readSource(path);
+
+    assert.match(source, /getOwnerDashboardData/, `${label} must fetch admin dashboard data`);
+    assert.match(source, /dynamic = "force-dynamic"/, `${label} must be dynamic`);
   }
 });
 
@@ -97,8 +129,13 @@ test("owner dashboard consumes admin API data and does not ship mock metrics", (
   assert.match(ownerDashboardSource, /MRR/);
   assert.match(ownerDashboardSource, /Lejek Agent-OZE/);
   assert.match(ownerDashboardSource, /Przychód vs koszt AI/);
+  assert.match(ownerAdminViewsSource, /Najczęstsze komponenty ofert/);
+  assert.match(ownerAdminViewsSource, /Status integracji/);
+  assert.match(ownerAdminViewsSource, /Przychód vs koszt AI/);
   assert.equal(ownerDashboardSource.includes("127 430"), false);
   assert.equal(ownerDashboardSource.includes("312"), false);
+  assert.equal(ownerAdminViewsSource.includes("127 430"), false);
+  assert.equal(ownerAdminViewsSource.includes("312"), false);
 });
 
 test("old admin mirror preview route is removed after production admin layer exists", () => {
