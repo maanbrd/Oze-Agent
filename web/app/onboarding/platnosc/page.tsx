@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Płatność | Agent-OZE",
-  description: "Miesięczna subskrypcja Agent-OZE.",
+  title: "Płatność | Agent OZE",
+  description: "Miesięczna subskrypcja Agent OZE.",
 };
 
 export default async function PaymentStepPage({
@@ -31,9 +32,7 @@ export default async function PaymentStepPage({
     <main className="min-h-screen bg-[#050607] text-zinc-100">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8">
         <header className="flex items-center justify-between border-b border-white/10 pb-5">
-          <Link href="/" className="text-sm font-semibold text-white">
-            OZE Agent
-          </Link>
+          <BrandLink href="/" className="text-sm font-semibold text-white" />
           <LogoutLink />
         </header>
 

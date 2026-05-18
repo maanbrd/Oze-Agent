@@ -4,7 +4,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Agent-OZE",
+  title: "Agent OZE",
   description:
     "Centrum dowodzenia handlowca OZE — przegląd lejka, plan dnia i klienci.",
 };

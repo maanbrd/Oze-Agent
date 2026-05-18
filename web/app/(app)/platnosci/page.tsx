@@ -49,8 +49,8 @@ export default async function PaymentsPage() {
             </p>
             <h2 className="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white">
               {active
-                ? "Subskrypcja działa. Możesz korzystać z Agent-OZE."
-                : "Aktywuj subskrypcję, żeby korzystać z Agent-OZE."}
+                ? "Subskrypcja działa. Możesz korzystać z Agent OZE."
+                : "Aktywuj subskrypcję, żeby korzystać z Agent OZE."}
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
               {active

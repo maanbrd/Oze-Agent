@@ -130,10 +130,10 @@ export function InstructionGuide() {
             Instrukcja
           </p>
           <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-white md:text-5xl">
-            Instrukcja użytkowa Agent-OZE
+            Instrukcja użytkowa Agent OZE
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-300">
-            Agent-OZE pomaga handlowcowi OZE prowadzić klientów bez przeklikiwania
+            Agent OZE pomaga handlowcowi OZE prowadzić klientów bez przeklikiwania
             się po arkuszach w trakcie dnia. Najszybciej pracujesz z nim w
             Telegramie, a panel web służy do przeglądania, kontroli i ustawiania
             ofert.

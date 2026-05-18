@@ -60,7 +60,7 @@ export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
           />
         </Panel>
 
-        <Panel title="Lejek Agent-OZE" subtitle="od rejestracji do pierwszej oferty">
+        <Panel title="Lejek Agent OZE" subtitle="od rejestracji do pierwszej oferty">
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
             {data.funnel.map((step, index) => (
               <div
@@ -207,7 +207,7 @@ export function OwnerPanel({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3DFF7A]">Agent-OZE Admin</p>
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3DFF7A]">Agent OZE Admin</p>
         <h1 className="mt-3 text-3xl font-semibold text-white">{title}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p>
       </div>

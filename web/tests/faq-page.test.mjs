@@ -50,7 +50,7 @@ test("FAQ avoids technical implementation wording", () => {
   }
 });
 
-test("FAQ uses the Agent-OZE help layout style", () => {
+test("FAQ uses the Agent OZE help layout style", () => {
   assert.equal(faqSource.includes("faqSections.reduce"), true);
   assert.equal(faqSource.includes("faqSections.length"), false);
   assert.equal(faqSource.includes("sekcje"), false);

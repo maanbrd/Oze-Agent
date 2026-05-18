@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import type { CurrentAccount } from "@/lib/api/account";
 import { decisionsBadgeClasses } from "@/lib/crm/decisions";
@@ -53,12 +54,7 @@ export function CrmShell({
     <main className="min-h-screen bg-[#050607] text-zinc-100">
       <div className="grid min-h-screen lg:grid-cols-[248px_1fr]">
         <aside className="border-b border-white/10 bg-[#090b0f] px-5 py-5 lg:border-b-0 lg:border-r">
-          <Link href="/dashboard" className="flex items-center gap-3 text-sm font-semibold text-white">
-            <span className="grid h-8 w-8 place-items-center rounded-full border border-[#3DFF7A]/40 bg-[#3DFF7A]/10">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#3DFF7A]" />
-            </span>
-            Agent-OZE
-          </Link>
+          <BrandLink href="/dashboard" className="text-sm font-semibold text-white" />
           <nav className="mt-7 grid gap-1">
             {navItems.map(([label, href]) => {
               const isDecyzje = href === "/dashboard/decyzje-preview";

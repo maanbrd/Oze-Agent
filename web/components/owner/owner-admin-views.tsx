@@ -94,7 +94,7 @@ export function OwnerAccountsDashboard({ data }: { data: OwnerDashboardData }) {
   return (
     <OwnerPanel
       title="Klienci i konta"
-      description="Przegląd użytkowników Agent-OZE, ich statusów, onboardingu i danych CRM w owner mirror Sheets."
+      description="Przegląd użytkowników Agent OZE, ich statusów, onboardingu i danych CRM w owner mirror Sheets."
     >
       <DashboardError error={data.error} />
       <KpiGrid
@@ -220,7 +220,7 @@ export function OwnerIntegrationsDashboard({ data }: { data: OwnerDashboardData 
   return (
     <OwnerPanel
       title="Integracje"
-      description="Google Sheets, Google Calendar, Drive, Telegram, Stripe, Supabase oraz stan połączeń potrzebnych do pracy Agent-OZE."
+      description="Google Sheets, Google Calendar, Drive, Telegram, Stripe, Supabase oraz stan połączeń potrzebnych do pracy Agent OZE."
     >
       <DashboardError error={data.error} />
       <KpiGrid

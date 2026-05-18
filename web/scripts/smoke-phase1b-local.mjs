@@ -173,7 +173,7 @@ async function run() {
   });
 
   await smoke.check("public landing renders", async () => {
-    await smoke.expectHtml("/", /Agent-OZE|OZE Agent/i);
+    await smoke.expectHtml("/", /Agent OZE|Agent OZE/i);
   });
 
   await smoke.check("login page renders", async () => {

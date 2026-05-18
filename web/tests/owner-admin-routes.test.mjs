@@ -127,7 +127,7 @@ test("owner dashboard consumes admin API data and does not ship mock metrics", (
   assert.match(adminApiSource, /\/api\/admin\/dashboard/);
   assert.match(adminApiSource, /Authorization: `Bearer \$\{account\.accessToken\}`/);
   assert.match(ownerDashboardSource, /MRR/);
-  assert.match(ownerDashboardSource, /Lejek Agent-OZE/);
+  assert.match(ownerDashboardSource, /Lejek Agent OZE/);
   assert.match(ownerDashboardSource, /Przychód vs koszt AI/);
   assert.match(ownerAdminViewsSource, /Najczęstsze komponenty ofert/);
   assert.match(ownerAdminViewsSource, /Status integracji/);

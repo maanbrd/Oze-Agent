@@ -15,7 +15,7 @@ const paymentsSource = readSource("../app/(app)/platnosci/page.tsx");
 const userFacingTexts = [
   "Konto i rozliczenia",
   "Konto czeka na płatność",
-  "Aktywuj subskrypcję, żeby korzystać z Agent-OZE.",
+  "Aktywuj subskrypcję, żeby korzystać z Agent OZE.",
   "OZE-Agent",
   "399 zł / mies.",
   "Co obejmuje plan",
