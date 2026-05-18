@@ -145,7 +145,6 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
             token_uri="https://oauth2.googleapis.com/token",
             client_id=Config.GOOGLE_CLIENT_ID,
             client_secret=Config.GOOGLE_CLIENT_SECRET,
-            scopes=SCOPES,
             expiry=expiry,
         )
 
