@@ -354,3 +354,117 @@ def test_calendar_mirror_updates_existing_inserts_new_and_deletes_stale():
     inserted_private = service.events().inserted[0]["body"]["extendedProperties"]["private"]
     assert inserted_private["admin_mirror_key"] == "user-1:cal-1:event-2"
     assert service.events().deleted == [{"calendarId": "admin-cal", "eventId": "stale-1"}]
+
+
+class _FakeDbResult:
+    def __init__(self, data=None):
+        self.data = data if data is not None else []
+
+
+class _FakeDbTable:
+    def __init__(self, db, name):
+        self.db = db
+        self.name = name
+        self._insert_payload = None
+        self._upsert_payload = None
+
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def range(self, *_args, **_kwargs):
+        return self
+
+    def insert(self, payload):
+        self._insert_payload = payload
+        return self
+
+    def upsert(self, payload, **_kwargs):
+        self._upsert_payload = payload
+        return self
+
+    def execute(self):
+        if self._insert_payload is not None:
+            self.db.tables.setdefault(self.name, []).append(self._insert_payload)
+            return _FakeDbResult([self._insert_payload])
+        if self._upsert_payload is not None:
+            self.db.tables.setdefault(self.name, []).append(self._upsert_payload)
+            return _FakeDbResult([self._upsert_payload])
+        return _FakeDbResult(self.db.tables.get(self.name, []))
+
+
+class _FakeDb:
+    def __init__(self):
+        self.tables = {
+            "users": [_user()],
+            "offer_templates": [],
+            "offer_send_attempts": [],
+            "interaction_log": [
+                {
+                    "telegram_id": 123,
+                    "cost_usd": 0.25,
+                    "created_at": "2026-05-17T08:00:00+00:00",
+                }
+            ],
+            "payment_history": [
+                {
+                    "user_id": "user-1",
+                    "amount_pln": 399,
+                    "type": "invoice.payment_succeeded",
+                    "status": "paid",
+                    "created_at": "2026-05-17T08:00:00+00:00",
+                }
+            ],
+        }
+
+    def table(self, name):
+        return _FakeDbTable(self, name)
+
+
+@pytest.mark.asyncio
+async def test_admin_mirror_logs_run_and_daily_metric_snapshot(monkeypatch):
+    from bot.config import Config
+    from shared.admin_mirror import sync
+
+    fake_db = _FakeDb()
+
+    async def fake_contacts(_user, synced_at):
+        return [["owner", "owner@example.com", "", "active", "user-1", "sheet-1", 2, synced_at]]
+
+    async def fake_events(_user, _now):
+        return [], []
+
+    async def fake_read_tab_values(*_args, **_kwargs):
+        return []
+
+    async def fake_write_workbook(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(Config, "ADMIN_MIRROR_ENABLED", True)
+    monkeypatch.setattr(Config, "ADMIN_MIRROR_GOOGLE_USER_ID", "admin-user")
+    monkeypatch.setattr(Config, "ADMIN_MIRROR_SPREADSHEET_ID", "sheet-admin")
+    monkeypatch.setattr(Config, "ADMIN_MIRROR_CALENDAR_ID", "cal-admin")
+    monkeypatch.setattr(Config, "MONTHLY_SUBSCRIPTION_PLN", 399)
+    monkeypatch.setattr(Config, "ADMIN_USD_PLN_RATE", 4.0)
+    monkeypatch.setattr(sync, "_fetch_active_user_contacts", fake_contacts)
+    monkeypatch.setattr(sync, "_fetch_active_user_events", fake_events)
+    monkeypatch.setattr(sync, "read_tab_values", fake_read_tab_values)
+    monkeypatch.setattr(sync, "write_workbook", fake_write_workbook)
+    monkeypatch.setattr(sync, "sync_admin_calendar_events", lambda *_args, **_kwargs: {"created": 0, "updated": 0, "deleted": 0})
+
+    result = await sync.run_admin_mirror(
+        force=True,
+        now=datetime(2026, 5, 18, 3, 0, tzinfo=timezone.utc),
+        database_client=fake_db,
+        sheets_service=object(),
+        calendar_service=object(),
+    )
+
+    assert result["ok"] is True
+    assert len(fake_db.tables["admin_mirror_runs"]) == 1
+    assert fake_db.tables["admin_mirror_runs"][0]["contacts_count"] == 1
+    assert len(fake_db.tables["admin_metric_snapshots"]) == 1
+    snapshot = fake_db.tables["admin_metric_snapshots"][0]
+    assert snapshot["snapshot_date"] == "2026-05-18"
+    assert snapshot["mrr_pln"] == 399
+    assert snapshot["ai_cost_usd_month"] == 0.25
+    assert "conversation_history" not in str(snapshot)

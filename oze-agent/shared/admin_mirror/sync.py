@@ -12,6 +12,7 @@ from shared.admin_mirror.calendar import (
     sync_admin_calendar_events,
 )
 from shared.admin_mirror.data import is_refreshable_user, list_mirror_users, list_table_rows
+from shared.admin_mirror.data import log_admin_mirror_run, upsert_admin_metric_snapshot
 from shared.admin_mirror.google_io import (
     build_admin_calendar_service,
     build_admin_sheets_service,
@@ -36,6 +37,7 @@ from shared.admin_mirror.rows import (
     count_contacts_by_user,
     merge_contact_snapshot_rows,
 )
+from shared.admin_dashboard import build_admin_metric_snapshot, build_owner_dashboard_payload
 from shared.google_calendar import get_events_for_range_or_raise
 from shared.google_sheets import get_all_clients_or_raise
 
@@ -102,6 +104,7 @@ async def run_admin_mirror(
         return {"ok": False, "skipped": True, "reason": "missing_config", "missing": missing}
 
     now = now or datetime.now(tz=timezone.utc)
+    run_started_at = now.isoformat()
     synced_at = now.isoformat()
     users = list_mirror_users(database_client)
     active_users = [user for user in users if is_refreshable_user(user)]
@@ -185,6 +188,8 @@ async def run_admin_mirror(
     result = {
         "ok": True,
         "skipped": False,
+        "run_started_at": run_started_at,
+        "run_finished_at": now.isoformat(),
         "users": len(users),
         "active_users": len(active_users),
         "canceled_users": len(canceled_users),
@@ -193,5 +198,78 @@ async def run_admin_mirror(
         "calendar_mirror": calendar_result,
         "errors": errors,
     }
+    _persist_admin_run_and_snapshot(
+        result=result,
+        users=list_table_rows("users", database_client),
+        interactions=interactions,
+        payment_history=payment_history,
+        offers=offers,
+        offer_attempts=offer_attempts,
+        contact_rows=contact_rows,
+        calendar_rows=calendar_rows,
+        now=now,
+        database_client=database_client,
+    )
     logger.info("admin_mirror.run %s", result)
     return result
+
+
+def _persist_admin_run_and_snapshot(
+    *,
+    result: dict,
+    users: list[dict],
+    interactions: list[dict],
+    payment_history: list[dict],
+    offers: list[dict],
+    offer_attempts: list[dict],
+    contact_rows: list[list],
+    calendar_rows: list[list],
+    now: datetime,
+    database_client=None,
+) -> None:
+    try:
+        log_admin_mirror_run(
+            {
+                "run_started_at": result.get("run_started_at"),
+                "run_finished_at": result.get("run_finished_at"),
+                "ok": result.get("ok", False),
+                "skipped": result.get("skipped", False),
+                "reason": result.get("reason", ""),
+                "users_count": result.get("users", 0),
+                "active_users_count": result.get("active_users", 0),
+                "canceled_users_count": result.get("canceled_users", 0),
+                "contacts_count": result.get("contacts", 0),
+                "calendar_events_count": result.get("calendar_events", 0),
+                "errors": result.get("errors", []),
+                "calendar_mirror": result.get("calendar_mirror", {}),
+            },
+            database_client,
+        )
+        payload = build_owner_dashboard_payload(
+            users=users,
+            interactions=interactions,
+            payment_history=payment_history,
+            offers=offers,
+            offer_attempts=offer_attempts,
+            contact_rows=_rows_to_dicts(CONTACT_HEADERS, contact_rows),
+            calendar_rows=_rows_to_dicts(CALENDAR_HEADERS, calendar_rows),
+            monthly_subscription_pln=Config.MONTHLY_SUBSCRIPTION_PLN,
+            admin_usd_pln_rate=Config.ADMIN_USD_PLN_RATE,
+            now=now,
+        )
+        upsert_admin_metric_snapshot(
+            build_admin_metric_snapshot(payload, now.date()),
+            database_client,
+        )
+    except Exception as exc:
+        logger.warning("admin_mirror.snapshot_log_failed: %s", exc)
+
+
+def _rows_to_dicts(headers: list[str], rows: list[list]) -> list[dict]:
+    mapped = []
+    for raw_row in rows:
+        mapped.append({
+            header: raw_row[index] if index < len(raw_row) else ""
+            for index, header in enumerate(headers)
+        })
+    return mapped

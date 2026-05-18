@@ -40,6 +40,8 @@ async def get_owner_admin_dashboard(
     payment_history = _list_table_rows("payment_history")
     offers = _list_table_rows("offer_templates")
     offer_attempts = _list_table_rows("offer_send_attempts")
+    metric_snapshots = _list_table_rows("admin_metric_snapshots")
+    mirror_runs = _list_table_rows("admin_mirror_runs")
     contact_rows = _read_owner_mirror_rows("Kontakty")
     calendar_rows = _read_owner_mirror_rows("Kalendarz")
 
@@ -51,7 +53,10 @@ async def get_owner_admin_dashboard(
         offer_attempts=offer_attempts,
         contact_rows=contact_rows,
         calendar_rows=calendar_rows,
+        metric_snapshots=metric_snapshots,
+        mirror_runs=mirror_runs,
         monthly_subscription_pln=Config.MONTHLY_SUBSCRIPTION_PLN,
+        admin_usd_pln_rate=Config.ADMIN_USD_PLN_RATE,
         owner_spreadsheet_id=Config.ADMIN_MIRROR_SPREADSHEET_ID,
         owner_calendar_id=Config.ADMIN_MIRROR_CALENDAR_ID,
     )

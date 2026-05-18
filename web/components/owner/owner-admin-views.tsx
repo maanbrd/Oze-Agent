@@ -2,9 +2,11 @@ import Link from "next/link";
 import type {
   OwnerCounterRow,
   OwnerDashboardData,
+  OwnerDataQuality,
   OwnerIntegrationRow,
+  OwnerTrendPoint,
 } from "@/lib/api/admin-dashboard";
-import { OwnerPanel } from "@/components/owner/owner-dashboard";
+import { OwnerPanel, QualityBadge } from "@/components/owner/owner-dashboard";
 
 export function OwnerAnalyticsDashboard({ data }: { data: OwnerDashboardData }) {
   return (
@@ -94,7 +96,7 @@ export function OwnerAccountsDashboard({ data }: { data: OwnerDashboardData }) {
   return (
     <OwnerPanel
       title="Klienci i konta"
-      description="Przegląd użytkowników Agent-OZE, ich statusów, onboardingu i danych CRM w owner mirror Sheets."
+      description="Przegląd użytkowników Agent OZE, ich statusów, onboardingu i danych CRM w owner mirror Sheets."
     >
       <DashboardError error={data.error} />
       <KpiGrid
@@ -144,7 +146,7 @@ export function OwnerBillingDashboard({ data }: { data: OwnerDashboardData }) {
       <KpiGrid
         items={[
           ["MRR", formatPln(data.business.mrr_pln), "aktywny przychód miesięczny"],
-          ["Marża brutto", formatPln(data.business.estimated_gross_margin_pln), "bez kosztów poza AI"],
+          ["Marża po AI", formatPln(data.business.gross_margin_after_ai_pln), "MRR minus koszt AI w PLN", data.data_quality.gross_margin_after_ai_pln],
           ["Pending payment", formatPln(data.business.pending_payment_pln), "wartość do odzyskania"],
           ["Churn/canceled", formatNumber(data.business.canceled_accounts), "konta anulowane"],
         ]}
@@ -165,7 +167,11 @@ export function OwnerBillingDashboard({ data }: { data: OwnerDashboardData }) {
           <BigNumber value={data.business.pending_payment_accounts} detail="kont oczekujących" warn />
         </Panel>
         <Panel title="Koszt AI" subtitle="miesięcznie">
-          <BigNumber value={data.business.ai_cost_usd_month} detail="USD z interaction_log" money="usd" />
+          <BigNumber
+            value={data.business.ai_cost_usd_month}
+            detail={`${formatPln(data.business.ai_cost_pln_month)} po kursie z env`}
+            money="usd"
+          />
         </Panel>
       </div>
     </OwnerPanel>
@@ -220,7 +226,7 @@ export function OwnerIntegrationsDashboard({ data }: { data: OwnerDashboardData 
   return (
     <OwnerPanel
       title="Integracje"
-      description="Google Sheets, Google Calendar, Drive, Telegram, Stripe, Supabase oraz stan połączeń potrzebnych do pracy Agent-OZE."
+      description="Google Sheets, Google Calendar, Drive, Telegram, Stripe, Supabase oraz stan połączeń potrzebnych do pracy Agent OZE."
     >
       <DashboardError error={data.error} />
       <KpiGrid
@@ -272,8 +278,8 @@ export function OwnerReportsDashboard({ data }: { data: OwnerDashboardData }) {
         ]} />
         <ReportCard title="Raport miesięczny" rows={[
           ["MRR", formatPln(data.business.mrr_pln)],
-          ["Koszt AI", formatUsd(data.business.ai_cost_usd_month)],
-          ["Marża brutto", formatPln(data.business.estimated_gross_margin_pln)],
+          ["Koszt AI", `${formatUsd(data.business.ai_cost_usd_month)} / ${formatPln(data.business.ai_cost_pln_month)}`],
+          ["Marża po AI", formatPln(data.business.gross_margin_after_ai_pln)],
         ]} />
         <ReportCard title="Raport OZE" rows={[
           ["Oferty", formatNumber(data.oze.offers_total)],
@@ -353,14 +359,17 @@ function Panel({
 function KpiGrid({
   items,
 }: {
-  items: Array<[label: string, value: string, detail: string]>;
+  items: Array<[label: string, value: string, detail: string, quality?: OwnerDataQuality]>;
 }) {
   return (
     <section className="rounded-[8px] border border-white/10 bg-white/[0.025]">
       <div className="grid divide-y divide-white/10 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
-        {items.map(([label, value, detail]) => (
+        {items.map(([label, value, detail, quality]) => (
           <div key={label} className="p-4">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+              {quality ? <QualityBadge quality={quality} /> : null}
+            </div>
             <p className="mt-2 text-3xl font-semibold text-[#3DFF7A]">{value}</p>
             <p className="mt-2 text-xs leading-5 text-zinc-500">{detail}</p>
           </div>
@@ -549,8 +558,21 @@ function AttentionList({ data, compact = false }: { data: OwnerDashboardData; co
 }
 
 function RevenueVsAi({ data }: { data: OwnerDashboardData }) {
-  const revenueHeight = data.business.mrr_pln > 0 ? 78 : 8;
-  const aiHeight = data.business.ai_cost_usd_month > 0 ? 28 : 8;
+  if (data.trends.length === 0) {
+    return <EmptyLine>Historia zacznie się po pierwszym dziennym syncu.</EmptyLine>;
+  }
+
+  return <TrendBars trends={data.trends} />;
+}
+
+function TrendBars({ trends }: { trends: OwnerTrendPoint[] }) {
+  const max = Math.max(
+    1,
+    ...trends.map((point) =>
+      Math.max(point.mrr_pln, point.revenue_pln_month, point.gross_margin_after_ai_pln, point.ai_cost_pln_month),
+    ),
+  );
+
   return (
     <div className="mt-5 grid h-64 grid-cols-[80px_1fr] rounded-[8px] border border-white/10 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[length:100%_25%] p-4">
       <div className="flex flex-col justify-between text-[11px] text-zinc-600">
@@ -558,31 +580,29 @@ function RevenueVsAi({ data }: { data: OwnerDashboardData }) {
         <span>śr.</span>
         <span>0</span>
       </div>
-      <div className="grid grid-cols-2 items-end gap-8">
-        <ChartBar label="Przychód" value={formatPln(data.business.mrr_pln)} height={revenueHeight} />
-        <ChartBar label="Koszt AI" value={formatUsd(data.business.ai_cost_usd_month)} height={aiHeight} muted />
-      </div>
-    </div>
-  );
-}
-
-function ChartBar({
-  label,
-  value,
-  height,
-  muted = false,
-}: {
-  label: string;
-  value: string;
-  height: number;
-  muted?: boolean;
-}) {
-  return (
-    <div className="grid h-full items-end gap-2">
-      <div className={muted ? "rounded-t-[8px] bg-white/35" : "rounded-t-[8px] bg-[#3DFF7A] shadow-[0_0_24px_rgba(61,255,122,0.18)]"} style={{ height: `${height}%` }} />
-      <div>
-        <p className="text-sm font-semibold text-white">{value}</p>
-        <p className="text-[11px] text-zinc-500">{label}</p>
+      <div className="grid items-end gap-3" style={{ gridTemplateColumns: `repeat(${trends.length}, minmax(44px, 1fr))` }}>
+        {trends.map((point) => (
+          <div key={point.date} className="grid h-full items-end gap-2">
+            <div className="grid h-36 grid-cols-2 items-end gap-1">
+              <div
+                className="rounded-t-[6px] bg-[#3DFF7A] shadow-[0_0_24px_rgba(61,255,122,0.16)]"
+                style={{ height: `${barHeight(point.revenue_pln_month || point.mrr_pln, max)}%` }}
+                title={`Przychód: ${formatPln(point.revenue_pln_month || point.mrr_pln)}`}
+              />
+              <div
+                className="rounded-t-[6px] bg-white/35"
+                style={{ height: `${barHeight(point.ai_cost_pln_month, max)}%` }}
+                title={`Koszt AI: ${formatPln(point.ai_cost_pln_month)}`}
+              />
+            </div>
+            <div>
+              <p className="truncate text-sm font-semibold text-white">
+                {formatPln(point.gross_margin_after_ai_pln)}
+              </p>
+              <p className="text-[11px] text-zinc-500">{formatTrendDate(point.date)}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -792,4 +812,13 @@ function formatUsd(value: number) {
 
 function formatPercent(value: number) {
   return `${formatNumber(value || 0)}%`;
+}
+
+function barHeight(value: number, max: number) {
+  return Math.min(100, Math.max(4, (value / max) * 100));
+}
+
+function formatTrendDate(value: string) {
+  const [, month, day] = value.split("-");
+  return month && day ? `${day}.${month}` : value;
 }

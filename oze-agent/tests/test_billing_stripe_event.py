@@ -44,6 +44,13 @@ class _FakeTable:
             self.supabase.webhook_logs.append(self._insert_payload)
             return _FakeResult([self._insert_payload])
 
+        if self.name == "payment_history" and self._insert_payload is not None:
+            event_id = self._insert_payload.get("stripe_event_id")
+            if event_id and any(row.get("stripe_event_id") == event_id for row in self.supabase.payment_history):
+                return _FakeResult([])
+            self.supabase.payment_history.append(self._insert_payload)
+            return _FakeResult([self._insert_payload])
+
         if self.name != "users":
             return _FakeResult([])
 
@@ -72,6 +79,7 @@ class _FakeSupabase:
             }
         ]
         self.webhook_logs: list[dict] = []
+        self.payment_history: list[dict] = []
 
     def table(self, name: str):
         return _FakeTable(self, name)
@@ -107,6 +115,8 @@ async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
             "mode": "subscription",
             "status": "complete",
             "payment_status": "paid",
+            "amount_total": 39900,
+            "currency": "pln",
             "customer": "cus_123",
             "subscription": "sub_123",
             "client_reference_id": "user-1",
@@ -143,6 +153,20 @@ async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
     assert fake.users[0]["stripe_customer_id"] == "cus_123"
     assert fake.users[0]["stripe_subscription_id"] == "sub_123"
     assert fake.users[0]["stripe_checkout_session_id"] == "cs_test_123"
+    assert fake.payment_history == [
+        {
+            "user_id": "user-1",
+            "amount_pln": 399.0,
+            "type": "checkout.session.completed",
+            "status": "paid",
+            "stripe_event_id": "evt_reconcile_cs_test_123",
+            "stripe_checkout_session_id": "cs_test_123",
+            "stripe_invoice_id": "",
+            "stripe_subscription_id": "sub_123",
+            "stripe_customer_id": "cus_123",
+            "currency": "pln",
+        }
+    ]
     assert fake.webhook_logs[0]["processed"] is True
 
 
@@ -179,3 +203,91 @@ async def test_stripe_checkout_event_rejects_mismatched_auth_user(monkeypatch):
 
     assert exc.value.status_code == 409
     assert fake.users[0]["subscription_status"] == "pending_payment"
+
+
+@pytest.mark.asyncio
+async def test_stripe_invoice_failed_marks_user_pending_and_logs_payment_snapshot(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-billing-secret"
+    fake = _FakeSupabase()
+    fake.users[0].update({
+        "subscription_status": "active",
+        "activation_paid": True,
+        "stripe_subscription_id": "sub_123",
+        "stripe_customer_id": "cus_123",
+    })
+    event = {
+        "id": "evt_invoice_failed_123",
+        "type": "invoice.payment_failed",
+        "object": {
+            "id": "in_123",
+            "object": "invoice",
+            "subscription": "sub_123",
+            "customer": "cus_123",
+            "amount_due": 39900,
+            "currency": "pln",
+            "status": "open",
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(
+        body,
+        _signed_headers(body, secret),
+    )
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "pending_payment"
+    assert fake.users[0]["activation_paid"] is False
+    assert fake.payment_history == [
+        {
+            "user_id": "user-1",
+            "amount_pln": 399.0,
+            "type": "invoice.payment_failed",
+            "status": "failed",
+            "stripe_event_id": "evt_invoice_failed_123",
+            "stripe_checkout_session_id": "",
+            "stripe_invoice_id": "in_123",
+            "stripe_subscription_id": "sub_123",
+            "stripe_customer_id": "cus_123",
+            "currency": "pln",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stripe_event_does_not_duplicate_payment_history_snapshot(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-billing-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_duplicate",
+        "type": "checkout.session.completed",
+        "object": {
+            "id": "cs_duplicate",
+            "object": "checkout.session",
+            "mode": "subscription",
+            "status": "complete",
+            "payment_status": "paid",
+            "amount_total": 39900,
+            "currency": "pln",
+            "customer": "cus_123",
+            "subscription": "sub_123",
+            "client_reference_id": "user-1",
+            "metadata": {"auth_user_id": "auth-1", "user_id": "user-1", "plan": "monthly"},
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+    await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert len(fake.payment_history) == 1

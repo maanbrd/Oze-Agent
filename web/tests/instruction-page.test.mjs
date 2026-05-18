@@ -15,7 +15,7 @@ const guideSource = existsSync(guidePath) ? readFileSync(guidePath, "utf8") : ""
 
 test("instruction page explains the agent as a full user guide", () => {
   for (const text of [
-    "Instrukcja użytkowa Agent-OZE",
+    "Instrukcja użytkowa Agent OZE",
     "Najważniejsza zasada: agent nic nie zapisuje od razu",
     "✅ Zapisać",
     "➕ Dopisać",

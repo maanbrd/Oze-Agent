@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import type { CurrentAccount } from "@/lib/api/account";
 
@@ -38,12 +39,7 @@ export function OwnerAdminShell({
     <main className="min-h-screen bg-[#050607] text-zinc-100">
       <div className="grid min-h-screen lg:grid-cols-[248px_1fr]">
         <aside className="border-b border-white/10 bg-[#080a0d] px-5 py-5 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-          <Link href="/admin" className="flex items-center gap-3 text-sm font-semibold text-white">
-            <span className="grid h-8 w-8 place-items-center rounded-full border border-[#3DFF7A]/40 bg-[#3DFF7A]/10 text-[#3DFF7A]">
-              ↯
-            </span>
-            Agent-OZE
-          </Link>
+          <BrandLink href="/admin" className="text-sm font-semibold text-white" />
 
           <nav className="mt-7 grid gap-1">
             {ownerNavItems.map(([label, href], index) => {

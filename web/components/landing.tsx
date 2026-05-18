@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BrandLink } from "@/components/brand";
 
 const G = "#3DFF7A"; // bright OZE green from cinematic hero design
 const VOICE_WAVE_HEIGHTS = [3, 9, 12, 7, 5, 11, 8, 4, 10, 12, 6, 5, 9, 11, 7];
@@ -113,12 +114,7 @@ function LandingNav() {
           gap: mobile ? 12 : 28,
         }}
       >
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "#fff" }}>
-          <RingLogo />
-          <span style={{ fontWeight: 600, fontSize: 17, whiteSpace: "nowrap" }}>
-            OZE Agent
-          </span>
-        </Link>
+        <BrandLink href="/" />
         <nav style={{ display: compact ? "none" : "flex", gap: 4, marginLeft: 32, flex: 1 }}>
           {(
             [
@@ -181,34 +177,6 @@ function LandingNav() {
         </Link>
       </div>
     </header>
-  );
-}
-
-function RingLogo() {
-  return (
-    <div
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: "50%",
-        position: "relative",
-        border: `2.5px solid ${G}`,
-        boxShadow: `0 0 16px ${G}66, inset 0 0 8px ${G}33`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: G,
-          boxShadow: `0 0 8px ${G}`,
-        }}
-      />
-    </div>
   );
 }
 
@@ -1956,10 +1924,7 @@ function FooterMin() {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <RingLogo />
-            <span style={{ fontSize: 17, fontWeight: 600 }}>OZE Agent</span>
-          </div>
+          <BrandLink href="/" style={{ marginBottom: 16 }} />
           <p
             style={{
               fontSize: 13.5,
@@ -2013,7 +1978,7 @@ function FooterMin() {
           color: "rgba(255,255,255,0.4)",
         }}
       >
-        © 2026 OZE Agent. Wszystkie prawa zastrzeżone.
+        © 2026 Agent OZE. Wszystkie prawa zastrzeżone.
       </div>
     </footer>
   );

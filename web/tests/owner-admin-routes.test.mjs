@@ -127,7 +127,7 @@ test("owner dashboard consumes admin API data and does not ship mock metrics", (
   assert.match(adminApiSource, /\/api\/admin\/dashboard/);
   assert.match(adminApiSource, /Authorization: `Bearer \$\{account\.accessToken\}`/);
   assert.match(ownerDashboardSource, /MRR/);
-  assert.match(ownerDashboardSource, /Lejek Agent-OZE/);
+  assert.match(ownerDashboardSource, /Lejek Agent OZE/);
   assert.match(ownerDashboardSource, /Przychód vs koszt AI/);
   assert.match(ownerAdminViewsSource, /Najczęstsze komponenty ofert/);
   assert.match(ownerAdminViewsSource, /Status integracji/);
@@ -136,6 +136,21 @@ test("owner dashboard consumes admin API data and does not ship mock metrics", (
   assert.equal(ownerDashboardSource.includes("312"), false);
   assert.equal(ownerAdminViewsSource.includes("127 430"), false);
   assert.equal(ownerAdminViewsSource.includes("312"), false);
+});
+
+test("owner dashboard labels estimated metrics and does not fake trends", () => {
+  assert.match(adminApiSource, /ai_cost_pln_month/);
+  assert.match(adminApiSource, /gross_margin_after_ai_pln/);
+  assert.match(adminApiSource, /data_quality/);
+  assert.match(adminApiSource, /trends/);
+  assert.match(adminApiSource, /sync/);
+
+  assert.match(ownerDashboardSource, /Marża po AI/);
+  assert.match(ownerAdminViewsSource, /Marża po AI/);
+  assert.match(ownerDashboardSource, /Historia zacznie się po pierwszym dziennym syncu/);
+  assert.match(ownerDashboardSource, /QualityBadge/);
+  assert.equal(ownerDashboardSource.includes("Marża brutto"), false);
+  assert.equal(ownerAdminViewsSource.includes("Marża brutto"), false);
 });
 
 test("old admin mirror preview route is removed after production admin layer exists", () => {

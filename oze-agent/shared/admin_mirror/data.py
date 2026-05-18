@@ -51,6 +51,19 @@ def list_table_rows(table_name: str, client=None) -> list[dict]:
     return _select_all(client, table_name, "*")
 
 
+def log_admin_mirror_run(run: dict, client=None) -> None:
+    client = client or get_supabase_client()
+    client.table("admin_mirror_runs").insert(run).execute()
+
+
+def upsert_admin_metric_snapshot(snapshot: dict, client=None) -> None:
+    client = client or get_supabase_client()
+    client.table("admin_metric_snapshots").upsert(
+        snapshot,
+        on_conflict="snapshot_date",
+    ).execute()
+
+
 def _select_all(client, table_name: str, fields: str, page_size: int = 1000) -> list[dict]:
     rows: list[dict] = []
     offset = 0

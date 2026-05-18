@@ -20,6 +20,7 @@ SUPPORTED_EVENTS = {
     "checkout.session.completed",
     "checkout.session.async_payment_succeeded",
     "invoice.payment_succeeded",
+    "invoice.payment_failed",
     "customer.subscription.updated",
     "customer.subscription.deleted",
 }
@@ -140,6 +141,64 @@ def _log_event(event: dict[str, Any], processed: bool) -> None:
         return
 
 
+def _find_user_by_subscription_id(subscription_id: str) -> dict[str, Any] | None:
+    result = (
+        get_supabase_client()
+        .table("users")
+        .select("*")
+        .eq("stripe_subscription_id", subscription_id)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def _stripe_amount_pln(value: dict[str, Any]) -> float:
+    amount = (
+        value.get("amount_total")
+        or value.get("amount_paid")
+        or value.get("amount_due")
+        or 0
+    )
+    try:
+        return round(float(amount) / 100, 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _log_payment_snapshot(
+    *,
+    event: dict[str, Any],
+    event_object: dict[str, Any],
+    user_id: str,
+    status_value: str,
+) -> None:
+    payload = {
+        "user_id": user_id,
+        "amount_pln": _stripe_amount_pln(event_object),
+        "type": event.get("type") or "",
+        "status": status_value,
+        "stripe_event_id": event.get("id") or "",
+        "stripe_checkout_session_id": (
+            event_object.get("id")
+            if event_object.get("object") == "checkout.session"
+            else ""
+        ),
+        "stripe_invoice_id": (
+            event_object.get("id")
+            if event_object.get("object") == "invoice"
+            else ""
+        ),
+        "stripe_subscription_id": event_object.get("subscription") or event_object.get("id") or "",
+        "stripe_customer_id": event_object.get("customer") or "",
+        "currency": event_object.get("currency") or "",
+    }
+    try:
+        get_supabase_client().table("payment_history").insert(payload).execute()
+    except Exception:
+        return
+
+
 def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
     metadata = _metadata(session)
     user_id = metadata.get("user_id") or session.get("client_reference_id")
@@ -168,7 +227,7 @@ def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
             detail="Checkout session does not match the authenticated user.",
         )
 
-    return _update_user(
+    updated = _update_user(
         user["id"],
         {
             "subscription_status": "active",
@@ -182,6 +241,7 @@ def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
             ),
         },
     )
+    return updated
 
 
 def _update_from_subscription(
@@ -217,6 +277,23 @@ def _update_from_subscription(
     )
 
 
+def _mark_invoice_failed(invoice: dict[str, Any]) -> dict[str, Any] | None:
+    subscription_id = invoice.get("subscription")
+    if not subscription_id:
+        return None
+    user = _find_user_by_subscription_id(subscription_id)
+    if not user:
+        return None
+    return _update_user(
+        user["id"],
+        {
+            "subscription_status": "pending_payment",
+            "activation_paid": False,
+            "stripe_subscription_id": subscription_id,
+        },
+    )
+
+
 async def process_signed_stripe_event(
     body: bytes,
     headers: dict[str, str],
@@ -242,14 +319,51 @@ async def process_signed_stripe_event(
         "checkout.session.async_payment_succeeded",
     }:
         updated = _activate_from_checkout_session(event_object)
+        if updated:
+            _log_payment_snapshot(
+                event=event,
+                event_object=event_object,
+                user_id=updated["id"],
+                status_value="paid",
+            )
     elif event_type == "invoice.payment_succeeded":
         subscription_id = event_object.get("subscription")
         if subscription_id:
             updated = _update_from_subscription({"id": subscription_id, "status": "active"})
+            if updated:
+                _log_payment_snapshot(
+                    event=event,
+                    event_object=event_object,
+                    user_id=updated["id"],
+                    status_value="paid",
+                )
+    elif event_type == "invoice.payment_failed":
+        updated = _mark_invoice_failed(event_object)
+        if updated:
+            _log_payment_snapshot(
+                event=event,
+                event_object=event_object,
+                user_id=updated["id"],
+                status_value="failed",
+            )
     elif event_type == "customer.subscription.updated":
         updated = _update_from_subscription(event_object)
+        if updated:
+            _log_payment_snapshot(
+                event=event,
+                event_object=event_object,
+                user_id=updated["id"],
+                status_value=updated.get("subscription_status", "active"),
+            )
     elif event_type == "customer.subscription.deleted":
         updated = _update_from_subscription(event_object, deleted=True)
+        if updated:
+            _log_payment_snapshot(
+                event=event,
+                event_object=event_object,
+                user_id=updated["id"],
+                status_value="canceled",
+            )
 
     _log_event(event, processed=updated is not None)
     return {

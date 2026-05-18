@@ -44,7 +44,7 @@ test("registration form keeps the fuller onboarding content and three consent ch
     "Płatność",
     "Google + Telegram",
     "Akceptuję regulamin i politykę prywatności.",
-    "Chcę otrzymywać informacje o rozwoju Agent-OZE.",
+    "Chcę otrzymywać informacje o rozwoju Agent OZE.",
     "Możecie zadzwonić, jeśli onboarding utknie.",
   ]) {
     assert.equal(registrationPageSource.includes(text), true);

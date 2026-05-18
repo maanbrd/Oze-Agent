@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -168,3 +170,150 @@ def test_admin_dashboard_accepts_owner_email(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["business"]["mrr_pln"] == 0
+
+
+def test_owner_dashboard_uses_real_payment_snapshots_and_timeboxed_activity():
+    from shared.admin_dashboard import build_owner_dashboard_payload
+
+    now = datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc)
+
+    payload = build_owner_dashboard_payload(
+        users=[
+            _user(id="user-1", telegram_id=123, subscription_status="active"),
+            _user(
+                id="user-2",
+                auth_user_id="auth-2",
+                email="anna@example.com",
+                telegram_id=456,
+                subscription_status="active",
+            ),
+            _user(
+                id="user-3",
+                auth_user_id="auth-3",
+                email="pending@example.com",
+                telegram_id=789,
+                subscription_status="pending_payment",
+            ),
+            _user(
+                id="user-4",
+                auth_user_id="auth-4",
+                email="old@example.com",
+                telegram_id=999,
+                subscription_status="canceled",
+            ),
+        ],
+        interactions=[
+            {
+                "telegram_id": 123,
+                "cost_usd": 0.25,
+                "created_at": "2026-05-17T10:00:00+00:00",
+            },
+            {
+                "telegram_id": 456,
+                "cost_usd": 9.0,
+                "created_at": "2026-04-17T10:00:00+00:00",
+            },
+            {
+                "telegram_id": 999,
+                "cost_usd": 1.0,
+                "created_at": "2026-04-01T10:00:00+00:00",
+            },
+        ],
+        payment_history=[
+            {
+                "user_id": "user-1",
+                "amount_pln": 399,
+                "type": "invoice.payment_succeeded",
+                "status": "paid",
+                "created_at": "2026-05-05T10:00:00+00:00",
+            },
+            {
+                "user_id": "user-3",
+                "amount_pln": 399,
+                "type": "invoice.payment_failed",
+                "status": "failed",
+                "created_at": "2026-05-06T10:00:00+00:00",
+            },
+        ],
+        offers=[],
+        offer_attempts=[],
+        contact_rows=[],
+        calendar_rows=[],
+        monthly_subscription_pln=399,
+        admin_usd_pln_rate=4.0,
+        now=now,
+    )
+
+    assert payload["business"]["mrr_pln"] == 798
+    assert payload["business"]["revenue_pln_month"] == 399
+    assert payload["business"]["pending_payment_pln"] == 399
+    assert payload["business"]["ai_cost_usd_month"] == 0.25
+    assert payload["business"]["ai_cost_pln_month"] == 1.0
+    assert payload["business"]["gross_margin_after_ai_pln"] == 797
+    assert payload["business"]["active_7d_accounts"] == 1
+    assert payload["data_quality"]["mrr_pln"] == "estimated"
+    assert payload["data_quality"]["ai_cost_usd_month"] == "real"
+    assert payload["data_quality"]["gross_margin_after_ai_pln"] == "estimated"
+
+
+def test_owner_dashboard_trends_and_sync_are_derived_from_snapshots_and_runs():
+    from shared.admin_dashboard import build_owner_dashboard_payload
+
+    payload = build_owner_dashboard_payload(
+        users=[_user()],
+        interactions=[],
+        payment_history=[],
+        offers=[],
+        offer_attempts=[],
+        monthly_subscription_pln=399,
+        admin_usd_pln_rate=4.0,
+        now=datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc),
+        metric_snapshots=[
+            {
+                "snapshot_date": "2025-10-01",
+                "mrr_pln": 111,
+                "ai_cost_usd_month": 1,
+                "gross_margin_after_ai_pln": 107,
+            },
+            {
+                "snapshot_date": "2026-05-17",
+                "mrr_pln": 399,
+                "revenue_pln_month": 399,
+                "ai_cost_usd_month": 0.25,
+                "ai_cost_pln_month": 1.0,
+                "gross_margin_after_ai_pln": 398,
+                "active_paid_accounts": 1,
+                "pending_payment_accounts": 0,
+                "active_7d_accounts": 1,
+            },
+        ],
+        mirror_runs=[
+            {
+                "run_finished_at": "2026-05-18T03:03:00+00:00",
+                "ok": True,
+                "skipped": False,
+                "contacts_count": 14,
+                "calendar_events_count": 3,
+                "errors": [],
+            }
+        ],
+    )
+
+    assert payload["trends"] == [
+        {
+            "date": "2026-05-17",
+            "mrr_pln": 399,
+            "revenue_pln_month": 399,
+            "ai_cost_usd_month": 0.25,
+            "ai_cost_pln_month": 1.0,
+            "gross_margin_after_ai_pln": 398,
+            "active_paid_accounts": 1,
+            "pending_payment_accounts": 0,
+            "active_7d_accounts": 1,
+        }
+    ]
+    assert payload["sync"]["last_run_at"] == "2026-05-18T03:03:00+00:00"
+    assert payload["sync"]["ok"] is True
+    assert payload["sync"]["contacts"] == 14
+    assert payload["sync"]["calendar_events"] == 3
+    assert "conversation_history" not in str(payload)

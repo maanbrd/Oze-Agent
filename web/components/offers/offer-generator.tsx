@@ -600,7 +600,7 @@ async function buildPdfBlob(offer: OfferTemplate, profile: SellerProfile) {
     });
     fill(0, 0, 595, 842, pdfDarkOverlay, 0.58);
   }
-  text(profile.companyName || "OZE Agent", 48, 760, 11, boldFont);
+  text(profile.companyName || "Agent OZE", 48, 760, 11, boldFont);
   if (logoImage) {
     const logoSize = logoImage.scaleToFit(72, 42);
     const logoX = 547 - logoSize.width;

@@ -1,5 +1,10 @@
 import Link from "next/link";
-import type { OwnerCounterRow, OwnerDashboardData } from "@/lib/api/admin-dashboard";
+import type {
+  OwnerCounterRow,
+  OwnerDashboardData,
+  OwnerDataQuality,
+  OwnerTrendPoint,
+} from "@/lib/api/admin-dashboard";
 
 export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
   const kpis = [
@@ -7,6 +12,7 @@ export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
       label: "MRR",
       value: formatPln(data.business.mrr_pln),
       detail: "miesięczny przychód z aktywnych kont",
+      quality: data.data_quality.mrr_pln,
     },
     {
       label: "Aktywne konta",
@@ -15,23 +21,27 @@ export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
     },
     {
       label: "Koszt AI",
-      value: `${formatUsd(data.business.ai_cost_usd_month)}`,
-      detail: "suma kosztów z interaction_log",
+      value: formatUsd(data.business.ai_cost_usd_month),
+      detail: `${formatPln(data.business.ai_cost_pln_month)} po kursie z env`,
+      quality: data.data_quality.ai_cost_pln_month,
     },
     {
-      label: "Marża brutto",
-      value: formatPln(data.business.estimated_gross_margin_pln),
-      detail: "bez estymacji kosztów poza AI",
+      label: "Marża po AI",
+      value: formatPln(data.business.gross_margin_after_ai_pln),
+      detail: "MRR minus koszt AI w PLN",
+      quality: data.data_quality.gross_margin_after_ai_pln,
     },
     {
       label: "Aktywni 7 dni",
       value: formatNumber(data.business.active_7d_accounts),
-      detail: "konta z aktywnością w logu",
+      detail: "konta z interakcją w ostatnich 7 dniach",
+      quality: data.data_quality.active_7d_accounts,
     },
     {
       label: "Pending payment",
       value: formatNumber(data.business.pending_payment_accounts),
       detail: `${formatPln(data.business.pending_payment_pln)} do odzyskania`,
+      quality: data.data_quality.pending_payment_pln,
       warn: true,
     },
   ];
@@ -54,13 +64,10 @@ export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
 
       <section className="grid gap-3 xl:grid-cols-[1.1fr_1fr_0.55fr]">
         <Panel title="Przychód vs koszt AI" subtitle="bieżący miesiąc">
-          <RevenueCostChart
-            revenue={data.business.mrr_pln}
-            aiCost={data.business.ai_cost_usd_month}
-          />
+          <RevenueCostChart trends={data.trends} />
         </Panel>
 
-        <Panel title="Lejek Agent-OZE" subtitle="od rejestracji do pierwszej oferty">
+        <Panel title="Lejek Agent OZE" subtitle="od rejestracji do pierwszej oferty">
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
             {data.funnel.map((step, index) => (
               <div
@@ -177,21 +184,44 @@ function Kpi({
   label,
   value,
   detail,
+  quality,
   warn = false,
 }: {
   label: string;
   value: string;
   detail: string;
+  quality?: OwnerDataQuality;
   warn?: boolean;
 }) {
   return (
     <div className="p-4">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+        {quality ? <QualityBadge quality={quality} /> : null}
+      </div>
       <p className={warn ? "mt-2 text-3xl font-semibold text-amber-300" : "mt-2 text-3xl font-semibold text-[#3DFF7A]"}>
         {value}
       </p>
       <p className="mt-2 text-xs leading-5 text-zinc-500">{detail}</p>
     </div>
+  );
+}
+
+export function QualityBadge({ quality }: { quality: OwnerDataQuality }) {
+  const normalized = String(quality || "missing");
+  const label =
+    normalized === "real" ? "realne" : normalized === "estimated" ? "szacunek" : "brak danych";
+  const className =
+    normalized === "real"
+      ? "border-[#3DFF7A]/25 bg-[#3DFF7A]/10 text-[#3DFF7A]"
+      : normalized === "estimated"
+        ? "border-amber-300/25 bg-amber-300/10 text-amber-200"
+        : "border-white/10 bg-white/[0.04] text-zinc-500";
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${className}`}>
+      {label}
+    </span>
   );
 }
 
@@ -207,7 +237,7 @@ export function OwnerPanel({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3DFF7A]">Agent-OZE Admin</p>
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#3DFF7A]">Agent OZE Admin</p>
         <h1 className="mt-3 text-3xl font-semibold text-white">{title}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p>
       </div>
@@ -245,9 +275,17 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RevenueCostChart({ revenue, aiCost }: { revenue: number; aiCost: number }) {
-  const revenueHeight = Math.min(82, Math.max(8, revenue > 0 ? 68 : 8));
-  const costHeight = Math.min(82, Math.max(8, aiCost > 0 ? 28 : 8));
+function RevenueCostChart({ trends }: { trends: OwnerTrendPoint[] }) {
+  if (trends.length === 0) {
+    return <EmptyLine>Historia zacznie się po pierwszym dziennym syncu.</EmptyLine>;
+  }
+
+  const max = Math.max(
+    1,
+    ...trends.map((point) =>
+      Math.max(point.mrr_pln, point.revenue_pln_month, point.gross_margin_after_ai_pln, point.ai_cost_pln_month),
+    ),
+  );
 
   return (
     <div className="mt-5">
@@ -257,39 +295,40 @@ function RevenueCostChart({ revenue, aiCost }: { revenue: number; aiCost: number
           <span>śr.</span>
           <span>0</span>
         </div>
-        <div className="grid grid-cols-2 items-end gap-8">
-          <ChartBar label="Przychód" value={formatPln(revenue)} height={revenueHeight} tone="green" />
-          <ChartBar label="Koszt AI" value={formatUsd(aiCost)} height={costHeight} tone="muted" />
+        <div className="grid items-end gap-3" style={{ gridTemplateColumns: `repeat(${trends.length}, minmax(44px, 1fr))` }}>
+          {trends.map((point) => (
+            <div key={point.date} className="grid h-full items-end gap-2">
+              <div className="grid h-32 grid-cols-2 items-end gap-1">
+                <div
+                  className="rounded-t-[6px] bg-[#3DFF7A] shadow-[0_0_24px_rgba(61,255,122,0.16)]"
+                  style={{ height: `${barHeight(point.revenue_pln_month || point.mrr_pln, max)}%` }}
+                  title={`Przychód: ${formatPln(point.revenue_pln_month || point.mrr_pln)}`}
+                />
+                <div
+                  className="rounded-t-[6px] bg-white/35"
+                  style={{ height: `${barHeight(point.ai_cost_pln_month, max)}%` }}
+                  title={`Koszt AI: ${formatPln(point.ai_cost_pln_month)}`}
+                />
+              </div>
+              <div>
+                <p className="truncate text-sm font-semibold text-white">
+                  {formatPln(point.gross_margin_after_ai_pln)}
+                </p>
+                <p className="text-[11px] text-zinc-500">{formatTrendDate(point.date)}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ChartBar({
-  label,
-  value,
-  height,
-  tone,
-}: {
-  label: string;
-  value: string;
-  height: number;
-  tone: "green" | "muted";
-}) {
-  return (
-    <div className="grid h-full items-end gap-2">
-      <div
-        className={
-          tone === "green"
-            ? "rounded-t-[8px] bg-[#3DFF7A] shadow-[0_0_24px_rgba(61,255,122,0.18)]"
-            : "rounded-t-[8px] bg-white/35"
-        }
-        style={{ height: `${height}%` }}
-      />
-      <div>
-        <p className="text-sm font-semibold text-white">{value}</p>
-        <p className="text-[11px] text-zinc-500">{label}</p>
+      <div className="mt-3 flex gap-4 text-[11px] text-zinc-500">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[#3DFF7A]" />
+          przychód
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-white/35" />
+          koszt AI w PLN
+        </span>
       </div>
     </div>
   );
@@ -395,4 +434,13 @@ function formatUsd(value: number) {
 
 function formatPercent(value: number) {
   return `${formatNumber(value || 0)}%`;
+}
+
+function barHeight(value: number, max: number) {
+  return Math.min(100, Math.max(4, (value / max) * 100));
+}
+
+function formatTrendDate(value: string) {
+  const [, month, day] = value.split("-");
+  return month && day ? `${day}.${month}` : value;
 }

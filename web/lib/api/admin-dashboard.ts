@@ -20,15 +20,40 @@ export type OwnerAttentionRow = {
   detail: string;
 };
 
+export type OwnerDataQuality = "real" | "estimated" | "missing" | string;
+
+export type OwnerTrendPoint = {
+  date: string;
+  mrr_pln: number;
+  revenue_pln_month: number;
+  ai_cost_usd_month: number;
+  ai_cost_pln_month: number;
+  gross_margin_after_ai_pln: number;
+  active_paid_accounts: number;
+  pending_payment_accounts: number;
+  active_7d_accounts: number;
+};
+
+export type OwnerSyncStatus = {
+  last_run_at: string | null;
+  ok: boolean | null;
+  skipped: boolean | null;
+  contacts: number;
+  calendar_events: number;
+  errors: unknown[];
+};
+
 export type OwnerDashboardData = {
   business: {
     mrr_pln: number;
+    revenue_pln_month: number;
     active_paid_accounts: number;
     pending_payment_accounts: number;
     pending_payment_pln: number;
     canceled_accounts: number;
     ai_cost_usd_month: number;
-    estimated_gross_margin_pln: number;
+    ai_cost_pln_month: number;
+    gross_margin_after_ai_pln: number;
     active_7d_accounts: number;
   };
   funnel: Array<{ label: string; count: number; conversion_pct: number }>;
@@ -51,6 +76,9 @@ export type OwnerDashboardData = {
     sheets_url: string | null;
     calendar_url: string | null;
   };
+  trends: OwnerTrendPoint[];
+  sync: OwnerSyncStatus;
+  data_quality: Record<string, OwnerDataQuality>;
   error?: string | null;
 };
 
@@ -58,12 +86,14 @@ export function emptyOwnerDashboardData(error: string | null = null): OwnerDashb
   return {
     business: {
       mrr_pln: 0,
+      revenue_pln_month: 0,
       active_paid_accounts: 0,
       pending_payment_accounts: 0,
       pending_payment_pln: 0,
       canceled_accounts: 0,
       ai_cost_usd_month: 0,
-      estimated_gross_margin_pln: 0,
+      ai_cost_pln_month: 0,
+      gross_margin_after_ai_pln: 0,
       active_7d_accounts: 0,
     },
     funnel: [
@@ -94,6 +124,24 @@ export function emptyOwnerDashboardData(error: string | null = null): OwnerDashb
       sheets_url: null,
       calendar_url: null,
     },
+    trends: [],
+    sync: {
+      last_run_at: null,
+      ok: null,
+      skipped: null,
+      contacts: 0,
+      calendar_events: 0,
+      errors: [],
+    },
+    data_quality: {
+      mrr_pln: "missing",
+      revenue_pln_month: "missing",
+      pending_payment_pln: "missing",
+      ai_cost_usd_month: "missing",
+      ai_cost_pln_month: "missing",
+      gross_margin_after_ai_pln: "missing",
+      active_7d_accounts: "missing",
+    },
     error,
   };
 }
@@ -122,9 +170,38 @@ export async function getOwnerDashboardData(
       return emptyOwnerDashboardData(`API admina zwróciło status ${response.status}.`);
     }
 
+    const fallback = emptyOwnerDashboardData();
+    const payload = (await response.json()) as Partial<OwnerDashboardData>;
+
     return {
-      ...emptyOwnerDashboardData(),
-      ...((await response.json()) as OwnerDashboardData),
+      ...fallback,
+      ...payload,
+      business: {
+        ...fallback.business,
+        ...payload.business,
+      },
+      oze: {
+        ...fallback.oze,
+        ...payload.oze,
+      },
+      operations: {
+        ...fallback.operations,
+        ...payload.operations,
+      },
+      links: {
+        ...fallback.links,
+        ...payload.links,
+      },
+      sync: {
+        ...fallback.sync,
+        ...payload.sync,
+      },
+      data_quality: {
+        ...fallback.data_quality,
+        ...payload.data_quality,
+      },
+      trends: payload.trends ?? fallback.trends,
+      funnel: payload.funnel ?? fallback.funnel,
       error: null,
     };
   } catch {

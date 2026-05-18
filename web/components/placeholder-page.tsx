@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLink } from "@/components/brand";
 
 type PlaceholderPageProps = {
   eyebrow: string;
@@ -30,15 +31,7 @@ export function PlaceholderPage({
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8">
         <header className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-3 text-sm font-semibold text-white"
-          >
-            <span className="grid h-8 w-8 place-items-center rounded-full border border-[#3DFF7A]/40 bg-[#3DFF7A]/10 shadow-[0_0_24px_rgba(61,255,122,0.18)]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#3DFF7A]" />
-            </span>
-            OZE Agent
-          </Link>
+          <BrandLink href="/" className="text-sm font-semibold text-white" />
           <Link
             href="/"
             className="rounded-full border border-white/12 px-4 py-2 text-sm text-zinc-300 transition hover:border-[#3DFF7A]/60 hover:text-white"

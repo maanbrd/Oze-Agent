@@ -1,4 +1,5 @@
 import { createGoogleResourcesAction } from "@/app/onboarding/actions";
+import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { ResourceSubmitButton } from "@/components/onboarding/resource-submit-button";
 import { requireOnboardingStep } from "@/lib/auth/guards";
@@ -38,14 +39,15 @@ export default async function ResourcesPage({
   const defaultName =
     cleanResourceOwnerName(profile?.name) ||
     cleanResourceOwnerName(profile?.email) ||
-    "Agent-OZE";
+    "Agent OZE";
 
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-zinc-100">
       <section className="mx-auto max-w-3xl">
-        <div className="mb-8 flex justify-end">
+        <header className="mb-8 flex items-center justify-between">
+          <BrandLink href="/" className="text-sm font-semibold text-white" />
           <LogoutLink />
-        </div>
+        </header>
         <p className="text-xs font-semibold uppercase text-[#3DFF7A]">Krok 4</p>
         <h1 className="mt-3 text-4xl font-semibold text-white">
           Zasoby Google.
@@ -64,7 +66,7 @@ export default async function ResourcesPage({
             Nazwa arkusza Sheets
             <input
               name="sheetsName"
-              defaultValue={`Agent-OZE CRM - ${defaultName}`}
+              defaultValue={`Agent OZE CRM - ${defaultName}`}
               className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
             />
           </label>
@@ -72,7 +74,7 @@ export default async function ResourcesPage({
             Nazwa kalendarza
             <input
               name="calendarName"
-              defaultValue={`Agent-OZE - ${defaultName}`}
+              defaultValue={`Agent OZE - ${defaultName}`}
               className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
             />
           </label>

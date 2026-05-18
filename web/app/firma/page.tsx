@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { BrandLink } from "@/components/brand";
 import { FirmaContactForm } from "@/components/firma-contact-form";
 
 const G = "#3DFF7A";
 
 export const metadata = {
-  title: "Agent OZE dla firm | OZE Agent",
+  title: "Agent OZE dla firm | Agent OZE",
   description:
     "Agent OZE skrojony pod Twoją firmę. Prosty formularz kontaktowy dla właścicieli firm OZE.",
 };
@@ -50,42 +51,7 @@ export default function FirmaPage() {
             gap: 18,
           }}
         >
-          <Link
-            href="/"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 10,
-              color: "#fff",
-              textDecoration: "none",
-              fontWeight: 700,
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                border: `2px solid ${G}`,
-                boxShadow: "0 0 4px rgba(61,255,122,0.18)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: G,
-                  boxShadow: "none",
-                }}
-              />
-            </span>
-            OZE Agent
-          </Link>
+          <BrandLink href="/" style={{ fontWeight: 700 }} />
           <Link
             href="/"
             style={{

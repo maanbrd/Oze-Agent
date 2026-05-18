@@ -74,15 +74,15 @@ export function checkoutConfigErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "";
 
   if (message.includes("Missing STRIPE_SECRET_KEY")) {
-    return "Płatność nie jest jeszcze skonfigurowana. Wróć później albo skontaktuj się z obsługą Agent-OZE.";
+    return "Płatność nie jest jeszcze skonfigurowana. Wróć później albo skontaktuj się z obsługą Agent OZE.";
   }
 
   if (message.includes("Missing Stripe price reference")) {
-    return "Plan płatności nie jest jeszcze skonfigurowany. Wróć później albo skontaktuj się z obsługą Agent-OZE.";
+    return "Plan płatności nie jest jeszcze skonfigurowany. Wróć później albo skontaktuj się z obsługą Agent OZE.";
   }
 
   if (message.includes("No active Stripe price found for lookup key")) {
-    return "Nie udało się znaleźć aktywnego planu płatności. Wróć później albo skontaktuj się z obsługą Agent-OZE.";
+    return "Nie udało się znaleźć aktywnego planu płatności. Wróć później albo skontaktuj się z obsługą Agent OZE.";
   }
 
   return "Nie udało się uruchomić płatności. Sprawdź konfigurację Stripe.";

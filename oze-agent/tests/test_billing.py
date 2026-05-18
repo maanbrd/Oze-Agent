@@ -1,278 +1,284 @@
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+from datetime import datetime, timezone
+
 import pytest
 from fastapi import HTTPException
 
 
+class _FakeResult:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeTable:
+    def __init__(self, supabase, name: str):
+        self.supabase = supabase
+        self.name = name
+        self._update_payload: dict | None = None
+        self._insert_payload: dict | None = None
+        self._eq: tuple[str, object] | None = None
+
+    def insert(self, payload: dict):
+        self._insert_payload = payload
+        return self
+
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def update(self, payload: dict):
+        self._update_payload = payload
+        return self
+
+    def eq(self, key: str, value: object):
+        self._eq = (key, value)
+        return self
+
+    def limit(self, *_args, **_kwargs):
+        return self
+
+    def execute(self):
+        if self.name == "webhook_log" and self._insert_payload is not None:
+            self.supabase.webhook_logs.append(self._insert_payload)
+            return _FakeResult([self._insert_payload])
+
+        if self.name == "payment_history" and self._insert_payload is not None:
+            event_id = self._insert_payload.get("stripe_event_id")
+            if event_id and any(row.get("stripe_event_id") == event_id for row in self.supabase.payment_history):
+                return _FakeResult([])
+            self.supabase.payment_history.append(self._insert_payload)
+            return _FakeResult([self._insert_payload])
+
+        if self.name != "users":
+            return _FakeResult([])
+
+        rows = self.supabase.users
+        if self._eq is not None:
+            key, value = self._eq
+            rows = [row for row in rows if row.get(key) == value]
+
+        if self._update_payload is not None:
+            for row in rows:
+                row.update(self._update_payload)
+            return _FakeResult(rows)
+
+        return _FakeResult(rows)
+
+
+class _FakeSupabase:
+    def __init__(self):
+        self.users = [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "pending_payment",
+                "activation_paid": False,
+                "stripe_subscription_id": "sub_123",
+                "stripe_customer_id": "cus_123",
+            }
+        ]
+        self.webhook_logs: list[dict] = []
+        self.payment_history: list[dict] = []
+
+    def table(self, name: str):
+        return _FakeTable(self, name)
+
+
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        value = datetime.fromtimestamp(1778019000, tz=timezone.utc)
+        return value if tz else value.replace(tzinfo=None)
+
+
+def _signed_headers(body: bytes, secret: str, timestamp: str = "1778019000"):
+    digest = hmac.new(
+        secret.encode(),
+        f"{timestamp}.".encode() + body,
+        hashlib.sha256,
+    ).hexdigest()
+    return {
+        "x-oze-timestamp": timestamp,
+        "x-oze-signature": f"sha256={digest}",
+    }
+
+
 def test_verify_internal_signature_accepts_valid_hmac(monkeypatch):
     from api.routes import billing
-    from bot.config import Config
 
-    monkeypatch.setattr(Config, "BILLING_INTERNAL_SECRET", "test-secret")
-    raw_body = b'{"id":"evt_1"}'
-    timestamp = "1000"
-    signature = billing._expected_signature(raw_body, timestamp, "test-secret")
+    secret = "test-secret"
+    body = b'{"id":"evt_1"}'
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
 
-    billing.verify_internal_signature(raw_body, timestamp, signature, now=1000)
+    billing._verify_internal_signature(body, _signed_headers(body, secret))
 
 
 def test_verify_internal_signature_rejects_stale_timestamp(monkeypatch):
     from api.routes import billing
-    from bot.config import Config
 
-    monkeypatch.setattr(Config, "BILLING_INTERNAL_SECRET", "test-secret")
-    raw_body = b'{"id":"evt_1"}'
-    signature = billing._expected_signature(raw_body, "1000", "test-secret")
+    secret = "test-secret"
+    body = b'{"id":"evt_1"}'
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
 
     with pytest.raises(HTTPException) as exc:
-        billing.verify_internal_signature(raw_body, "1000", signature, now=2000)
+        billing._verify_internal_signature(body, _signed_headers(body, secret, "1000"))
 
     assert exc.value.status_code == 401
 
 
 def test_verify_internal_signature_rejects_bad_signature(monkeypatch):
     from api.routes import billing
-    from bot.config import Config
 
-    monkeypatch.setattr(Config, "BILLING_INTERNAL_SECRET", "test-secret")
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", "test-secret")
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
 
     with pytest.raises(HTTPException) as exc:
-        billing.verify_internal_signature(
+        billing._verify_internal_signature(
             b'{"id":"evt_1"}',
-            "1000",
-            "sha256=bad",
-            now=1000,
+            {
+                "x-oze-timestamp": "1778019000",
+                "x-oze-signature": "sha256=bad",
+            },
         )
 
     assert exc.value.status_code == 401
 
 
-def test_process_stripe_event_skips_processed_duplicate(monkeypatch):
+@pytest.mark.asyncio
+async def test_unsupported_stripe_event_is_logged_without_processing(monkeypatch):
     from api.routes import billing
 
-    monkeypatch.setattr(
-        billing,
-        "_get_existing_log",
-        lambda event_id: {"id": "log-1", "processed": True},
-    )
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_unknown",
+        "type": "customer.created",
+        "object": {"object": "customer", "id": "cus_123"},
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
 
-    result = billing.process_stripe_event(
-        {
-            "id": "evt_1",
-            "type": "checkout.session.completed",
-            "object": {"object": "checkout.session"},
-        }
-    )
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
 
-    assert result == {"processed": False, "duplicate": True}
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result == {"received": True, "processed": False}
+    assert fake.webhook_logs[0]["processed"] is False
+    assert fake.payment_history == []
 
 
-def test_process_stripe_event_rejects_live_mode(monkeypatch):
+@pytest.mark.asyncio
+async def test_checkout_completed_does_not_activate_until_paid(monkeypatch):
     from api.routes import billing
 
-    monkeypatch.setattr(billing, "_get_existing_log", lambda event_id: None)
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_unpaid",
+        "type": "checkout.session.completed",
+        "object": {
+            "object": "checkout.session",
+            "id": "cs_1",
+            "mode": "subscription",
+            "status": "open",
+            "payment_status": "unpaid",
+            "metadata": {"user_id": "user-1", "plan": "monthly"},
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
 
     with pytest.raises(HTTPException) as exc:
-        billing.process_stripe_event(
-            {
-                "id": "evt_live",
-                "type": "checkout.session.completed",
-                "livemode": True,
-                "object": {"object": "checkout.session", "payment_status": "paid"},
-            }
-        )
+        await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
 
-    assert exc.value.status_code == 400
-    assert "Live Stripe events are disabled" in exc.value.detail
+    assert exc.value.status_code == 409
+    assert fake.users[0]["subscription_status"] == "pending_payment"
+    assert fake.payment_history == []
 
 
-def test_checkout_completed_does_not_activate_until_paid(monkeypatch):
+@pytest.mark.asyncio
+async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(monkeypatch):
     from api.routes import billing
 
-    marked = []
-    monkeypatch.setattr(billing, "_get_existing_log", lambda event_id: None)
-    monkeypatch.setattr(billing, "_insert_log", lambda payload: "log-1")
-    monkeypatch.setattr(billing, "_mark_log_processed", lambda log_id: marked.append(log_id))
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_invoice",
+        "type": "invoice.payment_succeeded",
+        "object": {
+            "object": "invoice",
+            "id": "in_1",
+            "customer": "cus_123",
+            "subscription": "sub_123",
+            "amount_paid": 39900,
+            "currency": "pln",
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
 
-    result = billing.process_stripe_event(
-        {
-            "id": "evt_unpaid",
-            "type": "checkout.session.completed",
-            "object": {
-                "object": "checkout.session",
-                "id": "cs_1",
-                "payment_status": "unpaid",
-                "metadata": {"user_id": "user-1", "plan": "monthly"},
-            },
-        }
-    )
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
 
-    assert result["activated"] is False
-    assert result["reason"] == "payment_not_paid"
-    assert marked == ["log-1"]
-
-
-class _FakeSupabase:
-    def __init__(self):
-        self.current_table = None
-        self.updates = []
-        self.inserts = []
-        self.filters = []
-
-    def table(self, name):
-        self.current_table = name
-        return self
-
-    def select(self, _fields):
-        return self
-
-    def update(self, data):
-        self.updates.append((self.current_table, data))
-        return self
-
-    def insert(self, data):
-        self.inserts.append((self.current_table, data))
-        return self
-
-    def eq(self, key, value):
-        self.filters.append((self.current_table, key, value))
-        return self
-
-    def limit(self, _count):
-        return self
-
-    def execute(self):
-        class Result:
-            data = []
-
-        return Result()
-
-
-def test_checkout_paid_activates_user_and_records_side_effects(monkeypatch):
-    from api.routes import billing
-
-    fake_db = _FakeSupabase()
-    payments = []
-    outbox = []
-
-    monkeypatch.setattr(billing, "_get_existing_log", lambda event_id: None)
-    monkeypatch.setattr(billing, "_insert_log", lambda payload: "log-1")
-    monkeypatch.setattr(billing, "_mark_log_processed", lambda log_id: None)
-    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake_db)
-    monkeypatch.setattr(
-        billing,
-        "_insert_payment_history",
-        lambda user_id, event_id, obj, payment_type: payments.append(
-            (user_id, event_id, payment_type)
-        ),
-    )
-    monkeypatch.setattr(
-        billing,
-        "_insert_outbox",
-        lambda user_id, event_id, event_type, payload: outbox.append(
-            (user_id, event_id, event_type)
-        ),
-    )
-
-    result = billing.process_stripe_event(
-        {
-            "id": "evt_paid",
-            "type": "checkout.session.completed",
-            "object": {
-                "object": "checkout.session",
-                "id": "cs_1",
-                "payment_status": "paid",
-                "customer": "cus_1",
-                "subscription": "sub_1",
-                "amount_total": 24800,
-                "currency": "pln",
-                "metadata": {"user_id": "user-1", "plan": "monthly"},
-            },
-        }
-    )
-
-    assert result["activated"] is True
-    assert ("users", "id", "user-1") in fake_db.filters
-    assert fake_db.updates[0][1]["subscription_status"] == "active"
-    assert fake_db.updates[0][1]["activation_paid"] is True
-    assert payments == [("user-1", "evt_paid", "stripe_checkout")]
-    assert outbox == [("user-1", "evt_paid", "billing_activated")]
-
-
-def test_checkout_paid_requires_user_metadata(monkeypatch):
-    from api.routes import billing
-
-    monkeypatch.setattr(billing, "_get_existing_log", lambda event_id: None)
-    monkeypatch.setattr(billing, "_insert_log", lambda payload: "log-1")
-
-    with pytest.raises(HTTPException) as exc:
-        billing.process_stripe_event(
-            {
-                "id": "evt_no_user",
-                "type": "checkout.session.completed",
-                "object": {
-                    "object": "checkout.session",
-                    "id": "cs_1",
-                    "payment_status": "paid",
-                    "metadata": {},
-                },
-            }
-        )
-
-    assert exc.value.status_code == 422
-
-
-def test_invoice_paid_resolves_parent_subscription_details(monkeypatch):
-    from api.routes import billing
-
-    fake_db = _FakeSupabase()
-    marked = []
-
-    monkeypatch.setattr(billing, "_get_existing_log", lambda event_id: None)
-    monkeypatch.setattr(billing, "_insert_log", lambda payload: "log-1")
-    monkeypatch.setattr(billing, "_mark_log_processed", lambda log_id: marked.append(log_id))
-    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake_db)
-
-    result = billing.process_stripe_event(
-        {
-            "id": "evt_invoice",
-            "type": "invoice.payment_succeeded",
-            "object": {
-                "object": "invoice",
-                "id": "in_1",
-                "customer": "cus_1",
-                "subscription": None,
-                "amount_paid": 24800,
-                "currency": "pln",
-                "metadata": {},
-                "parent": {
-                    "type": "subscription_details",
-                    "subscription_details": {
-                        "subscription": "sub_1",
-                        "metadata": {
-                            "user_id": "user-1",
-                            "plan": "monthly",
-                        },
-                    },
-                },
-            },
-        }
-    )
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
 
     assert result["processed"] is True
-    assert result["user_id"] == "user-1"
-    assert ("users", "id", "user-1") in fake_db.filters
-    assert fake_db.updates[0][1]["subscription_status"] == "active"
-    assert fake_db.updates[0][1]["stripe_subscription_id"] == "sub_1"
+    assert fake.users[0]["subscription_status"] == "active"
+    assert fake.payment_history == [
+        {
+            "user_id": "user-1",
+            "amount_pln": 399.0,
+            "type": "invoice.payment_succeeded",
+            "status": "paid",
+            "stripe_event_id": "evt_invoice",
+            "stripe_checkout_session_id": "",
+            "stripe_invoice_id": "in_1",
+            "stripe_subscription_id": "sub_123",
+            "stripe_customer_id": "cus_123",
+            "currency": "pln",
+        }
+    ]
 
-    payment_insert = next(
-        data for table, data in fake_db.inserts if table == "payment_history"
-    )
-    assert payment_insert["stripe_event_id"] == "evt_invoice"
-    assert payment_insert["stripe_invoice_id"] == "in_1"
-    assert payment_insert["stripe_subscription_id"] == "sub_1"
-    assert payment_insert["amount_pln"] == 248.0
-    assert payment_insert["type"] == "stripe_invoice"
 
-    outbox_insert = next(data for table, data in fake_db.inserts if table == "billing_outbox")
-    assert outbox_insert["stripe_event_id"] == "evt_invoice"
-    assert outbox_insert["event_type"] == "billing_invoice_paid"
-    assert marked == ["log-1"]
+@pytest.mark.asyncio
+async def test_subscription_deleted_cancels_user_and_logs_zero_amount_snapshot(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    fake.users[0]["subscription_status"] = "active"
+    fake.users[0]["activation_paid"] = True
+    event = {
+        "id": "evt_sub_deleted",
+        "type": "customer.subscription.deleted",
+        "object": {
+            "object": "subscription",
+            "id": "sub_123",
+            "customer": "cus_123",
+            "status": "canceled",
+            "currency": "pln",
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "canceled"
+    assert fake.users[0]["activation_paid"] is False
+    assert fake.payment_history[0]["amount_pln"] == 0.0
+    assert fake.payment_history[0]["status"] == "canceled"

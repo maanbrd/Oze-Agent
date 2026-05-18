@@ -6,7 +6,7 @@ const faqSections = [
       {
         question: "Gdzie są dane klientów?",
         answer:
-          "Dane są na Twoim koncie Google: klienci w Arkuszach Google, spotkania i telefony w Kalendarzu Google, zdjęcia na Dysku Google. Polecamy osobne konto Google do pracy z Agent-OZE; dla firmy najlepszym rozwiązaniem jest Google Workspace, bo łatwiej zarządzać dostępem, własnością danych i miejscem na Drive.",
+          "Dane są na Twoim koncie Google: klienci w Arkuszach Google, spotkania i telefony w Kalendarzu Google, zdjęcia na Dysku Google. Polecamy osobne konto Google do pracy z Agent OZE; dla firmy najlepszym rozwiązaniem jest Google Workspace, bo łatwiej zarządzać dostępem, własnością danych i miejscem na Drive.",
       },
       {
         question: "Czy muszę zakładać nowe konto Google?",
