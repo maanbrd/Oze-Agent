@@ -303,7 +303,7 @@ export function OwnerSettingsDashboard({ data }: { data: OwnerDashboardData }) {
       <DashboardError error={data.error} />
       <div className="grid gap-3 xl:grid-cols-3">
         <Panel title="Dostęp admina" subtitle="OWNER_ADMIN_EMAILS">
-          <SettingsStatus label="Aktualny admin" value="lukaszfathioze@gmail.com" ok />
+          <SettingsStatus label="Allowlista adminów" value="skonfigurowana w env" ok />
           <p className="mt-4 text-sm leading-6 text-zinc-400">
             Tylko email z listy owner admin może wejść na `/admin`. Zwykły
             użytkownik dostaje ukrytą stronę zamiast panelu właściciela.

@@ -153,6 +153,10 @@ test("owner dashboard labels estimated metrics and does not fake trends", () => 
   assert.equal(ownerAdminViewsSource.includes("Marża brutto"), false);
 });
 
+test("owner admin settings view does not expose the legacy personal Gmail", () => {
+  assert.equal(ownerAdminViewsSource.includes("@gmail.com"), false);
+});
+
 test("old admin mirror preview route is removed after production admin layer exists", () => {
   assert.equal(existsSync(adminMirrorPreviewPath), false);
 });
