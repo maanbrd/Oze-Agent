@@ -3,6 +3,7 @@ import { CrmShell } from "@/components/crm-shell";
 import { getCurrentAccount } from "@/lib/api/account";
 import { getDecisionsCount } from "@/lib/api/decisions";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
+import { isOwnerAdminAccount } from "@/lib/admin/owner-admin";
 import { safeLocalPath } from "@/lib/routes";
 
 export default async function LoggedInLayout({
@@ -13,6 +14,10 @@ export default async function LoggedInLayout({
   const account = await getCurrentAccount();
   if (!account.authenticated) {
     redirect("/login?next=/dashboard");
+  }
+
+  if (isOwnerAdminAccount(account)) {
+    redirect("/admin");
   }
 
   const onboardingStatus = await getOnboardingStatus();

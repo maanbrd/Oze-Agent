@@ -23,7 +23,7 @@ from bot.handlers.photo import handle_photo
 from bot.handlers.start import start_command
 from bot.handlers.text import handle_refresh_columns_command, handle_text
 from bot.handlers.voice import handle_voice
-from bot.scheduler import register_morning_brief
+from bot.scheduler import register_admin_mirror, register_morning_brief
 
 logging.basicConfig(
     level=logging.INFO,
@@ -97,6 +97,7 @@ def main():
     app.add_error_handler(error_handler)
 
     register_morning_brief(app)
+    register_admin_mirror(app)
 
     if Config.ENV == "dev":
         logger.info("Starting bot in POLLING mode (dev)")

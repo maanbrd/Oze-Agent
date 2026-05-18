@@ -152,6 +152,11 @@ Dane systemowe żyją w Supabase:
 
 Nie mieszamy tych dwóch światów.
 
+**Owner admin mirror** jest wyjątkiem raportowym, nie nowym źródłem prawdy:
+codzienna kopia danych operacyjnych może trafiać do właścicielskiego Google
+Sheets / Google Calendar w celu administracji, backupu i analizy. Źródłem CRM
+dla użytkownika pozostaje jego Google Sheets / Calendar / Drive.
+
 ### Sheets schema
 
 Kanoniczny schemat arkusza jest w `INTENCJE_MVP.md`.

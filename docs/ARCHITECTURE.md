@@ -67,6 +67,16 @@ in Google Sheets. PDFs are generated for preview/send but are not archived in MV
 
 ---
 
+## Owner Admin Mirror
+
+The owner-facing admin mirror is an operational copy, not a CRM source of truth.
+It runs from the backend scheduler and writes daily snapshots to the owner's
+Google Sheets plus future appointment copies to the owner's Google Calendar.
+It may read CRM rows from user Google Sheets and system rows from Supabase, but
+Telegram/web runtime behavior must keep using the user's own Google resources.
+
+---
+
 ## Deferred flows
 
 | Component | Current Location | Problem |

@@ -26,6 +26,10 @@ def _clean_env(name: str, default: str = "") -> str:
     return (os.getenv(name, default) or "").strip()
 
 
+def _env_bool(name: str, default: str = "false") -> bool:
+    return _clean_env(name, default).lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
     # Core
     ENV = os.getenv("ENV", "dev")
@@ -67,6 +71,13 @@ class Config:
     SENTRY_DSN = _clean_env("SENTRY_DSN")
     ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID", "")
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+    OWNER_ADMIN_EMAILS = _clean_env("OWNER_ADMIN_EMAILS")
+
+    # Owner-facing operational mirror (Sheets + Calendar)
+    ADMIN_MIRROR_ENABLED = _env_bool("ADMIN_MIRROR_ENABLED")
+    ADMIN_MIRROR_GOOGLE_USER_ID = _clean_env("ADMIN_MIRROR_GOOGLE_USER_ID")
+    ADMIN_MIRROR_SPREADSHEET_ID = _clean_env("ADMIN_MIRROR_SPREADSHEET_ID")
+    ADMIN_MIRROR_CALENDAR_ID = _clean_env("ADMIN_MIRROR_CALENDAR_ID")
 
     # URLs
     BASE_URL = os.getenv("BASE_URL", "")
