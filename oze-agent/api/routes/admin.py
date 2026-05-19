@@ -27,13 +27,7 @@ router = APIRouter()
 async def get_owner_admin_dashboard(
     auth_user: AuthUser = Depends(get_current_auth_user),
 ) -> dict[str, Any]:
-    profile = _get_user_profile(auth_user)
-    owner_email = (profile or {}).get("email") or auth_user.email
-    if not is_owner_admin_email(owner_email, Config.OWNER_ADMIN_EMAILS):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner admin access required.",
-        )
+    _require_owner_admin(auth_user)
 
     users = _list_table_rows("users")
     interactions = _list_table_rows("interaction_log")
@@ -62,6 +56,39 @@ async def get_owner_admin_dashboard(
     )
 
 
+@router.get("/admin/user-profiles")
+async def get_owner_user_profiles(
+    auth_user: AuthUser = Depends(get_current_auth_user),
+) -> dict[str, Any]:
+    _require_owner_admin(auth_user)
+    return {"profiles": _build_user_profile_rows()}
+
+
+@router.get("/admin/user-profiles/{user_id}")
+async def get_owner_user_profile(
+    user_id: str,
+    auth_user: AuthUser = Depends(get_current_auth_user),
+) -> dict[str, Any]:
+    _require_owner_admin(auth_user)
+    for row in _build_user_profile_rows():
+        if row["user_id"] == user_id:
+            return {"profile": row}
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="User profile not found.",
+    )
+
+
+def _require_owner_admin(auth_user: AuthUser) -> None:
+    profile = _get_user_profile(auth_user)
+    owner_email = (profile or {}).get("email") or auth_user.email
+    if not is_owner_admin_email(owner_email, Config.OWNER_ADMIN_EMAILS):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner admin access required.",
+        )
+
+
 def _get_user_profile(auth_user: AuthUser) -> dict[str, Any] | None:
     try:
         result = (
@@ -76,6 +103,40 @@ def _get_user_profile(auth_user: AuthUser) -> dict[str, Any] | None:
     except Exception as exc:
         logger.warning("admin.profile_lookup_failed(%s): %s", auth_user.user_id, exc)
         return None
+
+
+def _build_user_profile_rows() -> list[dict[str, Any]]:
+    users = _list_table_rows(
+        "users",
+        "id, name, email, telegram_id, subscription_status, is_suspended, is_deleted",
+    )
+    profiles = _list_table_rows("user_behavior_profiles")
+    users_by_id = {str(user.get("id")): user for user in users if user.get("id")}
+    rows: list[dict[str, Any]] = []
+    for profile in profiles:
+        user_id = str(profile.get("user_id") or "")
+        user = users_by_id.get(user_id, {})
+        rows.append({
+            "user_id": user_id,
+            "telegram_id": profile.get("telegram_id") or user.get("telegram_id"),
+            "name": user.get("name") or "",
+            "email": user.get("email") or "",
+            "subscription_status": user.get("subscription_status") or "",
+            "is_suspended": bool(user.get("is_suspended")),
+            "is_deleted": bool(user.get("is_deleted")),
+            "profile_markdown": profile.get("profile_markdown") or "",
+            "insights_json": profile.get("insights_json") or {},
+            "last_analyzed_message_at": profile.get("last_analyzed_message_at"),
+            "last_run_at": profile.get("last_run_at"),
+            "status": profile.get("status") or "unknown",
+            "error": profile.get("error"),
+            "model": profile.get("model"),
+            "tokens_in": profile.get("tokens_in") or 0,
+            "tokens_out": profile.get("tokens_out") or 0,
+            "cost_usd": profile.get("cost_usd") or 0,
+            "analyzed_messages_count": profile.get("analyzed_messages_count") or 0,
+        })
+    return sorted(rows, key=lambda row: row.get("last_run_at") or "", reverse=True)
 
 
 def _list_table_rows(table_name: str, fields: str = "*", page_size: int = 1000) -> list[dict[str, Any]]:

@@ -11,6 +11,7 @@ const ownerNavItems = [
   ["Analityka danych OZE", "/admin/analityka-danych-oze"],
   ["Operacje i zdrowie", "/admin/operacje-zdrowie"],
   ["Klienci i konta", "/admin/klienci-konta"],
+  ["Profile użytkowników", "/admin/profile-uzytkownikow"],
   ["Płatności i subskrypcje", "/admin/platnosci-subskrypcje"],
   ["Produkty i oferty", "/admin/produkty-oferty"],
   ["Integracje", "/admin/integracje"],

@@ -173,6 +173,42 @@ CREATE TABLE daily_interaction_counts (
     PRIMARY KEY (telegram_id, date)
 );
 
+CREATE TABLE user_behavior_profiles (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    telegram_id BIGINT NOT NULL,
+    profile_markdown TEXT NOT NULL DEFAULT '',
+    insights_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_analyzed_message_at TIMESTAMPTZ,
+    last_run_at TIMESTAMPTZ,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ok', 'skipped', 'failed')),
+    error TEXT,
+    model TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    cost_usd REAL DEFAULT 0,
+    analyzed_messages_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE user_behavior_profile_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    telegram_id BIGINT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('ok', 'skipped', 'failed')),
+    profile_markdown TEXT,
+    insights_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    analyzed_from TIMESTAMPTZ,
+    analyzed_to TIMESTAMPTZ,
+    messages_count INTEGER DEFAULT 0,
+    error TEXT,
+    model TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    cost_usd REAL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE offer_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -253,6 +289,8 @@ CREATE INDEX idx_photo_upload_sessions_expires ON photo_upload_sessions(expires_
 CREATE INDEX idx_daily_counts_date ON daily_interaction_counts(telegram_id, date);
 CREATE INDEX idx_webhook_log_source ON webhook_log(source, created_at DESC);
 CREATE INDEX idx_admin_broadcasts_status ON admin_broadcasts(status);
+CREATE INDEX idx_user_behavior_profiles_last_run ON user_behavior_profiles(last_run_at DESC);
+CREATE INDEX idx_user_behavior_profile_runs_user_created ON user_behavior_profile_runs(user_id, created_at DESC);
 CREATE INDEX idx_offer_templates_user_status_order ON offer_templates(user_id, status, sort_order);
 CREATE INDEX idx_offer_send_attempts_user_created ON offer_send_attempts(user_id, created_at DESC);
 
@@ -275,6 +313,8 @@ ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_broadcasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_interaction_counts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_behavior_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_behavior_profile_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offer_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offer_seller_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offer_send_attempts ENABLE ROW LEVEL SECURITY;
@@ -387,6 +427,52 @@ CREATE INDEX IF NOT EXISTS idx_offer_send_attempts_user_created
 ALTER TABLE offer_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offer_seller_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offer_send_attempts ENABLE ROW LEVEL SECURITY;
+
+-- User behavior profile agent (admin-only system data).
+CREATE TABLE IF NOT EXISTS user_behavior_profiles (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    telegram_id BIGINT NOT NULL,
+    profile_markdown TEXT NOT NULL DEFAULT '',
+    insights_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_analyzed_message_at TIMESTAMPTZ,
+    last_run_at TIMESTAMPTZ,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ok', 'skipped', 'failed')),
+    error TEXT,
+    model TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    cost_usd REAL DEFAULT 0,
+    analyzed_messages_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_behavior_profile_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    telegram_id BIGINT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('ok', 'skipped', 'failed')),
+    profile_markdown TEXT,
+    insights_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    analyzed_from TIMESTAMPTZ,
+    analyzed_to TIMESTAMPTZ,
+    messages_count INTEGER DEFAULT 0,
+    error TEXT,
+    model TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    cost_usd REAL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_behavior_profiles_last_run
+    ON user_behavior_profiles(last_run_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_behavior_profile_runs_user_created
+    ON user_behavior_profile_runs(user_id, created_at DESC);
+
+ALTER TABLE user_behavior_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_behavior_profile_runs ENABLE ROW LEVEL SECURITY;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
