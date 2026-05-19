@@ -34,6 +34,42 @@ export function isPaidCheckoutSessionForAccount(
   );
 }
 
+type StripeSubscriptionDetails = {
+  id: string;
+  status: Stripe.Subscription.Status;
+  current_period_start: unknown;
+  current_period_end: unknown;
+  cancel_at_period_end: unknown;
+  livemode: boolean;
+};
+
+function compactSubscriptionDetails(
+  subscription: Stripe.Subscription,
+): StripeSubscriptionDetails {
+  const raw = subscription as unknown as Record<string, unknown>;
+  return {
+    id: subscription.id,
+    status: subscription.status,
+    current_period_start: raw.current_period_start,
+    current_period_end: raw.current_period_end,
+    cancel_at_period_end: raw.cancel_at_period_end,
+    livemode: subscription.livemode,
+  };
+}
+
+async function enrichCheckoutSession(session: Stripe.Checkout.Session) {
+  const subscriptionRef = session.subscription;
+  const subscriptionId =
+    typeof subscriptionRef === "string" ? subscriptionRef : subscriptionRef?.id;
+  if (!subscriptionId) return session;
+
+  const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+  return {
+    ...session,
+    subscription_details: compactSubscriptionDetails(subscription),
+  };
+}
+
 export async function reconcileCheckoutSession(
   rawSessionId: string | null | undefined,
 ) {
@@ -55,7 +91,7 @@ export async function reconcileCheckoutSession(
     type: "checkout.session.completed",
     created: session.created,
     livemode: session.livemode,
-    object: session,
+    object: await enrichCheckoutSession(session),
   });
 
   return true;

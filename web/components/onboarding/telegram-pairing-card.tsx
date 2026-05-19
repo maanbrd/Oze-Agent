@@ -159,7 +159,7 @@ export function TelegramPairingCard({
               <a
                 href={telegramDeepLink}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className={
                   code && !expired
                     ? "mt-4 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98] sm:w-auto"

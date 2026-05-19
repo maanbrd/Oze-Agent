@@ -102,6 +102,10 @@ def _user(**overrides):
     return data
 
 
+def _future_period_end() -> str:
+    return datetime(2099, 1, 1, tzinfo=timezone.utc).isoformat()
+
+
 def _grant(**overrides):
     data = {
         "id": "grant-1",
@@ -242,7 +246,14 @@ async def test_paid_access_wins_over_revoked_beta_grant(monkeypatch):
     from api.routes import onboarding
 
     fake = _FakeSupabase(
-        users=[_user(subscription_status="active", activation_paid=True)],
+        users=[
+            _user(
+                subscription_status="active",
+                activation_paid=True,
+                stripe_livemode=True,
+                subscription_current_period_end=_future_period_end(),
+            )
+        ],
         beta_access_grants=[_grant(status="revoked", auth_user_id="auth-1")],
     )
     monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)

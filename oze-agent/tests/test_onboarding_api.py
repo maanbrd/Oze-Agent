@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -37,6 +38,14 @@ class _FakeSupabase:
         assert name == "users"
         self.last_query = _FakeQuery(self.rows)
         return self.last_query
+
+
+def _future_period_end() -> str:
+    return (datetime.now(tz=timezone.utc) + timedelta(days=30)).isoformat()
+
+
+def _expired_period_end() -> str:
+    return (datetime.now(tz=timezone.utc) - timedelta(seconds=1)).isoformat()
 
 
 @pytest.mark.asyncio
@@ -119,6 +128,8 @@ async def test_google_oauth_url_uses_authenticated_user(monkeypatch):
                 "email": "jan@example.pl",
                 "subscription_status": "active",
                 "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
             }
         ]
     )
@@ -143,6 +154,82 @@ async def test_google_oauth_url_uses_authenticated_user(monkeypatch):
         "return_url": "https://app.example/onboarding/google/sukces",
     }
     assert "auth-1" not in result["url"]
+
+
+@pytest.mark.asyncio
+async def test_onboarding_status_rejects_paid_access_without_live_stripe(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "stripe_livemode": False,
+                "subscription_current_period_end": _future_period_end(),
+                "google_access_token": None,
+                "google_refresh_token": None,
+                "google_sheets_id": None,
+                "google_calendar_id": None,
+                "google_drive_folder_id": None,
+                "telegram_id": None,
+                "telegram_link_code": None,
+                "telegram_link_code_expires": None,
+                "onboarding_completed": False,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+
+    result = await onboarding.get_onboarding_status(
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
+    )
+
+    assert result["nextStep"] == "/onboarding/platnosc"
+    assert result["steps"]["payment"] is False
+    assert result["access"]["active"] is False
+
+
+@pytest.mark.asyncio
+async def test_onboarding_status_rejects_paid_access_after_period_end(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "active",
+                "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _expired_period_end(),
+                "google_access_token": None,
+                "google_refresh_token": None,
+                "google_sheets_id": None,
+                "google_calendar_id": None,
+                "google_drive_folder_id": None,
+                "telegram_id": None,
+                "telegram_link_code": None,
+                "telegram_link_code_expires": None,
+                "onboarding_completed": False,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+
+    result = await onboarding.get_onboarding_status(
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
+    )
+
+    assert result["nextStep"] == "/onboarding/platnosc"
+    assert result["steps"]["payment"] is False
+    assert result["access"]["active"] is False
 
 
 def test_oauth_state_roundtrip():
@@ -175,6 +262,8 @@ async def test_create_google_resources_only_creates_missing(monkeypatch):
                 "name": "Jan Test",
                 "subscription_status": "active",
                 "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
                 "google_refresh_token": "encrypted",
                 "google_sheets_id": "existing-sheet",
                 "google_sheets_name": "Existing Sheet",
@@ -230,6 +319,8 @@ async def test_create_google_resources_rechecks_user_between_resource_steps(monk
                 "name": "Jan Test",
                 "subscription_status": "active",
                 "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
                 "google_refresh_token": "encrypted",
                 "google_sheets_id": None,
                 "google_sheets_name": None,
@@ -274,6 +365,8 @@ async def test_create_google_resources_serializes_concurrent_requests(monkeypatc
                 "name": "Jan Test",
                 "subscription_status": "active",
                 "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
                 "google_refresh_token": "encrypted",
                 "google_sheets_id": None,
                 "google_sheets_name": None,
@@ -338,6 +431,8 @@ async def test_create_google_resources_persists_partial_success_before_later_fai
                 "name": "Jan Test",
                 "subscription_status": "active",
                 "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
                 "google_refresh_token": "encrypted",
                 "google_sheets_id": "existing-sheet",
                 "google_calendar_id": None,
@@ -371,6 +466,8 @@ async def test_generate_telegram_code_sets_expiry(monkeypatch):
                 "email": "jan@example.pl",
                 "subscription_status": "active",
                 "activation_paid": True,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
                 "google_refresh_token": "encrypted",
                 "google_sheets_id": "sheet-1",
                 "google_calendar_id": "cal-1",

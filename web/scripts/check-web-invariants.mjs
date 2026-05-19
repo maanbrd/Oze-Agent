@@ -19,14 +19,20 @@ function walk(dir) {
 }
 
 const stripeWebhook = read("app/api/webhooks/stripe/route.ts");
+const stripeEvents = read("lib/billing/stripe-events.ts");
 assert.match(stripeWebhook, /livemode/, "Stripe webhook must inspect livemode.");
 assert.match(
   stripeWebhook,
-  /Live Stripe events are disabled|live mode/i,
-  "Stripe webhook must reject live-mode events.",
+  /subscription_details/,
+  "Stripe webhook must enrich forwarded events with subscription details.",
 );
 assert.match(
   stripeWebhook,
+  /current_period_end/,
+  "Stripe webhook must forward subscription period end for access gates.",
+);
+assert.match(
+  stripeEvents,
   /AbortController/,
   "Stripe webhook forwarding must have a timeout guard.",
 );
@@ -65,9 +71,9 @@ assert.match(
   "Logged-in UI must expose the logout server action.",
 );
 assert.match(
-  read("components/app-shell.tsx"),
-  /LogoutButton/,
-  "App shell must render a logout button for authenticated pages.",
+  read("components/crm-shell.tsx"),
+  /LogoutLink|LogoutButton/,
+  "CRM shell must render a logout control for authenticated pages.",
 );
 assert.match(
   read("app/onboarding/layout.tsx"),
@@ -115,11 +121,19 @@ for (const route of [
   "app/(app)/platnosci/page.tsx",
   "app/(app)/ustawienia/page.tsx",
   "app/(app)/import/page.tsx",
-  "app/(app)/instrukcja/page.tsx",
   "app/(app)/faq/page.tsx",
 ]) {
   assert.ok(read(route).length > 200, `${route} must be implemented.`);
 }
+assert.match(
+  read("app/(app)/instrukcja/page.tsx"),
+  /InstructionGuide/,
+  "Instruction route must render the implemented guide component.",
+);
+assert.ok(
+  read("components/instruction-guide.tsx").length > 200,
+  "Instruction guide must be implemented.",
+);
 
 const onboardingHelper = read("lib/api/onboarding.ts");
 const accountHelper = read("lib/api/account.ts");
@@ -303,7 +317,7 @@ for (const route of [
 }
 
 const onboardingGate = read("components/onboarding-gate.tsx");
-const appShell = read("components/app-shell.tsx");
+const crmShell = read("components/crm-shell.tsx");
 const appLayout = read("app/(app)/layout.tsx");
 assert.match(
   onboardingGate,
@@ -316,12 +330,12 @@ assert.match(
   "Onboarding gate must sanitize the next step returned by the backend.",
 );
 assert.match(
-  appShell,
-  /OnboardingGate/,
-  "App shell must render onboarding gate.",
+  appLayout,
+  /safeLocalPath\(onboardingStatus\?\.nextStep/,
+  "Logged-in layout must redirect incomplete onboarding users through the sanitized next step.",
 );
 assert.match(
-  appShell,
+  crmShell,
   /encodeURIComponent/,
   "Google quick links must encode resource IDs before placing them in hrefs.",
 );
@@ -332,8 +346,9 @@ assert.match(
 );
 
 const telegramPage = read("app/onboarding/telegram/page.tsx");
+const telegramPairingCard = read("components/onboarding/telegram-pairing-card.tsx");
 assert.match(
-  telegramPage,
+  telegramPairingCard,
   /\/start/,
   "Telegram onboarding must show /start code command.",
 );

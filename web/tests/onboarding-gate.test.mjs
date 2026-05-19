@@ -205,6 +205,14 @@ test("stripe webhook treats blank env values as missing configuration", () => {
   assert.match(stripeWebhookRouteSource, /Webhook not configured/);
 });
 
+test("stripe webhook enriches subscription events before forwarding", () => {
+  assert.match(stripeWebhookRouteSource, /subscriptions\.retrieve/);
+  assert.match(stripeWebhookRouteSource, /subscription_details/);
+  assert.match(stripeWebhookRouteSource, /current_period_end/);
+  assert.match(stripeWebhookRouteSource, /cancel_at_period_end/);
+  assert.match(stripeWebhookRouteSource, /livemode/);
+});
+
 test("payment success reconciles a paid Checkout session before waiting for webhook", () => {
   assert.match(paymentSuccessPageSource, /searchParams: Promise<\{ session_id\?: string \}>/);
   assert.match(paymentSuccessPageSource, /reconcileCheckoutSession\(params\.session_id\)/);

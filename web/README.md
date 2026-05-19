@@ -55,6 +55,11 @@ STRIPE_WEBHOOK_SECRET=whsec_...     # wymagane dla webhooka po płatności
 STRIPE_PRICE_MONTHLY=price_...      # albo puste: użyje lookup key agent_oze_monthly_399
 ```
 
+Production live używa obecnie ceny `price_1TYiiiFzlMN5xVVkZdOzZRGo`
+(`39900` minor units, `pln`, recurring monthly, product `prod_UXoLeO22grkQXC`).
+Jeśli w Stripe Dashboard ustawisz lookup key `agent_oze_monthly_399` na tej
+cenie, `STRIPE_PRICE_MONTHLY` może używać lookup key zamiast `price_...`.
+
 Jeśli ceny nie istnieją w Stripe, utwórz aktywne Prices albo wpisz istniejące
 `price_...` do `STRIPE_PRICE_MONTHLY`.
 

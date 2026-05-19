@@ -27,6 +27,7 @@ _RESOURCE_CREATION_LOCKS: dict[str, asyncio.Lock] = {}
 USER_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
     "subscription_plan, subscription_current_period_end, activation_paid, "
+    "stripe_livemode, "
     "google_access_token, google_refresh_token, google_token_expiry, "
     "google_sheets_id, google_sheets_name, google_calendar_id, "
     "google_calendar_name, google_drive_folder_id, telegram_id, "
@@ -67,9 +68,32 @@ def _has_resources(user: dict[str, Any]) -> bool:
     )
 
 
+def _parse_period_end(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _has_payment(user: dict[str, Any]) -> bool:
-    return user.get("subscription_status") == "active" and bool(
-        user.get("activation_paid")
+    period_end = _parse_period_end(user.get("subscription_current_period_end"))
+    return (
+        user.get("subscription_status") == "active"
+        and bool(user.get("activation_paid"))
+        and user.get("stripe_livemode") is True
+        and period_end is not None
+        and period_end > datetime.now(tz=timezone.utc)
     )
 
 
@@ -175,6 +199,7 @@ def _status_payload(user: dict[str, Any], auth_user: AuthUser) -> dict[str, Any]
                 "subscription_current_period_end"
             ),
             "activation_paid": user.get("activation_paid"),
+            "stripe_livemode": user.get("stripe_livemode"),
             "google_sheets_id": user.get("google_sheets_id"),
             "google_sheets_name": user.get("google_sheets_name"),
             "google_calendar_id": user.get("google_calendar_id"),

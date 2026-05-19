@@ -13,7 +13,7 @@ export default async function PaymentsPage() {
   const account = await getCurrentAccount();
   const profile = account.profile;
   const status = profile?.subscription_status ?? null;
-  const active = status === "active";
+  const active = isCurrentLivePaid(profile);
   const statusLabel = active ? "Aktywna" : billingStatusLabel(status);
   const periodLabel = active
     ? formatDate(profile?.subscription_current_period_end)
@@ -122,6 +122,20 @@ export default async function PaymentsPage() {
       </section>
     </div>
   );
+}
+
+function isCurrentLivePaid(
+  profile: Awaited<ReturnType<typeof getCurrentAccount>>["profile"],
+) {
+  if (!profile) return false;
+  if (profile.subscription_status !== "active" || !profile.activation_paid) {
+    return false;
+  }
+  if (profile.stripe_livemode !== true) return false;
+  const periodEnd = profile.subscription_current_period_end
+    ? Date.parse(profile.subscription_current_period_end)
+    : Number.NaN;
+  return Number.isFinite(periodEnd) && periodEnd > Date.now();
 }
 
 function BillingState({

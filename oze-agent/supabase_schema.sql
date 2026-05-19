@@ -34,7 +34,12 @@ CREATE TABLE users (
     subscription_status TEXT DEFAULT 'pending_payment',
     subscription_plan TEXT,
     subscription_expires_at TIMESTAMPTZ,
+    subscription_current_period_end TIMESTAMPTZ,
     activation_paid BOOLEAN DEFAULT FALSE,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    stripe_checkout_session_id TEXT,
+    stripe_livemode BOOLEAN DEFAULT FALSE,
     promo_code_used TEXT,
     consent_terms BOOLEAN DEFAULT FALSE,
     consent_marketing BOOLEAN DEFAULT FALSE,
@@ -140,6 +145,13 @@ CREATE TABLE payment_history (
     type TEXT NOT NULL,
     status TEXT NOT NULL,
     przelewy24_order_id TEXT UNIQUE,
+    stripe_event_id TEXT UNIQUE,
+    stripe_checkout_session_id TEXT,
+    stripe_invoice_id TEXT,
+    stripe_subscription_id TEXT,
+    stripe_customer_id TEXT,
+    currency TEXT,
+    stripe_livemode BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -149,6 +161,10 @@ CREATE TABLE webhook_log (
     payload JSONB NOT NULL,
     processed BOOLEAN DEFAULT FALSE,
     duplicate BOOLEAN DEFAULT FALSE,
+    stripe_event_id TEXT UNIQUE,
+    stripe_event_type TEXT,
+    stripe_livemode BOOLEAN DEFAULT FALSE,
+    processed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -79,6 +79,7 @@ class _FakeSupabase:
                 "activation_paid": False,
                 "stripe_subscription_id": "sub_123",
                 "stripe_customer_id": "cus_123",
+                "stripe_livemode": False,
             }
         ]
         self.webhook_logs: list[dict] = []
@@ -105,6 +106,10 @@ def _signed_headers(body: bytes, secret: str, timestamp: str = "1778019000"):
         "x-oze-timestamp": timestamp,
         "x-oze-signature": f"sha256={digest}",
     }
+
+
+def _iso(timestamp: int) -> str:
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
 
 
 def test_verify_internal_signature_accepts_valid_hmac(monkeypatch):
@@ -218,8 +223,16 @@ async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(
         "object": {
             "object": "invoice",
             "id": "in_1",
+            "livemode": True,
             "customer": "cus_123",
             "subscription": "sub_123",
+            "subscription_details": {
+                "id": "sub_123",
+                "status": "active",
+                "current_period_end": 1778623800,
+                "cancel_at_period_end": False,
+                "livemode": True,
+            },
             "amount_paid": 39900,
             "currency": "pln",
         },
@@ -234,6 +247,9 @@ async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(
 
     assert result["processed"] is True
     assert fake.users[0]["subscription_status"] == "active"
+    assert fake.users[0]["activation_paid"] is True
+    assert fake.users[0]["stripe_livemode"] is True
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1778623800)
     assert fake.payment_history == [
         {
             "user_id": "user-1",
@@ -246,8 +262,102 @@ async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(
             "stripe_subscription_id": "sub_123",
             "stripe_customer_id": "cus_123",
             "currency": "pln",
+            "stripe_livemode": True,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_checkout_session_uses_enriched_subscription_period_and_livemode(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_checkout_live",
+        "type": "checkout.session.completed",
+        "livemode": True,
+        "object": {
+            "object": "checkout.session",
+            "id": "cs_live_123",
+            "livemode": True,
+            "mode": "subscription",
+            "status": "complete",
+            "payment_status": "paid",
+            "amount_total": 39900,
+            "currency": "pln",
+            "customer": "cus_live_123",
+            "subscription": "sub_live_123",
+            "subscription_details": {
+                "id": "sub_live_123",
+                "status": "active",
+                "current_period_end": 1778623800,
+                "cancel_at_period_end": False,
+                "livemode": True,
+            },
+            "metadata": {"user_id": "user-1", "plan": "monthly"},
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "active"
+    assert fake.users[0]["activation_paid"] is True
+    assert fake.users[0]["stripe_livemode"] is True
+    assert fake.users[0]["stripe_subscription_id"] == "sub_live_123"
+    assert fake.users[0]["stripe_checkout_session_id"] == "cs_live_123"
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1778623800)
+    assert fake.payment_history[0]["stripe_livemode"] is True
+
+
+@pytest.mark.asyncio
+async def test_subscription_updated_cancel_at_period_end_keeps_access_until_period_end(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    fake.users[0].update(
+        {
+            "subscription_status": "active",
+            "activation_paid": True,
+            "stripe_livemode": True,
+            "subscription_current_period_end": _iso(1778623800),
+        }
+    )
+    event = {
+        "id": "evt_sub_updated",
+        "type": "customer.subscription.updated",
+        "livemode": True,
+        "object": {
+            "object": "subscription",
+            "id": "sub_123",
+            "livemode": True,
+            "customer": "cus_123",
+            "status": "active",
+            "cancel_at_period_end": True,
+            "current_period_end": 1779228600,
+            "currency": "pln",
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "active"
+    assert fake.users[0]["activation_paid"] is True
+    assert fake.users[0]["stripe_livemode"] is True
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1779228600)
 
 
 @pytest.mark.asyncio
@@ -264,6 +374,7 @@ async def test_subscription_deleted_cancels_user_and_logs_zero_amount_snapshot(m
         "object": {
             "object": "subscription",
             "id": "sub_123",
+            "livemode": True,
             "customer": "cus_123",
             "status": "canceled",
             "currency": "pln",
@@ -280,5 +391,7 @@ async def test_subscription_deleted_cancels_user_and_logs_zero_amount_snapshot(m
     assert result["processed"] is True
     assert fake.users[0]["subscription_status"] == "canceled"
     assert fake.users[0]["activation_paid"] is False
+    assert fake.users[0]["stripe_livemode"] is True
     assert fake.payment_history[0]["amount_pln"] == 0.0
     assert fake.payment_history[0]["status"] == "canceled"
+    assert fake.payment_history[0]["stripe_livemode"] is True

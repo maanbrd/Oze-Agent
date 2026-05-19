@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -8,36 +8,36 @@ function read(path) {
   return readFileSync(join(root, path), "utf8");
 }
 
-assert.ok(
-  existsSync(join(root, "components/telegram-status-poller.tsx")),
-  "Telegram onboarding must include a dedicated status poller component.",
-);
-
-const poller = read("components/telegram-status-poller.tsx");
+const poller = read("components/onboarding/telegram-pairing-card.tsx");
 assert.match(
   poller,
   /^"use client";/m,
-  "Telegram status poller must be a client component.",
+  "Telegram pairing card must be a client component.",
 );
 assert.match(
   poller,
-  /router\.refresh\(\)/,
-  "Telegram status poller must refresh the onboarding page.",
+  /\/api\/onboarding\/telegram-status/,
+  "Telegram pairing card must poll the Telegram status API.",
 );
 assert.match(
   poller,
-  /setInterval\(/,
-  "Telegram status poller must poll for updated pairing state.",
+  /window\.setInterval\(pollStatus/,
+  "Telegram pairing card must poll for updated pairing state.",
+);
+assert.match(
+  poller,
+  /window\.location\.assign\("\/dashboard\?onboarding=complete"\)/,
+  "Telegram pairing card must send paired users to the dashboard completion URL.",
 );
 
 const telegramPage = read("app/onboarding/telegram/page.tsx");
 assert.match(
   telegramPage,
-  /import\s+\{\s*TelegramStatusPoller\s*\}\s+from\s+"@\/components\/telegram-status-poller"/,
-  "Telegram onboarding page must use the shared status poller.",
+  /import\s+\{\s*TelegramPairingCard\s*\}\s+from\s+"@\/components\/onboarding\/telegram-pairing-card"/,
+  "Telegram onboarding page must use the shared pairing card.",
 );
 assert.match(
   telegramPage,
-  /<TelegramStatusPoller\s*\/>/,
-  "Telegram onboarding page must mount the status poller while waiting for pairing.",
+  /<TelegramPairingCard/,
+  "Telegram onboarding page must mount the pairing card while waiting for pairing.",
 );

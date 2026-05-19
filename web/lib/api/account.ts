@@ -12,6 +12,7 @@ export type AccountProfile = {
   subscription_plan: string | null;
   subscription_current_period_end: string | null;
   activation_paid: boolean | null;
+  stripe_livemode: boolean | null;
   onboarding_completed: boolean | null;
   google_sheets_id: string | null;
   google_calendar_id: string | null;
@@ -36,6 +37,7 @@ const ACCOUNT_PROFILE_SELECT = [
   "subscription_plan",
   "subscription_current_period_end",
   "activation_paid",
+  "stripe_livemode",
   "onboarding_completed",
   "google_sheets_id",
   "google_calendar_id",

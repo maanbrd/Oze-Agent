@@ -35,11 +35,18 @@ assert.match(
   "LogoutButton must preserve caller-supplied styling overrides.",
 );
 
-const appShell = read("components/app-shell.tsx");
+const logoutLink = read("components/auth/logout-link.tsx");
 assert.match(
-  appShell,
-  /<LogoutButton\s*\/>/,
-  "App shell must render the shared logout button for authenticated pages.",
+  logoutLink,
+  /href="\/logout"/,
+  "LogoutLink must point at the dedicated logout route.",
+);
+
+const crmShell = read("components/crm-shell.tsx");
+assert.match(
+  crmShell,
+  /<LogoutLink\s*\/>/,
+  "CRM shell must render the shared logout link for authenticated pages.",
 );
 
 const onboardingLayout = read("app/onboarding/layout.tsx");

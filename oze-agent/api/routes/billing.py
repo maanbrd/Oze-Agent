@@ -92,6 +92,45 @@ def _event_object(event: dict[str, Any]) -> dict[str, Any]:
     return event_object
 
 
+def _subscription_details(value: dict[str, Any]) -> dict[str, Any]:
+    details = value.get("subscription_details")
+    return details if isinstance(details, dict) else {}
+
+
+def _stripe_livemode(event: dict[str, Any], event_object: dict[str, Any]) -> bool:
+    details = _subscription_details(event_object)
+    for value in (
+        event_object.get("livemode"),
+        details.get("livemode"),
+        event.get("livemode"),
+    ):
+        if isinstance(value, bool):
+            return value
+    return False
+
+
+def _stripe_timestamp_to_iso(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).isoformat()
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return datetime.fromtimestamp(int(text), tz=timezone.utc).isoformat()
+    return text
+
+
+def _subscription_period_end(value: dict[str, Any]) -> str | None:
+    details = _subscription_details(value)
+    return _stripe_timestamp_to_iso(
+        details.get("current_period_end")
+        or value.get("current_period_end")
+        or value.get("subscription_current_period_end")
+    )
+
+
 def _metadata(value: dict[str, Any]) -> dict[str, Any]:
     metadata = value.get("metadata")
     return metadata if isinstance(metadata, dict) else {}
@@ -127,6 +166,8 @@ def _update_user(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _log_event(event: dict[str, Any], processed: bool) -> None:
+    event_object = event.get("object")
+    normalized_object = event_object if isinstance(event_object, dict) else {}
     try:
         get_supabase_client().table("webhook_log").insert(
             {
@@ -134,6 +175,10 @@ def _log_event(event: dict[str, Any], processed: bool) -> None:
                 "payload": event,
                 "processed": processed,
                 "duplicate": False,
+                "stripe_event_id": event.get("id") or "",
+                "stripe_event_type": event.get("type") or "",
+                "stripe_livemode": _stripe_livemode(event, normalized_object),
+                "processed_at": _now_iso() if processed else None,
             }
         ).execute()
     except Exception:
@@ -192,6 +237,7 @@ def _log_payment_snapshot(
         "stripe_subscription_id": event_object.get("subscription") or event_object.get("id") or "",
         "stripe_customer_id": event_object.get("customer") or "",
         "currency": event_object.get("currency") or "",
+        "stripe_livemode": _stripe_livemode(event, event_object),
     }
     try:
         get_supabase_client().table("payment_history").insert(payload).execute()
@@ -236,9 +282,8 @@ def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
             "stripe_customer_id": session.get("customer"),
             "stripe_subscription_id": session.get("subscription"),
             "stripe_checkout_session_id": session.get("id"),
-            "subscription_current_period_end": session.get(
-                "subscription_current_period_end"
-            ),
+            "subscription_current_period_end": _subscription_period_end(session),
+            "stripe_livemode": _stripe_livemode({}, session),
         },
     )
     return updated
@@ -265,14 +310,24 @@ def _update_from_subscription(
         return None
 
     status_value = "canceled" if deleted else subscription.get("status")
+    if status_value == "canceled":
+        subscription_status = "canceled"
+        activation_paid = False
+    elif status_value in {"past_due", "unpaid", "incomplete", "incomplete_expired"}:
+        subscription_status = "pending_payment"
+        activation_paid = False
+    else:
+        subscription_status = "active"
+        activation_paid = True
+
     return _update_user(
         result.data[0]["id"],
         {
-            "subscription_status": "canceled"
-            if status_value == "canceled"
-            else "active",
-            "activation_paid": status_value != "canceled",
+            "subscription_status": subscription_status,
+            "activation_paid": activation_paid,
             "stripe_subscription_id": subscription_id,
+            "subscription_current_period_end": _subscription_period_end(subscription),
+            "stripe_livemode": _stripe_livemode({}, subscription),
         },
     )
 
@@ -290,6 +345,8 @@ def _mark_invoice_failed(invoice: dict[str, Any]) -> dict[str, Any] | None:
             "subscription_status": "pending_payment",
             "activation_paid": False,
             "stripe_subscription_id": subscription_id,
+            "subscription_current_period_end": _subscription_period_end(invoice),
+            "stripe_livemode": _stripe_livemode({}, invoice),
         },
     )
 
@@ -329,7 +386,15 @@ async def process_signed_stripe_event(
     elif event_type == "invoice.payment_succeeded":
         subscription_id = event_object.get("subscription")
         if subscription_id:
-            updated = _update_from_subscription({"id": subscription_id, "status": "active"})
+            details = _subscription_details(event_object)
+            updated = _update_from_subscription(
+                {
+                    **details,
+                    "id": subscription_id,
+                    "status": details.get("status") or "active",
+                    "livemode": details.get("livemode", event_object.get("livemode")),
+                }
+            )
             if updated:
                 _log_payment_snapshot(
                     event=event,

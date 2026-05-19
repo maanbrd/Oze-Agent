@@ -18,6 +18,7 @@ const previewAccount = {
     subscription_status: "active",
     subscription_plan: "preview",
     subscription_current_period_end: null,
+    stripe_livemode: true,
     activation_paid: true,
     onboarding_completed: true,
     google_sheets_id: null,

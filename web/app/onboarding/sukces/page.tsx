@@ -32,7 +32,7 @@ export default async function PaymentSuccessPage({
     redirect("/login?next=/onboarding/platnosc");
   }
 
-  const active = account.profile?.subscription_status === "active";
+  const active = isCurrentLivePaid(account.profile);
 
   return (
     <main className="relative grid min-h-screen place-items-center bg-[#050607] px-5 text-zinc-100">
@@ -61,4 +61,18 @@ export default async function PaymentSuccessPage({
       </section>
     </main>
   );
+}
+
+function isCurrentLivePaid(
+  profile: Awaited<ReturnType<typeof getCurrentAccount>>["profile"],
+) {
+  if (!profile) return false;
+  if (profile.subscription_status !== "active" || !profile.activation_paid) {
+    return false;
+  }
+  if (profile.stripe_livemode !== true) return false;
+  const periodEnd = profile.subscription_current_period_end
+    ? Date.parse(profile.subscription_current_period_end)
+    : Number.NaN;
+  return Number.isFinite(periodEnd) && periodEnd > Date.now();
 }

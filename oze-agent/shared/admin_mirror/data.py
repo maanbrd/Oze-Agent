@@ -16,6 +16,7 @@ MIRROR_USER_FIELDS = ",".join([
     "subscription_expires_at",
     "subscription_current_period_end",
     "activation_paid",
+    "stripe_livemode",
     "stripe_customer_id",
     "stripe_subscription_id",
     "stripe_checkout_session_id",

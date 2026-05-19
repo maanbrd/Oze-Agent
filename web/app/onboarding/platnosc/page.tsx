@@ -22,11 +22,7 @@ export default async function PaymentStepPage({
 
   const betaEligible = Boolean(onboardingStatus?.access?.betaEligible);
   const isBetaActive = onboardingStatus?.access?.type === "beta";
-  const isPaidActive = Boolean(
-    account.profile?.subscription_status === "active" &&
-      account.profile?.activation_paid,
-  );
-  const isActive = Boolean(onboardingStatus?.access?.active || isPaidActive);
+  const isActive = Boolean(onboardingStatus?.access?.active);
 
   return (
     <main className="min-h-screen bg-[#050607] text-zinc-100">

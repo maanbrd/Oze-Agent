@@ -1,7 +1,7 @@
 """Common Telegram bot utilities for OZE-Agent."""
 
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -63,12 +63,43 @@ async def check_user_registered(telegram_id: int) -> Optional[dict]:
     return get_user_by_telegram_id(telegram_id)
 
 
+def _parse_subscription_period_end(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _has_active_live_payment(user: dict) -> bool:
+    period_end = _parse_subscription_period_end(
+        user.get("subscription_current_period_end")
+    )
+    return (
+        user.get("subscription_status") == "active"
+        and bool(user.get("activation_paid"))
+        and user.get("stripe_livemode") is True
+        and period_end is not None
+        and period_end > datetime.now(tz=timezone.utc)
+    )
+
+
 async def check_subscription_active(user: dict) -> bool:
     """Return True if the user's subscription is currently active."""
     if user.get("is_suspended", False):
         return False
 
-    if user.get("subscription_status") == "active":
+    if _has_active_live_payment(user):
         return True
 
     auth_user_id = str(user.get("auth_user_id") or "").strip()

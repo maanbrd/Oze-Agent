@@ -98,6 +98,10 @@ def _signed_headers(body: bytes, secret: str, timestamp: str | None = None):
     }
 
 
+def _iso(timestamp: int) -> str:
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+
+
 @pytest.mark.asyncio
 async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
     from api.routes import billing
@@ -112,6 +116,7 @@ async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
         "object": {
             "id": "cs_test_123",
             "object": "checkout.session",
+            "livemode": False,
             "mode": "subscription",
             "status": "complete",
             "payment_status": "paid",
@@ -119,6 +124,13 @@ async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
             "currency": "pln",
             "customer": "cus_123",
             "subscription": "sub_123",
+            "subscription_details": {
+                "id": "sub_123",
+                "status": "active",
+                "current_period_end": 1778623800,
+                "cancel_at_period_end": False,
+                "livemode": False,
+            },
             "client_reference_id": "user-1",
             "customer_email": "jan@example.pl",
             "metadata": {
@@ -153,6 +165,8 @@ async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
     assert fake.users[0]["stripe_customer_id"] == "cus_123"
     assert fake.users[0]["stripe_subscription_id"] == "sub_123"
     assert fake.users[0]["stripe_checkout_session_id"] == "cs_test_123"
+    assert fake.users[0]["stripe_livemode"] is False
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1778623800)
     assert fake.payment_history == [
         {
             "user_id": "user-1",
@@ -165,6 +179,7 @@ async def test_stripe_checkout_event_activates_matching_user(monkeypatch):
             "stripe_subscription_id": "sub_123",
             "stripe_customer_id": "cus_123",
             "currency": "pln",
+            "stripe_livemode": False,
         }
     ]
     assert fake.webhook_logs[0]["processed"] is True
@@ -223,6 +238,7 @@ async def test_stripe_invoice_failed_marks_user_pending_and_logs_payment_snapsho
         "object": {
             "id": "in_123",
             "object": "invoice",
+            "livemode": True,
             "subscription": "sub_123",
             "customer": "cus_123",
             "amount_due": 39900,
@@ -243,6 +259,7 @@ async def test_stripe_invoice_failed_marks_user_pending_and_logs_payment_snapsho
     assert result["processed"] is True
     assert fake.users[0]["subscription_status"] == "pending_payment"
     assert fake.users[0]["activation_paid"] is False
+    assert fake.users[0]["stripe_livemode"] is True
     assert fake.payment_history == [
         {
             "user_id": "user-1",
@@ -255,6 +272,7 @@ async def test_stripe_invoice_failed_marks_user_pending_and_logs_payment_snapsho
             "stripe_subscription_id": "sub_123",
             "stripe_customer_id": "cus_123",
             "currency": "pln",
+            "stripe_livemode": True,
         }
     ]
 
