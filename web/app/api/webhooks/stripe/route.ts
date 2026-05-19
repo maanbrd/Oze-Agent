@@ -47,11 +47,15 @@ function compactSubscriptionDetails(
   subscription: Stripe.Subscription,
 ): StripeSubscriptionDetails {
   const raw = subscription as unknown as Record<string, unknown>;
+  const items = raw.items as { data?: Array<Record<string, unknown>> } | undefined;
+  const firstItem = items?.data?.[0] ?? {};
   return {
     id: subscription.id,
     status: subscription.status,
-    current_period_start: raw.current_period_start,
-    current_period_end: raw.current_period_end,
+    current_period_start:
+      raw.current_period_start ?? firstItem.current_period_start,
+    current_period_end:
+      raw.current_period_end ?? firstItem.current_period_end,
     cancel_at_period_end: raw.cancel_at_period_end,
     livemode: subscription.livemode,
   };
@@ -59,9 +63,28 @@ function compactSubscriptionDetails(
 
 function subscriptionIdFromObject(object: StripeObjectWithSubscription) {
   const subscription = object.subscription;
-  if (!subscription) return null;
   if (typeof subscription === "string") return subscription;
-  return subscription.id;
+  if (subscription) return subscription.id;
+
+  const raw = object as unknown as Record<string, unknown>;
+  const parent = raw.parent as Record<string, unknown> | undefined;
+  const parentSubscriptionDetails = parent?.subscription_details as
+    | Record<string, unknown>
+    | undefined;
+  const parentSubscription = parentSubscriptionDetails?.subscription;
+  if (typeof parentSubscription === "string") return parentSubscription;
+
+  const lines = raw.lines as { data?: Array<Record<string, unknown>> } | undefined;
+  const firstLine = lines?.data?.[0];
+  const lineParent = firstLine?.parent as Record<string, unknown> | undefined;
+  const lineSubscriptionItemDetails = lineParent?.subscription_item_details as
+    | Record<string, unknown>
+    | undefined;
+  const lineParentSubscription = lineSubscriptionItemDetails?.subscription;
+  if (typeof lineParentSubscription === "string") return lineParentSubscription;
+
+  const lineSubscription = firstLine?.subscription;
+  return typeof lineSubscription === "string" ? lineSubscription : null;
 }
 
 async function enrichStripeObject(

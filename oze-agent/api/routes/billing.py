@@ -122,12 +122,44 @@ def _stripe_timestamp_to_iso(value: Any) -> str | None:
     return text
 
 
+def _first_subscription_item(value: dict[str, Any]) -> dict[str, Any]:
+    items = value.get("items")
+    if not isinstance(items, dict):
+        return {}
+    data = items.get("data")
+    if not isinstance(data, list) or not data:
+        return {}
+    first = data[0]
+    return first if isinstance(first, dict) else {}
+
+
+def _invoice_lines(value: dict[str, Any]) -> list[dict[str, Any]]:
+    lines = value.get("lines")
+    if not isinstance(lines, dict):
+        return []
+    data = lines.get("data")
+    if not isinstance(data, list):
+        return []
+    return [line for line in data if isinstance(line, dict)]
+
+
+def _line_period_end(value: dict[str, Any]) -> Any:
+    for line in _invoice_lines(value):
+        period = line.get("period")
+        if isinstance(period, dict) and period.get("end"):
+            return period.get("end")
+    return None
+
+
 def _subscription_period_end(value: dict[str, Any]) -> str | None:
     details = _subscription_details(value)
+    first_item = _first_subscription_item(value)
     return _stripe_timestamp_to_iso(
         details.get("current_period_end")
         or value.get("current_period_end")
+        or first_item.get("current_period_end")
         or value.get("subscription_current_period_end")
+        or _line_period_end(value)
     )
 
 
@@ -198,6 +230,37 @@ def _find_user_by_subscription_id(subscription_id: str) -> dict[str, Any] | None
     return result.data[0] if result.data else None
 
 
+def _invoice_subscription_id(invoice: dict[str, Any]) -> str | None:
+    subscription_id = invoice.get("subscription")
+    if isinstance(subscription_id, str) and subscription_id:
+        return subscription_id
+
+    parent = invoice.get("parent")
+    if isinstance(parent, dict):
+        subscription_details = parent.get("subscription_details")
+        if isinstance(subscription_details, dict):
+            subscription_id = subscription_details.get("subscription")
+            if isinstance(subscription_id, str) and subscription_id:
+                return subscription_id
+
+    for line in _invoice_lines(invoice):
+        line_subscription_id = line.get("subscription")
+        if isinstance(line_subscription_id, str) and line_subscription_id:
+            return line_subscription_id
+
+        parent = line.get("parent")
+        if not isinstance(parent, dict):
+            continue
+        subscription_item_details = parent.get("subscription_item_details")
+        if not isinstance(subscription_item_details, dict):
+            continue
+        subscription_id = subscription_item_details.get("subscription")
+        if isinstance(subscription_id, str) and subscription_id:
+            return subscription_id
+
+    return None
+
+
 def _stripe_amount_pln(value: dict[str, Any]) -> float:
     amount = (
         value.get("amount_total")
@@ -209,6 +272,38 @@ def _stripe_amount_pln(value: dict[str, Any]) -> float:
         return round(float(amount) / 100, 2)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _event_subscription_id(event_object: dict[str, Any]) -> str:
+    if event_object.get("object") == "invoice":
+        return _invoice_subscription_id(event_object) or ""
+    value = event_object.get("subscription") or event_object.get("id") or ""
+    return str(value) if value else ""
+
+
+def _payment_snapshot_exists(payload: dict[str, Any]) -> bool:
+    checks = [
+        ("stripe_event_id", payload.get("stripe_event_id")),
+        ("stripe_checkout_session_id", payload.get("stripe_checkout_session_id")),
+        ("stripe_invoice_id", payload.get("stripe_invoice_id")),
+    ]
+    for key, value in checks:
+        if not value:
+            continue
+        try:
+            result = (
+                get_supabase_client()
+                .table("payment_history")
+                .select("id")
+                .eq(key, value)
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            continue
+        if result.data:
+            return True
+    return False
 
 
 def _log_payment_snapshot(
@@ -234,12 +329,14 @@ def _log_payment_snapshot(
             if event_object.get("object") == "invoice"
             else ""
         ),
-        "stripe_subscription_id": event_object.get("subscription") or event_object.get("id") or "",
+        "stripe_subscription_id": _event_subscription_id(event_object),
         "stripe_customer_id": event_object.get("customer") or "",
         "currency": event_object.get("currency") or "",
         "stripe_livemode": _stripe_livemode(event, event_object),
     }
     try:
+        if _payment_snapshot_exists(payload):
+            return
         get_supabase_client().table("payment_history").insert(payload).execute()
     except Exception:
         return
@@ -333,7 +430,7 @@ def _update_from_subscription(
 
 
 def _mark_invoice_failed(invoice: dict[str, Any]) -> dict[str, Any] | None:
-    subscription_id = invoice.get("subscription")
+    subscription_id = _invoice_subscription_id(invoice)
     if not subscription_id:
         return None
     user = _find_user_by_subscription_id(subscription_id)
@@ -384,7 +481,7 @@ async def process_signed_stripe_event(
                 status_value="paid",
             )
     elif event_type == "invoice.payment_succeeded":
-        subscription_id = event_object.get("subscription")
+        subscription_id = _invoice_subscription_id(event_object)
         if subscription_id:
             details = _subscription_details(event_object)
             updated = _update_from_subscription(
@@ -393,6 +490,11 @@ async def process_signed_stripe_event(
                     "id": subscription_id,
                     "status": details.get("status") or "active",
                     "livemode": details.get("livemode", event_object.get("livemode")),
+                    "current_period_end": (
+                        details.get("current_period_end")
+                        or _line_period_end(event_object)
+                        or event_object.get("period_end")
+                    ),
                 }
             )
             if updated:

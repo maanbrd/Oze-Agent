@@ -52,6 +52,13 @@ class _FakeTable:
             self.supabase.payment_history.append(self._insert_payload)
             return _FakeResult([self._insert_payload])
 
+        if self.name == "payment_history":
+            rows = self.supabase.payment_history
+            if self._eq is not None:
+                key, value = self._eq
+                rows = [row for row in rows if row.get(key) == value]
+            return _FakeResult(rows)
+
         if self.name != "users":
             return _FakeResult([])
 
@@ -268,6 +275,64 @@ async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_invoice_payment_succeeded_uses_parent_subscription_and_line_period(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_invoice_current_api",
+        "type": "invoice.payment_succeeded",
+        "livemode": True,
+        "object": {
+            "object": "invoice",
+            "id": "in_current_api",
+            "livemode": True,
+            "customer": "cus_123",
+            "subscription": None,
+            "parent": {
+                "type": "subscription_details",
+                "subscription_details": {
+                    "subscription": "sub_123",
+                    "metadata": {"user_id": "user-1", "plan": "monthly"},
+                },
+            },
+            "lines": {
+                "data": [
+                    {
+                        "period": {"start": 1778019000, "end": 1778623800},
+                        "parent": {
+                            "type": "subscription_item_details",
+                            "subscription_item_details": {
+                                "subscription": "sub_123",
+                                "subscription_item": "si_123",
+                            },
+                        },
+                    }
+                ]
+            },
+            "amount_paid": 39900,
+            "currency": "pln",
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "active"
+    assert fake.users[0]["activation_paid"] is True
+    assert fake.users[0]["stripe_livemode"] is True
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1778623800)
+    assert fake.payment_history[0]["stripe_invoice_id"] == "in_current_api"
+    assert fake.payment_history[0]["stripe_subscription_id"] == "sub_123"
+
+
+@pytest.mark.asyncio
 async def test_checkout_session_uses_enriched_subscription_period_and_livemode(monkeypatch):
     from api.routes import billing
 
@@ -317,6 +382,64 @@ async def test_checkout_session_uses_enriched_subscription_period_and_livemode(m
 
 
 @pytest.mark.asyncio
+async def test_reconcile_event_does_not_duplicate_checkout_payment_snapshot(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    checkout_object = {
+        "object": "checkout.session",
+        "id": "cs_live_123",
+        "livemode": True,
+        "mode": "subscription",
+        "status": "complete",
+        "payment_status": "paid",
+        "amount_total": 39900,
+        "currency": "pln",
+        "customer": "cus_live_123",
+        "subscription": "sub_live_123",
+        "subscription_details": {
+            "id": "sub_live_123",
+            "status": "active",
+            "current_period_end": 1778623800,
+            "cancel_at_period_end": False,
+            "livemode": True,
+        },
+        "metadata": {"user_id": "user-1", "plan": "monthly"},
+    }
+    events = [
+        {
+            "id": "evt_checkout_live",
+            "type": "checkout.session.completed",
+            "livemode": True,
+            "object": checkout_object,
+        },
+        {
+            "id": "evt_reconcile_cs_live_123",
+            "type": "checkout.session.completed",
+            "livemode": True,
+            "object": checkout_object,
+        },
+    ]
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    for event in events:
+        body = json.dumps(event, separators=(",", ":")).encode()
+        result = await billing.process_signed_stripe_event(
+            body,
+            _signed_headers(body, secret),
+        )
+        assert result["processed"] is True
+
+    assert len(fake.payment_history) == 1
+    assert fake.payment_history[0]["stripe_event_id"] == "evt_checkout_live"
+    assert fake.payment_history[0]["stripe_checkout_session_id"] == "cs_live_123"
+
+
+@pytest.mark.asyncio
 async def test_subscription_updated_cancel_at_period_end_keeps_access_until_period_end(monkeypatch):
     from api.routes import billing
 
@@ -357,6 +480,58 @@ async def test_subscription_updated_cancel_at_period_end_keeps_access_until_peri
     assert fake.users[0]["subscription_status"] == "active"
     assert fake.users[0]["activation_paid"] is True
     assert fake.users[0]["stripe_livemode"] is True
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1779228600)
+
+
+@pytest.mark.asyncio
+async def test_subscription_updated_reads_period_from_subscription_item(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    fake.users[0].update(
+        {
+            "subscription_status": "active",
+            "activation_paid": True,
+            "stripe_livemode": True,
+            "subscription_current_period_end": _iso(1778623800),
+        }
+    )
+    event = {
+        "id": "evt_sub_updated_current_api",
+        "type": "customer.subscription.updated",
+        "livemode": True,
+        "object": {
+            "object": "subscription",
+            "id": "sub_123",
+            "livemode": True,
+            "customer": "cus_123",
+            "status": "active",
+            "cancel_at_period_end": False,
+            "current_period_end": None,
+            "items": {
+                "data": [
+                    {
+                        "id": "si_123",
+                        "current_period_start": 1778019000,
+                        "current_period_end": 1779228600,
+                    }
+                ]
+            },
+            "currency": "pln",
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "active"
+    assert fake.users[0]["activation_paid"] is True
     assert fake.users[0]["subscription_current_period_end"] == _iso(1779228600)
 
 
