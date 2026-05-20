@@ -1,0 +1,1846 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 4400" font-family="Inter, 'Segoe UI', sans-serif">
+<defs>
+<pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1.4" cy="1.4" r="1.4" fill="#2a2a40"/></pattern>
+<filter id="ns" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dx="0" dy="2" result="o"/><feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a86b0"/></marker>
+<marker id="arrow-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3ecf8e"/></marker>
+<marker id="arrow-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e76f6f"/></marker>
+<marker id="arrow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b89bff"/></marker>
+<marker id="arrow-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker>
+</defs>
+<rect width="1900" height="4400" fill="#14141f"/>
+<rect width="1900" height="4400" fill="url(#dot-grid)"/>
+<rect x="0" y="0" width="1900" height="72" fill="#1f1f33"/>
+<text x="32" y="44" fill="#ffffff" font-size="24" font-weight="800">OZE-Agent · workflow (n8n style, 100% unsimplified)</text>
+<text x="500" y="44" fill="#8b94b8" font-size="13">every node maps to a real file / function · sourced from bot/, shared/, api/, web/ on 20.05.2026</text>
+<text x="1868" y="44" fill="#8b94b8" font-size="13" text-anchor="end">~266 nodes · ~296 edges · branch claude/agent-workflow-diagram-WM0b0</text>
+<rect x="20" y="100" width="1860" height="470" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="122" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE A · INGRESS · Telegram trigger + commands + per-message gates</text>
+<rect x="20" y="520" width="1860" height="220" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="542" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE B · VOICE PIPELINE · handle_voice → Whisper → Polish post-pass → R1 voice card → text override</text>
+<rect x="20" y="760" width="1860" height="330" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="782" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE C · PHOTO PIPELINE · handle_photo → resolve client → R1 Drive card → upload → Sheets N/O</text>
+<rect x="20" y="1110" width="1860" height="410" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="1132" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE D · TEXT INTAKE + INTENT ROUTER · regex preflights → Haiku tool-use → 9 tools → scope+banner → entity extraction</text>
+<rect x="20" y="1540" width="1860" height="410" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="1562" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE E · INTENT SWITCH + R4 + DISAMBIG · 11 IntentTypes → R4 search → multi-match / duplicate / R6 fallback → behavior helpers</text>
+<rect x="20" y="1970" width="1860" height="450" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="1992" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE F · PENDING STATE MACHINE + CARD BUILDERS + CALLBACK DISPATCH · 10 PendingFlowTypes · 4 card builders · handle_button</text>
+<rect x="20" y="2430" width="1860" height="480" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="2452" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE G · MUTATION COMMIT PIPELINES · 5 commits · Sheets+Calendar dual-write · post-commit next_action_prompt / active client</text>
+<rect x="20" y="2920" width="1860" height="380" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="2942" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE H · BACKGROUND JOBS · 3 daily cron jobs (07:00 morning brief · 03:00 admin mirror · 02:15 user profile agent)</text>
+<rect x="20" y="3310" width="1860" height="460" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="3332" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE I · OFFER GENERATOR FULL SLICE · web /oferty → 14 FastAPI routes → shared/offers/* → Telegram send → Gmail → Sheets follow-up</text>
+<rect x="20" y="3780" width="1860" height="380" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="3802" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE J · FastAPI ROUTES · WEBAPP ROUTE TREE · STRIPE BILLING (Vercel webhook → api signed event → user.subscription_active)</text>
+<rect x="20" y="4180" width="1860" height="170" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1" opacity="0.55"/>
+<text x="40" y="4202" fill="#9aa3c7" font-size="12" font-weight="700" letter-spacing="1">LANE K · EXTERNAL SERVICES (brand bar — runtime dependencies)</text>
+<path d="M 190,165.0 C 230,165.0 180,165.0 220,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="205.0" y="161.0" fill="#9aa3c7" font-size="10" text-anchor="middle">TypeHandler grp=-1</text>
+<path d="M 266.0,200 C 266.0,240.0 266.0,260.0 266.0,300" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="266.0" y="246.0" fill="#9aa3c7" font-size="10" text-anchor="middle">bumps last_seen</text>
+<path d="M 190,165.0 C 258.0,165.0 292.0,165.0 360,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 258.0,165.0 292.0,250.0 360,250.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 258.0,165.0 292.0,335.0 360,335.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 258.0,165.0 292.0,420.0 360,420.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 314.0,165.0 376.0,165.0 500,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 314.0,165.0 376.0,250.0 500,250.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 314.0,165.0 376.0,335.0 500,335.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 314.0,165.0 376.0,420.0 500,420.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,165.0 C 314.0,165.0 376.0,505.0 500,505.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 135.0,200 C 135.0,308.0 266.0,362.0 266.0,470" fill="none" stroke="#e76f6f" stroke-width="1.6" marker-end="url(#arrow-x)" stroke-dasharray="4 4"/>
+<text x="200.5" y="331.0" fill="#9aa3c7" font-size="10" text-anchor="middle">any unhandled exception</text>
+<path d="M 592,165.0 C 632,165.0 620,165.0 660,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,250.0 C 632,250.0 620,165.0 660,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 546.0,300 C 546.0,260.0 706.0,240.0 706.0,200" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 752,165.0 C 792,165.0 770,165.0 810,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 902,165.0 C 942,165.0 920,165.0 960,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1052,165.0 C 1092,165.0 1070,165.0 1110,165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 752,165.0 C 792,165.0 620,285.0 660,285.0" fill="none" stroke="#e76f6f" stroke-width="1.6" marker-end="url(#arrow-x)" stroke-dasharray="4 4"/>
+<text x="706.0" y="221.0" fill="#9aa3c7" font-size="10" text-anchor="middle">missing</text>
+<path d="M 902,165.0 C 942,165.0 770,285.0 810,285.0" fill="none" stroke="#e76f6f" stroke-width="1.6" marker-end="url(#arrow-x)" stroke-dasharray="4 4"/>
+<text x="856.0" y="221.0" fill="#9aa3c7" font-size="10" text-anchor="middle">expired</text>
+<path d="M 1052,165.0 C 1092,165.0 920,285.0 960,285.0" fill="none" stroke="#e76f6f" stroke-width="1.6" marker-end="url(#arrow-x)" stroke-dasharray="4 4"/>
+<text x="1006.0" y="221.0" fill="#9aa3c7" font-size="10" text-anchor="middle">over budget</text>
+<path d="M 1156.0,200 C 1156.0,366.0 80,615.0 80,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="618.0" y="403.5" fill="#9aa3c7" font-size="10" text-anchor="middle">voice</text>
+<path d="M 172,615.0 C 212,615.0 180,615.0 220,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,615.0 C 352,615.0 320,615.0 360,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,615.0 C 492,615.0 460,615.0 500,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,615.0 C 632,615.0 600,615.0 640,615.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 732,615.0 C 772,615.0 740,615.0 780,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 872,615.0 C 912,615.0 880,615.0 920,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1012,615.0 C 1052,615.0 1020,615.0 1060,615.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1152,615.0 C 1192,615.0 1160,615.0 1200,615.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<text x="1176.0" y="611.0" fill="#9aa3c7" font-size="10" text-anchor="middle">Zapisz</text>
+<path d="M 1292,615.0 C 1332,615.0 1300,615.0 1340,615.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<path d="M 1156.0,200 C 1156.0,486.0 80,915.0 80,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="618.0" y="553.5" fill="#9aa3c7" font-size="10" text-anchor="middle">photo</text>
+<path d="M 172,915.0 C 212,915.0 180,915.0 220,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,915.0 C 212,915.0 180,1005.0 220,1005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,915.0 C 352,915.0 320,915.0 360,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,1005.0 C 352,1005.0 320,915.0 360,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,915.0 C 492,915.0 460,915.0 500,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,915.0 C 492,915.0 320,1005.0 360,1005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 592,915.0 C 632,915.0 460,1005.0 500,1005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="546.0" y="956.0" fill="#9aa3c7" font-size="10" text-anchor="middle">if empty query</text>
+<path d="M 592,915.0 C 632,915.0 600,915.0 640,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="616.0" y="911.0" fill="#9aa3c7" font-size="10" text-anchor="middle">1 hit</text>
+<path d="M 592,915.0 C 632,915.0 600,1005.0 640,1005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="616.0" y="956.0" fill="#9aa3c7" font-size="10" text-anchor="middle">≥2 hits</text>
+<path d="M 546.0,950 C 546.0,994.0 686.0,1016.0 686.0,1060" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="616.0" y="1001.0" fill="#9aa3c7" font-size="10" text-anchor="middle">0 hits</text>
+<path d="M 732,1095.0 C 772,1095.0 740,1095.0 780,1095.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)"/>
+<path d="M 732,1005.0 C 772,1005.0 740,1005.0 780,1005.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<text x="756.0" y="1001.0" fill="#9aa3c7" font-size="10" text-anchor="middle">picks #</text>
+<path d="M 732,915.0 C 772,915.0 740,915.0 780,915.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<text x="756.0" y="911.0" fill="#9aa3c7" font-size="10" text-anchor="middle">✅ Zapisać</text>
+<path d="M 872,1005.0 C 912,1005.0 880,915.0 920,915.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<path d="M 872,1095.0 C 1003.2,1095.0 1068.8,1005.0 1200,1005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="1036.0" y="1046.0" fill="#9aa3c7" font-size="10" text-anchor="middle">after add_client</text>
+<path d="M 872,915.0 C 912,915.0 880,915.0 920,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1012,915.0 C 1052,915.0 1020,915.0 1060,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1152,915.0 C 1192,915.0 1160,915.0 1200,915.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<text x="1176.0" y="911.0" fill="#9aa3c7" font-size="10" text-anchor="middle">upload</text>
+<path d="M 1292,915.0 C 1332,915.0 1300,915.0 1340,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1292,915.0 C 1332,915.0 1300,1005.0 1340,1005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1432,915.0 C 1472,915.0 1440,915.0 1480,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1432,1005.0 C 1472,1005.0 1440,915.0 1480,915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1156.0,200 C 1156.0,634.0 80,1285.0 80,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="618.0" y="738.5" fill="#9aa3c7" font-size="10" text-anchor="middle">text</text>
+<path d="M 1432,615.0 C 1472,615.0 40,1285.0 80,1285.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<text x="756.0" y="946.0" fill="#9aa3c7" font-size="10" text-anchor="middle">voice path joins</text>
+<path d="M 172,1285.0 C 212,1285.0 180,1285.0 220,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,1285.0 C 352,1285.0 320,1285.0 360,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,1285.0 C 492,1285.0 320,1375.0 360,1375.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,1285.0 C 303.20000000000005,1285.0 368.79999999999995,1285.0 500,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,1285.0 C 303.20000000000005,1285.0 368.79999999999995,1375.0 500,1375.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,1285.0 C 303.20000000000005,1285.0 368.79999999999995,1465.0 500,1465.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,1285.0 C 303.20000000000005,1285.0 368.79999999999995,1555.0 500,1555.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 592,1285.0 C 632,1285.0 640,1285.0 680,1285.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<text x="636.0" y="1281.0" fill="#9aa3c7" font-size="10" text-anchor="middle">forces record_add_meeting if hit</text>
+<path d="M 592,1375.0 C 632,1375.0 640,1285.0 680,1285.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 452,1285.0 C 543.2,1285.0 588.8,1285.0 680,1285.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)" stroke-dasharray="4 4"/>
+<text x="566.0" y="1281.0" fill="#9aa3c7" font-size="10" text-anchor="middle">context</text>
+<path d="M 790,1285.0 C 830,1285.0 780,1231.0 820,1231.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 790,1285.0 C 830,1285.0 780,1261.0 820,1261.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 790,1285.0 C 830,1285.0 780,1291.0 820,1291.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 790,1285.0 C 830,1285.0 780,1321.0 820,1321.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 790,1285.0 C 830,1285.0 780,1351.0 820,1351.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 790,1285.0 C 830,1285.0 780,1381.0 820,1381.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 790,1285.0 C 830,1285.0 780,1411.0 820,1411.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 735.0,1320 C 735.0,1364.0 905.0,1386.0 905.0,1430" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 735.0,1320 C 735.0,1376.0 905.0,1404.0 905.0,1460" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 990,1231.0 C 1030,1231.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1261.0 C 1030,1261.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1291.0 C 1030,1291.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1321.0 C 1030,1321.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1351.0 C 1030,1351.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1381.0 C 1030,1381.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1411.0 C 1030,1411.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1441.0 C 1030,1441.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 990,1471.0 C 1030,1471.0 980,1285.0 1020,1285.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1112,1285.0 C 1152,1285.0 980,1385.0 1020,1385.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="1066.0" y="1331.0" fill="#9aa3c7" font-size="10" text-anchor="middle">if out-of-scope</text>
+<path d="M 1112,1385.0 C 1152,1385.0 980,1485.0 1020,1485.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1112,1285.0 C 1152,1285.0 1140,1285.0 1180,1285.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 1112,1285.0 C 1152,1285.0 1140,1375.0 1180,1375.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 1066.0,1320 C 1066.0,1364.0 1226.0,1386.0 1226.0,1430" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 1066.0,1320 C 1066.0,1400.0 1226.0,1440.0 1226.0,1520" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)" stroke-dasharray="4 4"/>
+<path d="M 172,1715.0 C 212,1715.0 200,1635.0 240,1635.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,1715.0 C 212,1715.0 200,1673.0 240,1673.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,1715.0 C 212,1715.0 200,1711.0 240,1711.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,1715.0 C 212,1715.0 200,1749.0 240,1749.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,1715.0 C 212,1715.0 200,1787.0 240,1787.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,1715.0 C 212,1715.0 200,1825.0 240,1825.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 126.0,1750 C 126.0,1789.2 315.0,1808.8 315.0,1848" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 126.0,1750 C 126.0,1804.4 315.0,1831.6 315.0,1886" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 126.0,1750 C 126.0,1819.6 315.0,1854.4 315.0,1924" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 126.0,1750 C 126.0,1834.8 315.0,1877.2 315.0,1962" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 126.0,1750 C 126.0,1850.0 315.0,1900.0 315.0,2000" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 390,1635.0 C 530.0,1635.0 600.0,1785.0 740,1785.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="565.0" y="1706.0" fill="#9aa3c7" font-size="10" text-anchor="middle">match=1</text>
+<path d="M 390,1635.0 C 430,1635.0 400,1655.0 440,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="415.0" y="1641.0" fill="#9aa3c7" font-size="10" text-anchor="middle">otherwise (new)</text>
+<path d="M 390,1673.0 C 430,1673.0 400,1655.0 440,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 390,1711.0 C 430,1711.0 400,1655.0 440,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 390,1749.0 C 430,1749.0 400,1655.0 440,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 390,1787.0 C 430,1787.0 400,1655.0 440,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 390,1825.0 C 650.0,1825.0 780.0,1655.0 1040,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="715.0" y="1736.0" fill="#9aa3c7" font-size="10" text-anchor="middle">read-only</text>
+<path d="M 390,1863.0 C 650.0,1863.0 780.0,1655.0 1040,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 390,1901.0 C 650.0,1901.0 780.0,1655.0 1040,1655.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<text x="715.0" y="1774.0" fill="#9aa3c7" font-size="10" text-anchor="middle">banner only</text>
+<path d="M 390,1939.0 C 650.0,1939.0 780.0,1655.0 1040,1655.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<path d="M 390,1977.0 C 650.0,1977.0 780.0,1655.0 1040,1655.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<path d="M 390,2015.0 C 650.0,2015.0 780.0,1655.0 1040,1655.0" fill="none" stroke="#e76f6f" stroke-width="1.6" marker-end="url(#arrow-x)" stroke-dasharray="4 4"/>
+<text x="715.0" y="1831.0" fill="#9aa3c7" font-size="10" text-anchor="middle">rejected w/ msg</text>
+<path d="M 550,1655.0 C 590,1655.0 550,1655.0 590,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 550,1655.0 C 590,1655.0 550,1745.0 590,1745.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 495.0,1690 C 495.0,1734.0 636.0,1756.0 636.0,1800" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 495.0,1690 C 495.0,1770.0 636.0,1810.0 636.0,1890" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 495.0,1690 C 495.0,1734.0 486.0,1756.0 486.0,1800" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="490.5" y="1741.0" fill="#9aa3c7" font-size="10" text-anchor="middle">R6 fallback</text>
+<path d="M 682,1655.0 C 722,1655.0 700,1645.0 740,1645.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 682,1655.0 C 722,1655.0 700,1715.0 740,1715.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 682,1655.0 C 722,1655.0 700,1785.0 740,1785.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 636.0,1690 C 636.0,1746.0 775.0,1774.0 775.0,1830" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 810,1715.0 C 850,1715.0 840,1725.0 880,1725.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<path d="M 810,1785.0 C 850,1785.0 840,1795.0 880,1795.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<path d="M 532,1925.0 C 735.2,1925.0 836.8,1655.0 1040,1655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2015.0 C 490,2015.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2053.0 C 490,2053.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2091.0 C 490,2091.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2129.0 C 490,2129.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2167.0 C 490,2167.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2205.0 C 490,2205.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2243.0 C 490,2243.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 450,2281.0 C 490,2281.0 40,2165.0 80,2165.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 345.0,2304 C 345.0,2266.4 135.0,2247.6 135.0,2210" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 345.0,2342 C 345.0,2289.2 135.0,2262.8 135.0,2210" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,2165.0 C 314.0,2165.0 376.0,2035.0 500,2035.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,2165.0 C 314.0,2165.0 376.0,2125.0 500,2125.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,2165.0 C 314.0,2165.0 376.0,2215.0 500,2215.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 190,2165.0 C 314.0,2165.0 376.0,2305.0 500,2305.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,2035.0 C 632,2035.0 620,2035.0 660,2035.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,2035.0 C 632,2035.0 620,2125.0 660,2125.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 546.0,2070 C 546.0,2114.0 706.0,2136.0 706.0,2180" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 546.0,2070 C 546.0,2150.0 706.0,2190.0 706.0,2270" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 706.0,2070 C 706.0,2114.0 866.0,2136.0 866.0,2180" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 752,2125.0 C 792,2125.0 780,2215.0 820,2215.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 752,2215.0 C 792,2215.0 780,2215.0 820,2215.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 752,2305.0 C 792,2305.0 780,2215.0 820,2215.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 866.0,2180 C 866.0,2136.0 1026.0,2114.0 1026.0,2070" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 912,2035.0 C 952,2035.0 940,2035.0 980,2035.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 912,2125.0 C 952,2125.0 940,2035.0 980,2035.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 866.0,2270 C 866.0,2190.0 1026.0,2150.0 1026.0,2070" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 866.0,2360 C 866.0,2244.0 1026.0,2186.0 1026.0,2070" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1026.0,2070 C 1026.0,2114.0 1026.0,2136.0 1026.0,2180" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1072,2125.0 C 1112,2125.0 940,2215.0 980,2215.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1250,2035.0 C 1290,2035.0 1100,2135.0 1140,2135.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1195.0,2070 C 1195.0,2110.0 1186.0,2130.0 1186.0,2170" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1195.0,2070 C 1195.0,2138.0 1186.0,2172.0 1186.0,2240" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1195.0,2070 C 1195.0,2166.0 1186.0,2214.0 1186.0,2310" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1195.0,2070 C 1195.0,2194.0 1186.0,2256.0 1186.0,2380" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,420.0 C 811.2,420.0 920.8,2035.0 1140,2035.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<text x="866.0" y="1223.5" fill="#9aa3c7" font-size="10" text-anchor="middle">all callbacks</text>
+<path d="M 1232,2135.0 C 1272,2135.0 40,2475.0 80,2475.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<text x="656.0" y="2301.0" fill="#9aa3c7" font-size="10" text-anchor="middle">add_client</text>
+<path d="M 1232,2135.0 C 1272,2135.0 40,2655.0 80,2655.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<path d="M 1232,2135.0 C 1272,2135.0 40,2745.0 80,2745.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<path d="M 1232,2135.0 C 1272,2135.0 40,2835.0 80,2835.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<path d="M 1232,2415.0 C 1272,2415.0 40,2565.0 80,2565.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<path d="M 172,2475.0 C 212,2475.0 200,2475.0 240,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,2475.0 C 263.2,2475.0 308.8,2475.0 400,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2475.0 C 327.20000000000005,2475.0 404.79999999999995,2475.0 560,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="366.0" y="2471.0" fill="#9aa3c7" font-size="10" text-anchor="middle">if follow-up date</text>
+<path d="M 172,2565.0 C 263.2,2565.0 308.8,2565.0 400,2565.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2655.0 C 212,2655.0 200,2655.0 240,2655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,2655.0 C 212,2655.0 200,2745.0 240,2745.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,2655.0 C 263.2,2655.0 308.8,2565.0 400,2565.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2745.0 C 263.2,2745.0 308.8,2565.0 400,2565.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2745.0 C 327.20000000000005,2745.0 404.79999999999995,2475.0 560,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2835.0 C 327.20000000000005,2835.0 404.79999999999995,2565.0 560,2565.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="366.0" y="2696.0" fill="#9aa3c7" font-size="10" text-anchor="middle">conflict pre-check</text>
+<path d="M 126.0,2800 C 126.0,2720.0 286.0,2680.0 286.0,2600" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,2835.0 C 263.2,2835.0 308.8,2565.0 400,2565.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2835.0 C 327.20000000000005,2835.0 404.79999999999995,2475.0 560,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2835.0 C 212,2835.0 200,2840.0 240,2840.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="206.0" y="2833.5" fill="#9aa3c7" font-size="10" text-anchor="middle">compound meeting+client</text>
+<path d="M 332,2840.0 C 372,2840.0 200,2915.0 240,2915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 286.0,2880 C 286.0,2732.0 126.0,2658.0 126.0,2510" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 172,2475.0 C 391.20000000000005,2475.0 500.79999999999995,2565.0 720,2565.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<text x="446.0" y="2516.0" fill="#9aa3c7" font-size="10" text-anchor="middle">ask next step</text>
+<path d="M 830,2565.0 C 870,2565.0 680,2655.0 720,2655.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<path d="M 1132,1835.0 C 1172,1835.0 680,2655.0 720,2655.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="926.0" y="2241.0" fill="#9aa3c7" font-size="10" text-anchor="middle">reply classified</text>
+<path d="M 172,2475.0 C 391.20000000000005,2475.0 500.79999999999995,2745.0 720,2745.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="446.0" y="2606.0" fill="#9aa3c7" font-size="10" text-anchor="middle">mark active</text>
+<path d="M 172,2475.0 C 391.20000000000005,2475.0 500.79999999999995,2475.0 720,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2655.0 C 391.20000000000005,2655.0 500.79999999999995,2475.0 720,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2745.0 C 391.20000000000005,2745.0 500.79999999999995,2475.0 720,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2835.0 C 391.20000000000005,2835.0 500.79999999999995,2475.0 720,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2565.0 C 391.20000000000005,2565.0 500.79999999999995,2475.0 720,2475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,2975.0 C 212,2975.0 180,2975.0 220,2975.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,2975.0 C 352,2975.0 320,2975.0 360,2975.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,2975.0 C 492,2975.0 460,2975.0 500,2975.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,2975.0 C 632,2975.0 600,2975.0 640,2975.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 732,2975.0 C 772,2975.0 740,2975.0 780,2975.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 872,2975.0 C 912,2975.0 880,2975.0 920,2975.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,3085.0 C 212,3085.0 180,3085.0 220,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,3085.0 C 352,3085.0 320,3085.0 360,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,3085.0 C 492,3085.0 460,3085.0 500,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,3085.0 C 632,3085.0 600,3085.0 640,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 732,3085.0 C 772,3085.0 740,3085.0 780,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 872,3085.0 C 912,3085.0 880,3085.0 920,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1012,3085.0 C 1052,3085.0 1020,3085.0 1060,3085.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 172,3195.0 C 212,3195.0 180,3195.0 220,3195.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 312,3195.0 C 352,3195.0 320,3195.0 360,3195.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 452,3195.0 C 492,3195.0 460,3195.0 500,3195.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,3195.0 C 632,3195.0 600,3195.0 640,3195.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 732,3195.0 C 772,3195.0 740,3195.0 780,3195.0" fill="none" stroke="#b89bff" stroke-width="1.6" marker-end="url(#arrow-a)"/>
+<path d="M 872,3195.0 C 912,3195.0 880,3195.0 920,3195.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1012,3195.0 C 1052,3195.0 1020,3195.0 1060,3195.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 592,3195.0 C 835.2,3195.0 956.8,3195.0 1200,3195.0" fill="none" stroke="#e76f6f" stroke-width="1.6" marker-end="url(#arrow-x)" stroke-dasharray="4 4"/>
+<path d="M 172,3355.0 C 212,3355.0 170,3355.0 210,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 302,3355.0 C 342,3355.0 300,3355.0 340,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 432,3355.0 C 472,3355.0 430,3335.0 470,3335.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3335.0 C 690,3335.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 432,3355.0 C 472,3355.0 430,3370.0 470,3370.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3370.0 C 690,3370.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 432,3355.0 C 472,3355.0 430,3405.0 470,3405.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3405.0 C 690,3405.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 432,3355.0 C 472,3355.0 430,3440.0 470,3440.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3440.0 C 690,3440.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 432,3355.0 C 472,3355.0 430,3475.0 470,3475.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3475.0 C 690,3475.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3432.0 560.0,3453.0 560.0,3495" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3510.0 C 690,3510.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3446.0 560.0,3474.0 560.0,3530" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3545.0 C 690,3545.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3460.0 560.0,3495.0 560.0,3565" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3580.0 C 690,3580.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3474.0 560.0,3516.0 560.0,3600" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3615.0 C 690,3615.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3488.0 560.0,3537.0 560.0,3635" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3650.0 C 690,3650.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3502.0 560.0,3558.0 560.0,3670" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3685.0 C 690,3685.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 386.0,3390 C 386.0,3516.0 560.0,3579.0 560.0,3705" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3720.0 C 690,3720.0 650,3355.0 690,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 800,3355.0 C 996.0,3355.0 1094.0,3625.0 1290,3625.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 800,3355.0 C 996.0,3355.0 1094.0,3715.0 1290,3715.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3370.0 C 690,3370.0 650,3445.0 690,3445.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 650,3405.0 C 690,3405.0 650,3445.0 690,3445.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 650,3370.0 C 690,3370.0 650,3535.0 690,3535.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3475.0 C 690,3475.0 650,3625.0 690,3625.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 650,3615.0 C 722.0,3615.0 758.0,3355.0 830,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 650,3720.0 C 722.0,3720.0 758.0,3625.0 830,3625.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 922,3625.0 C 962,3625.0 790,3535.0 830,3535.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 922,3355.0 C 962,3355.0 790,3445.0 830,3445.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 390,1787.0 C 622.0,1787.0 738.0,3445.0 970,3445.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<text x="680.0" y="2612.0" fill="#9aa3c7" font-size="10" text-anchor="middle">offer_email event type</text>
+<path d="M 1066.0,1320 C 1066.0,2120.0 1016.0,2520.0 1016.0,3320" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<text x="1041.0" y="2316.0" fill="#9aa3c7" font-size="10" text-anchor="middle">&quot;jakie mam oferty?&quot;</text>
+<path d="M 1066.0,1320 C 1066.0,2156.0 1016.0,2574.0 1016.0,3410" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<text x="1041.0" y="2361.0" fill="#9aa3c7" font-size="10" text-anchor="middle">instant &quot;wyślij&quot;</text>
+<path d="M 1062,3355.0 C 1102,3355.0 650,3625.0 690,3625.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1062,3445.0 C 1102,3445.0 930,3535.0 970,3535.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1062,3535.0 C 1102,3535.0 930,3625.0 970,3625.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1016.0,3590 C 1016.0,3510.0 1185.0,3470.0 1185.0,3390" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<text x="1100.5" y="3486.0" fill="#9aa3c7" font-size="10" text-anchor="middle">Wysłać</text>
+<path d="M 1240,3355.0 C 1280,3355.0 1090,3445.0 1130,3445.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1185.0,3390 C 1185.0,3434.0 1176.0,3456.0 1176.0,3500" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1240,3355.0 C 1280,3355.0 790,3445.0 830,3445.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1240,3355.0 C 1280,3355.0 790,3535.0 830,3535.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1240,3355.0 C 1280,3355.0 790,3715.0 830,3715.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 922,3715.0 C 1069.2,3715.0 1142.8,3355.0 1290,3355.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 1400,3355.0 C 1440,3355.0 1250,3445.0 1290,3445.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)"/>
+<text x="1345.0" y="3396.0" fill="#9aa3c7" font-size="10" text-anchor="middle">only after Gmail OK</text>
+<path d="M 1400,3445.0 C 1440,3445.0 1250,3535.0 1290,3535.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)"/>
+<path d="M 782,3715.0 C 985.2,3715.0 1086.8,3535.0 1290,3535.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3785.0 340,3785.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3820.0 340,3820.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3855.0 340,3855.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3890.0 340,3890.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3925.0 340,3925.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3960.0 340,3960.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,3995.0 340,3995.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,4030.0 340,4030.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 190,3825.0 C 250.0,3825.0 280.0,4065.0 340,4065.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 910,3825.0 850,3793.5 890,3793.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 910,3825.0 850,3825.5 890,3825.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 910,3825.0 850,3857.5 890,3857.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 910,3825.0 850,3889.5 890,3889.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 910,3825.0 850,3921.5 890,3921.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 910,3825.0 850,3953.5 890,3953.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 815.0,3860 C 815.0,3904.8 1035.0,3927.2 1035.0,3972" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 815.0,3860 C 815.0,3917.6 1035.0,3946.4 1035.0,4004" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 815.0,3860 C 815.0,3930.4 1035.0,3965.6 1035.0,4036" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3793.5 1200,3793.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3825.5 1200,3825.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3857.5 1200,3857.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3889.5 1200,3889.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3921.5 1200,3921.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3953.5 1200,3953.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,3985.5 1200,3985.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,4017.5 1200,4017.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 870,3825.0 C 1002.0,3825.0 1068.0,4049.5 1200,4049.5" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1520,4049.5 C 1560,4049.5 1520,3825.0 1560,3825.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)" stroke-dasharray="4 4"/>
+<path d="M 1660,3825.0 C 1700,3825.0 300,3925.0 340,3925.0" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-o)"/>
+<text x="1000.0" y="3871.0" fill="#9aa3c7" font-size="10" text-anchor="middle">event</text>
+<path d="M 720,3925.0 C 1056.0,3925.0 1224.0,3915.0 1560,3915.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1652,3915.0 C 1692,3915.0 1520,4005.0 1560,4005.0" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<path d="M 1652,4005.0 C 1692,4005.0 770,165.0 810,165.0" fill="none" stroke="#3ecf8e" stroke-width="1.6" marker-end="url(#arrow-c)" stroke-dasharray="4 4"/>
+<text x="1231.0" y="2081.0" fill="#9aa3c7" font-size="10" text-anchor="middle">updates subscription state</text>
+<path d="M 126.0,1320 C 126.0,2308.0 135.0,2802.0 135.0,3790" fill="none" stroke="#7a86b0" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+<text x="130.5" y="2551.0" fill="#9aa3c7" font-size="10" text-anchor="middle">(legacy: api also serves bot)</text>
+<g filter="url(#ns)">
+<rect x="80" y="130" width="110" height="70" rx="12" fill="#229ED9"/>
+<text x="135.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG</text>
+</g>
+<text x="135.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Telegram trigger</text>
+<text x="135.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">webhook /webhooks/telegram (prod) · polling (dev)</text>
+<g filter="url(#ns)">
+<rect x="220" y="130" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">👀</text>
+</g>
+<text x="266.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">mark_update_seen</text>
+<text x="266.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">TypeHandler · group=-1 · healthcheck heartbeat</text>
+<g filter="url(#ns)">
+<rect x="220" y="300" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="341.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">❤</text>
+</g>
+<text x="266.0" y="384" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Healthcheck HTTP</text>
+<text x="266.0" y="398" text-anchor="middle" fill="#8b94b8" font-size="10">create_healthcheck_server · /healthz</text>
+<g filter="url(#ns)">
+<rect x="220" y="470" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="266.0" y="511.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">ERR</text>
+</g>
+<text x="266.0" y="554" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">error_handler</text>
+<text x="266.0" y="568" text-anchor="middle" fill="#8b94b8" font-size="10">logs · reply ⚠️ Wystąpił błąd</text>
+<g filter="url(#ns)">
+<rect x="360" y="130" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="406.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">/start</text>
+</g>
+<text x="406.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">/start</text>
+<text x="406.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">start_command</text>
+<g filter="url(#ns)">
+<rect x="360" y="215" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="406.0" y="256.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✋</text>
+</g>
+<text x="406.0" y="299" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">/cancel</text>
+<text x="406.0" y="313" text-anchor="middle" fill="#8b94b8" font-size="10">handle_cancel_command</text>
+<g filter="url(#ns)">
+<rect x="360" y="300" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="406.0" y="341.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🐞</text>
+</g>
+<text x="406.0" y="384" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">/debug_brief</text>
+<text x="406.0" y="398" text-anchor="middle" fill="#8b94b8" font-size="10">debug_brief_command</text>
+<g filter="url(#ns)">
+<rect x="360" y="385" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="406.0" y="426.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔁</text>
+</g>
+<text x="406.0" y="469" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">/odswiez_kolumny</text>
+<text x="406.0" y="483" text-anchor="middle" fill="#8b94b8" font-size="10">handle_refresh_columns_command</text>
+<g filter="url(#ns)">
+<rect x="500" y="130" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="546.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🎙</text>
+</g>
+<text x="546.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">filter VOICE|AUDIO</text>
+<text x="546.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">MessageHandler</text>
+<g filter="url(#ns)">
+<rect x="500" y="215" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="546.0" y="256.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📷</text>
+</g>
+<text x="546.0" y="299" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">filter PHOTO|IMAGE</text>
+<text x="546.0" y="313" text-anchor="middle" fill="#8b94b8" font-size="10">MessageHandler</text>
+<g filter="url(#ns)">
+<rect x="500" y="300" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="546.0" y="341.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">💬</text>
+</g>
+<text x="546.0" y="384" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">filter TEXT (no /cmd)</text>
+<text x="546.0" y="398" text-anchor="middle" fill="#8b94b8" font-size="10">MessageHandler</text>
+<g filter="url(#ns)">
+<rect x="500" y="385" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="546.0" y="426.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔘</text>
+</g>
+<text x="546.0" y="469" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">CallbackQueryHandler</text>
+<text x="546.0" y="483" text-anchor="middle" fill="#8b94b8" font-size="10">handle_button (callbacks)</text>
+<g filter="url(#ns)">
+<rect x="500" y="470" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="546.0" y="511.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↩</text>
+</g>
+<text x="546.0" y="554" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">filter ALL (fallback)</text>
+<text x="546.0" y="568" text-anchor="middle" fill="#8b94b8" font-size="10">handle_fallback</text>
+<g filter="url(#ns)">
+<rect x="660" y="130" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="706.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">👤</text>
+</g>
+<text x="706.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">check_user_registered</text>
+<text x="706.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">users.* · Supabase</text>
+<g filter="url(#ns)">
+<rect x="810" y="130" width="92" height="70" rx="12" fill="#635bff"/>
+<text x="856.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">💳</text>
+</g>
+<text x="856.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">check_subscription_active</text>
+<text x="856.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">Stripe-driven · _has_active_live_payment</text>
+<g filter="url(#ns)">
+<rect x="960" y="130" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1006.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">⏱</text>
+</g>
+<text x="1006.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">check_interaction_limit</text>
+<text x="1006.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">rate-limit per user</text>
+<g filter="url(#ns)">
+<rect x="1110" y="130" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1156.0" y="171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">+1</text>
+</g>
+<text x="1156.0" y="214" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">increment_interaction</text>
+<text x="1156.0" y="228" text-anchor="middle" fill="#8b94b8" font-size="10">counter bump</text>
+<g filter="url(#ns)">
+<rect x="660" y="250" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="706.0" y="291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">❌</text>
+</g>
+<text x="706.0" y="334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">send_unregistered_message</text>
+<text x="706.0" y="348" text-anchor="middle" fill="#8b94b8" font-size="10">→ Telegram reply</text>
+<g filter="url(#ns)">
+<rect x="810" y="250" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="856.0" y="291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">❌</text>
+</g>
+<text x="856.0" y="334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">send_subscription_expired</text>
+<text x="856.0" y="348" text-anchor="middle" fill="#8b94b8" font-size="10">→ Telegram reply</text>
+<g filter="url(#ns)">
+<rect x="960" y="250" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="1006.0" y="291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">❌</text>
+</g>
+<text x="1006.0" y="334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">send_rate_limit_message</text>
+<text x="1006.0" y="348" text-anchor="middle" fill="#8b94b8" font-size="10">→ Telegram reply</text>
+<g filter="url(#ns)">
+<rect x="1110" y="250" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="1156.0" y="291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔒</text>
+</g>
+<text x="1156.0" y="334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">is_private_chat</text>
+<text x="1156.0" y="348" text-anchor="middle" fill="#8b94b8" font-size="10">private-only check</text>
+<g filter="url(#ns)">
+<rect x="80" y="580" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="126.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🎙</text>
+</g>
+<text x="126.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">handle_voice</text>
+<text x="126.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">bot/handlers/voice.py</text>
+<g filter="url(#ns)">
+<rect x="220" y="580" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="266.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">⬇</text>
+</g>
+<text x="266.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">TG File download</text>
+<text x="266.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">voice.get_file · bytes</text>
+<g filter="url(#ns)">
+<rect x="360" y="580" width="92" height="70" rx="12" fill="#10a37f"/>
+<text x="406.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Whisper</text>
+</g>
+<text x="406.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Whisper STT</text>
+<text x="406.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">shared/whisper_stt.py · transcribe_voice</text>
+<g filter="url(#ns)">
+<rect x="500" y="580" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="546.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">σ</text>
+</g>
+<text x="546.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_segment_avg_logprob</text>
+<text x="546.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">low-confidence guard</text>
+<g filter="url(#ns)">
+<rect x="640" y="580" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="686.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="686.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Polish name post-pass</text>
+<text x="686.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">shared/voice_postproc.py · Haiku · normalize_polish_names</text>
+<g filter="url(#ns)">
+<rect x="780" y="580" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="826.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Δ</text>
+</g>
+<text x="826.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_token_diff_ratio</text>
+<text x="826.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">fallback if model drifted</text>
+<g filter="url(#ns)">
+<rect x="920" y="580" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="966.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🕶</text>
+</g>
+<text x="966.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_redacted_postproc_summary</text>
+<text x="966.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">log without PII</text>
+<g filter="url(#ns)">
+<rect x="1060" y="580" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1106.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅❌</text>
+</g>
+<text x="1106.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Voice 2-button card</text>
+<text x="1106.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">build_confirm_cancel_buttons · ✅ Zapisz / ❌ Anuluj</text>
+<g filter="url(#ns)">
+<rect x="1200" y="580" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1246.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📦</text>
+</g>
+<text x="1246.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">pending CLIENT_CONTEXT</text>
+<text x="1246.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">save_pending · ClientContextPayload (voice)</text>
+<g filter="url(#ns)">
+<rect x="1340" y="580" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="1386.0" y="621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↪</text>
+</g>
+<text x="1386.0" y="664" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">handle_text(text_override=)</text>
+<text x="1386.0" y="678" text-anchor="middle" fill="#8b94b8" font-size="10">voice → normal text path</text>
+<g filter="url(#ns)">
+<rect x="80" y="880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="126.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📷</text>
+</g>
+<text x="126.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">handle_photo</text>
+<text x="126.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">bot/handlers/photo.py</text>
+<g filter="url(#ns)">
+<rect x="220" y="880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">id</text>
+</g>
+<text x="266.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_file_id_from_update</text>
+<text x="266.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">extract file_id</text>
+<g filter="url(#ns)">
+<rect x="220" y="970" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📝</text>
+</g>
+<text x="266.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_caption_from_update</text>
+<text x="266.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">user-supplied caption</text>
+<g filter="url(#ns)">
+<rect x="360" y="880" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="406.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔍</text>
+</g>
+<text x="406.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_explicit_target_query</text>
+<text x="406.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">client name in caption?</text>
+<g filter="url(#ns)">
+<rect x="360" y="970" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="406.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">≈</text>
+</g>
+<text x="406.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_client_matches_text</text>
+<text x="406.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">name/city overlap test</text>
+<g filter="url(#ns)">
+<rect x="500" y="880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="546.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">👥</text>
+</g>
+<text x="546.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_resolve_clients_from_text</text>
+<text x="546.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">search_clients(user_id, …)</text>
+<g filter="url(#ns)">
+<rect x="500" y="970" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="546.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">⏱15m</text>
+</g>
+<text x="546.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">15-min active session</text>
+<text x="546.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">derive_active_client · TTL</text>
+<g filter="url(#ns)">
+<rect x="640" y="880" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="686.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅</text>
+</g>
+<text x="686.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_show_confirmation</text>
+<text x="686.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">single match → R1 card</text>
+<g filter="url(#ns)">
+<rect x="640" y="970" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="686.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">1·2·3</text>
+</g>
+<text x="686.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_show_multi_match</text>
+<text x="686.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">≥2 hits · numeric pick</text>
+<g filter="url(#ns)">
+<rect x="640" y="1060" width="92" height="70" rx="12" fill="#f59e0b"/>
+<text x="686.0" y="1101.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">?</text>
+</g>
+<text x="686.0" y="1144" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_show_not_found</text>
+<text x="686.0" y="1158" text-anchor="middle" fill="#8b94b8" font-size="10">[+ Dodaj klienta]</text>
+<g filter="url(#ns)">
+<rect x="780" y="1060" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="826.0" y="1101.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">➕</text>
+</g>
+<text x="826.0" y="1144" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">start_photo_add_client</text>
+<text x="826.0" y="1158" text-anchor="middle" fill="#8b94b8" font-size="10">branch → add_client</text>
+<g filter="url(#ns)">
+<rect x="780" y="970" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="826.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">→</text>
+</g>
+<text x="826.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">handle_photo_select_client</text>
+<text x="826.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">row_str callback</text>
+<g filter="url(#ns)">
+<rect x="780" y="880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="826.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↑S</text>
+</g>
+<text x="826.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">upload_photo_for_session</text>
+<text x="826.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">session route</text>
+<g filter="url(#ns)">
+<rect x="920" y="880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="966.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↑C</text>
+</g>
+<text x="966.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">upload_photo_for_client</text>
+<text x="966.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">client route</text>
+<g filter="url(#ns)">
+<rect x="1060" y="880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="1106.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✓</text>
+</g>
+<text x="1106.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">confirm_photo_upload</text>
+<text x="1106.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">callback handler</text>
+<g filter="url(#ns)">
+<rect x="1200" y="970" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="1246.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✓+</text>
+</g>
+<text x="1246.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">complete_photo_after_add_client</text>
+<text x="1246.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">post add_client commit</text>
+<g filter="url(#ns)">
+<rect x="1200" y="880" width="92" height="70" rx="12" fill="#fbbc04"/>
+<text x="1246.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Drive</text>
+</g>
+<text x="1246.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Google Drive folder</text>
+<text x="1246.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">shared/google_drive.py · per-client folder</text>
+<g filter="url(#ns)">
+<rect x="1340" y="880" width="92" height="70" rx="12" fill="#34a853"/>
+<text x="1386.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">N</text>
+</g>
+<text x="1386.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Sheets N=Zdjęcia</text>
+<text x="1386.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">photo count cell</text>
+<g filter="url(#ns)">
+<rect x="1340" y="970" width="92" height="70" rx="12" fill="#34a853"/>
+<text x="1386.0" y="1011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">O</text>
+</g>
+<text x="1386.0" y="1054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Sheets O=Link</text>
+<text x="1386.0" y="1068" text-anchor="middle" fill="#8b94b8" font-size="10">Drive folder URL</text>
+<g filter="url(#ns)">
+<rect x="1480" y="880" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="1526.0" y="921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG</text>
+</g>
+<text x="1526.0" y="964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Telegram reply</text>
+<text x="1526.0" y="978" text-anchor="middle" fill="#8b94b8" font-size="10">MarkdownV2 confirmation</text>
+<g filter="url(#ns)">
+<rect x="80" y="1250" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="126.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">💬</text>
+</g>
+<text x="126.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">handle_text</text>
+<text x="126.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">bot/handlers/text.py · 4056 lines</text>
+<g filter="url(#ns)">
+<rect x="220" y="1250" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="266.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🧠</text>
+</g>
+<text x="266.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">derive_active_client</text>
+<text x="266.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">shared/active_client.py · R6</text>
+<g filter="url(#ns)">
+<rect x="360" y="1250" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="406.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📜</text>
+</g>
+<text x="406.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">get_conversation_history</text>
+<text x="406.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">10 msg / 30 min · Supabase</text>
+<g filter="url(#ns)">
+<rect x="360" y="1340" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="406.0" y="1381.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📜∅</text>
+</g>
+<text x="406.0" y="1424" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">get_history_unless_pending</text>
+<text x="406.0" y="1438" text-anchor="middle" fill="#8b94b8" font-size="10">skip when in pending flow</text>
+<g filter="url(#ns)">
+<rect x="500" y="1250" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="546.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">M+T</text>
+</g>
+<text x="546.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_meeting_preflight_hint</text>
+<text x="546.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">regex: meeting + temporal</text>
+<g filter="url(#ns)">
+<rect x="500" y="1340" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="546.0" y="1381.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">+kl</text>
+</g>
+<text x="546.0" y="1424" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_add_client_preflight_hint</text>
+<text x="546.0" y="1438" text-anchor="middle" fill="#8b94b8" font-size="10">regex: dodaj/dopisz</text>
+<g filter="url(#ns)">
+<rect x="500" y="1430" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="546.0" y="1471.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">: n</text>
+</g>
+<text x="546.0" y="1514" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_NOTE_SHORTHAND_RE</text>
+<text x="546.0" y="1528" text-anchor="middle" fill="#8b94b8" font-size="10">name: note shorthand</text>
+<g filter="url(#ns)">
+<rect x="500" y="1520" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="546.0" y="1561.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Δst</text>
+</g>
+<text x="546.0" y="1604" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_STATUS_MARKER_RE</text>
+<text x="546.0" y="1618" text-anchor="middle" fill="#8b94b8" font-size="10">podpisał/rezygnuje/zamontowano</text>
+<g filter="url(#ns)">
+<rect x="680" y="1250" width="110" height="70" rx="12" fill="#c89b6c"/>
+<text x="735.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="735.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">call_claude_with_tools</text>
+<text x="735.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">shared/intent/router.py · Haiku · tool-use</text>
+<rect x="820" y="1220" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1234.0" fill="#dde4ff" font-size="11" font-weight="600">record_add_client</text>
+<rect x="820" y="1250" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1264.0" fill="#dde4ff" font-size="11" font-weight="600">record_show_client</text>
+<rect x="820" y="1280" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1294.0" fill="#dde4ff" font-size="11" font-weight="600">record_add_note</text>
+<rect x="820" y="1310" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1324.0" fill="#dde4ff" font-size="11" font-weight="600">record_change_status</text>
+<rect x="820" y="1340" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1354.0" fill="#dde4ff" font-size="11" font-weight="600">record_add_meeting</text>
+<rect x="820" y="1370" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1384.0" fill="#dde4ff" font-size="11" font-weight="600">record_show_day_plan</text>
+<rect x="820" y="1400" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1414.0" fill="#dde4ff" font-size="11" font-weight="600">record_general_question</text>
+<rect x="820" y="1430" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1444.0" fill="#dde4ff" font-size="11" font-weight="600">record_out_of_scope</text>
+<text x="982" y="1444.0" fill="#8b94b8" font-size="10" text-anchor="end">feature_key→category</text>
+<rect x="820" y="1460" width="170" height="22" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="828" y="1474.0" fill="#dde4ff" font-size="11" font-weight="600">record_multi_meeting_rejection</text>
+<g filter="url(#ns)">
+<rect x="1020" y="1250" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="1066.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">→IT</text>
+</g>
+<text x="1066.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_to_intent_result</text>
+<text x="1066.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">tool→IntentType · ScopeTier</text>
+<g filter="url(#ns)">
+<rect x="1020" y="1350" width="92" height="70" rx="12" fill="#f59e0b"/>
+<text x="1066.0" y="1391.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🏷</text>
+</g>
+<text x="1066.0" y="1434" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">banner_for(result)</text>
+<text x="1066.0" y="1448" text-anchor="middle" fill="#8b94b8" font-size="10">POST_MVP / VISION / UNPLANNED / MULTI</text>
+<g filter="url(#ns)">
+<rect x="1020" y="1450" width="92" height="70" rx="12" fill="#f59e0b"/>
+<text x="1066.0" y="1491.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🏷·</text>
+</g>
+<text x="1066.0" y="1534" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">banner_for_legacy</text>
+<text x="1066.0" y="1548" text-anchor="middle" fill="#8b94b8" font-size="10">intent_data fallback</text>
+<g filter="url(#ns)">
+<rect x="1180" y="1250" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="1226.0" y="1291.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="1226.0" y="1334" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">extract_client_data</text>
+<text x="1226.0" y="1348" text-anchor="middle" fill="#8b94b8" font-size="10">Claude · structured</text>
+<g filter="url(#ns)">
+<rect x="1180" y="1340" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="1226.0" y="1381.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="1226.0" y="1424" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">extract_meeting_data</text>
+<text x="1226.0" y="1438" text-anchor="middle" fill="#8b94b8" font-size="10">Claude · structured</text>
+<g filter="url(#ns)">
+<rect x="1180" y="1430" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="1226.0" y="1471.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="1226.0" y="1514" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">extract_note_data</text>
+<text x="1226.0" y="1528" text-anchor="middle" fill="#8b94b8" font-size="10">Claude · structured</text>
+<g filter="url(#ns)">
+<rect x="1180" y="1520" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="1226.0" y="1561.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="1226.0" y="1604" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">generate_bot_response</text>
+<text x="1226.0" y="1618" text-anchor="middle" fill="#8b94b8" font-size="10">Claude reply (general_question)</text>
+<g filter="url(#ns)">
+<rect x="80" y="1680" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="126.0" y="1721.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔀</text>
+</g>
+<text x="126.0" y="1764" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Switch · IntentType</text>
+<text x="126.0" y="1778" text-anchor="middle" fill="#8b94b8" font-size="10">11 enum values · ScopeTier</text>
+<rect x="240" y="1620" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1638.0" fill="#dde4ff" font-size="11" font-weight="600">add_client</text>
+<text x="382" y="1638.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1658" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1676.0" fill="#dde4ff" font-size="11" font-weight="600">show_client</text>
+<text x="382" y="1676.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1696" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1714.0" fill="#dde4ff" font-size="11" font-weight="600">add_note</text>
+<text x="382" y="1714.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1734" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1752.0" fill="#dde4ff" font-size="11" font-weight="600">change_status</text>
+<text x="382" y="1752.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1772" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1790.0" fill="#dde4ff" font-size="11" font-weight="600">add_meeting</text>
+<text x="382" y="1790.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1810" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1828.0" fill="#dde4ff" font-size="11" font-weight="600">show_day_plan</text>
+<text x="382" y="1828.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1848" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1866.0" fill="#dde4ff" font-size="11" font-weight="600">general_question</text>
+<text x="382" y="1866.0" fill="#8b94b8" font-size="10" text-anchor="end">MVP</text>
+<rect x="240" y="1886" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1904.0" fill="#dde4ff" font-size="11" font-weight="600">post_mvp_roadmap</text>
+<text x="382" y="1904.0" fill="#8b94b8" font-size="10" text-anchor="end">banner</text>
+<rect x="240" y="1924" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1942.0" fill="#dde4ff" font-size="11" font-weight="600">vision_only</text>
+<text x="382" y="1942.0" fill="#8b94b8" font-size="10" text-anchor="end">banner</text>
+<rect x="240" y="1962" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="1980.0" fill="#dde4ff" font-size="11" font-weight="600">unplanned</text>
+<text x="382" y="1980.0" fill="#8b94b8" font-size="10" text-anchor="end">banner</text>
+<rect x="240" y="2000" width="150" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2018.0" fill="#dde4ff" font-size="11" font-weight="600">multi_meeting</text>
+<text x="382" y="2018.0" fill="#8b94b8" font-size="10" text-anchor="end">rejected</text>
+<g filter="url(#ns)">
+<rect x="440" y="1620" width="110" height="70" rx="12" fill="#506bda"/>
+<text x="495.0" y="1661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔍</text>
+</g>
+<text x="495.0" y="1704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">R4 client identify</text>
+<text x="495.0" y="1718" text-anchor="middle" fill="#8b94b8" font-size="10">imię+nazwisko+miasto · fuzzy · PL declension</text>
+<g filter="url(#ns)">
+<rect x="590" y="1620" width="92" height="70" rx="12" fill="#34a853"/>
+<text x="636.0" y="1661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets</text>
+</g>
+<text x="636.0" y="1704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">search_clients</text>
+<text x="636.0" y="1718" text-anchor="middle" fill="#8b94b8" font-size="10">shared/google_sheets.py</text>
+<g filter="url(#ns)">
+<rect x="590" y="1710" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="636.0" y="1751.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">≈</text>
+</g>
+<text x="636.0" y="1794" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">matching.fuzzy</text>
+<text x="636.0" y="1808" text-anchor="middle" fill="#8b94b8" font-size="10">shared/matching.py</text>
+<g filter="url(#ns)">
+<rect x="590" y="1800" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="636.0" y="1841.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">PL</text>
+</g>
+<text x="636.0" y="1884" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Polish declension</text>
+<text x="636.0" y="1898" text-anchor="middle" fill="#8b94b8" font-size="10">Krzywińskim → Krzywiński</text>
+<g filter="url(#ns)">
+<rect x="590" y="1890" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="636.0" y="1931.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔍s</text>
+</g>
+<text x="636.0" y="1974" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">shared/search.py</text>
+<text x="636.0" y="1988" text-anchor="middle" fill="#8b94b8" font-size="10">name+city scoring</text>
+<g filter="url(#ns)">
+<rect x="740" y="1620" width="70" height="50" rx="12" fill="#3ecf8e"/>
+<text x="775.0" y="1651.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">1</text>
+</g>
+<text x="775.0" y="1684" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">match=1</text>
+<text x="775.0" y="1698" text-anchor="middle" fill="#8b94b8" font-size="10">single hit → continue</text>
+<g filter="url(#ns)">
+<rect x="740" y="1690" width="70" height="50" rx="12" fill="#506bda"/>
+<text x="775.0" y="1721.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">n</text>
+</g>
+<text x="775.0" y="1754" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">match≥2</text>
+<text x="775.0" y="1768" text-anchor="middle" fill="#8b94b8" font-size="10">→ multi-match card</text>
+<g filter="url(#ns)">
+<rect x="740" y="1760" width="70" height="50" rx="12" fill="#f59e0b"/>
+<text x="775.0" y="1791.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Δ</text>
+</g>
+<text x="775.0" y="1824" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">match=1 on add_client</text>
+<text x="775.0" y="1838" text-anchor="middle" fill="#8b94b8" font-size="10">→ duplicate resolution</text>
+<g filter="url(#ns)">
+<rect x="740" y="1830" width="70" height="50" rx="12" fill="#e76f6f"/>
+<text x="775.0" y="1861.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">∅</text>
+</g>
+<text x="775.0" y="1894" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">match=0</text>
+<text x="775.0" y="1908" text-anchor="middle" fill="#8b94b8" font-size="10">ask / fail</text>
+<g filter="url(#ns)">
+<rect x="880" y="1690" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="926.0" y="1731.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">1·2·3</text>
+</g>
+<text x="926.0" y="1774" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Multi-match card</text>
+<text x="926.0" y="1788" text-anchor="middle" fill="#8b94b8" font-size="10">build_choice_buttons · [1][2][3]</text>
+<g filter="url(#ns)">
+<rect x="880" y="1760" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="926.0" y="1801.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">N/A</text>
+</g>
+<text x="926.0" y="1844" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Duplicate card</text>
+<text x="926.0" y="1858" text-anchor="middle" fill="#8b94b8" font-size="10">build_duplicate_buttons · [Nowy] [Aktualizuj]</text>
+<g filter="url(#ns)">
+<rect x="440" y="1800" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="486.0" y="1841.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">R6</text>
+</g>
+<text x="486.0" y="1884" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Active client R6</text>
+<text x="486.0" y="1898" text-anchor="middle" fill="#8b94b8" font-size="10">derive_active_client · 30 min</text>
+<g filter="url(#ns)">
+<rect x="440" y="1890" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="486.0" y="1931.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Δfield</text>
+</g>
+<text x="486.0" y="1974" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">parse_client_field_update</text>
+<text x="486.0" y="1988" text-anchor="middle" fill="#8b94b8" font-size="10">shared/behavior/client_field_update.py</text>
+<g filter="url(#ns)">
+<rect x="1040" y="1620" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="1086.0" y="1661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Atp</text>
+</g>
+<text x="1086.0" y="1704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">action_type</text>
+<text x="1086.0" y="1718" text-anchor="middle" fill="#8b94b8" font-size="10">calendar_title · action_label · success</text>
+<g filter="url(#ns)">
+<rect x="1040" y="1710" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="1086.0" y="1751.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📍</text>
+</g>
+<text x="1086.0" y="1794" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">resolve_meeting_location</text>
+<text x="1086.0" y="1808" text-anchor="middle" fill="#8b94b8" font-size="10">shared/behavior/meeting_location.py</text>
+<g filter="url(#ns)">
+<rect x="1040" y="1800" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="1086.0" y="1841.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">→?</text>
+</g>
+<text x="1086.0" y="1884" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">classify_next_step_reply</text>
+<text x="1086.0" y="1898" text-anchor="middle" fill="#8b94b8" font-size="10">NextStepDecisionKind</text>
+<g filter="url(#ns)">
+<rect x="1040" y="1890" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="1086.0" y="1931.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔗</text>
+</g>
+<text x="1086.0" y="1974" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_meeting_seeded_client_data</text>
+<text x="1086.0" y="1988" text-anchor="middle" fill="#8b94b8" font-size="10">meeting_client_flow.py</text>
+<g filter="url(#ns)">
+<rect x="80" y="2120" width="110" height="90" rx="12" fill="#f5b54a"/>
+<text x="135.0" y="2171.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📦</text>
+</g>
+<text x="135.0" y="2224" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">pending_flow_store</text>
+<text x="135.0" y="2238" text-anchor="middle" fill="#8b94b8" font-size="10">shared/pending/store.py · Supabase pending_flows</text>
+<rect x="240" y="2000" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2018.0" fill="#dde4ff" font-size="11" font-weight="600">ADD_CLIENT</text>
+<text x="442" y="2018.0" fill="#8b94b8" font-size="10" text-anchor="end">AddClientPayload</text>
+<rect x="240" y="2038" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2056.0" fill="#dde4ff" font-size="11" font-weight="600">ADD_CLIENT_DUPLICATE</text>
+<text x="442" y="2056.0" fill="#8b94b8" font-size="10" text-anchor="end">AddClientDuplicatePayload</text>
+<rect x="240" y="2076" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2094.0" fill="#dde4ff" font-size="11" font-weight="600">ADD_NOTE</text>
+<text x="442" y="2094.0" fill="#8b94b8" font-size="10" text-anchor="end">AddNotePayload</text>
+<rect x="240" y="2114" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2132.0" fill="#dde4ff" font-size="11" font-weight="600">CHANGE_STATUS</text>
+<text x="442" y="2132.0" fill="#8b94b8" font-size="10" text-anchor="end">ChangeStatusPayload</text>
+<rect x="240" y="2152" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2170.0" fill="#dde4ff" font-size="11" font-weight="600">ADD_MEETING</text>
+<text x="442" y="2170.0" fill="#8b94b8" font-size="10" text-anchor="end">AddMeetingPayload</text>
+<rect x="240" y="2190" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2208.0" fill="#dde4ff" font-size="11" font-weight="600">ADD_MEETING_DISAMBIGUATION</text>
+<text x="442" y="2208.0" fill="#8b94b8" font-size="10" text-anchor="end">AddMeetingDisambiguationPayload</text>
+<rect x="240" y="2228" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2246.0" fill="#dde4ff" font-size="11" font-weight="600">DISAMBIGUATION</text>
+<text x="442" y="2246.0" fill="#8b94b8" font-size="10" text-anchor="end">DisambiguationPayload</text>
+<rect x="240" y="2266" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2284.0" fill="#dde4ff" font-size="11" font-weight="600">CLIENT_CONTEXT</text>
+<text x="442" y="2284.0" fill="#8b94b8" font-size="10" text-anchor="end">ClientContextPayload</text>
+<rect x="240" y="2304" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2322.0" fill="#dde4ff" font-size="11" font-weight="600">CLIENT_FIELD_UPDATE_CONFIRM</text>
+<text x="442" y="2322.0" fill="#8b94b8" font-size="10" text-anchor="end">ClientFieldUpdateConfirmPayload</text>
+<rect x="240" y="2342" width="210" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="248" y="2360.0" fill="#dde4ff" font-size="11" font-weight="600">AWAITING_NEXT_STEP</text>
+<text x="442" y="2360.0" fill="#8b94b8" font-size="10" text-anchor="end">AwaitingNextStepPayload</text>
+<g filter="url(#ns)">
+<rect x="500" y="2000" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="546.0" y="2041.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">💾</text>
+</g>
+<text x="546.0" y="2084" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">save_pending</text>
+<text x="546.0" y="2098" text-anchor="middle" fill="#8b94b8" font-size="10">shared/pending/__init__.py</text>
+<g filter="url(#ns)">
+<rect x="500" y="2090" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="546.0" y="2131.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↻</text>
+</g>
+<text x="546.0" y="2174" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">get_pending_flow</text>
+<text x="546.0" y="2188" text-anchor="middle" fill="#8b94b8" font-size="10">Supabase read</text>
+<g filter="url(#ns)">
+<rect x="500" y="2180" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="546.0" y="2221.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🗑</text>
+</g>
+<text x="546.0" y="2264" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">delete_pending_flow</text>
+<text x="546.0" y="2278" text-anchor="middle" fill="#8b94b8" font-size="10">on confirm/cancel</text>
+<g filter="url(#ns)">
+<rect x="500" y="2270" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="546.0" y="2311.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔁</text>
+</g>
+<text x="546.0" y="2354" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">update_pending_followup</text>
+<text x="546.0" y="2368" text-anchor="middle" fill="#8b94b8" font-size="10">phone_call follow-up state</text>
+<g filter="url(#ns)">
+<rect x="660" y="2000" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="706.0" y="2041.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">3-btn</text>
+</g>
+<text x="706.0" y="2084" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_mutation_buttons</text>
+<text x="706.0" y="2098" text-anchor="middle" fill="#8b94b8" font-size="10">[✅ Zapisać] [➕ Dopisać] [❌ Anulować]</text>
+<g filter="url(#ns)">
+<rect x="660" y="2090" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="706.0" y="2131.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">2-btn</text>
+</g>
+<text x="706.0" y="2174" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_confirm_cancel_buttons</text>
+<text x="706.0" y="2188" text-anchor="middle" fill="#8b94b8" font-size="10">[✅ Zapisz] [❌ Anuluj]</text>
+<g filter="url(#ns)">
+<rect x="660" y="2180" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="706.0" y="2221.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">dup</text>
+</g>
+<text x="706.0" y="2264" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_duplicate_buttons</text>
+<text x="706.0" y="2278" text-anchor="middle" fill="#8b94b8" font-size="10">[Nowy] [Aktualizuj]</text>
+<g filter="url(#ns)">
+<rect x="660" y="2270" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="706.0" y="2311.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">1·2·3</text>
+</g>
+<text x="706.0" y="2354" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_choice_buttons</text>
+<text x="706.0" y="2368" text-anchor="middle" fill="#8b94b8" font-size="10">generic [1][2][3]</text>
+<g filter="url(#ns)">
+<rect x="820" y="2000" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="866.0" y="2041.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📋</text>
+</g>
+<text x="866.0" y="2084" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_add_client_card</text>
+<text x="866.0" y="2098" text-anchor="middle" fill="#8b94b8" font-size="10">shared/formatting.py</text>
+<g filter="url(#ns)">
+<rect x="820" y="2090" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="866.0" y="2131.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📋</text>
+</g>
+<text x="866.0" y="2174" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_client_card</text>
+<text x="866.0" y="2188" text-anchor="middle" fill="#8b94b8" font-size="10">show_client output</text>
+<g filter="url(#ns)">
+<rect x="820" y="2180" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="866.0" y="2221.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📋</text>
+</g>
+<text x="866.0" y="2264" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_confirmation</text>
+<text x="866.0" y="2278" text-anchor="middle" fill="#8b94b8" font-size="10">shared mutation card</text>
+<g filter="url(#ns)">
+<rect x="820" y="2270" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="866.0" y="2311.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📋</text>
+</g>
+<text x="866.0" y="2354" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_daily_schedule</text>
+<text x="866.0" y="2368" text-anchor="middle" fill="#8b94b8" font-size="10">show_day_plan</text>
+<g filter="url(#ns)">
+<rect x="820" y="2360" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="866.0" y="2401.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📋</text>
+</g>
+<text x="866.0" y="2444" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_edit_comparison</text>
+<text x="866.0" y="2458" text-anchor="middle" fill="#8b94b8" font-size="10">field update</text>
+<g filter="url(#ns)">
+<rect x="980" y="2000" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="1026.0" y="2041.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG</text>
+</g>
+<text x="1026.0" y="2084" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">reply_markdown_v2</text>
+<text x="1026.0" y="2098" text-anchor="middle" fill="#8b94b8" font-size="10">bot/utils/conversation_reply.py</text>
+<g filter="url(#ns)">
+<rect x="980" y="2090" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="1026.0" y="2131.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG·</text>
+</g>
+<text x="1026.0" y="2174" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">reply_text</text>
+<text x="1026.0" y="2188" text-anchor="middle" fill="#8b94b8" font-size="10">+ persist to conversation_history</text>
+<g filter="url(#ns)">
+<rect x="980" y="2180" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1026.0" y="2221.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">💬+</text>
+</g>
+<text x="1026.0" y="2264" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">save_conversation_message</text>
+<text x="1026.0" y="2278" text-anchor="middle" fill="#8b94b8" font-size="10">Supabase conversation_history</text>
+<g filter="url(#ns)">
+<rect x="1140" y="2000" width="110" height="70" rx="12" fill="#506bda"/>
+<text x="1195.0" y="2041.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔘</text>
+</g>
+<text x="1195.0" y="2084" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">handle_button</text>
+<text x="1195.0" y="2098" text-anchor="middle" fill="#8b94b8" font-size="10">bot/handlers/buttons.py · 647 lines · CallbackQueryHandler</text>
+<g filter="url(#ns)">
+<rect x="1140" y="2100" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1186.0" y="2141.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅</text>
+</g>
+<text x="1186.0" y="2184" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">callback save</text>
+<text x="1186.0" y="2198" text-anchor="middle" fill="#8b94b8" font-size="10">→ commit pipeline</text>
+<g filter="url(#ns)">
+<rect x="1140" y="2170" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1186.0" y="2211.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">➕</text>
+</g>
+<text x="1186.0" y="2254" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">callback append</text>
+<text x="1186.0" y="2268" text-anchor="middle" fill="#8b94b8" font-size="10">➕ Dopisać</text>
+<g filter="url(#ns)">
+<rect x="1140" y="2240" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="1186.0" y="2281.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">❌</text>
+</g>
+<text x="1186.0" y="2324" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">callback cancel</text>
+<text x="1186.0" y="2338" text-anchor="middle" fill="#8b94b8" font-size="10">❌ Anulować · delete_pending</text>
+<g filter="url(#ns)">
+<rect x="1140" y="2310" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1186.0" y="2351.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">N</text>
+</g>
+<text x="1186.0" y="2394" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">callback [Nowy]</text>
+<text x="1186.0" y="2408" text-anchor="middle" fill="#8b94b8" font-size="10">create new client row</text>
+<g filter="url(#ns)">
+<rect x="1140" y="2380" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1186.0" y="2421.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">A</text>
+</g>
+<text x="1186.0" y="2464" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">callback [Aktualizuj]</text>
+<text x="1186.0" y="2478" text-anchor="middle" fill="#8b94b8" font-size="10">update existing client</text>
+<g filter="url(#ns)">
+<rect x="80" y="2440" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="126.0" y="2481.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅+kl</text>
+</g>
+<text x="126.0" y="2524" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">commit_add_client</text>
+<text x="126.0" y="2538" text-anchor="middle" fill="#8b94b8" font-size="10">shared/mutations/add_client.py</text>
+<g filter="url(#ns)">
+<rect x="80" y="2530" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="126.0" y="2571.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">Δkl</text>
+</g>
+<text x="126.0" y="2614" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">commit_update_client_fields</text>
+<text x="126.0" y="2628" text-anchor="middle" fill="#8b94b8" font-size="10">edit existing</text>
+<g filter="url(#ns)">
+<rect x="80" y="2620" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="126.0" y="2661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅n</text>
+</g>
+<text x="126.0" y="2704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">commit_add_note</text>
+<text x="126.0" y="2718" text-anchor="middle" fill="#8b94b8" font-size="10">append to Notatki</text>
+<g filter="url(#ns)">
+<rect x="80" y="2710" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="126.0" y="2751.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅Δst</text>
+</g>
+<text x="126.0" y="2794" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">commit_change_status</text>
+<text x="126.0" y="2808" text-anchor="middle" fill="#8b94b8" font-size="10">Sheets F + Calendar event</text>
+<g filter="url(#ns)">
+<rect x="80" y="2800" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="126.0" y="2841.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅mtg</text>
+</g>
+<text x="126.0" y="2884" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">commit_add_meeting</text>
+<text x="126.0" y="2898" text-anchor="middle" fill="#8b94b8" font-size="10">Sheets J/L + Calendar event</text>
+<g filter="url(#ns)">
+<rect x="240" y="2800" width="92" height="80" rx="12" fill="#9d6bd9"/>
+<text x="286.0" y="2846.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔗</text>
+</g>
+<text x="286.0" y="2894" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_meeting_seeded_client_data</text>
+<text x="286.0" y="2908" text-anchor="middle" fill="#8b94b8" font-size="10">missing fields for compound meeting+client</text>
+<g filter="url(#ns)">
+<rect x="240" y="2880" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="286.0" y="2921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔗·</text>
+</g>
+<text x="286.0" y="2964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">canonical_missing_client_fields</text>
+<text x="286.0" y="2978" text-anchor="middle" fill="#8b94b8" font-size="10">produce add_client follow-up</text>
+<g filter="url(#ns)">
+<rect x="240" y="2440" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="286.0" y="2481.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Fdef</text>
+</g>
+<text x="286.0" y="2524" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">with_default_client_status</text>
+<text x="286.0" y="2538" text-anchor="middle" fill="#8b94b8" font-size="10">F=Nowy lead</text>
+<g filter="url(#ns)">
+<rect x="240" y="2620" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="286.0" y="2661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">fmt</text>
+</g>
+<text x="286.0" y="2704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_format_note_entry</text>
+<text x="286.0" y="2718" text-anchor="middle" fill="#8b94b8" font-size="10">[20.05.2026] ...</text>
+<g filter="url(#ns)">
+<rect x="240" y="2710" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="286.0" y="2751.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">∪</text>
+</g>
+<text x="286.0" y="2794" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_merge_with_existing</text>
+<text x="286.0" y="2808" text-anchor="middle" fill="#8b94b8" font-size="10">join existing Notatki</text>
+<g filter="url(#ns)">
+<rect x="240" y="2530" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="286.0" y="2571.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📅</text>
+</g>
+<text x="286.0" y="2614" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_next_step_date_for_sheets</text>
+<text x="286.0" y="2628" text-anchor="middle" fill="#8b94b8" font-size="10">DD.MM.YYYY</text>
+<g filter="url(#ns)">
+<rect x="400" y="2440" width="110" height="70" rx="12" fill="#34a853"/>
+<text x="455.0" y="2481.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets</text>
+</g>
+<text x="455.0" y="2524" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">google_sheets.add_client</text>
+<text x="455.0" y="2538" text-anchor="middle" fill="#8b94b8" font-size="10">new row</text>
+<g filter="url(#ns)">
+<rect x="400" y="2530" width="110" height="70" rx="12" fill="#34a853"/>
+<text x="455.0" y="2571.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets</text>
+</g>
+<text x="455.0" y="2614" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">google_sheets.update_client</text>
+<text x="455.0" y="2628" text-anchor="middle" fill="#8b94b8" font-size="10">cell update</text>
+<g filter="url(#ns)">
+<rect x="400" y="2620" width="110" height="70" rx="12" fill="#34a853"/>
+<text x="455.0" y="2661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets·r</text>
+</g>
+<text x="455.0" y="2704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">get_all_clients · get_sheet_headers</text>
+<text x="455.0" y="2718" text-anchor="middle" fill="#8b94b8" font-size="10">schema read</text>
+<g filter="url(#ns)">
+<rect x="560" y="2440" width="110" height="70" rx="12" fill="#4285f4"/>
+<text x="615.0" y="2481.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Cal+</text>
+</g>
+<text x="615.0" y="2524" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">google_calendar.create_event</text>
+<text x="615.0" y="2538" text-anchor="middle" fill="#8b94b8" font-size="10">lead / phone_call / offer_email / in_person</text>
+<g filter="url(#ns)">
+<rect x="560" y="2530" width="110" height="70" rx="12" fill="#4285f4"/>
+<text x="615.0" y="2571.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Cal?</text>
+</g>
+<text x="615.0" y="2614" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">check_conflicts</text>
+<text x="615.0" y="2628" text-anchor="middle" fill="#8b94b8" font-size="10">before create_event</text>
+<g filter="url(#ns)">
+<rect x="560" y="2620" width="110" height="70" rx="12" fill="#4285f4"/>
+<text x="615.0" y="2661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Cal d</text>
+</g>
+<text x="615.0" y="2704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">get_events_for_date</text>
+<text x="615.0" y="2718" text-anchor="middle" fill="#8b94b8" font-size="10">show_day_plan</text>
+<g filter="url(#ns)">
+<rect x="560" y="2710" width="110" height="70" rx="12" fill="#4285f4"/>
+<text x="615.0" y="2751.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Cal r</text>
+</g>
+<text x="615.0" y="2794" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">get_events_for_range</text>
+<text x="615.0" y="2808" text-anchor="middle" fill="#8b94b8" font-size="10">morning brief</text>
+<g filter="url(#ns)">
+<rect x="720" y="2530" width="110" height="70" rx="12" fill="#f5b54a"/>
+<text x="775.0" y="2571.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">?→</text>
+</g>
+<text x="775.0" y="2614" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">next_action_prompt</text>
+<text x="775.0" y="2628" text-anchor="middle" fill="#8b94b8" font-size="10">after add_client · open prose ask</text>
+<g filter="url(#ns)">
+<rect x="720" y="2620" width="110" height="70" rx="12" fill="#f5b54a"/>
+<text x="775.0" y="2661.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📦?</text>
+</g>
+<text x="775.0" y="2704" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">save AWAITING_NEXT_STEP</text>
+<text x="775.0" y="2718" text-anchor="middle" fill="#8b94b8" font-size="10">AwaitingNextStepPayload</text>
+<g filter="url(#ns)">
+<rect x="720" y="2710" width="110" height="70" rx="12" fill="#f5b54a"/>
+<text x="775.0" y="2751.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📦·</text>
+</g>
+<text x="775.0" y="2794" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">save CLIENT_CONTEXT</text>
+<text x="775.0" y="2808" text-anchor="middle" fill="#8b94b8" font-size="10">ClientContextPayload (active client)</text>
+<g filter="url(#ns)">
+<rect x="720" y="2440" width="110" height="70" rx="12" fill="#229ED9"/>
+<text x="775.0" y="2481.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG✓</text>
+</g>
+<text x="775.0" y="2524" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">action success message</text>
+<text x="775.0" y="2538" text-anchor="middle" fill="#8b94b8" font-size="10">shared/behavior/action_type.success_message</text>
+<g filter="url(#ns)">
+<rect x="80" y="2940" width="92" height="70" rx="12" fill="#ff6d5a"/>
+<text x="126.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">07:00</text>
+</g>
+<text x="126.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Cron 07:00 Warsaw</text>
+<text x="126.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">register_morning_brief · run_daily</text>
+<g filter="url(#ns)">
+<rect x="220" y="2940" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🌅</text>
+</g>
+<text x="266.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_morning_brief_callback</text>
+<text x="266.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">bot/scheduler/morning_brief_job.py</text>
+<g filter="url(#ns)">
+<rect x="360" y="2940" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="406.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🚀</text>
+</g>
+<text x="406.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">run_morning_brief</text>
+<text x="406.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">shared/proactive/morning_brief.py</text>
+<g filter="url(#ns)">
+<rect x="500" y="2940" width="92" height="70" rx="12" fill="#34a853"/>
+<text x="546.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">→ns</text>
+</g>
+<text x="546.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_fetch_open_next_steps</text>
+<text x="546.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">Sheets + Calendar today</text>
+<g filter="url(#ns)">
+<rect x="640" y="2940" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="686.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">1/d</text>
+</g>
+<text x="686.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_already_sent_today</text>
+<text x="686.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">Supabase sent_morning_briefs</text>
+<g filter="url(#ns)">
+<rect x="780" y="2940" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="826.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="826.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">format_morning_brief</text>
+<text x="826.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">Claude · shared/claude_ai.py</text>
+<g filter="url(#ns)">
+<rect x="920" y="2940" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="966.0" y="2981.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG</text>
+</g>
+<text x="966.0" y="3024" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">bot.send_message</text>
+<text x="966.0" y="3038" text-anchor="middle" fill="#8b94b8" font-size="10">Telegram push to handlowiec</text>
+<g filter="url(#ns)">
+<rect x="80" y="3050" width="92" height="70" rx="12" fill="#ff6d5a"/>
+<text x="126.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">03:00</text>
+</g>
+<text x="126.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Cron 03:00 Warsaw</text>
+<text x="126.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">register_admin_mirror · daily</text>
+<g filter="url(#ns)">
+<rect x="220" y="3050" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🪞</text>
+</g>
+<text x="266.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_admin_mirror_callback</text>
+<text x="266.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">bot/scheduler/admin_mirror_job.py</text>
+<g filter="url(#ns)">
+<rect x="360" y="3050" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="406.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↻</text>
+</g>
+<text x="406.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">admin_mirror.sync</text>
+<text x="406.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">shared/admin_mirror/sync.py</text>
+<g filter="url(#ns)">
+<rect x="500" y="3050" width="92" height="70" rx="12" fill="#34a853"/>
+<text x="546.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">→c</text>
+</g>
+<text x="546.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_fetch_active_user_contacts</text>
+<text x="546.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">Sheets + Supabase per user</text>
+<g filter="url(#ns)">
+<rect x="640" y="3050" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="686.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">io</text>
+</g>
+<text x="686.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">admin_mirror.google_io</text>
+<text x="686.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">OAuth-as-owner writes</text>
+<g filter="url(#ns)">
+<rect x="780" y="3050" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="826.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">rows</text>
+</g>
+<text x="826.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">admin_mirror.rows / calendar / data</text>
+<text x="826.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">tab builders</text>
+<g filter="url(#ns)">
+<rect x="920" y="3050" width="92" height="70" rx="12" fill="#34a853"/>
+<text x="966.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">OwnS</text>
+</g>
+<text x="966.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Owner Sheets snapshot</text>
+<text x="966.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">writes owner spreadsheet</text>
+<g filter="url(#ns)">
+<rect x="1060" y="3050" width="92" height="70" rx="12" fill="#4285f4"/>
+<text x="1106.0" y="3091.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">OwnC</text>
+</g>
+<text x="1106.0" y="3134" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Owner Calendar copy</text>
+<text x="1106.0" y="3148" text-anchor="middle" fill="#8b94b8" font-size="10">future appointments mirror</text>
+<g filter="url(#ns)">
+<rect x="80" y="3160" width="92" height="70" rx="12" fill="#ff6d5a"/>
+<text x="126.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">02:15</text>
+</g>
+<text x="126.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Cron 02:15 Warsaw</text>
+<text x="126.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">register_user_profile_agent · daily</text>
+<g filter="url(#ns)">
+<rect x="220" y="3160" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="266.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">👤</text>
+</g>
+<text x="266.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_user_profile_agent_callback</text>
+<text x="266.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">bot/scheduler/user_profile_agent_job.py</text>
+<g filter="url(#ns)">
+<rect x="360" y="3160" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="406.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🚀</text>
+</g>
+<text x="406.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">run_user_profile_agent</text>
+<text x="406.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">shared/user_profiles/agent.py</text>
+<g filter="url(#ns)">
+<rect x="500" y="3160" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="546.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">∀u</text>
+</g>
+<text x="546.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_run_for_user</text>
+<text x="546.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">iterate active users</text>
+<g filter="url(#ns)">
+<rect x="640" y="3160" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="686.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">hist</text>
+</g>
+<text x="686.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_format_messages · _last_message_at</text>
+<text x="686.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">recent conversation_history</text>
+<g filter="url(#ns)">
+<rect x="780" y="3160" width="92" height="70" rx="12" fill="#c89b6c"/>
+<text x="826.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="826.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Claude analyze tone/habits</text>
+<text x="826.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">_system_prompt · _user_prompt</text>
+<g filter="url(#ns)">
+<rect x="920" y="3160" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="966.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">JSON</text>
+</g>
+<text x="966.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">parse_profile_response</text>
+<text x="966.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">ProfileDraft · _strip_json_fence</text>
+<g filter="url(#ns)">
+<rect x="1060" y="3160" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1106.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📦u</text>
+</g>
+<text x="1106.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">user_profiles.store</text>
+<text x="1106.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">Supabase user_profiles upsert</text>
+<g filter="url(#ns)">
+<rect x="1200" y="3160" width="92" height="70" rx="12" fill="#e76f6f"/>
+<text x="1246.0" y="3201.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✗</text>
+</g>
+<text x="1246.0" y="3244" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_safe_insert_failed_run</text>
+<text x="1246.0" y="3258" text-anchor="middle" fill="#8b94b8" font-size="10">audit row on exception</text>
+<g filter="url(#ns)">
+<rect x="80" y="3320" width="92" height="70" rx="12" fill="#1a78ff"/>
+<text x="126.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Web</text>
+</g>
+<text x="126.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Web /oferty</text>
+<text x="126.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">Next.js 15 · dark app shell</text>
+<g filter="url(#ns)">
+<rect x="210" y="3320" width="92" height="70" rx="12" fill="#1a78ff"/>
+<text x="256.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Edit</text>
+</g>
+<text x="256.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">offer-generator.tsx</text>
+<text x="256.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">web/components/offers</text>
+<g filter="url(#ns)">
+<rect x="340" y="3320" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="386.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">↔</text>
+</g>
+<text x="386.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">web proxy.ts</text>
+<text x="386.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">→ FastAPI</text>
+<g filter="url(#ns)">
+<rect x="470" y="3320" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3341.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">GET</text>
+</g>
+<text x="560.0" y="3364" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">GET /offers/templates</text>
+<text x="560.0" y="3378" text-anchor="middle" fill="#8b94b8" font-size="10">list</text>
+<g filter="url(#ns)">
+<rect x="470" y="3355" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3376.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">POST</text>
+</g>
+<text x="560.0" y="3399" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">POST /offers/templates</text>
+<text x="560.0" y="3413" text-anchor="middle" fill="#8b94b8" font-size="10">create</text>
+<g filter="url(#ns)">
+<rect x="470" y="3390" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3411.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">PATCH</text>
+</g>
+<text x="560.0" y="3434" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">PATCH /offers/templates/{id}</text>
+<text x="560.0" y="3448" text-anchor="middle" fill="#8b94b8" font-size="10">update</text>
+<g filter="url(#ns)">
+<rect x="470" y="3425" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3446.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">DEL</text>
+</g>
+<text x="560.0" y="3469" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">DELETE /offers/templates/{id}</text>
+<text x="560.0" y="3483" text-anchor="middle" fill="#8b94b8" font-size="10">delete</text>
+<g filter="url(#ns)">
+<rect x="470" y="3460" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3481.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">POST</text>
+</g>
+<text x="560.0" y="3504" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">POST /offers/templates/{id}/publish</text>
+<text x="560.0" y="3518" text-anchor="middle" fill="#8b94b8" font-size="10">publish</text>
+<g filter="url(#ns)">
+<rect x="470" y="3495" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3516.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">POST</text>
+</g>
+<text x="560.0" y="3539" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">POST /offers/templates/{id}/duplicate</text>
+<text x="560.0" y="3553" text-anchor="middle" fill="#8b94b8" font-size="10">duplicate</text>
+<g filter="url(#ns)">
+<rect x="470" y="3530" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3551.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">POST</text>
+</g>
+<text x="560.0" y="3574" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">POST /offers/templates/reorder</text>
+<text x="560.0" y="3588" text-anchor="middle" fill="#8b94b8" font-size="10">reorder</text>
+<g filter="url(#ns)">
+<rect x="470" y="3565" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3586.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">GET</text>
+</g>
+<text x="560.0" y="3609" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">GET /offers/profile</text>
+<text x="560.0" y="3623" text-anchor="middle" fill="#8b94b8" font-size="10">seller profile</text>
+<g filter="url(#ns)">
+<rect x="470" y="3600" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3621.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">PUT</text>
+</g>
+<text x="560.0" y="3644" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">PUT /offers/profile</text>
+<text x="560.0" y="3658" text-anchor="middle" fill="#8b94b8" font-size="10">save profile</text>
+<g filter="url(#ns)">
+<rect x="470" y="3635" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3656.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">GET</text>
+</g>
+<text x="560.0" y="3679" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">GET /offers/email-variables</text>
+<text x="560.0" y="3693" text-anchor="middle" fill="#8b94b8" font-size="10">available tokens</text>
+<g filter="url(#ns)">
+<rect x="470" y="3670" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3691.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">POST</text>
+</g>
+<text x="560.0" y="3714" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">POST /offers/profile/logo</text>
+<text x="560.0" y="3728" text-anchor="middle" fill="#8b94b8" font-size="10">upload logo</text>
+<g filter="url(#ns)">
+<rect x="470" y="3705" width="180" height="30" rx="12" fill="#22d3a4"/>
+<text x="560.0" y="3726.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">GET</text>
+</g>
+<text x="560.0" y="3749" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">GET /offers/templates/{id}/test-pdf</text>
+<text x="560.0" y="3763" text-anchor="middle" fill="#8b94b8" font-size="10">test PDF</text>
+<g filter="url(#ns)">
+<rect x="690" y="3320" width="110" height="70" rx="12" fill="#f5b54a"/>
+<text x="745.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">📦o</text>
+</g>
+<text x="745.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">OfferRepository</text>
+<text x="745.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">shared/offers/repository.py</text>
+<g filter="url(#ns)">
+<rect x="690" y="3410" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="736.0" y="3451.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✓val</text>
+</g>
+<text x="736.0" y="3494" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">validation</text>
+<text x="736.0" y="3508" text-anchor="middle" fill="#8b94b8" font-size="10">shared/offers/validation.py</text>
+<g filter="url(#ns)">
+<rect x="690" y="3500" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="736.0" y="3541.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">💰</text>
+</g>
+<text x="736.0" y="3584" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">pricing</text>
+<text x="736.0" y="3598" text-anchor="middle" fill="#8b94b8" font-size="10">shared/offers/pricing.py</text>
+<g filter="url(#ns)">
+<rect x="690" y="3590" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="736.0" y="3631.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">#</text>
+</g>
+<text x="736.0" y="3674" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">numbering</text>
+<text x="736.0" y="3688" text-anchor="middle" fill="#8b94b8" font-size="10">list_ready_with_numbers · get_ready_offer_by_number</text>
+<g filter="url(#ns)">
+<rect x="690" y="3680" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="736.0" y="3721.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">Δst</text>
+</g>
+<text x="736.0" y="3764" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">status_policy</text>
+<text x="736.0" y="3778" text-anchor="middle" fill="#8b94b8" font-size="10">should_mark_offer_sent</text>
+<g filter="url(#ns)">
+<rect x="830" y="3320" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="876.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✓et</text>
+</g>
+<text x="876.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">validate_email_template</text>
+<text x="876.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">extract + block unknown tokens</text>
+<g filter="url(#ns)">
+<rect x="830" y="3410" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="876.0" y="3451.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">→et</text>
+</g>
+<text x="876.0" y="3494" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">render_email_template</text>
+<text x="876.0" y="3508" text-anchor="middle" fill="#8b94b8" font-size="10">_value_for_variable</text>
+<g filter="url(#ns)">
+<rect x="830" y="3500" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="876.0" y="3541.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">PDF</text>
+</g>
+<text x="876.0" y="3584" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">render_offer_pdf</text>
+<text x="876.0" y="3598" text-anchor="middle" fill="#8b94b8" font-size="10">reportlab · _component_lines</text>
+<g filter="url(#ns)">
+<rect x="830" y="3590" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="876.0" y="3631.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">PDF·</text>
+</g>
+<text x="876.0" y="3674" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_offer_pdf_context</text>
+<text x="876.0" y="3688" text-anchor="middle" fill="#8b94b8" font-size="10">_client_display · _display_date</text>
+<g filter="url(#ns)">
+<rect x="830" y="3680" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="876.0" y="3721.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">MIME</text>
+</g>
+<text x="876.0" y="3764" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">build_offer_email_message</text>
+<text x="876.0" y="3778" text-anchor="middle" fill="#8b94b8" font-size="10">MIME · subject · body · attachment</text>
+<g filter="url(#ns)">
+<rect x="970" y="3320" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="1016.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG</text>
+</g>
+<text x="1016.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Telegram &quot;jakie mam oferty?&quot;</text>
+<text x="1016.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">lists numbered ready offers</text>
+<g filter="url(#ns)">
+<rect x="970" y="3410" width="92" height="70" rx="12" fill="#229ED9"/>
+<text x="1016.0" y="3451.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">TG</text>
+</g>
+<text x="1016.0" y="3494" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Telegram &quot;wyślij ofertę...&quot;</text>
+<text x="1016.0" y="3508" text-anchor="middle" fill="#8b94b8" font-size="10">instant send command</text>
+<g filter="url(#ns)">
+<rect x="970" y="3500" width="92" height="70" rx="12" fill="#506bda"/>
+<text x="1016.0" y="3541.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔍</text>
+</g>
+<text x="1016.0" y="3584" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">R4 for offer target</text>
+<text x="1016.0" y="3598" text-anchor="middle" fill="#8b94b8" font-size="10">single client resolved</text>
+<g filter="url(#ns)">
+<rect x="970" y="3590" width="92" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1016.0" y="3631.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">✅✈</text>
+</g>
+<text x="1016.0" y="3674" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Offer card</text>
+<text x="1016.0" y="3688" text-anchor="middle" fill="#8b94b8" font-size="10">[✅ Wysłać] [❌ Anulować] · idempotent</text>
+<g filter="url(#ns)">
+<rect x="1130" y="3320" width="110" height="70" rx="12" fill="#3b3b58"/>
+<text x="1185.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">⚙</text>
+</g>
+<text x="1185.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">send_offer_after_confirmation</text>
+<text x="1185.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">shared/offers/pipeline.py · idempotent key</text>
+<g filter="url(#ns)">
+<rect x="1130" y="3410" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1176.0" y="3451.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">1×</text>
+</g>
+<text x="1176.0" y="3494" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">idempotency log</text>
+<text x="1176.0" y="3508" text-anchor="middle" fill="#8b94b8" font-size="10">Supabase offer_send_attempts</text>
+<g filter="url(#ns)">
+<rect x="1130" y="3500" width="92" height="70" rx="12" fill="#9d6bd9"/>
+<text x="1176.0" y="3541.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">to:</text>
+</g>
+<text x="1176.0" y="3584" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">merge_offer_recipients</text>
+<text x="1176.0" y="3598" text-anchor="middle" fill="#8b94b8" font-size="10">shared/offers/email_utils.py</text>
+<g filter="url(#ns)">
+<rect x="1290" y="3320" width="110" height="70" rx="12" fill="#ea4335"/>
+<text x="1345.0" y="3361.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Gmail</text>
+</g>
+<text x="1345.0" y="3404" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Gmail send_offer_email</text>
+<text x="1345.0" y="3418" text-anchor="middle" fill="#8b94b8" font-size="10">OAuth-as-user · raw MIME</text>
+<g filter="url(#ns)">
+<rect x="1290" y="3410" width="110" height="70" rx="12" fill="#34a853"/>
+<text x="1345.0" y="3451.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets</text>
+</g>
+<text x="1345.0" y="3494" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Sheets email column</text>
+<text x="1345.0" y="3508" text-anchor="middle" fill="#8b94b8" font-size="10">fill if empty</text>
+<g filter="url(#ns)">
+<rect x="1290" y="3500" width="110" height="70" rx="12" fill="#34a853"/>
+<text x="1345.0" y="3541.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets</text>
+</g>
+<text x="1345.0" y="3584" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Sheets status update</text>
+<text x="1345.0" y="3598" text-anchor="middle" fill="#8b94b8" font-size="10">should_mark_offer_sent → Oferta wysłana</text>
+<g filter="url(#ns)">
+<rect x="1290" y="3590" width="110" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1345.0" y="3631.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">Supabase</text>
+</g>
+<text x="1345.0" y="3674" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Supabase offer_templates</text>
+<text x="1345.0" y="3688" text-anchor="middle" fill="#8b94b8" font-size="10">system data only</text>
+<g filter="url(#ns)">
+<rect x="1290" y="3680" width="110" height="70" rx="12" fill="#3ecf8e"/>
+<text x="1345.0" y="3721.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">Supabase</text>
+</g>
+<text x="1345.0" y="3764" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Supabase offer_seller_profiles</text>
+<text x="1345.0" y="3778" text-anchor="middle" fill="#8b94b8" font-size="10">+ offer-logos bucket</text>
+<g filter="url(#ns)">
+<rect x="80" y="3790" width="110" height="70" rx="12" fill="#22d3a4"/>
+<text x="135.0" y="3831.0" text-anchor="middle" font-size="18" font-weight="700" fill="#073d2a">API</text>
+</g>
+<text x="135.0" y="3874" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">FastAPI · api/main.py</text>
+<text x="135.0" y="3888" text-anchor="middle" fill="#8b94b8" font-size="10">oze-agent backend (Railway)</text>
+<g filter="url(#ns)">
+<rect x="210" y="3790" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="256.0" y="3831.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">🔑</text>
+</g>
+<text x="256.0" y="3874" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">api/auth.py</text>
+<text x="256.0" y="3888" text-anchor="middle" fill="#8b94b8" font-size="10">get_current_auth_user · JWT</text>
+<rect x="340" y="3770" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3788.0" fill="#dde4ff" font-size="11" font-weight="600">GET /me</text>
+<text x="712" y="3788.0" fill="#8b94b8" font-size="10" text-anchor="end">account.py</text>
+<rect x="340" y="3805" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3823.0" fill="#dde4ff" font-size="11" font-weight="600">GET /dashboard/crm</text>
+<text x="712" y="3823.0" fill="#8b94b8" font-size="10" text-anchor="end">dashboard.py</text>
+<rect x="340" y="3840" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3858.0" fill="#dde4ff" font-size="11" font-weight="600">GET/POST /decisions/*</text>
+<text x="712" y="3858.0" fill="#8b94b8" font-size="10" text-anchor="end">5 routes · decisions.py</text>
+<rect x="340" y="3875" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3893.0" fill="#dde4ff" font-size="11" font-weight="600">GET /admin/*</text>
+<text x="712" y="3893.0" fill="#8b94b8" font-size="10" text-anchor="end">3 routes · admin.py (owner-only)</text>
+<rect x="340" y="3910" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3928.0" fill="#dde4ff" font-size="11" font-weight="600">POST /stripe-event</text>
+<text x="712" y="3928.0" fill="#8b94b8" font-size="10" text-anchor="end">billing.py · signed webhook</text>
+<rect x="340" y="3945" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3963.0" fill="#dde4ff" font-size="11" font-weight="600">GET /google/url/{id} · /google/callback</text>
+<text x="712" y="3963.0" fill="#8b94b8" font-size="10" text-anchor="end">google_oauth.py</text>
+<rect x="340" y="3980" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="3998.0" fill="#dde4ff" font-size="11" font-weight="600">/onboarding/*</text>
+<text x="712" y="3998.0" fill="#8b94b8" font-size="10" text-anchor="end">7 routes · onboarding.py</text>
+<rect x="340" y="4015" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="4033.0" fill="#dde4ff" font-size="11" font-weight="600">/insights/*</text>
+<text x="712" y="4033.0" fill="#8b94b8" font-size="10" text-anchor="end">3 routes · insights.py</text>
+<rect x="340" y="4050" width="380" height="30" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="348" y="4068.0" fill="#dde4ff" font-size="11" font-weight="600">/offers/*</text>
+<text x="712" y="4068.0" fill="#8b94b8" font-size="10" text-anchor="end">14 routes · offers.py</text>
+<g filter="url(#ns)">
+<rect x="760" y="3790" width="110" height="70" rx="12" fill="#000000"/>
+<text x="815.0" y="3831.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Vercel</text>
+</g>
+<text x="815.0" y="3874" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Next.js · web/app</text>
+<text x="815.0" y="3888" text-anchor="middle" fill="#8b94b8" font-size="10">Vercel · dark app shell</text>
+<rect x="890" y="3780" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3796.5" fill="#dde4ff" font-size="11" font-weight="600">/dashboard</text>
+<text x="1172" y="3796.5" fill="#8b94b8" font-size="10" text-anchor="end">+ /dashboard/decyzje-preview</text>
+<rect x="890" y="3812" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3828.5" fill="#dde4ff" font-size="11" font-weight="600">/faq</text>
+<text x="1172" y="3828.5" fill="#8b94b8" font-size="10" text-anchor="end">FAQ</text>
+<rect x="890" y="3844" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3860.5" fill="#dde4ff" font-size="11" font-weight="600">/import</text>
+<text x="1172" y="3860.5" fill="#8b94b8" font-size="10" text-anchor="end">CSV/Excel POST-MVP</text>
+<rect x="890" y="3876" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3892.5" fill="#dde4ff" font-size="11" font-weight="600">/instrukcja</text>
+<text x="1172" y="3892.5" fill="#8b94b8" font-size="10" text-anchor="end">instructions</text>
+<rect x="890" y="3908" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3924.5" fill="#dde4ff" font-size="11" font-weight="600">/kalendarz</text>
+<text x="1172" y="3924.5" fill="#8b94b8" font-size="10" text-anchor="end">calendar view</text>
+<rect x="890" y="3940" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3956.5" fill="#dde4ff" font-size="11" font-weight="600">/klienci</text>
+<text x="1172" y="3956.5" fill="#8b94b8" font-size="10" text-anchor="end">client list</text>
+<rect x="890" y="3972" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="3988.5" fill="#dde4ff" font-size="11" font-weight="600">/oferty</text>
+<text x="1172" y="3988.5" fill="#8b94b8" font-size="10" text-anchor="end">offer generator</text>
+<rect x="890" y="4004" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="4020.5" fill="#dde4ff" font-size="11" font-weight="600">/platnosci</text>
+<text x="1172" y="4020.5" fill="#8b94b8" font-size="10" text-anchor="end">Stripe portal</text>
+<rect x="890" y="4036" width="290" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="898" y="4052.5" fill="#dde4ff" font-size="11" font-weight="600">/ustawienia</text>
+<text x="1172" y="4052.5" fill="#8b94b8" font-size="10" text-anchor="end">user settings</text>
+<rect x="1200" y="3780" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3796.5" fill="#dde4ff" font-size="11" font-weight="600">/admin/* (9 sub-routes)</text>
+<text x="1512" y="3796.5" fill="#8b94b8" font-size="10" text-anchor="end">owner admin</text>
+<rect x="1200" y="3812" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3828.5" fill="#dde4ff" font-size="11" font-weight="600">/auth · /login · /logout · /rejestracja</text>
+<text x="1512" y="3828.5" fill="#8b94b8" font-size="10" text-anchor="end">auth</text>
+<rect x="1200" y="3844" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3860.5" fill="#dde4ff" font-size="11" font-weight="600">/firma</text>
+<text x="1512" y="3860.5" fill="#8b94b8" font-size="10" text-anchor="end">company</text>
+<rect x="1200" y="3876" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3892.5" fill="#dde4ff" font-size="11" font-weight="600">/healthz</text>
+<text x="1512" y="3892.5" fill="#8b94b8" font-size="10" text-anchor="end">ops</text>
+<rect x="1200" y="3908" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3924.5" fill="#dde4ff" font-size="11" font-weight="600">/onboarding/*</text>
+<text x="1512" y="3924.5" fill="#8b94b8" font-size="10" text-anchor="end">8 sub-routes</text>
+<rect x="1200" y="3940" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3956.5" fill="#dde4ff" font-size="11" font-weight="600">/*-preview</text>
+<text x="1512" y="3956.5" fill="#8b94b8" font-size="10" text-anchor="end">design previews</text>
+<rect x="1200" y="3972" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="3988.5" fill="#dde4ff" font-size="11" font-weight="600">/polityka-prywatnosci · /regulamin</text>
+<text x="1512" y="3988.5" fill="#8b94b8" font-size="10" text-anchor="end">legal</text>
+<rect x="1200" y="4004" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="4020.5" fill="#dde4ff" font-size="11" font-weight="600">/api/onboarding/telegram-status</text>
+<text x="1512" y="4020.5" fill="#8b94b8" font-size="10" text-anchor="end">internal</text>
+<rect x="1200" y="4036" width="320" height="27" rx="6" fill="#1f2a4a" stroke="#1f2a4a" stroke-width="1.4"/>
+<text x="1208" y="4052.5" fill="#dde4ff" font-size="11" font-weight="600">/api/webhooks/stripe</text>
+<text x="1512" y="4052.5" fill="#8b94b8" font-size="10" text-anchor="end">Stripe webhook ingress</text>
+<g filter="url(#ns)">
+<rect x="1560" y="3790" width="100" height="70" rx="12" fill="#635bff"/>
+<text x="1610.0" y="3831.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Stripe</text>
+</g>
+<text x="1610.0" y="3874" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Stripe</text>
+<text x="1610.0" y="3888" text-anchor="middle" fill="#8b94b8" font-size="10">live billing</text>
+<g filter="url(#ns)">
+<rect x="1560" y="3880" width="92" height="70" rx="12" fill="#3b3b58"/>
+<text x="1606.0" y="3921.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">sig</text>
+</g>
+<text x="1606.0" y="3964" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_verify_internal_signature</text>
+<text x="1606.0" y="3978" text-anchor="middle" fill="#8b94b8" font-size="10">billing service → oze-agent api</text>
+<g filter="url(#ns)">
+<rect x="1560" y="3970" width="92" height="70" rx="12" fill="#f5b54a"/>
+<text x="1606.0" y="4011.0" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">✓sub</text>
+</g>
+<text x="1606.0" y="4054" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">_activate_from_checkout_session</text>
+<text x="1606.0" y="4068" text-anchor="middle" fill="#8b94b8" font-size="10">user.subscription_active=true</text>
+<g filter="url(#ns)">
+<rect x="80" y="4220" width="120" height="70" rx="12" fill="#34a853"/>
+<text x="140.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Sheets</text>
+</g>
+<text x="140.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Google Sheets</text>
+<text x="140.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">CRM source of truth</text>
+<g filter="url(#ns)">
+<rect x="220" y="4220" width="120" height="70" rx="12" fill="#4285f4"/>
+<text x="280.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Cal</text>
+</g>
+<text x="280.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Google Calendar</text>
+<text x="280.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">events (action layer)</text>
+<g filter="url(#ns)">
+<rect x="360" y="4220" width="120" height="70" rx="12" fill="#fbbc04"/>
+<text x="420.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Drive</text>
+</g>
+<text x="420.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Google Drive</text>
+<text x="420.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">client photo folders</text>
+<g filter="url(#ns)">
+<rect x="500" y="4220" width="120" height="70" rx="12" fill="#ea4335"/>
+<text x="560.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Gmail</text>
+</g>
+<text x="560.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Gmail</text>
+<text x="560.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">offer delivery</text>
+<g filter="url(#ns)">
+<rect x="640" y="4220" width="120" height="70" rx="12" fill="#c89b6c"/>
+<text x="700.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#1a1a2e">Claude</text>
+</g>
+<text x="700.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Anthropic</text>
+<text x="700.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">Claude Haiku · Sonnet</text>
+<g filter="url(#ns)">
+<rect x="780" y="4220" width="120" height="70" rx="12" fill="#10a37f"/>
+<text x="840.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">OpenAI</text>
+</g>
+<text x="840.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">OpenAI</text>
+<text x="840.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">Whisper STT</text>
+<g filter="url(#ns)">
+<rect x="920" y="4220" width="120" height="70" rx="12" fill="#3ecf8e"/>
+<text x="980.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#0e2c1f">Supabase</text>
+</g>
+<text x="980.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Supabase</text>
+<text x="980.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">system data · pgvector</text>
+<g filter="url(#ns)">
+<rect x="1060" y="4220" width="120" height="70" rx="12" fill="#635bff"/>
+<text x="1120.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Stripe</text>
+</g>
+<text x="1120.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Stripe</text>
+<text x="1120.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">live subscription billing</text>
+<g filter="url(#ns)">
+<rect x="1200" y="4220" width="120" height="70" rx="12" fill="#229ED9"/>
+<text x="1260.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">TG</text>
+</g>
+<text x="1260.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Telegram BotAPI</text>
+<text x="1260.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">prod bot + bot-test</text>
+<g filter="url(#ns)">
+<rect x="1340" y="4220" width="120" height="70" rx="12" fill="#3b3b58"/>
+<text x="1400.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Railway</text>
+</g>
+<text x="1400.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Railway</text>
+<text x="1400.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">bot · bot-test · api</text>
+<g filter="url(#ns)">
+<rect x="1480" y="4220" width="120" height="70" rx="12" fill="#000000"/>
+<text x="1540.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">Vercel</text>
+</g>
+<text x="1540.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Vercel</text>
+<text x="1540.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">web · proxy</text>
+<g filter="url(#ns)">
+<rect x="1620" y="4220" width="120" height="70" rx="12" fill="#4285f4"/>
+<text x="1680.0" y="4261.0" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">OAuth</text>
+</g>
+<text x="1680.0" y="4304" text-anchor="middle" fill="#e3e8ff" font-size="11" font-weight="600">Google OAuth</text>
+<text x="1680.0" y="4318" text-anchor="middle" fill="#8b94b8" font-size="10">Sheets·Calendar·Drive·Gmail scopes</text>
+<rect x="20" y="4240" width="900" height="140" rx="12" fill="#1f1f33" stroke="#2a2a40"/>
+<text x="36" y="4266" fill="#e3e8ff" font-size="13" font-weight="800" letter-spacing="1">LEGEND</text>
+<rect x="36" y="4274" width="14" height="14" rx="3" fill="#229ED9"/>
+<text x="56" y="4286" fill="#cdd3ee" font-size="11">Telegram</text>
+<rect x="216" y="4274" width="14" height="14" rx="3" fill="#506bda"/>
+<text x="236" y="4286" fill="#cdd3ee" font-size="11">Switch/decision</text>
+<rect x="396" y="4274" width="14" height="14" rx="3" fill="#3ecf8e"/>
+<text x="416" y="4286" fill="#cdd3ee" font-size="11">Confirm card (R1)</text>
+<rect x="576" y="4274" width="14" height="14" rx="3" fill="#c89b6c"/>
+<text x="596" y="4286" fill="#cdd3ee" font-size="11">Claude AI</text>
+<rect x="756" y="4274" width="14" height="14" rx="3" fill="#10a37f"/>
+<text x="776" y="4286" fill="#cdd3ee" font-size="11">OpenAI</text>
+<rect x="36" y="4296" width="14" height="14" rx="3" fill="#9d6bd9"/>
+<text x="56" y="4308" fill="#cdd3ee" font-size="11">Deterministic logic</text>
+<rect x="216" y="4296" width="14" height="14" rx="3" fill="#f5b54a"/>
+<text x="236" y="4308" fill="#cdd3ee" font-size="11">State / Supabase</text>
+<rect x="396" y="4296" width="14" height="14" rx="3" fill="#34a853"/>
+<text x="416" y="4308" fill="#cdd3ee" font-size="11">Google Sheets</text>
+<rect x="576" y="4296" width="14" height="14" rx="3" fill="#4285f4"/>
+<text x="596" y="4308" fill="#cdd3ee" font-size="11">Google Calendar</text>
+<rect x="756" y="4296" width="14" height="14" rx="3" fill="#fbbc04"/>
+<text x="776" y="4308" fill="#cdd3ee" font-size="11">Google Drive</text>
+<rect x="36" y="4318" width="14" height="14" rx="3" fill="#ea4335"/>
+<text x="56" y="4330" fill="#cdd3ee" font-size="11">Gmail</text>
+<rect x="216" y="4318" width="14" height="14" rx="3" fill="#ff6d5a"/>
+<text x="236" y="4330" fill="#cdd3ee" font-size="11">Cron/trigger</text>
+<rect x="396" y="4318" width="14" height="14" rx="3" fill="#e76f6f"/>
+<text x="416" y="4330" fill="#cdd3ee" font-size="11">Cancel/error</text>
+<rect x="576" y="4318" width="14" height="14" rx="3" fill="#3b3b58"/>
+<text x="596" y="4330" fill="#cdd3ee" font-size="11">Helper/service</text>
+<rect x="756" y="4318" width="14" height="14" rx="3" fill="#22d3a4"/>
+<text x="776" y="4330" fill="#cdd3ee" font-size="11">FastAPI route</text>
+<rect x="36" y="4340" width="14" height="14" rx="3" fill="#1a78ff"/>
+<text x="56" y="4352" fill="#cdd3ee" font-size="11">Next.js page</text>
+<rect x="216" y="4340" width="14" height="14" rx="3" fill="#000000"/>
+<text x="236" y="4352" fill="#cdd3ee" font-size="11">Vercel</text>
+<rect x="396" y="4340" width="14" height="14" rx="3" fill="#635bff"/>
+<text x="416" y="4352" fill="#cdd3ee" font-size="11">Stripe</text>
+<line x1="576" y1="4348" x2="600" y2="4348" stroke="#7a86b0" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="606" y="4352" fill="#cdd3ee" font-size="11">→ data flow</text>
+<line x1="756" y1="4348" x2="780" y2="4348" stroke="#7a86b0" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="786" y="4352" fill="#cdd3ee" font-size="11">⤍ side effect / persist</text>
+<rect x="1180" y="4240" width="700" height="140" rx="12" fill="#0f2a1d" stroke="#3ecf8e"/>
+<text x="1200" y="4270" fill="#3ecf8e" font-size="15" font-weight="800" letter-spacing="1">R1 INVARIANT · NO WRITE WITHOUT CONFIRMATION</text>
+<text x="1200" y="4296" fill="#cdd3ee" font-size="11">Every mutation card uses [✅ Zapisać] [➕ Dopisać] [❌ Anulować] — one-click ❌ Anulować, no &quot;na pewno?&quot; loop.</text>
+<text x="1200" y="4314" fill="#cdd3ee" font-size="11">Voice transcription uses a separate 2-button [✅ Zapisz] [❌ Anuluj] card before joining the text path.</text>
+<text x="1200" y="4332" fill="#cdd3ee" font-size="11">Offer send uses [✅ Wysłać] [❌ Anulować] · Gmail-first · Sheets writes only after Gmail success.</text>
+<text x="1200" y="4350" fill="#cdd3ee" font-size="11">Duplicate resolution ([Nowy]/[Aktualizuj]) is a routing decision — not a mutation confirmation.</text>
+<text x="1200" y="4368" fill="#cdd3ee" font-size="11">Multi-match disambiguation ([1] [2] [3]) is a routing decision — not a mutation confirmation.</text>
+</svg>
