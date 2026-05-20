@@ -1,0 +1,812 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2600 1780" font-family="Inter, 'Segoe UI', sans-serif">
+  <!-- ============================================================ -->
+  <!-- OZE-Agent — n8n-style workflow representation                -->
+  <!-- Visual only. Mirrors the actual implementation               -->
+  <!-- (Telegram + FastAPI + webapp + offer generator + schedulers) -->
+  <!-- ============================================================ -->
+
+  <defs>
+    <!-- Dot grid pattern (n8n canvas) -->
+    <pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1.4" cy="1.4" r="1.4" fill="#2a2a40"/>
+    </pattern>
+
+    <!-- Drop shadow for nodes -->
+    <filter id="node-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="3" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Arrowhead -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a86b0"/>
+    </marker>
+    <marker id="arrow-confirm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3ecf8e"/>
+    </marker>
+    <marker id="arrow-cancel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e76f6f"/>
+    </marker>
+    <marker id="arrow-ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b89bff"/>
+    </marker>
+
+    <!-- Reusable connector dot -->
+    <g id="conn">
+      <circle r="5" fill="#1a1a2e" stroke="#7a86b0" stroke-width="1.5"/>
+    </g>
+  </defs>
+
+  <!-- Canvas -->
+  <rect width="2600" height="1780" fill="#14141f"/>
+  <rect width="2600" height="1780" fill="url(#dot-grid)"/>
+
+  <!-- =============== TITLE BAR =============== -->
+  <g>
+    <rect x="0" y="0" width="2600" height="64" fill="#1f1f33" opacity="0.96"/>
+    <text x="32" y="40" fill="#ffffff" font-size="22" font-weight="700">OZE-Agent — Workflow</text>
+    <text x="232" y="40" fill="#8b94b8" font-size="14">n8n-style visualization · faithful to the implementation (Telegram bot + FastAPI + Next.js webapp + offer generator + schedulers)</text>
+    <text x="2400" y="40" fill="#8b94b8" font-size="13" text-anchor="end">v1 · 20.05.2026</text>
+  </g>
+
+  <!-- =============== SWIMLANE BACKGROUNDS =============== -->
+  <g opacity="0.55">
+    <rect x="20" y="84"   width="2560" height="780" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1"/>
+    <rect x="20" y="884"  width="2560" height="360" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1"/>
+    <rect x="20" y="1264" width="2560" height="320" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1"/>
+    <rect x="20" y="1604" width="2560" height="160" rx="14" fill="#1a1a2e" stroke="#2a2a40" stroke-width="1"/>
+  </g>
+
+  <!-- Swimlane labels -->
+  <g font-size="12" font-weight="700" letter-spacing="2">
+    <text x="40" y="108" fill="#9aa3c7">LANE A · TELEGRAM AGENT (bot/handlers + shared/intent + shared/pending + shared/mutations)</text>
+    <text x="40" y="908" fill="#9aa3c7">LANE B · OFFER GENERATOR SLICE (web/oferty + api/routes/offers + shared/offers)</text>
+    <text x="40" y="1288" fill="#9aa3c7">LANE C · BACKGROUND JOBS (bot/scheduler)</text>
+    <text x="40" y="1628" fill="#9aa3c7">LANE D · AUTH + EXTERNAL SERVICE LEGEND</text>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- EDGES (drawn before nodes so nodes sit on top)                 -->
+  <!-- All paths use cubic bezier in the n8n idiom                    -->
+  <!-- ============================================================== -->
+
+  <g fill="none" stroke-width="2" marker-end="url(#arrow)">
+
+    <!-- LANE A: telegram trigger fan-out -->
+    <path d="M 230,300 C 270,300 270,180 310,180" stroke="#7a86b0"/>           <!-- TG -> Switch type-->
+    <path d="M 410,180 C 450,180 450,180 490,180" stroke="#7a86b0"/>           <!-- Switch -> Text -->
+    <path d="M 410,180 C 450,180 450,320 490,320" stroke="#7a86b0"/>           <!-- Switch -> Voice -->
+    <path d="M 410,180 C 450,180 450,460 490,460" stroke="#7a86b0"/>           <!-- Switch -> Photo -->
+
+    <!-- VOICE pipeline -->
+    <path d="M 590,320 C 630,320 630,320 670,320" stroke="#b89bff" marker-end="url(#arrow-ai)"/>  <!-- voice -> Whisper -->
+    <path d="M 770,320 C 810,320 810,320 850,320" stroke="#b89bff" marker-end="url(#arrow-ai)"/>  <!-- whisper -> postpass -->
+    <path d="M 950,320 C 990,320 990,320 1030,320" stroke="#7a86b0"/>                              <!-- postpass -> confirm card -->
+    <path d="M 1130,320 C 1170,320 1170,180 1210,180" stroke="#3ecf8e" marker-end="url(#arrow-confirm)" stroke-dasharray="0"/> <!-- confirm Zapisz -> text path -->
+
+    <!-- PHOTO pipeline -->
+    <path d="M 590,460 C 630,460 630,460 670,460" stroke="#7a86b0"/>           <!-- photo -> active session -->
+    <path d="M 770,460 C 810,460 810,460 850,460" stroke="#7a86b0"/>           <!-- session -> drive card -->
+    <path d="M 950,460 C 1020,460 1020,460 1980,460" stroke="#3ecf8e" marker-end="url(#arrow-confirm)"/> <!-- drive card -> commit photo -->
+
+    <!-- TEXT path -> preflight + classifier -->
+    <path d="M 590,180 C 720,180 720,180 1210,180" stroke="#7a86b0"/>          <!-- text -> preflight -->
+    <path d="M 1310,180 C 1370,180 1370,300 1410,300" stroke="#b89bff" marker-end="url(#arrow-ai)"/> <!-- preflight -> classifier -->
+    <path d="M 590,180 C 900,180 900,300 1410,300" stroke="#b89bff" marker-end="url(#arrow-ai)" opacity="0.6"/> <!-- text (no preflight) -> classifier -->
+
+    <!-- R6 active client lookup feeds classifier context -->
+    <path d="M 1310,440 C 1370,440 1370,300 1410,300" stroke="#7a86b0" stroke-dasharray="4 4"/> <!-- R6 -> classifier -->
+
+    <!-- Classifier -> Intent switch -->
+    <path d="M 1510,300 C 1550,300 1550,300 1590,300" stroke="#7a86b0"/>
+
+    <!-- Intent switch fan-out (8 outputs) -->
+    <path d="M 1690,300 C 1740,300 1740,120 1790,120" stroke="#7a86b0"/>  <!-- add_client -->
+    <path d="M 1690,300 C 1740,300 1740,210 1790,210" stroke="#7a86b0"/>  <!-- show_client -->
+    <path d="M 1690,300 C 1740,300 1740,300 1790,300" stroke="#7a86b0"/>  <!-- add_note -->
+    <path d="M 1690,300 C 1740,300 1740,390 1790,390" stroke="#7a86b0"/>  <!-- change_status -->
+    <path d="M 1690,300 C 1740,300 1740,480 1790,480" stroke="#7a86b0"/>  <!-- add_meeting -->
+    <path d="M 1690,300 C 1740,300 1740,570 1790,570" stroke="#7a86b0"/>  <!-- show_day_plan -->
+    <path d="M 1690,300 C 1740,300 1740,660 1790,660" stroke="#7a86b0"/>  <!-- general_question -->
+    <path d="M 1690,300 C 1740,300 1740,750 1790,750" stroke="#7a86b0"/>  <!-- offer_send -->
+
+    <!-- Intent branches -> identification / disambiguation -->
+    <path d="M 1890,210 C 1940,210 1940,300 1990,300" stroke="#7a86b0"/>  <!-- show_client -> R4 -->
+    <path d="M 1890,300 C 1940,300 1940,300 1990,300" stroke="#7a86b0"/>  <!-- add_note   -> R4 -->
+    <path d="M 1890,390 C 1940,390 1940,300 1990,300" stroke="#7a86b0"/>  <!-- change_status -> R4 -->
+    <path d="M 1890,480 C 1940,480 1940,300 1990,300" stroke="#7a86b0"/>  <!-- add_meeting -> R4 -->
+    <path d="M 1890,120 C 1940,120 1940,160 1990,160" stroke="#7a86b0"/>  <!-- add_client -> Dup resolution -->
+
+    <!-- R4 fork: full match vs multi -->
+    <path d="M 2090,300 C 2140,300 2140,300 2180,300" stroke="#7a86b0"/>  <!-- R4 -> pending -->
+    <path d="M 2090,300 C 2140,300 2140,440 2180,440" stroke="#7a86b0" stroke-dasharray="4 4"/> <!-- R4 multi -> disambig card -->
+    <path d="M 2280,440 C 2300,440 2300,300 2280,300" stroke="#3ecf8e" marker-end="url(#arrow-confirm)"/> <!-- disambig pick -> pending -->
+
+    <!-- Duplicate resolution -->
+    <path d="M 2090,160 C 2140,160 2140,300 2180,300" stroke="#3ecf8e" marker-end="url(#arrow-confirm)"/> <!-- [Nowy] -> pending add_client -->
+    <path d="M 2090,160 C 2140,160 2140,160 2180,300" stroke="#3ecf8e" marker-end="url(#arrow-confirm)" opacity="0.6"/> <!-- [Aktualizuj] -> pending update -->
+
+    <!-- Pending store <-> Supabase -->
+    <path d="M 2280,300 C 2330,300 2330,300 2360,300" stroke="#7a86b0"/>  <!-- pending -> R1 card -->
+    <path d="M 2280,300 C 2330,300 2330,820 2480,820" stroke="#3ecf8e" stroke-dasharray="4 4"/> <!-- pending persist -> Supabase legend -->
+
+    <!-- R1 card (Zapisać / Dopisać / Anulować) -->
+    <path d="M 2460,300 C 2500,300 2500,300 2540,300" stroke="#7a86b0"/> <!-- card -> commit pipeline (off-canvas fold) -->
+
+    <!-- show_day_plan -> read-only card -->
+    <path d="M 1890,570 C 2000,570 2000,640 2180,640" stroke="#7a86b0"/>
+    <!-- show_client -> read-only card (after R4) -->
+    <path d="M 2280,300 C 2320,300 2320,640 2180,640" stroke="#7a86b0" stroke-dasharray="4 4" opacity="0.7"/>
+
+    <!-- general_question -> Claude generator -->
+    <path d="M 1890,660 C 1940,660 1940,820 2480,820" stroke="#b89bff" marker-end="url(#arrow-ai)" stroke-dasharray="4 4"/>
+
+    <!-- offer_send branch -> Offer flow card -->
+    <path d="M 1890,750 C 2000,750 2000,750 2180,750" stroke="#7a86b0"/>
+
+    <!-- Reply to user (Telegram sendMessage) — implicit at every card -->
+
+    <!-- /cancel handler -->
+    <path d="M 230,720 C 280,720 280,720 310,720" stroke="#e76f6f" marker-end="url(#arrow-cancel)"/>
+    <path d="M 410,720 C 700,830 1700,830 2280,300" stroke="#e76f6f" marker-end="url(#arrow-cancel)" stroke-dasharray="6 4" opacity="0.5"/>
+
+    <!-- ====== LANE B: Offer generator ====== -->
+    <path d="M 230,1000 C 270,1000 270,1000 310,1000" stroke="#7a86b0"/>           <!-- web -> FastAPI -->
+    <path d="M 410,1000 C 450,1000 450,940 490,940" stroke="#7a86b0"/>              <!-- API -> templates -->
+    <path d="M 410,1000 C 450,1000 450,1060 490,1060" stroke="#7a86b0"/>            <!-- API -> PDF preview -->
+    <path d="M 590,940  C 640,940 640,1000 690,1000" stroke="#3ecf8e" marker-end="url(#arrow-confirm)"/> <!-- template save -> Supabase (lane D legend) -->
+    <path d="M 590,1060 C 640,1060 640,1000 690,1000" stroke="#7a86b0"/>            <!-- PDF preview -> render -->
+    <path d="M 790,1000 C 840,1000 840,1000 890,1000" stroke="#7a86b0"/>            <!-- render -> Telegram "wyślij ofertę" intent gate -->
+    <path d="M 990,1000 C 1040,1000 1040,1000 1090,1000" stroke="#7a86b0"/>         <!-- gate -> R4 search client -->
+    <path d="M 1190,1000 C 1240,1000 1240,1000 1290,1000" stroke="#7a86b0"/>        <!-- R4 -> Offer card -->
+    <path d="M 1390,1000 C 1450,1000 1450,1000 1490,1000" stroke="#3ecf8e" marker-end="url(#arrow-confirm)"/> <!-- card Wysłać -> send pipeline -->
+    <path d="M 1590,1000 C 1640,1000 1640,1000 1690,1000" stroke="#7a86b0"/>        <!-- send pipeline -> Gmail MIME -->
+    <path d="M 1790,1000 C 1850,1000 1850,1000 1900,1000" stroke="#7a86b0"/>        <!-- Gmail -> Sheets follow-up -->
+
+    <!-- ====== LANE C: schedulers ====== -->
+    <path d="M 230,1340 C 270,1340 270,1340 310,1340" stroke="#7a86b0"/>            <!-- cron -> morning brief job -->
+    <path d="M 230,1440 C 270,1440 270,1440 310,1440" stroke="#7a86b0"/>            <!-- cron -> admin mirror -->
+    <path d="M 230,1540 C 270,1540 270,1540 310,1540" stroke="#7a86b0"/>            <!-- cron -> user profile -->
+    <path d="M 410,1340 C 470,1340 470,1340 530,1340" stroke="#b89bff" marker-end="url(#arrow-ai)"/> <!-- brief -> Claude summary -->
+    <path d="M 630,1340 C 700,1340 700,1340 770,1340" stroke="#7a86b0"/>            <!-- summary -> Telegram push -->
+    <path d="M 410,1440 C 470,1440 470,1440 530,1440" stroke="#7a86b0"/>            <!-- admin mirror -> owner sheets -->
+    <path d="M 630,1440 C 690,1440 690,1440 770,1440" stroke="#7a86b0"/>            <!-- owner sheets -> owner calendar -->
+    <path d="M 410,1540 C 470,1540 470,1540 530,1540" stroke="#b89bff" marker-end="url(#arrow-ai)"/> <!-- profile -> Claude analyze -->
+
+    <!-- ====== LANE D: OAuth + cross-cutting links to externals ====== -->
+    <path d="M 230,1690 C 290,1690 290,1690 350,1690" stroke="#7a86b0"/>            <!-- OAuth callback -> token store -->
+    <path d="M 450,1690 C 510,1690 510,1690 570,1690" stroke="#3ecf8e" marker-end="url(#arrow-confirm)"/> <!-- token store -> Supabase encrypted -->
+
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- NODES                                                          -->
+  <!-- Style: rounded square (90x90) brand-coloured, emoji icon,      -->
+  <!-- two-line label below in white.                                 -->
+  <!-- ============================================================== -->
+
+  <!-- ===== LANE A — Telegram Agent ===== -->
+
+  <!-- Telegram Trigger -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="255" width="90" height="90" rx="14" fill="#229ED9"/>
+    <text x="185" y="310" text-anchor="middle" font-size="40">✈️</text>
+    <use href="#conn" x="230" y="300"/>
+  </g>
+  <text x="185" y="370" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Telegram Trigger</text>
+  <text x="185" y="386" text-anchor="middle" fill="#8b94b8" font-size="11">webhook /webhooks/telegram</text>
+
+  <!-- Switch input type -->
+  <g filter="url(#node-shadow)">
+    <rect x="310" y="135" width="100" height="90" rx="14" fill="#506bda"/>
+    <text x="360" y="190" text-anchor="middle" font-size="30">🔀</text>
+    <use href="#conn" x="310" y="180"/><use href="#conn" x="410" y="180"/>
+  </g>
+  <text x="360" y="250" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Switch · Input type</text>
+  <text x="360" y="266" text-anchor="middle" fill="#8b94b8" font-size="11">text / voice / photo / cancel</text>
+
+  <!-- Text route -->
+  <g filter="url(#node-shadow)">
+    <rect x="490" y="135" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="540" y="190" text-anchor="middle" font-size="30">💬</text>
+    <use href="#conn" x="490" y="180"/><use href="#conn" x="590" y="180"/>
+  </g>
+  <text x="540" y="250" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">handle_text</text>
+  <text x="540" y="266" text-anchor="middle" fill="#8b94b8" font-size="11">bot/handlers/text.py</text>
+
+  <!-- Voice route -->
+  <g filter="url(#node-shadow)">
+    <rect x="490" y="275" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="540" y="330" text-anchor="middle" font-size="30">🎙️</text>
+    <use href="#conn" x="490" y="320"/><use href="#conn" x="590" y="320"/>
+  </g>
+  <text x="540" y="390" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">handle_voice</text>
+  <text x="540" y="406" text-anchor="middle" fill="#8b94b8" font-size="11">bot/handlers/voice.py</text>
+
+  <!-- Photo route -->
+  <g filter="url(#node-shadow)">
+    <rect x="490" y="415" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="540" y="470" text-anchor="middle" font-size="30">📷</text>
+    <use href="#conn" x="490" y="460"/><use href="#conn" x="590" y="460"/>
+  </g>
+  <text x="540" y="530" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">handle_photo</text>
+  <text x="540" y="546" text-anchor="middle" fill="#8b94b8" font-size="11">bot/handlers/photo.py</text>
+
+  <!-- Whisper STT -->
+  <g filter="url(#node-shadow)">
+    <rect x="670" y="275" width="100" height="90" rx="14" fill="#10a37f"/>
+    <text x="720" y="324" text-anchor="middle" font-size="22" fill="#fff" font-weight="800">OpenAI</text>
+    <use href="#conn" x="670" y="320"/><use href="#conn" x="770" y="320"/>
+  </g>
+  <text x="720" y="390" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Whisper STT</text>
+  <text x="720" y="406" text-anchor="middle" fill="#8b94b8" font-size="11">shared/whisper_stt.py</text>
+
+  <!-- Polish name post-pass (Claude haiku) -->
+  <g filter="url(#node-shadow)">
+    <rect x="850" y="275" width="100" height="90" rx="14" fill="#c89b6c"/>
+    <text x="900" y="324" text-anchor="middle" font-size="20" fill="#1a1a2e" font-weight="800">Claude</text>
+    <use href="#conn" x="850" y="320"/><use href="#conn" x="950" y="320"/>
+  </g>
+  <text x="900" y="390" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Polish name post-pass</text>
+  <text x="900" y="406" text-anchor="middle" fill="#8b94b8" font-size="11">shared/voice_postproc.py · Haiku</text>
+
+  <!-- Voice 2-button confirm card -->
+  <g filter="url(#node-shadow)">
+    <rect x="1030" y="275" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="1080" y="316" text-anchor="middle" font-size="18" fill="#0e2c1f" font-weight="800">✅ Zapisz</text>
+    <text x="1080" y="338" text-anchor="middle" font-size="18" fill="#0e2c1f" font-weight="800">❌ Anuluj</text>
+    <use href="#conn" x="1030" y="320"/><use href="#conn" x="1130" y="320"/>
+  </g>
+  <text x="1080" y="390" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Voice 2-button card</text>
+  <text x="1080" y="406" text-anchor="middle" fill="#8b94b8" font-size="11">R1 · transcription confirm</text>
+
+  <!-- Active photo session 15 min -->
+  <g filter="url(#node-shadow)">
+    <rect x="670" y="415" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="720" y="470" text-anchor="middle" font-size="28">⏱️</text>
+    <use href="#conn" x="670" y="460"/><use href="#conn" x="770" y="460"/>
+  </g>
+  <text x="720" y="530" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Active client session</text>
+  <text x="720" y="546" text-anchor="middle" fill="#8b94b8" font-size="11">15-min photo window</text>
+
+  <!-- Drive card R1 -->
+  <g filter="url(#node-shadow)">
+    <rect x="850" y="415" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="900" y="466" text-anchor="middle" font-size="18" fill="#0e2c1f" font-weight="800">✅ Zapisać</text>
+    <text x="900" y="488" text-anchor="middle" font-size="14" fill="#0e2c1f" font-weight="700">do Drive</text>
+    <use href="#conn" x="850" y="460"/><use href="#conn" x="950" y="460"/>
+  </g>
+  <text x="900" y="530" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Photo confirm card</text>
+  <text x="900" y="546" text-anchor="middle" fill="#8b94b8" font-size="11">R1 · Drive + Sheets N/O</text>
+
+  <!-- /cancel command -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="675" width="90" height="90" rx="14" fill="#e76f6f"/>
+    <text x="185" y="730" text-anchor="middle" font-size="30">🛑</text>
+    <use href="#conn" x="230" y="720"/>
+  </g>
+  <text x="185" y="790" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">/cancel command</text>
+  <text x="185" y="806" text-anchor="middle" fill="#8b94b8" font-size="11">bot/handlers/cancel.py</text>
+
+  <!-- Cancel: clear pending -->
+  <g filter="url(#node-shadow)">
+    <rect x="310" y="675" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="360" y="730" text-anchor="middle" font-size="28">🧹</text>
+    <use href="#conn" x="310" y="720"/><use href="#conn" x="410" y="720"/>
+  </g>
+  <text x="360" y="790" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Clear pending flow</text>
+  <text x="360" y="806" text-anchor="middle" fill="#8b94b8" font-size="11">universal escape hatch</text>
+
+  <!-- Meeting preflight regex -->
+  <g filter="url(#node-shadow)">
+    <rect x="1210" y="135" width="100" height="90" rx="14" fill="#9d6bd9"/>
+    <text x="1260" y="190" text-anchor="middle" font-size="28">⚖️</text>
+    <use href="#conn" x="1210" y="180"/><use href="#conn" x="1310" y="180"/>
+  </g>
+  <text x="1260" y="250" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Meeting preflight</text>
+  <text x="1260" y="266" text-anchor="middle" fill="#8b94b8" font-size="11">regex: meeting + temporal</text>
+
+  <!-- Intent classifier Haiku tool-use -->
+  <g filter="url(#node-shadow)">
+    <rect x="1410" y="255" width="100" height="90" rx="14" fill="#c89b6c"/>
+    <text x="1460" y="304" text-anchor="middle" font-size="20" fill="#1a1a2e" font-weight="800">Claude</text>
+    <use href="#conn" x="1410" y="300"/><use href="#conn" x="1510" y="300"/>
+  </g>
+  <text x="1460" y="370" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Intent classifier</text>
+  <text x="1460" y="386" text-anchor="middle" fill="#8b94b8" font-size="11">Haiku · tool-use · shared/intent</text>
+
+  <!-- Active client R6 -->
+  <g filter="url(#node-shadow)">
+    <rect x="1210" y="395" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="1260" y="450" text-anchor="middle" font-size="28">🧠</text>
+    <use href="#conn" x="1210" y="440"/><use href="#conn" x="1310" y="440"/>
+  </g>
+  <text x="1260" y="510" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Active client R6</text>
+  <text x="1260" y="526" text-anchor="middle" fill="#8b94b8" font-size="11">10 msg / 30 min rolling</text>
+
+  <!-- Intent switch -->
+  <g filter="url(#node-shadow)">
+    <rect x="1590" y="255" width="100" height="90" rx="14" fill="#506bda"/>
+    <text x="1640" y="310" text-anchor="middle" font-size="28">🔀</text>
+    <use href="#conn" x="1590" y="300"/><use href="#conn" x="1690" y="300"/>
+  </g>
+  <text x="1640" y="370" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Switch · IntentType</text>
+  <text x="1640" y="386" text-anchor="middle" fill="#8b94b8" font-size="11">6 MVP + general + offer</text>
+
+  <!-- Eight intent branches -->
+  <g>
+    <!-- add_client -->
+    <rect x="1790" y="80" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="112" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">add_client</text>
+    <text x="1840" y="132" text-anchor="middle" fill="#8b94b8" font-size="11">new row + Calendar</text>
+    <use href="#conn" x="1790" y="120"/><use href="#conn" x="1890" y="120"/>
+
+    <!-- show_client -->
+    <rect x="1790" y="170" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="202" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">show_client</text>
+    <text x="1840" y="222" text-anchor="middle" fill="#8b94b8" font-size="11">read-only card</text>
+    <use href="#conn" x="1790" y="210"/><use href="#conn" x="1890" y="210"/>
+
+    <!-- add_note -->
+    <rect x="1790" y="260" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="292" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">add_note</text>
+    <text x="1840" y="312" text-anchor="middle" fill="#8b94b8" font-size="11">+ compound call detect</text>
+    <use href="#conn" x="1790" y="300"/><use href="#conn" x="1890" y="300"/>
+
+    <!-- change_status -->
+    <rect x="1790" y="350" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="382" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">change_status</text>
+    <text x="1840" y="402" text-anchor="middle" fill="#8b94b8" font-size="11">funnel + Calendar event</text>
+    <use href="#conn" x="1790" y="390"/><use href="#conn" x="1890" y="390"/>
+
+    <!-- add_meeting -->
+    <rect x="1790" y="440" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="472" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">add_meeting</text>
+    <text x="1840" y="492" text-anchor="middle" fill="#8b94b8" font-size="11">spotk / tel / oferta / FU</text>
+    <use href="#conn" x="1790" y="480"/><use href="#conn" x="1890" y="480"/>
+
+    <!-- show_day_plan -->
+    <rect x="1790" y="530" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="562" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">show_day_plan</text>
+    <text x="1840" y="582" text-anchor="middle" fill="#8b94b8" font-size="11">reads Calendar, not Sheets</text>
+    <use href="#conn" x="1790" y="570"/><use href="#conn" x="1890" y="570"/>
+
+    <!-- general_question -->
+    <rect x="1790" y="620" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#506bda" stroke-width="1.5"/>
+    <text x="1840" y="652" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="700">general_question</text>
+    <text x="1840" y="672" text-anchor="middle" fill="#8b94b8" font-size="11">Claude reply, no write</text>
+    <use href="#conn" x="1790" y="660"/><use href="#conn" x="1890" y="660"/>
+
+    <!-- offer_send command (instant) -->
+    <rect x="1790" y="710" width="100" height="76" rx="12" fill="#1f2a4a" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="1840" y="742" text-anchor="middle" fill="#fbe6c1" font-size="13" font-weight="700">offer_send</text>
+    <text x="1840" y="762" text-anchor="middle" fill="#8b94b8" font-size="11">"wyślij ofertę X"</text>
+    <use href="#conn" x="1790" y="750"/><use href="#conn" x="1890" y="750"/>
+  </g>
+
+  <!-- Duplicate resolution [Nowy]/[Aktualizuj] -->
+  <g filter="url(#node-shadow)">
+    <rect x="1990" y="115" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="2040" y="155" text-anchor="middle" font-size="16" fill="#0e2c1f" font-weight="800">[Nowy]</text>
+    <text x="2040" y="178" text-anchor="middle" font-size="14" fill="#0e2c1f" font-weight="700">[Aktualizuj]</text>
+    <use href="#conn" x="1990" y="160"/><use href="#conn" x="2090" y="160"/>
+  </g>
+  <text x="2040" y="230" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Duplicate resolution</text>
+  <text x="2040" y="246" text-anchor="middle" fill="#8b94b8" font-size="11">match=1 routing decision</text>
+
+  <!-- R4 client identification -->
+  <g filter="url(#node-shadow)">
+    <rect x="1990" y="255" width="100" height="90" rx="14" fill="#506bda"/>
+    <text x="2040" y="310" text-anchor="middle" font-size="26">🔍</text>
+    <use href="#conn" x="1990" y="300"/><use href="#conn" x="2090" y="300"/>
+  </g>
+  <text x="2040" y="370" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">R4 client identify</text>
+  <text x="2040" y="386" text-anchor="middle" fill="#8b94b8" font-size="11">imię+nazwisko+miasto · fuzzy · PL declension</text>
+
+  <!-- Multi-match disambiguation card -->
+  <g filter="url(#node-shadow)">
+    <rect x="2180" y="395" width="100" height="90" rx="14" fill="#506bda"/>
+    <text x="2230" y="436" text-anchor="middle" font-size="14" fill="#fff" font-weight="800">[1] [2] [3]</text>
+    <text x="2230" y="460" text-anchor="middle" font-size="12" fill="#dde4ff">Którego?</text>
+    <use href="#conn" x="2180" y="440"/><use href="#conn" x="2280" y="440"/>
+  </g>
+  <text x="2230" y="510" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Multi-match card</text>
+  <text x="2230" y="526" text-anchor="middle" fill="#8b94b8" font-size="11">multi · samo nazwisko → always</text>
+
+  <!-- Pending Flow Store -->
+  <g filter="url(#node-shadow)">
+    <rect x="2180" y="255" width="100" height="90" rx="14" fill="#f5b54a"/>
+    <text x="2230" y="310" text-anchor="middle" font-size="26">📦</text>
+    <use href="#conn" x="2180" y="300"/><use href="#conn" x="2280" y="300"/>
+  </g>
+  <text x="2230" y="370" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Pending flow store</text>
+  <text x="2230" y="386" text-anchor="middle" fill="#8b94b8" font-size="11">shared/pending · Supabase</text>
+
+  <!-- R1 Mutation card -->
+  <g filter="url(#node-shadow)">
+    <rect x="2360" y="255" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="2410" y="296" text-anchor="middle" font-size="13" fill="#0e2c1f" font-weight="800">✅ Zapisać</text>
+    <text x="2410" y="316" text-anchor="middle" font-size="13" fill="#0e2c1f" font-weight="800">➕ Dopisać</text>
+    <text x="2410" y="336" text-anchor="middle" font-size="13" fill="#7a2222" font-weight="800">❌ Anulować</text>
+    <use href="#conn" x="2360" y="300"/><use href="#conn" x="2460" y="300"/>
+  </g>
+  <text x="2410" y="370" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Mutation card (R1)</text>
+  <text x="2410" y="386" text-anchor="middle" fill="#8b94b8" font-size="11">unified 3-button for all mutations</text>
+
+  <!-- show_* read-only formatter -->
+  <g filter="url(#node-shadow)">
+    <rect x="2180" y="595" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="2230" y="650" text-anchor="middle" font-size="28">📋</text>
+    <use href="#conn" x="2180" y="640"/><use href="#conn" x="2280" y="640"/>
+  </g>
+  <text x="2230" y="710" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Read-only card</text>
+  <text x="2230" y="726" text-anchor="middle" fill="#8b94b8" font-size="11">shared/formatting · DD.MM.YYYY</text>
+
+  <!-- Offer send card -->
+  <g filter="url(#node-shadow)">
+    <rect x="2180" y="705" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="2230" y="745" text-anchor="middle" font-size="14" fill="#0e2c1f" font-weight="800">✅ Wysłać</text>
+    <text x="2230" y="767" text-anchor="middle" font-size="13" fill="#7a2222" font-weight="800">❌ Anulować</text>
+    <use href="#conn" x="2180" y="750"/><use href="#conn" x="2280" y="750"/>
+  </g>
+  <text x="2230" y="820" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Offer-send card</text>
+  <text x="2230" y="836" text-anchor="middle" fill="#8b94b8" font-size="11">idempotent · Gmail-first</text>
+
+  <!-- Mutation pipeline (off-card right) -->
+  <g filter="url(#node-shadow)">
+    <rect x="2540" y="255" width="40" height="90" rx="14" fill="#234d3b" stroke="#3ecf8e" stroke-width="2"/>
+    <text x="2560" y="290" text-anchor="middle" font-size="11" fill="#3ecf8e" font-weight="800">→</text>
+    <text x="2560" y="310" text-anchor="middle" font-size="11" fill="#3ecf8e" font-weight="800">commit</text>
+    <text x="2560" y="328" text-anchor="middle" font-size="11" fill="#3ecf8e" font-weight="800">pipeline</text>
+  </g>
+
+  <!-- ===== LANE B — Offer generator ===== -->
+
+  <!-- Web /oferty -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="955" width="90" height="90" rx="14" fill="#1a78ff"/>
+    <text x="185" y="1010" text-anchor="middle" font-size="22" fill="#fff" font-weight="800">Web</text>
+    <use href="#conn" x="230" y="1000"/>
+  </g>
+  <text x="185" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Web /oferty</text>
+  <text x="185" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">Next.js · dark app shell</text>
+
+  <!-- FastAPI offers -->
+  <g filter="url(#node-shadow)">
+    <rect x="310" y="955" width="100" height="90" rx="14" fill="#22d3a4"/>
+    <text x="360" y="1010" text-anchor="middle" font-size="20" fill="#073d2a" font-weight="800">FastAPI</text>
+    <use href="#conn" x="310" y="1000"/><use href="#conn" x="410" y="1000"/>
+  </g>
+  <text x="360" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">api/routes/offers</text>
+  <text x="360" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">templates · profile · logo · email</text>
+
+  <!-- Templates save -->
+  <g filter="url(#node-shadow)">
+    <rect x="490" y="895" width="100" height="90" rx="14" fill="#f5b54a"/>
+    <text x="540" y="950" text-anchor="middle" font-size="26">🧩</text>
+    <use href="#conn" x="490" y="940"/><use href="#conn" x="590" y="940"/>
+  </g>
+  <text x="540" y="1010" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Template + profile save</text>
+  <text x="540" y="1026" text-anchor="middle" fill="#8b94b8" font-size="11">PV / Magazyn / PV+Magazyn</text>
+
+  <!-- PDF preview -->
+  <g filter="url(#node-shadow)">
+    <rect x="490" y="1015" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="540" y="1070" text-anchor="middle" font-size="26">📄</text>
+    <use href="#conn" x="490" y="1060"/><use href="#conn" x="590" y="1060"/>
+  </g>
+  <text x="540" y="1130" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">PDF preview / test</text>
+  <text x="540" y="1146" text-anchor="middle" fill="#8b94b8" font-size="11">no customer send from web</text>
+
+  <!-- PDF render shared/offers -->
+  <g filter="url(#node-shadow)">
+    <rect x="690" y="955" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="740" y="1010" text-anchor="middle" font-size="26">🖨️</text>
+    <use href="#conn" x="690" y="1000"/><use href="#conn" x="790" y="1000"/>
+  </g>
+  <text x="740" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">PDF renderer</text>
+  <text x="740" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">shared/offers · pricing · MIME</text>
+
+  <!-- TG offer command gate -->
+  <g filter="url(#node-shadow)">
+    <rect x="890" y="955" width="100" height="90" rx="14" fill="#229ED9"/>
+    <text x="940" y="1010" text-anchor="middle" font-size="26">✈️</text>
+    <use href="#conn" x="890" y="1000"/><use href="#conn" x="990" y="1000"/>
+  </g>
+  <text x="940" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Telegram offer cmd</text>
+  <text x="940" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">"jakie mam oferty?" / "wyślij…"</text>
+
+  <!-- R4 client search (offer) -->
+  <g filter="url(#node-shadow)">
+    <rect x="1090" y="955" width="100" height="90" rx="14" fill="#506bda"/>
+    <text x="1140" y="1010" text-anchor="middle" font-size="26">🔍</text>
+    <use href="#conn" x="1090" y="1000"/><use href="#conn" x="1190" y="1000"/>
+  </g>
+  <text x="1140" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Resolve one client</text>
+  <text x="1140" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">R4 · same identification</text>
+
+  <!-- Offer send confirmation card -->
+  <g filter="url(#node-shadow)">
+    <rect x="1290" y="955" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="1340" y="996" text-anchor="middle" font-size="14" fill="#0e2c1f" font-weight="800">✅ Wysłać</text>
+    <text x="1340" y="1018" text-anchor="middle" font-size="13" fill="#7a2222" font-weight="800">❌ Anulować</text>
+    <use href="#conn" x="1290" y="1000"/><use href="#conn" x="1390" y="1000"/>
+  </g>
+  <text x="1340" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Offer confirm card</text>
+  <text x="1340" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">no Gmail before this · idempotent</text>
+
+  <!-- Send pipeline -->
+  <g filter="url(#node-shadow)">
+    <rect x="1490" y="955" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="1540" y="1010" text-anchor="middle" font-size="26">⚙️</text>
+    <use href="#conn" x="1490" y="1000"/><use href="#conn" x="1590" y="1000"/>
+  </g>
+  <text x="1540" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Send pipeline</text>
+  <text x="1540" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">shared/offers · idempotent key</text>
+
+  <!-- Gmail MIME -->
+  <g filter="url(#node-shadow)">
+    <rect x="1690" y="955" width="100" height="90" rx="14" fill="#ea4335"/>
+    <text x="1740" y="1010" text-anchor="middle" font-size="22" fill="#fff" font-weight="800">Gmail</text>
+    <use href="#conn" x="1690" y="1000"/><use href="#conn" x="1790" y="1000"/>
+  </g>
+  <text x="1740" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Gmail send (MIME)</text>
+  <text x="1740" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">customer email + PDF</text>
+
+  <!-- Sheets follow-up writes -->
+  <g filter="url(#node-shadow)">
+    <rect x="1900" y="955" width="100" height="90" rx="14" fill="#34a853"/>
+    <text x="1950" y="1010" text-anchor="middle" font-size="22" fill="#fff" font-weight="800">Sheets</text>
+    <use href="#conn" x="1900" y="1000"/>
+  </g>
+  <text x="1950" y="1070" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Sheets follow-up</text>
+  <text x="1950" y="1086" text-anchor="middle" fill="#8b94b8" font-size="11">email + status (only after Gmail OK)</text>
+
+  <!-- ===== LANE C — Schedulers ===== -->
+
+  <!-- Cron 07:00 -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="1295" width="90" height="90" rx="14" fill="#ff6d5a"/>
+    <text x="185" y="1342" text-anchor="middle" font-size="20" fill="#fff" font-weight="800">07:00</text>
+    <text x="185" y="1362" text-anchor="middle" font-size="12" fill="#fff">cron</text>
+    <use href="#conn" x="230" y="1340"/>
+  </g>
+  <text x="185" y="1400" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Cron · morning</text>
+
+  <!-- Cron daily admin -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="1395" width="90" height="90" rx="14" fill="#ff6d5a"/>
+    <text x="185" y="1442" text-anchor="middle" font-size="18" fill="#fff" font-weight="800">DAILY</text>
+    <text x="185" y="1462" text-anchor="middle" font-size="12" fill="#fff">cron</text>
+    <use href="#conn" x="230" y="1440"/>
+  </g>
+  <text x="185" y="1500" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Cron · admin mirror</text>
+
+  <!-- Cron user profile -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="1495" width="90" height="90" rx="14" fill="#ff6d5a"/>
+    <text x="185" y="1542" text-anchor="middle" font-size="18" fill="#fff" font-weight="800">DAILY</text>
+    <text x="185" y="1562" text-anchor="middle" font-size="12" fill="#fff">cron</text>
+    <use href="#conn" x="230" y="1540"/>
+  </g>
+  <text x="185" y="1600" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Cron · profile</text>
+
+  <!-- Morning brief job -->
+  <g filter="url(#node-shadow)">
+    <rect x="310" y="1295" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="360" y="1350" text-anchor="middle" font-size="26">🌅</text>
+    <use href="#conn" x="310" y="1340"/><use href="#conn" x="410" y="1340"/>
+  </g>
+  <text x="360" y="1400" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">morning_brief_job</text>
+
+  <!-- Admin mirror job -->
+  <g filter="url(#node-shadow)">
+    <rect x="310" y="1395" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="360" y="1450" text-anchor="middle" font-size="26">🪞</text>
+    <use href="#conn" x="310" y="1440"/><use href="#conn" x="410" y="1440"/>
+  </g>
+  <text x="360" y="1500" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">admin_mirror_job</text>
+
+  <!-- User profile agent job -->
+  <g filter="url(#node-shadow)">
+    <rect x="310" y="1495" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="360" y="1550" text-anchor="middle" font-size="26">👤</text>
+    <use href="#conn" x="310" y="1540"/><use href="#conn" x="410" y="1540"/>
+  </g>
+  <text x="360" y="1600" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">user_profile_agent_job</text>
+
+  <!-- Claude summary for brief -->
+  <g filter="url(#node-shadow)">
+    <rect x="530" y="1295" width="100" height="90" rx="14" fill="#c89b6c"/>
+    <text x="580" y="1344" text-anchor="middle" font-size="20" fill="#1a1a2e" font-weight="800">Claude</text>
+    <use href="#conn" x="530" y="1340"/><use href="#conn" x="630" y="1340"/>
+  </g>
+  <text x="580" y="1400" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Summarize day</text>
+
+  <!-- Push brief to Telegram -->
+  <g filter="url(#node-shadow)">
+    <rect x="770" y="1295" width="100" height="90" rx="14" fill="#229ED9"/>
+    <text x="820" y="1350" text-anchor="middle" font-size="26">✈️</text>
+    <use href="#conn" x="770" y="1340"/>
+  </g>
+  <text x="820" y="1400" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Push to handlowiec</text>
+
+  <!-- Owner sheets -->
+  <g filter="url(#node-shadow)">
+    <rect x="530" y="1395" width="100" height="90" rx="14" fill="#34a853"/>
+    <text x="580" y="1450" text-anchor="middle" font-size="22" fill="#fff" font-weight="800">Sheets</text>
+    <use href="#conn" x="530" y="1440"/><use href="#conn" x="630" y="1440"/>
+  </g>
+  <text x="580" y="1500" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Owner Sheets snapshot</text>
+
+  <!-- Owner calendar -->
+  <g filter="url(#node-shadow)">
+    <rect x="770" y="1395" width="100" height="90" rx="14" fill="#4285f4"/>
+    <text x="820" y="1450" text-anchor="middle" font-size="20" fill="#fff" font-weight="800">Calendar</text>
+    <use href="#conn" x="770" y="1440"/>
+  </g>
+  <text x="820" y="1500" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Owner Calendar copy</text>
+
+  <!-- User profile Claude analyze -->
+  <g filter="url(#node-shadow)">
+    <rect x="530" y="1495" width="100" height="90" rx="14" fill="#c89b6c"/>
+    <text x="580" y="1544" text-anchor="middle" font-size="20" fill="#1a1a2e" font-weight="800">Claude</text>
+    <use href="#conn" x="530" y="1540"/>
+  </g>
+  <text x="580" y="1600" text-anchor="middle" fill="#e3e8ff" font-size="13" font-weight="600">Tone / habit analyzer</text>
+
+  <!-- ===== LANE D — OAuth + externals ===== -->
+
+  <!-- OAuth callback -->
+  <g filter="url(#node-shadow)">
+    <rect x="140" y="1645" width="90" height="90" rx="14" fill="#22d3a4"/>
+    <text x="185" y="1700" text-anchor="middle" font-size="18" fill="#073d2a" font-weight="800">OAuth</text>
+    <use href="#conn" x="230" y="1690"/>
+  </g>
+  <text x="185" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12" font-weight="600">Google OAuth callback</text>
+
+  <!-- Encrypt + persist -->
+  <g filter="url(#node-shadow)">
+    <rect x="350" y="1645" width="100" height="90" rx="14" fill="#3b3b58"/>
+    <text x="400" y="1700" text-anchor="middle" font-size="26">🔐</text>
+    <use href="#conn" x="350" y="1690"/><use href="#conn" x="450" y="1690"/>
+  </g>
+  <text x="400" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12" font-weight="600">Encrypt tokens (Fernet)</text>
+
+  <!-- Supabase storage -->
+  <g filter="url(#node-shadow)">
+    <rect x="570" y="1645" width="100" height="90" rx="14" fill="#3ecf8e"/>
+    <text x="620" y="1700" text-anchor="middle" font-size="20" fill="#0e2c1f" font-weight="800">Supabase</text>
+    <use href="#conn" x="570" y="1690"/>
+  </g>
+  <text x="620" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12" font-weight="600">users · pending · history · offer templates</text>
+
+  <!-- External services brand-bar -->
+  <g>
+    <rect x="800" y="1645" width="120" height="90" rx="14" fill="#34a853" filter="url(#node-shadow)"/>
+    <text x="860" y="1700" text-anchor="middle" font-size="20" fill="#fff" font-weight="800">Sheets</text>
+    <text x="860" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">CRM rows (source of truth)</text>
+
+    <rect x="940" y="1645" width="120" height="90" rx="14" fill="#4285f4" filter="url(#node-shadow)"/>
+    <text x="1000" y="1700" text-anchor="middle" font-size="18" fill="#fff" font-weight="800">Calendar</text>
+    <text x="1000" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">events (action layer)</text>
+
+    <rect x="1080" y="1645" width="120" height="90" rx="14" fill="#fbbc04" filter="url(#node-shadow)"/>
+    <text x="1140" y="1700" text-anchor="middle" font-size="20" fill="#1a1a2e" font-weight="800">Drive</text>
+    <text x="1140" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">client photo folders</text>
+
+    <rect x="1220" y="1645" width="120" height="90" rx="14" fill="#ea4335" filter="url(#node-shadow)"/>
+    <text x="1280" y="1700" text-anchor="middle" font-size="20" fill="#fff" font-weight="800">Gmail</text>
+    <text x="1280" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">customer offer send</text>
+
+    <rect x="1360" y="1645" width="120" height="90" rx="14" fill="#c89b6c" filter="url(#node-shadow)"/>
+    <text x="1420" y="1700" text-anchor="middle" font-size="20" fill="#1a1a2e" font-weight="800">Anthropic</text>
+    <text x="1420" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">Claude Haiku · Sonnet</text>
+
+    <rect x="1500" y="1645" width="120" height="90" rx="14" fill="#10a37f" filter="url(#node-shadow)"/>
+    <text x="1560" y="1700" text-anchor="middle" font-size="20" fill="#fff" font-weight="800">OpenAI</text>
+    <text x="1560" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">Whisper STT</text>
+
+    <rect x="1640" y="1645" width="120" height="90" rx="14" fill="#1a78ff" filter="url(#node-shadow)"/>
+    <text x="1700" y="1700" text-anchor="middle" font-size="20" fill="#fff" font-weight="800">Stripe</text>
+    <text x="1700" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">billing (services/billing)</text>
+
+    <rect x="1780" y="1645" width="120" height="90" rx="14" fill="#3ecf8e" filter="url(#node-shadow)"/>
+    <text x="1840" y="1700" text-anchor="middle" font-size="18" fill="#0e2c1f" font-weight="800">Supabase</text>
+    <text x="1840" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">system data only</text>
+
+    <rect x="1920" y="1645" width="120" height="90" rx="14" fill="#229ED9" filter="url(#node-shadow)"/>
+    <text x="1980" y="1700" text-anchor="middle" font-size="18" fill="#fff" font-weight="800">Telegram</text>
+    <text x="1980" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">bot prod + bot-test</text>
+
+    <rect x="2060" y="1645" width="120" height="90" rx="14" fill="#3b3b58" filter="url(#node-shadow)"/>
+    <text x="2120" y="1700" text-anchor="middle" font-size="14" fill="#fff" font-weight="800">Railway</text>
+    <text x="2120" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">runtime · bot, api, billing</text>
+
+    <rect x="2200" y="1645" width="120" height="90" rx="14" fill="#000000" filter="url(#node-shadow)" stroke="#3b3b58"/>
+    <text x="2260" y="1700" text-anchor="middle" font-size="14" fill="#fff" font-weight="800">Vercel</text>
+    <text x="2260" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">web (Next.js 15)</text>
+
+    <rect x="2340" y="1645" width="120" height="90" rx="14" fill="#3b3b58" filter="url(#node-shadow)" stroke="#506bda"/>
+    <text x="2400" y="1700" text-anchor="middle" font-size="14" fill="#fff" font-weight="800">Whisper</text>
+    <text x="2400" y="1755" text-anchor="middle" fill="#e3e8ff" font-size="12">voice in · OpenAI API</text>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- LEGEND (top-right inside lane A)                               -->
+  <!-- ============================================================== -->
+  <g transform="translate(640, 575)">
+    <rect width="500" height="180" rx="14" fill="#1f1f33" stroke="#2a2a40"/>
+    <text x="16" y="26" fill="#e3e8ff" font-size="13" font-weight="700" letter-spacing="1">LEGEND</text>
+
+    <!-- swatches -->
+    <g transform="translate(16, 40)">
+      <rect width="18" height="18" rx="4" fill="#229ED9"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Telegram</text>
+      <g transform="translate(110, 0)"><rect width="18" height="18" rx="4" fill="#506bda"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Switch / decision</text></g>
+      <g transform="translate(260, 0)"><rect width="18" height="18" rx="4" fill="#3ecf8e"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Confirm card (R1)</text></g>
+    </g>
+    <g transform="translate(16, 68)">
+      <rect width="18" height="18" rx="4" fill="#c89b6c"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Claude (Anthropic)</text>
+      <g transform="translate(150, 0)"><rect width="18" height="18" rx="4" fill="#10a37f"/><text x="28" y="14" fill="#cdd3ee" font-size="12">OpenAI</text></g>
+      <g transform="translate(250, 0)"><rect width="18" height="18" rx="4" fill="#9d6bd9"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Deterministic logic</text></g>
+    </g>
+    <g transform="translate(16, 96)">
+      <rect width="18" height="18" rx="4" fill="#f5b54a"/><text x="28" y="14" fill="#cdd3ee" font-size="12">State store</text>
+      <g transform="translate(150, 0)"><rect width="18" height="18" rx="4" fill="#34a853"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Sheets</text></g>
+      <g transform="translate(250, 0)"><rect width="18" height="18" rx="4" fill="#4285f4"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Calendar</text></g>
+      <g transform="translate(360, 0)"><rect width="18" height="18" rx="4" fill="#ea4335"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Gmail</text></g>
+    </g>
+    <g transform="translate(16, 124)">
+      <rect width="18" height="18" rx="4" fill="#ff6d5a"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Trigger / cron</text>
+      <g transform="translate(150, 0)"><rect width="18" height="18" rx="4" fill="#e76f6f"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Cancel path</text></g>
+      <g transform="translate(290, 0)"><rect width="18" height="18" rx="4" fill="#3b3b58"/><text x="28" y="14" fill="#cdd3ee" font-size="12">Service / helper</text></g>
+    </g>
+    <g transform="translate(16, 152)">
+      <line x1="0" y1="9" x2="40" y2="9" stroke="#7a86b0" stroke-width="2"/><text x="48" y="14" fill="#cdd3ee" font-size="12">data flow</text>
+      <g transform="translate(140, 0)"><line x1="0" y1="9" x2="40" y2="9" stroke="#7a86b0" stroke-width="2" stroke-dasharray="4 4"/><text x="48" y="14" fill="#cdd3ee" font-size="12">side read / persist</text></g>
+      <g transform="translate(310, 0)"><line x1="0" y1="9" x2="40" y2="9" stroke="#3ecf8e" stroke-width="2"/><text x="48" y="14" fill="#cdd3ee" font-size="12">user confirmation</text></g>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- Edge labels (inline annotations to make the diagram readable)  -->
+  <!-- ============================================================== -->
+  <g fill="#9aa3c7" font-size="11">
+    <text x="295" y="172" transform="rotate(0)">text</text>
+    <text x="430" y="312">voice</text>
+    <text x="430" y="452">photo</text>
+    <text x="1170" y="296" font-style="italic">forces add_meeting if<tspan x="1170" dy="14">compound (meeting+temporal)</tspan></text>
+    <text x="1700" y="290" font-style="italic">+ entities</text>
+    <text x="2110" y="178" font-style="italic">match=1<tspan x="2110" dy="14">→ ambiguous</tspan></text>
+    <text x="2110" y="438" font-style="italic">≥ 2 hits</text>
+    <text x="2330" y="290" font-style="italic">user picks</text>
+    <text x="2475" y="296" font-style="italic">Zapisać</text>
+    <text x="2475" y="328" font-style="italic">→ Sheets + Calendar</text>
+    <text x="900" y="450">Drive upload</text>
+    <text x="430" y="712" fill="#e76f6f" font-style="italic">/cancel → clears any pending flow</text>
+    <text x="1480" y="990" font-style="italic">no Sheets write before Gmail OK</text>
+    <text x="610" y="938" font-style="italic">templates · profile · logo</text>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- R1 INVARIANT BANNER (bottom of lane A)                         -->
+  <!-- ============================================================== -->
+  <g transform="translate(2050, 100)">
+    <rect width="510" height="120" rx="12" fill="#0f2a1d" stroke="#3ecf8e"/>
+    <text x="20" y="32" fill="#3ecf8e" font-size="14" font-weight="800" letter-spacing="1">R1 INVARIANT · NO WRITE WITHOUT CONFIRMATION</text>
+    <text x="20" y="62" fill="#cdd3ee" font-size="13">Every mutation card uses [✅ Zapisać] [➕ Dopisać] [❌ Anulować].</text>
+    <text x="20" y="84" fill="#cdd3ee" font-size="13">❌ Anulować is one-click — no "na pewno?" loop.</text>
+    <text x="20" y="106" fill="#cdd3ee" font-size="13">Offer send uses [✅ Wysłać] [❌ Anulować]. [Tak]/[Nie] never confirms a write.</text>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- Footer note                                                    -->
+  <!-- ============================================================== -->
+  <g>
+    <text x="32" y="1755" fill="#5d6688" font-size="11">CRM source of truth = Google (Sheets / Calendar / Drive / Gmail). System data = Supabase. Bot delegates business logic to shared/* — handlers stay thin.</text>
+  </g>
+
+</svg>
