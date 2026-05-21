@@ -15,7 +15,7 @@ export type OnboardingStatus = {
   };
   access?: {
     active: boolean;
-    type: "paid" | "beta" | null;
+    type: "paid" | "trial" | "beta" | null;
     betaEligible: boolean;
   };
   profile: Record<string, unknown> | null;

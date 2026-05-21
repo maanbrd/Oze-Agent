@@ -18,6 +18,8 @@ const userFacingTexts = [
   "Aktywuj subskrypcję, żeby korzystać z Agent OZE.",
   "OZE-Agent",
   "399 zł / mies.",
+  "Okres próbny",
+  "Zarządzaj / anuluj okres próbny",
   "Co obejmuje plan",
   "Faktury i historia",
   "Historia płatności pojawi się po pierwszej opłaconej subskrypcji.",
@@ -61,6 +63,15 @@ test("payments page uses the same live billing language", () => {
   for (const text of userFacingTexts) {
     assert.equal(paymentsSource.includes(text), true, text);
   }
+});
+
+test("payments page exposes trial cancellation as a secondary confirmed action", () => {
+  assert.match(paymentsSource, /subscription_status === "trialing"/);
+  assert.match(paymentsSource, /subscription_cancel_at_period_end/);
+  assert.match(paymentsSource, /action="\/platnosci\/anuluj-trial"/);
+  assert.match(paymentsSource, /Zarządzaj \/ anuluj okres próbny/);
+  assert.match(paymentsSource, /Potwierdzam anulowanie po okresie próbnym/);
+  assert.doesNotMatch(paymentsSource, /bg-\[#3DFF7A\][^>]*>\\s*Zarządzaj \/ anuluj okres próbny/);
 });
 
 test("payments page does not expose implementation details to users", () => {

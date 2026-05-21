@@ -27,7 +27,7 @@ _RESOURCE_CREATION_LOCKS: dict[str, asyncio.Lock] = {}
 USER_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
     "subscription_plan, subscription_current_period_end, activation_paid, "
-    "stripe_livemode, "
+    "stripe_livemode, subscription_cancel_at_period_end, "
     "google_access_token, google_refresh_token, google_token_expiry, "
     "google_sheets_id, google_sheets_name, google_calendar_id, "
     "google_calendar_name, google_drive_folder_id, telegram_id, "
@@ -88,9 +88,12 @@ def _parse_period_end(value: Any) -> datetime | None:
 
 def _has_payment(user: dict[str, Any]) -> bool:
     period_end = _parse_period_end(user.get("subscription_current_period_end"))
+    status_value = user.get("subscription_status")
     return (
-        user.get("subscription_status") == "active"
-        and bool(user.get("activation_paid"))
+        (
+            (status_value == "active" and bool(user.get("activation_paid")))
+            or status_value == "trialing"
+        )
         and user.get("stripe_livemode") is True
         and period_end is not None
         and period_end > datetime.now(tz=timezone.utc)
@@ -133,7 +136,8 @@ def _active_beta_grant(
 
 def _access_state(user: dict[str, Any], auth_user: AuthUser) -> dict[str, Any]:
     if _has_payment(user):
-        return {"active": True, "type": "paid", "betaEligible": False}
+        access_type = "trial" if user.get("subscription_status") == "trialing" else "paid"
+        return {"active": True, "type": access_type, "betaEligible": False}
 
     grant = _active_beta_grant(user, auth_user)
     if not grant:
@@ -200,6 +204,9 @@ def _status_payload(user: dict[str, Any], auth_user: AuthUser) -> dict[str, Any]
             ),
             "activation_paid": user.get("activation_paid"),
             "stripe_livemode": user.get("stripe_livemode"),
+            "subscription_cancel_at_period_end": user.get(
+                "subscription_cancel_at_period_end"
+            ),
             "google_sheets_id": user.get("google_sheets_id"),
             "google_sheets_name": user.get("google_sheets_name"),
             "google_calendar_id": user.get("google_calendar_id"),

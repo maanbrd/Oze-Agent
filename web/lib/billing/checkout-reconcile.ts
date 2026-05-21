@@ -28,7 +28,10 @@ export function isPaidCheckoutSessionForAccount(
   return (
     session.mode === "subscription" &&
     session.status === "complete" &&
-    session.payment_status === "paid" &&
+    (
+      session.payment_status === "paid" ||
+      session.payment_status === "no_payment_required"
+    ) &&
     ownedByProfile &&
     authMatches
   );

@@ -94,6 +94,7 @@ export async function POST(request: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
+      payment_method_collection: "always",
       customer_email: account.email ?? account.profile.email ?? undefined,
       client_reference_id: account.profile.id,
       line_items: [{ price: recurringPriceId, quantity: 1 }],
@@ -102,13 +103,16 @@ export async function POST(request: Request) {
         user_id: account.profile.id,
         plan: BILLING_PLAN,
         source: "web_onboarding",
+        trial_days: "3",
       },
       subscription_data: {
+        trial_period_days: 3,
         metadata: {
           auth_user_id: account.profile.auth_user_id,
           user_id: account.profile.id,
           plan: BILLING_PLAN,
           source: "web_onboarding",
+          trial_days: "3",
         },
       },
       success_url: `${returnBaseUrl}/onboarding/sukces?session_id={CHECKOUT_SESSION_ID}`,

@@ -32,7 +32,8 @@ export default async function PaymentSuccessPage({
     redirect("/login?next=/onboarding/platnosc");
   }
 
-  const active = isCurrentLivePaid(account.profile);
+  const active = isCurrentLiveAccess(account.profile);
+  const trial = account.profile?.subscription_status === "trialing";
 
   return (
     <main className="relative grid min-h-screen place-items-center bg-[#050607] px-5 text-zinc-100">
@@ -45,11 +46,17 @@ export default async function PaymentSuccessPage({
           Płatność
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-white">
-          {active ? "Płatność zaksięgowana." : "Czekamy na potwierdzenie płatności."}
+          {active
+            ? trial
+              ? "Okres próbny aktywny."
+              : "Płatność zaksięgowana."
+            : "Czekamy na potwierdzenie płatności."}
         </h1>
         <p className="mt-4 text-sm leading-7 text-zinc-300">
           {active
-            ? "Konto ma aktywną subskrypcję. Następny etap to Google, zasoby Google i Telegram."
+            ? trial
+              ? "Konto ma aktywny 3-dniowy test. Następny etap to Google, zasoby Google i Telegram."
+              : "Konto ma aktywną subskrypcję. Następny etap to Google, zasoby Google i Telegram."
             : "Wróciłeś do panelu, ale konto nie ma jeszcze aktywnej subskrypcji. Odśwież za chwilę albo wróć do płatności, jeśli status się nie zmieni."}
         </p>
         <Link
@@ -63,11 +70,14 @@ export default async function PaymentSuccessPage({
   );
 }
 
-function isCurrentLivePaid(
+function isCurrentLiveAccess(
   profile: Awaited<ReturnType<typeof getCurrentAccount>>["profile"],
 ) {
   if (!profile) return false;
-  if (profile.subscription_status !== "active" || !profile.activation_paid) {
+  const hasAccessStatus =
+    profile.subscription_status === "trialing" ||
+    (profile.subscription_status === "active" && profile.activation_paid);
+  if (!hasAccessStatus) {
     return false;
   }
   if (profile.stripe_livemode !== true) return false;

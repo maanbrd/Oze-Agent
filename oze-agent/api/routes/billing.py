@@ -180,6 +180,17 @@ def _subscription_period_end(value: dict[str, Any]) -> str | None:
     )
 
 
+def _subscription_cancel_at_period_end(value: dict[str, Any]) -> bool:
+    details = _subscription_details(value)
+    for candidate in (
+        value.get("cancel_at_period_end"),
+        details.get("cancel_at_period_end"),
+    ):
+        if isinstance(candidate, bool):
+            return candidate
+    return False
+
+
 def _metadata(value: dict[str, Any]) -> dict[str, Any]:
     metadata = value.get("metadata")
     return metadata if isinstance(metadata, dict) else {}
@@ -488,12 +499,13 @@ def process_stripe_event(event: dict[str, Any]) -> dict[str, Any]:
     }:
         updated = _activate_from_checkout_session(event_object)
         if updated:
-            _log_payment_snapshot(
-                event=event,
-                event_object=event_object,
-                user_id=updated["id"],
-                status_value="paid",
-            )
+            if updated.get("activation_paid"):
+                _log_payment_snapshot(
+                    event=event,
+                    event_object=event_object,
+                    user_id=updated["id"],
+                    status_value="paid",
+                )
             _insert_outbox(updated["id"], event_id, "billing_activated", event)
     elif event_type == "invoice.payment_succeeded":
         subscription_id = _invoice_subscription_id(event_object)
@@ -570,7 +582,7 @@ def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
         session.get("object") != "checkout.session"
         or session.get("mode") != "subscription"
         or session.get("status") != "complete"
-        or session.get("payment_status") != "paid"
+        or session.get("payment_status") not in {"paid", "no_payment_required"}
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -585,17 +597,24 @@ def _activate_from_checkout_session(session: dict[str, Any]) -> dict[str, Any]:
             detail="Checkout session does not match the authenticated user.",
         )
 
+    details = _subscription_details(session)
+    is_trial = (
+        session.get("payment_status") == "no_payment_required"
+        or details.get("status") == "trialing"
+    )
+
     updated = _update_user(
         user["id"],
         {
-            "subscription_status": "active",
+            "subscription_status": "trialing" if is_trial else "active",
             "subscription_plan": metadata.get("plan"),
-            "activation_paid": True,
+            "activation_paid": not is_trial,
             "stripe_customer_id": session.get("customer"),
             "stripe_subscription_id": session.get("subscription"),
             "stripe_checkout_session_id": session.get("id"),
             "subscription_current_period_end": _subscription_period_end(session),
             "stripe_livemode": _stripe_livemode({}, session),
+            "subscription_cancel_at_period_end": _subscription_cancel_at_period_end(session),
         },
     )
     return updated
@@ -625,6 +644,9 @@ def _update_from_subscription(
     if status_value == "canceled":
         subscription_status = "canceled"
         activation_paid = False
+    elif status_value == "trialing":
+        subscription_status = "trialing"
+        activation_paid = False
     elif status_value in {"past_due", "unpaid", "incomplete", "incomplete_expired"}:
         subscription_status = "pending_payment"
         activation_paid = False
@@ -640,6 +662,7 @@ def _update_from_subscription(
             "stripe_subscription_id": subscription_id,
             "subscription_current_period_end": _subscription_period_end(subscription),
             "stripe_livemode": _stripe_livemode({}, subscription),
+            "subscription_cancel_at_period_end": _subscription_cancel_at_period_end(subscription),
         },
     )
 
@@ -659,6 +682,7 @@ def _mark_invoice_failed(invoice: dict[str, Any]) -> dict[str, Any] | None:
             "stripe_subscription_id": subscription_id,
             "subscription_current_period_end": _subscription_period_end(invoice),
             "stripe_livemode": _stripe_livemode({}, invoice),
+            "subscription_cancel_at_period_end": _subscription_cancel_at_period_end(invoice),
         },
     )
 

@@ -232,6 +232,47 @@ async def test_onboarding_status_rejects_paid_access_after_period_end(monkeypatc
     assert result["access"]["active"] is False
 
 
+@pytest.mark.asyncio
+async def test_onboarding_status_allows_live_trial_until_period_end(monkeypatch):
+    from api.auth import AuthUser
+    from api.routes import onboarding
+
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "trialing",
+                "activation_paid": False,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
+                "subscription_cancel_at_period_end": False,
+                "google_access_token": None,
+                "google_refresh_token": None,
+                "google_sheets_id": None,
+                "google_calendar_id": None,
+                "google_drive_folder_id": None,
+                "telegram_id": None,
+                "telegram_link_code": None,
+                "telegram_link_code_expires": None,
+                "onboarding_completed": False,
+            }
+        ]
+    )
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+
+    result = await onboarding.get_onboarding_status(
+        AuthUser(user_id="auth-1", email="jan@example.pl", claims={})
+    )
+
+    assert result["nextStep"] == "/onboarding/google"
+    assert result["steps"]["payment"] is True
+    assert result["access"]["active"] is True
+    assert result["access"]["type"] == "trial"
+    assert result["profile"]["subscription_cancel_at_period_end"] is False
+
+
 def test_oauth_state_roundtrip():
     from shared.google_auth import build_oauth_state, parse_oauth_state
 

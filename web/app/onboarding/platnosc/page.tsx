@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Płatność | Agent OZE",
-  description: "Miesięczna subskrypcja Agent OZE.",
+  description: "3 dni testu Agent OZE, potem miesięczna subskrypcja.",
 };
 
 export default async function PaymentStepPage({
@@ -39,11 +39,11 @@ export default async function PaymentStepPage({
               Krok 2
             </p>
             <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-white sm:text-5xl">
-              Uruchom subskrypcję.
+              Rozpocznij 3 dni testu.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
-              Jeden plan miesięczny. Po opłaceniu subskrypcji przejdziesz dalej
-              do konfiguracji Google i Telegrama.
+              Podajesz kartę teraz, dziś płacisz 0 zł. Jeśli nie anulujesz przed
+              końcem okresu próbnego, po 3 dniach rusza subskrypcja 399 zł / mies.
             </p>
 
             {params.message ? (
@@ -91,8 +91,8 @@ export default async function PaymentStepPage({
                 <div className="max-w-xl">
                   <PlanCard
                     title="OZE-Agent"
-                    price="399 zł / mies."
-                    note="Pełny dostęp do agenta, panelu i generatora ofert. Rezygnujesz kiedy chcesz."
+                    price="0 zł dziś"
+                    note="Pełny dostęp przez 3 dni. Po okresie próbnym 399 zł / mies., jeśli wcześniej nie anulujesz."
                   />
                 </div>
               </div>
@@ -102,12 +102,13 @@ export default async function PaymentStepPage({
           <aside className="h-fit rounded-[8px] border border-white/10 bg-white/[0.04] p-6">
             <p className="text-sm font-semibold text-white">Koszyk</p>
             <div className="mt-5 space-y-4 text-sm">
-              <Row label="Subskrypcja miesięczna" value="399 zł / mies." />
+              <Row label="Dzisiaj" value="0 zł" />
+              <Row label="Po 3 dniach" value="399 zł / mies." />
             </div>
             <div className="mt-6 border-t border-white/10 pt-5">
               <p className="text-sm leading-6 text-zinc-400">
-                Po płatności wrócisz do konfiguracji konta. Jeśli płatność nie
-                przejdzie, możesz wrócić tutaj i spróbować ponownie.
+                Stripe zapisze kartę do późniejszego obciążenia. Po rozpoczęciu
+                testu wrócisz do konfiguracji Google i Telegrama.
               </p>
             </div>
           </aside>
@@ -189,7 +190,7 @@ function PlanCard({
         type="submit"
         className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98]"
       >
-        Zapłać i kontynuuj
+        Rozpocznij 3 dni testu
       </button>
     </form>
   );

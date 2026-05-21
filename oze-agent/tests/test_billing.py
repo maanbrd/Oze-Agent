@@ -219,6 +219,62 @@ async def test_checkout_completed_does_not_activate_until_paid(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_trial_checkout_completed_grants_trial_access_without_paid_activation(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_trial_checkout",
+        "type": "checkout.session.completed",
+        "livemode": True,
+        "object": {
+            "object": "checkout.session",
+            "id": "cs_trial_123",
+            "livemode": True,
+            "mode": "subscription",
+            "status": "complete",
+            "payment_status": "no_payment_required",
+            "amount_total": 0,
+            "currency": "pln",
+            "customer": "cus_trial_123",
+            "subscription": "sub_trial_123",
+            "subscription_details": {
+                "id": "sub_trial_123",
+                "status": "trialing",
+                "current_period_end": 1778278200,
+                "cancel_at_period_end": False,
+                "livemode": True,
+            },
+            "metadata": {
+                "auth_user_id": "auth-1",
+                "user_id": "user-1",
+                "plan": "monthly",
+                "trial_days": "3",
+            },
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "trialing"
+    assert fake.users[0]["activation_paid"] is False
+    assert fake.users[0]["stripe_livemode"] is True
+    assert fake.users[0]["stripe_customer_id"] == "cus_trial_123"
+    assert fake.users[0]["stripe_subscription_id"] == "sub_trial_123"
+    assert fake.users[0]["stripe_checkout_session_id"] == "cs_trial_123"
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1778278200)
+    assert fake.users[0]["subscription_cancel_at_period_end"] is False
+    assert fake.payment_history == []
+
+
+@pytest.mark.asyncio
 async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(monkeypatch):
     from api.routes import billing
 
@@ -481,6 +537,7 @@ async def test_subscription_updated_cancel_at_period_end_keeps_access_until_peri
     assert fake.users[0]["activation_paid"] is True
     assert fake.users[0]["stripe_livemode"] is True
     assert fake.users[0]["subscription_current_period_end"] == _iso(1779228600)
+    assert fake.users[0]["subscription_cancel_at_period_end"] is True
 
 
 @pytest.mark.asyncio

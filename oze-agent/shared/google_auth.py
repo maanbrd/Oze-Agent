@@ -11,6 +11,7 @@ import json
 import logging
 import secrets
 from datetime import datetime, timezone
+from importlib import import_module
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -59,13 +60,22 @@ def _base64url_decode(value: str) -> dict | None:
 
 
 def _configured_web_host() -> str | None:
-    for value in (Config.DASHBOARD_URL, Config.BASE_URL):
-        if not value:
-            continue
-        try:
-            return urlparse(value).hostname
-        except Exception:
-            continue
+    config_sources = [Config]
+    try:
+        current_config = import_module("bot.config").Config
+    except Exception:
+        current_config = None
+    if current_config is not None and current_config is not Config:
+        config_sources.append(current_config)
+
+    for config in config_sources:
+        for value in (config.DASHBOARD_URL, config.BASE_URL):
+            if not value:
+                continue
+            try:
+                return urlparse(value.strip()).hostname
+            except Exception:
+                continue
     return None
 
 
