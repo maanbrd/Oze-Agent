@@ -1,0 +1,3 @@
+# Fixture Seed After Nonfixture Fix
+
+seed= {'user_id': 'bd381405-66d2-4544-b817-117f8f8de441', 'seeded_clients': ['Jan Kowalski, Warszawa → row 70'], 'skipped_clients': ['Jan Kowalski, Kraków', 'Marek Nowak, Wyszków'], 'failed_clients': [], 'seeded_events': [], 'skipped_events': ['E2E-Beta-Fixture-Conflict-Slot 2026-05-20 14:00-15:00'], 'failed_events': []}

@@ -1,0 +1,26 @@
+{
+  "user_id": "bd381405-66d2-4544-b817-117f8f8de441",
+  "match_count": 1,
+  "matches": [
+    {
+      "Imię i nazwisko": "E2E-Beta-Tester-221158-B11",
+      "Telefon": "600100200",
+      "Email": "",
+      "Miasto": "E2E-Beta-City",
+      "Adres": "",
+      "Status": "Nowy lead",
+      "Produkt": "PV",
+      "Notatki": "",
+      "Data pierwszego kontaktu": "2026-05-19",
+      "Data ostatniego kontaktu": "2026-05-19",
+      "Następny krok": "",
+      "Data następnego kroku": "",
+      "Źródło pozyskania": "",
+      "Zdjęcia": "",
+      "Link do zdjęć": "",
+      "ID wydarzenia Kalendarz": "",
+      "_row": 72
+    }
+  ],
+  "duplicate": null
+}

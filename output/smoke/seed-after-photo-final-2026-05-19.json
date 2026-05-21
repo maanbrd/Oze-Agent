@@ -1,0 +1,15 @@
+{
+  "user_id": "bd381405-66d2-4544-b817-117f8f8de441",
+  "seeded_clients": [
+    "Jan Kowalski, Warszawa → row 68",
+    "Jan Kowalski, Kraków → row 69",
+    "Marek Nowak, Wyszków → row 70"
+  ],
+  "skipped_clients": [],
+  "failed_clients": [],
+  "seeded_events": [
+    "E2E-Beta-Fixture-Conflict-Slot 2026-05-20 14:00-15:00 → 9j6sfijmhes7l4q2b3lt2ornd8"
+  ],
+  "skipped_events": [],
+  "failed_events": []
+}
