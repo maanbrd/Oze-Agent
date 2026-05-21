@@ -139,7 +139,14 @@ def test_assert_row_field_equals_substring_does_not_match():
 async def test_find_synthetic_rows_excludes_non_e2e():
     rows = [
         {"Imię i nazwisko": "E2E-Beta-Tester-143052-B01", "Miasto": "X", "_row": 1},
+        {"Imię i nazwisko": "E2E Beta Tester 143052 SM2", "Miasto": "Voice", "_row": 5},
         {"Imię i nazwisko": "Anna Nowak", "Email": "e2e.test.143052.b01@e2e-noinbox.local", "_row": 4},
+        {
+            "Imię i nazwisko": "Jan Kowalski",
+            "Email": "e2e.fixture.jan.warszawa@e2e-noinbox.local",
+            "Notatki": "E2E fixture: disambiguation",
+            "_row": 6,
+        },
         {"Imię i nazwisko": "Real Client Name", "Miasto": "Y", "_row": 2},
         {"Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski", "Miasto": "Z", "_row": 3},
     ]
@@ -148,8 +155,10 @@ async def test_find_synthetic_rows_excludes_non_e2e():
     names = [r["Imię i nazwisko"] for r in out]
     assert "Real Client Name" not in names
     assert "E2E-Beta-Tester-143052-B01" in names
+    assert "E2E Beta Tester 143052 SM2" in names
     assert "Anna Nowak" in names
-    # Fixture excluded by default
+    # Fixtures excluded by default.
+    assert "Jan Kowalski" not in names
     assert "E2E-Beta-Fixture-Jan-Kowalski" not in names
 
 
@@ -157,10 +166,18 @@ async def test_find_synthetic_rows_excludes_non_e2e():
 async def test_find_synthetic_rows_include_fixtures_true():
     rows = [
         {"Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski", "_row": 3},
+        {
+            "Imię i nazwisko": "Jan Kowalski",
+            "Email": "e2e.fixture.jan.warszawa@e2e-noinbox.local",
+            "Notatki": "E2E fixture: disambiguation",
+            "_row": 6,
+        },
     ]
     with patch("tests_e2e.sheets_verify.get_all_clients_for_e2e", new=AsyncMock(return_value=rows)):
         out = await find_synthetic_rows("uid", include_fixtures=True)
-    assert len(out) == 1
+    names = [r["Imię i nazwisko"] for r in out]
+    assert "E2E-Beta-Fixture-Jan-Kowalski" in names
+    assert "Jan Kowalski" in names
 
 
 @pytest.mark.asyncio

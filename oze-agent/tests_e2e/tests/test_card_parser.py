@@ -41,6 +41,36 @@ def test_parse_add_meeting_phone_call_header():
     assert card.icon == "📞"
 
 
+def test_parse_phone_card_icon_after_checkmark_heading():
+    text = "✅ 📞 Dodać telefon?\n\n• Klient: Jan Kowalski\n• Godzina: 10:00"
+    card = parse_card(text)
+    assert card.icon == "📞"
+    assert card.header_line == "Dodać telefon?"
+
+
+def test_duplicate_update_prompt_detects_initial_and_augmented_cards():
+    initial = parse_card(
+        "Mam już Jan Kowalski (Warszawa).\n"
+        "Zaktualizować o: Email?",
+        ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"],
+    )
+    augmented = parse_card(
+        "Zaktualizować Jan Kowalski (Warszawa) o:\n"
+        "Email: jan@example.pl?",
+        ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"],
+    )
+    regular_add = parse_card(
+        "📋 Jan Kowalski, Warszawa\n"
+        "Email: jan@example.pl\n"
+        "Zapisać / dopisać / anulować?",
+        ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"],
+    )
+
+    assert initial.is_duplicate_update_prompt() is True
+    assert augmented.is_duplicate_update_prompt() is True
+    assert regular_add.is_duplicate_update_prompt() is False
+
+
 def test_parse_add_note_card_flow_a():
     text = '📝 Marek Kowalski, Wyszków:\ndodaj notatkę "ma duży dom"?'
     card = parse_card(text)

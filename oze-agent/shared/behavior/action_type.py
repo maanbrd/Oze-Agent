@@ -21,7 +21,7 @@ _PRESENTATION: dict[str, ActionTypePresentation] = {
     ),
     "phone_call": ActionTypePresentation(
         label="Telefon",
-        confirmation_heading="✅ Dodać telefon?",
+        confirmation_heading="📞 Dodać telefon?",
         success_message="✅ Telefon dodany do kalendarza.",
         schedule_suffix="telefon",
         description_prefix="📞 Zadzwoń do klienta.",
@@ -73,4 +73,3 @@ def calendar_title(event_type: str | None, client_name: str | None = "") -> str:
     label = action_label(event_type)
     name = (client_name or "").strip()
     return f"{label} — {name}" if name else label
-

@@ -1,5 +1,9 @@
 """Pure tests for post-campaign app smoke configuration."""
 
+from types import SimpleNamespace
+
+import pytest
+
 from tests_e2e import post_campaign_checks as checks
 
 
@@ -33,3 +37,21 @@ def test_zero_runs_are_rejected():
     error = checks.validate_post_campaign_args(args)
 
     assert error == "at least one post-campaign app run is required"
+
+
+@pytest.mark.asyncio
+async def test_post_campaign_cleanup_preserves_fixtures_by_default(monkeypatch):
+    calls = []
+
+    async def fake_cleanup(telegram_id, **kwargs):
+        calls.append((telegram_id, kwargs))
+        return {"cleanup_safe": True}
+
+    monkeypatch.setattr(checks, "cleanup_synthetic_data", fake_cleanup)
+
+    report = await checks.cleanup_post_campaign_data(
+        SimpleNamespace(admin_telegram_id=1690210103)
+    )
+
+    assert report == {"cleanup_safe": True}
+    assert calls == [(1690210103, {})]

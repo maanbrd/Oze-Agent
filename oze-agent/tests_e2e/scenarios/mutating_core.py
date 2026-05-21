@@ -1188,8 +1188,8 @@ async def run_add_meeting_calendar_conflict_warning(
     name="add_client_dup_dopisac_update_path",
     category=CATEGORY,
     description=(
-        "setup client → send same name + extra field → 3-button dup card "
-        "→ click ➕ Dopisać → bot offers update card → ✅ → Sheets row "
+        "setup client → send same name/contact data → 3-button dup card "
+        "→ click ➕ Dopisać → send address → bot offers update card → ✅ → Sheets row "
         "UPDATED (no NEW row created)."
     ),
     default_in_run=False,
@@ -1198,17 +1198,42 @@ async def run_add_client_dup_dopisac_update_path(
     harness: TelegramE2EHarness,
 ) -> ScenarioResult:
     result = new_result("add_client_dup_dopisac_update_path", CATEGORY)
-    name = e2e_beta_name("B11")
-    new_email = f"updated-{name.lower().replace(' ', '-')}@example.pl"
+    client = e2e_realistic_client("B11")
+    name = "Oskar Stabilski"
+    city = "Wrocław"
+    new_address = "ul. Stabilna 7"
     result.context["client_name"] = name
-    result.context["new_email"] = new_email
+    result.context["client_city"] = city
+    result.context["setup_email"] = client.email
+    result.context["new_address"] = new_address
     try:
         await reset_pending(harness)
-        if not await setup_existing_client(harness, result, name):
+        if not await setup_existing_client(
+            harness,
+            result,
+            name,
+            city,
+            extra_fields=f"{client.phone}, {client.email}, PV",
+        ):
+            return result
+        setup_row = await _verify_save_to_sheets(
+            harness,
+            result,
+            name,
+            city,
+            expected_fields={"Telefon": client.phone, "Email": client.email},
+            check_key="setup_sheets_row_ready",
+        )
+        if setup_row is None:
+            result.add_blocker(
+                "setup_sheets_row_ready_for_duplicate_lookup",
+                "setup row was not readable from Sheets before duplicate trigger",
+            )
             return result
 
-        # Send same name + new email → bot detects dup → 3-button card.
-        dup_trigger = f"dodaj klienta {name}, {E2E_BETA_CITY}, 600100200, PV, {new_email}"
+        # Send same name + same contact data → bot detects dup without a
+        # field conflict, then the append step supplies the actual new value.
+        dup_trigger = f"dodaj klienta {name}, {city}, {client.phone}, {client.email}, PV"
         result.context["dup_trigger"] = dup_trigger
         await harness.send(dup_trigger)
         replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
@@ -1219,6 +1244,14 @@ async def run_add_client_dup_dopisac_update_path(
             result.add_blocker("got_dup_card", "no card after dup trigger")
             return result
         result.add("got_dup_card", True, detail=str(dup_card.button_labels))
+        parsed_dup_card = parse_card(dup_card.text, dup_card.button_labels)
+        result.add(
+            "duplicate_update_card_detected",
+            parsed_dup_card.is_duplicate_update_prompt(),
+            detail=f"card text: {dup_card.text[:240]!r}",
+        )
+        if not parsed_dup_card.is_duplicate_update_prompt():
+            return result
 
         # Find ➕ Dopisać button.
         dopisac_label = next(
@@ -1255,9 +1288,9 @@ async def run_add_client_dup_dopisac_update_path(
                     doc_ref="agent_behavior_spec_v5.md duplicate-routing flow",
                 )
                 await _verify_save_to_sheets(
-                    harness, result, name, E2E_BETA_CITY,
-                    expected_fields={"Email": "updated-"},
-                    check_key="sheets_row_updated_with_new_email",
+                    harness, result, name, city,
+                    expected_fields={"Adres": new_address},
+                    check_key="sheets_row_updated_with_new_address",
                 )
                 return result
 
@@ -1283,7 +1316,7 @@ async def run_add_client_dup_dopisac_update_path(
                 )
                 return result
 
-            extra_text = f"email: {new_email}"
+            extra_text = f"adres: {new_address}"
             result.context["dopisac_text"] = extra_text
             await harness.send(extra_text)
             update_replies = await harness.collect_messages(duration_s=12.0)
@@ -1297,6 +1330,14 @@ async def run_add_client_dup_dopisac_update_path(
                 )
                 return result
         result.add("post_dopisac_update_card", True, detail=str(update_card.button_labels))
+        parsed_update_card = parse_card(update_card.text, update_card.button_labels)
+        result.add(
+            "post_dopisac_card_is_duplicate_update",
+            parsed_update_card.is_duplicate_update_prompt(),
+            detail=f"card text: {update_card.text[:240]!r}",
+        )
+        if not parsed_update_card.is_duplicate_update_prompt():
+            return result
 
         save_label, final_confirm = await click_save_and_collect(harness, update_card)
         if save_label is None:
@@ -1311,9 +1352,9 @@ async def run_add_client_dup_dopisac_update_path(
         )
 
         await _verify_save_to_sheets(
-            harness, result, name, E2E_BETA_CITY,
-            expected_fields={"Email": "updated-"},
-            check_key="sheets_row_updated_with_new_email",
+            harness, result, name, city,
+            expected_fields={"Adres": new_address},
+            check_key="sheets_row_updated_with_new_address",
         )
     except Exception as e:
         logger.exception("add_client_dup_dopisac_update_path crashed")

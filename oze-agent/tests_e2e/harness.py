@@ -187,12 +187,21 @@ class TelegramE2EHarness:
         await self._client.send_message(self._bot_entity, text)
         logger.info("e2e_harness.sent text=%r", text)
 
-    async def send_file(self, path: str | Path, *, caption: str = "") -> None:
+    async def send_file(
+        self,
+        path: str | Path,
+        *,
+        caption: str = "",
+        voice_note: bool = False,
+    ) -> None:
         """Send a local file to the bot as the test user."""
         if self._client is None or self._bot_entity is None:
             raise RuntimeError("Harness not connected (use 'async with').")
         await self._drain_inbox()
-        await self._client.send_file(self._bot_entity, str(path), caption=caption)
+        kwargs = {"caption": caption}
+        if voice_note:
+            kwargs["voice_note"] = True
+        await self._client.send_file(self._bot_entity, str(path), **kwargs)
         logger.info("e2e_harness.sent_file path=%r caption=%r", str(path), caption)
 
     async def click_button(

@@ -23,12 +23,12 @@ def test_fixture_clients_count_and_names():
     """Three canonical fixtures: 2 Jan Kowalski (different cities) + 1 Marek."""
     assert len(FIXTURE_CLIENTS) == 3
     names = [c["Imię i nazwisko"] for c in FIXTURE_CLIENTS]
-    assert names.count("E2E-Beta-Fixture-Jan-Kowalski") == 2
-    assert "E2E-Beta-Fixture-Marek-Nowak" in names
+    assert names.count("Jan Kowalski") == 2
+    assert "Marek Nowak" in names
 
 
 def test_fixture_jan_kowalski_has_distinct_cities():
-    jans = [c for c in FIXTURE_CLIENTS if c["Imię i nazwisko"] == "E2E-Beta-Fixture-Jan-Kowalski"]
+    jans = [c for c in FIXTURE_CLIENTS if c["Imię i nazwisko"] == "Jan Kowalski"]
     cities = {c["Miasto"] for c in jans}
     assert cities == {"Warszawa", "Kraków"}
 
@@ -44,11 +44,12 @@ def test_conflict_fixture_title_constant():
     assert CONFLICT_FIXTURE_TITLE == "E2E-Beta-Fixture-Conflict-Slot"
 
 
-def test_all_fixtures_use_e2e_beta_fixture_prefix():
-    """Naming invariant: fixture rows must start with E2E-Beta-Fixture-
-    so the per-run cleanup leaves them alone."""
+def test_all_fixtures_use_natural_names_and_fixture_metadata():
+    """Fixture rows use natural names; synthetic ownership lives in metadata."""
     for c in FIXTURE_CLIENTS:
-        assert c["Imię i nazwisko"].startswith("E2E-Beta-Fixture-")
+        assert not c["Imię i nazwisko"].startswith("E2E-Beta-Fixture-")
+        assert c["Email"].startswith("e2e.fixture.")
+        assert "E2E fixture" in c.get("Notatki", "")
 
 
 # ── seed_fixtures ───────────────────────────────────────────────────────────
@@ -64,8 +65,16 @@ async def test_seed_fixtures_returns_error_when_user_missing():
 
 @pytest.mark.asyncio
 async def test_seed_fixtures_skips_existing_clients():
-    """When find_client_row returns an existing row, that fixture is skipped."""
-    fake_existing = {"_row": 5, "Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski"}
+    """When a matching fixture row exists, that fixture is skipped."""
+    fake_existing = [
+        {
+            "_row": idx,
+            "Imię i nazwisko": fixture["Imię i nazwisko"],
+            "Miasto": fixture["Miasto"],
+            "Email": fixture["Email"],
+        }
+        for idx, fixture in enumerate(FIXTURE_CLIENTS, start=5)
+    ]
     add_calls = []
 
     async def fake_add(uid, data):
@@ -73,7 +82,7 @@ async def test_seed_fixtures_skips_existing_clients():
         return 99
 
     with patch("tests_e2e.fixtures.resolve_user_id", new=AsyncMock(return_value="uuid")), \
-         patch("tests_e2e.fixtures.find_client_row",
+         patch("tests_e2e.fixtures.find_synthetic_rows",
                new=AsyncMock(return_value=fake_existing)), \
          patch("tests_e2e.fixtures.add_client", new=fake_add), \
          patch("tests_e2e.fixtures.find_event_by_summary_in_window",
@@ -92,6 +101,29 @@ async def test_seed_fixtures_skips_existing_clients():
 
 
 @pytest.mark.asyncio
+async def test_seed_fixtures_creates_when_natural_nonfixture_row_exists():
+    """A real Jan Kowalski row must not suppress the controlled fixture row."""
+    add_calls = []
+
+    async def fake_add(uid, data):
+        add_calls.append((data["Imię i nazwisko"], data["Miasto"], data["Email"]))
+        return len(add_calls) + 100
+
+    with patch("tests_e2e.fixtures.resolve_user_id", new=AsyncMock(return_value="uuid")), \
+         patch("tests_e2e.fixtures.find_synthetic_rows",
+               new=AsyncMock(return_value=[])), \
+         patch("tests_e2e.fixtures.add_client", new=fake_add), \
+         patch("tests_e2e.fixtures.find_event_by_summary_in_window",
+               new=AsyncMock(return_value={"id": "x", "title": CONFLICT_FIXTURE_TITLE})), \
+         patch("tests_e2e.fixtures.create_event",
+               new=AsyncMock(return_value={"id": "x"})):
+        report = await seed_fixtures(999)
+
+    assert ("Jan Kowalski", "Warszawa", "e2e.fixture.jan.warszawa@e2e-noinbox.local") in add_calls
+    assert any("Jan Kowalski, Warszawa" in value for value in report["seeded_clients"])
+
+
+@pytest.mark.asyncio
 async def test_seed_fixtures_creates_when_missing():
     """When nothing exists, seed_fixtures creates all three rows + the event."""
     add_calls = []
@@ -101,8 +133,8 @@ async def test_seed_fixtures_creates_when_missing():
         return len(add_calls) + 100  # fake row number
 
     with patch("tests_e2e.fixtures.resolve_user_id", new=AsyncMock(return_value="uuid")), \
-         patch("tests_e2e.fixtures.find_client_row",
-               new=AsyncMock(return_value=None)), \
+         patch("tests_e2e.fixtures.find_synthetic_rows",
+               new=AsyncMock(return_value=[])), \
          patch("tests_e2e.fixtures.add_client", new=fake_add), \
          patch("tests_e2e.fixtures.find_event_by_summary_in_window",
                new=AsyncMock(return_value=None)), \
@@ -120,8 +152,8 @@ async def test_seed_fixtures_creates_when_missing():
 async def test_seed_fixtures_records_failures():
     """add_client returning None → recorded as failed_clients."""
     with patch("tests_e2e.fixtures.resolve_user_id", new=AsyncMock(return_value="uuid")), \
-         patch("tests_e2e.fixtures.find_client_row",
-               new=AsyncMock(return_value=None)), \
+         patch("tests_e2e.fixtures.find_synthetic_rows",
+               new=AsyncMock(return_value=[])), \
          patch("tests_e2e.fixtures.add_client", new=AsyncMock(return_value=None)), \
          patch("tests_e2e.fixtures.find_event_by_summary_in_window",
                new=AsyncMock(return_value=None)), \

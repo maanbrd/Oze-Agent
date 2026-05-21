@@ -10,7 +10,7 @@ from shared.behavior.action_type import (
 
 def test_phone_copy_never_uses_meeting_wording():
     assert action_label("phone_call") == "Telefon"
-    assert confirmation_heading("phone_call") == "✅ Dodać telefon?"
+    assert confirmation_heading("phone_call") == "📞 Dodać telefon?"
     assert success_message("phone_call") == "✅ Telefon dodany do kalendarza."
     assert calendar_title("phone_call", "Zbigniew Borek") == "Telefon — Zbigniew Borek"
     assert schedule_entry_suffix("phone_call") == "telefon"

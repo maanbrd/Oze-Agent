@@ -26,8 +26,10 @@ _CALENDAR_READ_RETRY_DELAY_S = 2.0
 
 
 _SYNTHETIC_PREFIX = "E2E-Beta-"
+_SYNTHETIC_VOICE_PREFIX = "E2E Beta "
 _FIXTURE_PREFIX = "E2E-Beta-Fixture-"
 _SYNTHETIC_EMAIL_DOMAIN = "@e2e-noinbox.local"
+_FIXTURE_MARKER = "e2e fixture"
 _REALISTIC_SYNTHETIC_TITLE_MARKERS = (
     "Michał Zieliński",
     "Karolina Woźniak",
@@ -173,13 +175,21 @@ async def find_synthetic_events(
         # "Telefon — E2E-Beta-...", "Wysłać ofertę — E2E-Beta-...",
         # so use substring match, not prefix.
         is_legacy_synthetic = _SYNTHETIC_PREFIX in title
+        is_voice_synthetic = _SYNTHETIC_VOICE_PREFIX in title
         is_email_synthetic = _SYNTHETIC_EMAIL_DOMAIN in description
+        is_natural_fixture = _FIXTURE_MARKER in title.lower() or _FIXTURE_MARKER in description
         is_realistic_synthetic = any(
             marker in title for marker in _REALISTIC_SYNTHETIC_TITLE_MARKERS
         )
-        if not (is_legacy_synthetic or is_email_synthetic or is_realistic_synthetic):
+        if not (
+            is_legacy_synthetic
+            or is_voice_synthetic
+            or is_email_synthetic
+            or is_natural_fixture
+            or is_realistic_synthetic
+        ):
             continue
-        is_fixture = _FIXTURE_PREFIX in title or "fixture" in description
+        is_fixture = _FIXTURE_PREFIX in title or is_natural_fixture or "fixture" in description
         if not include_fixtures and is_fixture:
             continue
         if run_id is not None and run_id not in title and run_id not in description:

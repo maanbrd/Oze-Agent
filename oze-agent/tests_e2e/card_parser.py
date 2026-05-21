@@ -78,6 +78,16 @@ class ParsedCard:
         labels = {lbl.strip().lower() for lbl in self.button_labels}
         return "nowy" in labels and "aktualizuj" in labels
 
+    def is_duplicate_update_prompt(self) -> bool:
+        """True for the duplicate-update card, not for a regular add-client card."""
+        if not self.has_three_button():
+            return False
+        normalized = " ".join(self.raw_text.lower().split())
+        return (
+            ("mam już" in normalized and "zaktualizować" in normalized)
+            or normalized.startswith("zaktualizować ")
+        )
+
     def is_read_only(self) -> bool:
         """A read-only message has no inline buttons at all."""
         return not self.button_labels
@@ -90,6 +100,8 @@ def _strip_known_icon(line: str) -> tuple[Optional[str], str]:
     """If the line starts with a known card icon, peel it off and return
     (icon, remainder). Otherwise (None, line)."""
     stripped = line.lstrip()
+    if stripped.startswith("✅"):
+        stripped = stripped[1:].lstrip()
     for icon in _CARD_ICONS:
         if stripped.startswith(icon):
             rest = stripped[len(icon):].lstrip()

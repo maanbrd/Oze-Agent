@@ -180,7 +180,9 @@ _SAVE_CONFIRMATION_MARKERS = (
     "Zapisałem", "Zapisałam", "Zapisano", "Zapisana", "Zapisane",
     "Dodałem", "Dodałam", "Dodano",
     "Zaktualizowano", "Zaktualizowane", "Zaktualizowałem",
+    "Dane zaktualizowane",
     "Spotkanie umówione", "Spotkanie zapisane", "Spotkanie dodane",
+    "Telefon dodany", "Telefon zapisany",
     "Status zmieniony", "Zmieniłem status",
     "Notatka dodana", "Notatkę dodano", "Notatkę zapisałem",
 )
@@ -403,7 +405,7 @@ async def setup_existing_client(
     save_label, confirm_replies = await click_save_and_collect(
         harness,
         setup_card,
-        duration_s=12.0,
+        duration_s=20.0,
     )
     if save_label is None:
         result.add_blocker(

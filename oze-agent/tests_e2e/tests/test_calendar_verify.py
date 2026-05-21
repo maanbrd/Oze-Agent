@@ -175,12 +175,17 @@ def test_assert_event_duration_outside_tolerance():
 async def test_find_synthetic_events_excludes_non_e2e():
     events = [
         _make_event(summary="E2E-Beta-Tester-143052-B06"),
+        _make_event(summary="Spotkanie — E2E Beta Tester 143052 SM2", eid="voice"),
         {
             **_make_event(summary="Spotkanie — Anna Nowak", eid="email"),
             "description": "Email: e2e.test.143052.b06@e2e-noinbox.local",
         },
         _make_event(summary="Real meeting", eid="real"),
         _make_event(summary="E2E-Beta-Fixture-Conflict-Slot", eid="fixture"),
+        {
+            **_make_event(summary="E2E fixture conflict slot", eid="natural-fixture"),
+            "description": "E2E fixture: conflict slot",
+        },
     ]
     with patch(
         "tests_e2e.calendar_verify.get_events_for_range_for_e2e",
@@ -190,9 +195,27 @@ async def test_find_synthetic_events_excludes_non_e2e():
     titles = [e["title"] for e in out]
     assert "Real meeting" not in titles
     assert any("143052" in t for t in titles)
+    assert "Spotkanie — E2E Beta Tester 143052 SM2" in titles
     assert "Spotkanie — Anna Nowak" in titles
-    # Fixture excluded by default
+    # Fixtures excluded by default.
     assert not any("Fixture" in t for t in titles)
+    assert "E2E fixture conflict slot" not in titles
+
+
+@pytest.mark.asyncio
+async def test_find_synthetic_events_include_natural_fixtures_when_requested():
+    events = [
+        {
+            **_make_event(summary="E2E fixture conflict slot", eid="natural-fixture"),
+            "description": "E2E fixture: conflict slot",
+        },
+    ]
+    with patch(
+        "tests_e2e.calendar_verify.get_events_for_range_for_e2e",
+        new=AsyncMock(return_value=events),
+    ):
+        out = await find_synthetic_events("uid", include_fixtures=True)
+    assert [e["title"] for e in out] == ["E2E fixture conflict slot"]
 
 
 @pytest.mark.asyncio

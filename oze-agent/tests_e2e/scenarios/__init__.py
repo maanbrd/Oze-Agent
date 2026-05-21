@@ -9,6 +9,7 @@ by creating a new module and importing it below.
 # But keep alphabetical for stable diffs.
 from tests_e2e.scenarios import (  # noqa: F401  (registration side effect)
     card_structure,
+    core_smoke,
     debug_brief,
     error_paths,
     mutating_core,

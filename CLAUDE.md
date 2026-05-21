@@ -172,6 +172,19 @@ User-facing dates must use:
 
 Never expose raw ISO dates, Excel serials, row numbers, internal IDs, or technical metadata to the user.
 
+### Brand assets / content workflow
+
+Canonical Agent OZE brand assets live in `assets/brand/`.
+
+Use:
+
+- `assets/brand/agent-oze-icon.png` for square icons, avatars, favicons, thumbnails, watermarks, and compact content placements
+- `assets/brand/agent-oze-logo.png` for Stripe logo, decks, content end cards, brand bars, and larger placements
+
+Do not use `deliverables/stripe-branding/` as source of truth; it is only an export folder.
+
+Do not ask image models to invent or redesign the Agent OZE logo. If generated content needs the mark, use the canonical files. If a model cannot accept reference assets, describe the exact mark: bright `#3DFF7A` glowing ring with centered `#3DFF7A` dot on near-black `#050607` / `#0b0d10` background.
+
 ---
 
 ## Working Rules
@@ -299,7 +312,7 @@ Do not:
 - implement POST-MVP features accidentally
 - add new product behavior just because it seems useful
 - silently resolve product contradictions in code
-- commit changes unless Maan explicitly asks for commits
+- commit changes unless Maan explicitly asks for commits; if changes are already staged, you may commit only the staged set
 - rewrite stable wrappers without a clear reason
 - expose technical internals to the Telegram user
 

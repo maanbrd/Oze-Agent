@@ -57,8 +57,16 @@ def test_is_save_confirmation_recognizes_spotkanie_dodane():
     ) is True
 
 
+def test_is_save_confirmation_recognizes_phone_call_calendar_save():
+    assert is_save_confirmation("✅ Telefon dodany do kalendarza.") is True
+
+
 def test_is_save_confirmation_recognizes_status_specific():
     assert is_save_confirmation("Status zmieniony.") is True
+
+
+def test_is_save_confirmation_recognizes_duplicate_update_specific():
+    assert is_save_confirmation("✅ Dane zaktualizowane.") is True
 
 
 def test_is_save_confirmation_rejects_co_dalej():

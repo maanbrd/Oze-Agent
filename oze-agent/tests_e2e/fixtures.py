@@ -32,7 +32,6 @@ from tests_e2e.calendar_verify import (
 )
 from tests_e2e.sheets_verify import (
     delete_synthetic_rows,
-    find_client_row,
     find_synthetic_rows,
     resolve_user_id,
 )
@@ -43,44 +42,62 @@ WARSAW = ZoneInfo("Europe/Warsaw")
 
 
 # Canonical fixtures — created once, kept across runs unless fully reset.
-# Names use `E2E-Beta-Fixture-` prefix so the per-run cleanup can leave
-# them in place.
+# Client names stay natural so read-only matching/disambiguation exercises the
+# same surface a seller uses. Synthetic ownership lives in email/notes metadata.
 FIXTURE_CLIENTS: tuple[dict, ...] = (
     {
-        "Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski",
+        "Imię i nazwisko": "Jan Kowalski",
         "Miasto": "Warszawa",
         "Adres": "ul. Pułaskiego 12",
         "Telefon": "600100201",
-        "Email": "jan-warszawa@example.pl",
+        "Email": "e2e.fixture.jan.warszawa@e2e-noinbox.local",
         "Produkt": "PV",
         "Status": "Nowy lead",
         "Źródło pozyskania": "Polecenie",
+        "Notatki": "E2E fixture: disambiguation Warszawa",
     },
     {
-        "Imię i nazwisko": "E2E-Beta-Fixture-Jan-Kowalski",
+        "Imię i nazwisko": "Jan Kowalski",
         "Miasto": "Kraków",
         "Adres": "ul. Wawelska 5",
         "Telefon": "600100202",
-        "Email": "jan-krakow@example.pl",
+        "Email": "e2e.fixture.jan.krakow@e2e-noinbox.local",
         "Produkt": "Pompa ciepła",
         "Status": "Nowy lead",
         "Źródło pozyskania": "FB",
+        "Notatki": "E2E fixture: disambiguation Kraków",
     },
     {
-        "Imię i nazwisko": "E2E-Beta-Fixture-Marek-Nowak",
+        "Imię i nazwisko": "Marek Nowak",
         "Miasto": "Wyszków",
         "Adres": "ul. Kościuszki 22",
         "Telefon": "600100203",
-        "Email": "marek@example.pl",
+        "Email": "e2e.fixture.marek.nowak@e2e-noinbox.local",
         "Produkt": "PV",
         "Status": "Spotkanie umówione",
-        "Notatki": "Klient zainteresowany dużą instalacją 12kW",
+        "Notatki": "E2E fixture: klient zainteresowany dużą instalacją 12kW",
         "Źródło pozyskania": "Strona www",
     },
 )
 
 
 CONFLICT_FIXTURE_TITLE = "E2E-Beta-Fixture-Conflict-Slot"
+
+
+def _same_fixture_client(row: dict, fixture: dict) -> bool:
+    return (
+        row.get("Imię i nazwisko", "").casefold()
+        == fixture.get("Imię i nazwisko", "").casefold()
+        and row.get("Miasto", "").casefold() == fixture.get("Miasto", "").casefold()
+        and row.get("Email", "").casefold() == fixture.get("Email", "").casefold()
+    )
+
+
+async def _find_existing_fixture_client(user_id: str, fixture: dict) -> dict | None:
+    for row in await find_synthetic_rows(user_id, include_fixtures=True):
+        if _same_fixture_client(row, fixture):
+            return row
+    return None
 
 
 # ── Seed ───────────────────────────────────────────────────────────────────
@@ -102,11 +119,7 @@ async def seed_fixtures(telegram_id: int) -> dict:
 
     for client_data in FIXTURE_CLIENTS:
         label = f"{client_data['Imię i nazwisko']}, {client_data['Miasto']}"
-        existing = await find_client_row(
-            user_id,
-            client_data["Imię i nazwisko"],
-            client_data["Miasto"],
-        )
+        existing = await _find_existing_fixture_client(user_id, client_data)
         if existing:
             skipped_clients.append(label)
             continue

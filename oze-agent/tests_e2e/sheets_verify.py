@@ -138,8 +138,11 @@ def assert_row_field_equals(row: dict, field: str, expected: str) -> tuple[bool,
 
 
 _SYNTHETIC_PREFIX = "E2E-Beta-"
+_SYNTHETIC_VOICE_PREFIX = "E2E Beta "
 _FIXTURE_PREFIX = "E2E-Beta-Fixture-"
 _SYNTHETIC_EMAIL_DOMAIN = "@e2e-noinbox.local"
+_FIXTURE_EMAIL_MARKER = "e2e.fixture."
+_FIXTURE_NOTE_MARKER = "e2e fixture"
 
 
 async def find_synthetic_rows(
@@ -160,11 +163,17 @@ async def find_synthetic_rows(
     for c in clients:
         name = c.get("Imię i nazwisko", "")
         email = c.get("Email", "").lower()
+        notes = c.get("Notatki", "").lower()
         is_legacy_synthetic = name.startswith(_SYNTHETIC_PREFIX)
+        is_voice_synthetic = name.startswith(_SYNTHETIC_VOICE_PREFIX)
         is_email_synthetic = email.endswith(_SYNTHETIC_EMAIL_DOMAIN)
-        if not (is_legacy_synthetic or is_email_synthetic):
+        if not (is_legacy_synthetic or is_voice_synthetic or is_email_synthetic):
             continue
-        is_fixture = name.startswith(_FIXTURE_PREFIX) or "fixture" in email
+        is_fixture = (
+            name.startswith(_FIXTURE_PREFIX)
+            or _FIXTURE_EMAIL_MARKER in email
+            or _FIXTURE_NOTE_MARKER in notes
+        )
         if not include_fixtures and is_fixture:
             continue
         if run_id is not None and run_id not in name and run_id not in email:

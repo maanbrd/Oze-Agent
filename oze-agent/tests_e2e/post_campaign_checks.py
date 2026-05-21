@@ -125,6 +125,11 @@ async def _delete_drive_folder(user_id: str, folder_id: str) -> bool:
     return await asyncio.to_thread(_delete)
 
 
+async def cleanup_post_campaign_data(config: E2EConfig) -> dict:
+    """Clean per-run post-campaign data while preserving shared fixtures."""
+    return await cleanup_synthetic_data(config.admin_telegram_id)
+
+
 async def run_drive_photo_smoke(config: E2EConfig) -> ScenarioResult:
     result = new_result("post_drive_photo_smoke", "post_campaign_apps")
     run_id = _run_id()
@@ -199,7 +204,7 @@ async def run_drive_photo_smoke(config: E2EConfig) -> ScenarioResult:
             deleted = await _delete_drive_folder(user_id, folder_id)
             result.add("drive_folder_cleanup", deleted, detail=folder_id)
         delete_active_photo_session(config.admin_telegram_id)
-        cleanup = await cleanup_synthetic_data(config.admin_telegram_id, include_fixtures=True)
+        cleanup = await cleanup_post_campaign_data(config)
         result.context["cleanup"] = cleanup
         result.add(
             "sheets_calendar_cleanup",
@@ -339,7 +344,7 @@ async def run_offer_gmail_smoke(config: E2EConfig) -> ScenarioResult:
                 ),
             )
 
-        cleanup = await cleanup_synthetic_data(config.admin_telegram_id, include_fixtures=True)
+        cleanup = await cleanup_post_campaign_data(config)
         result.context["cleanup"] = cleanup
     except Exception as e:
         logger.exception("offer gmail smoke crashed")
