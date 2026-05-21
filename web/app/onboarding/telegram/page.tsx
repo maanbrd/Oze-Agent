@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { BrandLink } from "@/components/brand";
+import { TelegramStatusPoller } from "@/components/telegram-status-poller";
 import { TelegramPairingCard } from "@/components/onboarding/telegram-pairing-card";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 import { getTelegramStatus } from "@/lib/api/onboarding";
@@ -73,11 +74,14 @@ export default async function TelegramOnboardingPage({
             </Link>
           </div>
         ) : (
-          <TelegramPairingCard
-            botHandle={telegramBotHandle()}
-            code={pairing?.code ?? null}
-            expiresAt={pairing?.expiresAt ?? null}
-          />
+          <>
+            <TelegramPairingCard
+              botHandle={telegramBotHandle()}
+              code={pairing?.code ?? null}
+              expiresAt={pairing?.expiresAt ?? null}
+            />
+            <TelegramStatusPoller />
+          </>
         )}
       </section>
     </main>

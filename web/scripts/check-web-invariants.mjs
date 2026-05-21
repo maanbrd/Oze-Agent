@@ -32,7 +32,7 @@ assert.match(
   "Stripe webhook must forward subscription period end for access gates.",
 );
 assert.match(
-  stripeEvents,
+  `${stripeWebhook}\n${stripeEvents}`,
   /AbortController/,
   "Stripe webhook forwarding must have a timeout guard.",
 );
@@ -318,6 +318,7 @@ for (const route of [
 
 const onboardingGate = read("components/onboarding-gate.tsx");
 const crmShell = read("components/crm-shell.tsx");
+const appShell = read("components/app-shell.tsx");
 const appLayout = read("app/(app)/layout.tsx");
 assert.match(
   onboardingGate,
@@ -340,6 +341,11 @@ assert.match(
   "Google quick links must encode resource IDs before placing them in hrefs.",
 );
 assert.match(
+  appShell,
+  /<LogoutButton \/>/,
+  "App shell must render a logout control.",
+);
+assert.match(
   appLayout,
   /getOnboardingStatus/,
   "Logged-in layout must fetch onboarding status.",
@@ -348,7 +354,7 @@ assert.match(
 const telegramPage = read("app/onboarding/telegram/page.tsx");
 const telegramPairingCard = read("components/onboarding/telegram-pairing-card.tsx");
 assert.match(
-  telegramPairingCard,
+  `${telegramPage}\n${telegramPairingCard}`,
   /\/start/,
   "Telegram onboarding must show /start code command.",
 );

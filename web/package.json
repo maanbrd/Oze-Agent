@@ -17,7 +17,16 @@
     "check:phase1b-env": "node scripts/check-phase1b-env.mjs",
     "smoke:phase1b-local": "node scripts/smoke-phase1b-local.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:dates": "node scripts/test-dates.mjs",
+    "test:routes": "node scripts/test-routes.mjs",
+    "test:api-base-url": "node scripts/test-api-base-url.mjs",
+    "test:logout-ui": "node scripts/test-logout-ui.mjs",
+    "test:telegram-onboarding-refresh": "node scripts/test-telegram-onboarding-refresh.mjs",
+    "test:web-units": "npm run test:routes && npm run test:dates && npm run test:api-base-url && npm run test:logout-ui && npm run test:telegram-onboarding-refresh",
+    "test:invariants": "node scripts/check-web-invariants.mjs",
+    "check:phase1b-env": "node scripts/check-phase1b-env.mjs",
+    "smoke:phase1b-local": "node scripts/smoke-phase1b-local.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

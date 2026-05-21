@@ -153,8 +153,7 @@ const defaultProfile: SellerProfile = {
   logoUrl: null,
 };
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
-const envUserId = process.env.NEXT_PUBLIC_OFFER_USER_ID ?? "";
+const apiBase = "/api";
 const pdfFontPaths = {
   regular: "/fonts/NotoSans-Regular.ttf",
   bold: "/fonts/NotoSans-Bold.ttf",
@@ -238,12 +237,11 @@ function profileToApi(profile: SellerProfile) {
   };
 }
 
-async function apiRequest(path: string, userId: string, init: RequestInit = {}) {
+async function apiRequest(path: string, init: RequestInit = {}) {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: {
       ...(init.body instanceof FormData ? {} : { "content-type": "application/json" }),
-      "x-user-id": userId,
       ...(init.headers ?? {}),
     },
   });
@@ -706,11 +704,10 @@ async function downloadTestPdf(offer: OfferTemplate, profile: SellerProfile) {
   URL.revokeObjectURL(url);
 }
 
-export function OfferGenerator() {
+export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } = {}) {
   const [offers, setOffers] = useState<OfferTemplate[]>(initialOffers);
   const [profile, setProfile] = useState<SellerProfile>(defaultProfile);
   const [emailVariables, setEmailVariables] = useState<EmailVariable[]>(defaultEmailVariables);
-  const [apiUserId] = useState(envUserId);
   const [apiError, setApiError] = useState("");
   const [selectedId, setSelectedId] = useState(initialOffers[0]?.id ?? "");
   const [editor, setEditor] = useState<OfferTemplate>(initialOffers[0] ?? emptyDraft());
@@ -725,19 +722,19 @@ export function OfferGenerator() {
   const selected = offers.find((offer) => offer.id === selectedId) ?? null;
   const price = priceBreakdown(editor);
   const pdfAllowed = hasPdfMinimum(editor);
-  const apiReady = Boolean(apiBase && apiUserId);
+  const apiReady = apiEnabled;
   const emailUnknownTokens = unknownEmailTokens(profile.emailBodyTemplate, emailVariables);
 
   useEffect(() => {
-    if (!apiBase || !apiUserId) return;
+    if (!apiReady) return;
     let cancelled = false;
     async function load() {
       try {
         setApiError("");
         const [templatesResponse, profileResponse, variablesResponse] = await Promise.all([
-          apiRequest("/offers/templates", apiUserId),
-          apiRequest("/offers/profile", apiUserId),
-          apiRequest("/offers/email-variables", apiUserId),
+          apiRequest("/offers/templates"),
+          apiRequest("/offers/profile"),
+          apiRequest("/offers/email-variables"),
         ]);
         const templatesBody = await templatesResponse.json();
         const profileBody = await profileResponse.json();
@@ -763,7 +760,7 @@ export function OfferGenerator() {
     return () => {
       cancelled = true;
     };
-  }, [apiUserId]);
+  }, [apiReady]);
 
   function selectOffer(offer: OfferTemplate) {
     setSelectedId(offer.id);
@@ -776,7 +773,7 @@ export function OfferGenerator() {
     if (apiReady) {
       try {
         setApiError("");
-        const response = await apiRequest("/offers/templates", apiUserId, {
+        const response = await apiRequest("/offers/templates", {
           method: "POST",
           body: JSON.stringify({ data: toApi(draft) }),
         });
@@ -802,7 +799,7 @@ export function OfferGenerator() {
     if (apiReady) {
       try {
         setApiError("");
-        const response = await apiRequest(`/offers/templates/${editor.id}`, apiUserId, {
+        const response = await apiRequest(`/offers/templates/${editor.id}`, {
           method: "PATCH",
           body: JSON.stringify({ data: toApi(editor) }),
         });
@@ -830,11 +827,11 @@ export function OfferGenerator() {
     if (apiReady) {
       try {
         setApiError("");
-        await apiRequest(`/offers/templates/${editor.id}`, apiUserId, {
+        await apiRequest(`/offers/templates/${editor.id}`, {
           method: "PATCH",
           body: JSON.stringify({ data: toApi(editor) }),
         });
-        const response = await apiRequest(`/offers/templates/${editor.id}/publish`, apiUserId, { method: "POST" });
+        const response = await apiRequest(`/offers/templates/${editor.id}/publish`, { method: "POST" });
         const body = await response.json();
         const published = fromApi(body.template);
         setEditor(published);
@@ -859,7 +856,7 @@ export function OfferGenerator() {
     if (apiReady) {
       try {
         setApiError("");
-        await apiRequest(`/offers/templates/${id}`, apiUserId, { method: "DELETE" });
+        await apiRequest(`/offers/templates/${id}`, { method: "DELETE" });
       } catch (error) {
         setApiError(error instanceof Error ? error.message : "Nie udało się usunąć oferty.");
         return;
@@ -884,7 +881,7 @@ export function OfferGenerator() {
     if (apiReady) {
       try {
         setApiError("");
-        const response = await apiRequest(`/offers/templates/${offer.id}/duplicate`, apiUserId, { method: "POST" });
+        const response = await apiRequest(`/offers/templates/${offer.id}/duplicate`, { method: "POST" });
         const body = await response.json();
         const draft = fromApi(body.template);
         setOffers((current) => [draft, ...current]);
@@ -923,7 +920,7 @@ export function OfferGenerator() {
     if (apiReady) {
       try {
         setApiError("");
-        await apiRequest("/offers/templates/reorder", apiUserId, {
+        await apiRequest("/offers/templates/reorder", {
           method: "POST",
           body: JSON.stringify({ ordered_template_ids: ordered }),
         });
@@ -949,7 +946,7 @@ export function OfferGenerator() {
         setApiError("");
         const form = new FormData();
         form.append("file", file);
-        const response = await apiRequest("/offers/profile/logo", apiUserId, {
+        const response = await apiRequest("/offers/profile/logo", {
           method: "POST",
           body: form,
         });
@@ -977,7 +974,7 @@ export function OfferGenerator() {
     try {
       setApiError("");
       setProfileErrors([]);
-      await apiRequest("/offers/profile", apiUserId, {
+      await apiRequest("/offers/profile", {
         method: "PUT",
         body: JSON.stringify({ data: profileToApi(profile) }),
       });

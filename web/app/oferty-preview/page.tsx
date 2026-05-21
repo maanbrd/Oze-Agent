@@ -36,7 +36,7 @@ export default function OffersPreviewPage() {
 
   return (
     <CrmShell account={previewAccount} decisionsCount={14}>
-      <OfferGenerator />
+      <OfferGenerator apiEnabled={false} />
     </CrmShell>
   );
 }

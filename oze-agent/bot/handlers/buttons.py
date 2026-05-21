@@ -53,6 +53,37 @@ logger = logging.getLogger(__name__)
 _DAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
 
 
+def _pending_updated_at(flow: dict) -> datetime | None:
+    raw = flow.get("updated_at") or flow.get("created_at")
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def _callback_matches_pending_message(query, flow: dict | None) -> bool:
+    """Reject stale inline buttons from cards older than the active pending flow."""
+    if not flow:
+        return False
+    message_date = getattr(getattr(query, "message", None), "date", None)
+    if not isinstance(message_date, datetime):
+        return True
+    flow_updated_at = _pending_updated_at(flow)
+    if flow_updated_at is None:
+        return True
+    if message_date.tzinfo is None and flow_updated_at.tzinfo is not None:
+        message_date = message_date.replace(tzinfo=flow_updated_at.tzinfo)
+    if flow_updated_at.tzinfo is None and message_date.tzinfo is not None:
+        flow_updated_at = flow_updated_at.replace(tzinfo=message_date.tzinfo)
+    return message_date >= flow_updated_at
+
+
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Route inline button presses by callback_data format 'action:value'."""
     query = update.callback_query
@@ -76,9 +107,17 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if action == "save":
         # R1: commit the pending flow
+        flow = get_pending_flow(telegram_id)
+        if not _callback_matches_pending_message(query, flow):
+            await edit_message_text(query, "Nieaktualny przycisk. Wpisz polecenie jeszcze raz.")
+            return
         await handle_confirm(update, context, user, {}, "")
 
     elif action == "offer_send":
+        flow = get_pending_flow(telegram_id)
+        if not _callback_matches_pending_message(query, flow):
+            await edit_message_text(query, "Nieaktualny przycisk. Wpisz polecenie jeszcze raz.")
+            return
         await handle_confirm(update, context, user, {}, "")
 
     elif action == "append":
@@ -172,15 +211,44 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 await edit_message_text(query, "❌ Anulowane.")
 
     elif action == "set_status":
-        # value format: "{row}:{status}"
+        # Legacy status-pick buttons must still route through an R1
+        # confirmation card. Never write directly from callback_data.
         parts = value.split(":", 1)
         if len(parts) == 2:
             row, new_status = int(parts[0]), parts[1]
-            ok = await update_client(user["id"], row, {"Status": new_status})
-            if ok:
-                await edit_message_text(query, f"✅ Status zmieniony na: {new_status}")
-            else:
-                await edit_message_text(query, "❌ Nie udało się zmienić statusu.")
+            flow = get_pending_flow(telegram_id)
+            if not flow or flow.get("flow_type") != "disambiguation":
+                await edit_message_text(query, "Nieaktualny przycisk. Wpisz zmianę statusu jeszcze raz.")
+                return
+            flow_data = flow.get("flow_data", {})
+            if flow_data.get("intent") != "change_status":
+                delete_pending_flow(telegram_id)
+                await edit_message_text(query, "Nieaktualny przycisk. Wpisz zmianę statusu jeszcze raz.")
+                return
+            clients = await get_all_clients(user["id"])
+            client = next((c for c in clients if c.get("_row") == row), None)
+            if not client:
+                delete_pending_flow(telegram_id)
+                await edit_message_text(query, "Nie znaleziono klienta.")
+                return
+            old_status = client.get("Status", "")
+            save_pending(PendingFlow(
+                telegram_id=telegram_id,
+                flow_type=PendingFlowType.CHANGE_STATUS,
+                flow_data=payload_to_flow_data(ChangeStatusPayload(
+                    row=row,
+                    new_value=new_status,
+                    client_name=client.get("Imię i nazwisko", ""),
+                    old_value=old_status,
+                    city=client.get("Miasto", ""),
+                )),
+            ))
+            await edit_message_text(query,
+                f"Zmienić status klienta *{escape_markdown_v2(client.get('Imię i nazwisko', ''))}*?\n"
+                + format_edit_comparison("Status", old_status, new_status),
+                parse_mode="MarkdownV2",
+                reply_markup=build_mutation_buttons("confirm"),
+            )
 
     elif action == "phone":
         await _handle_phone_choice(query, telegram_id, user["id"], value)

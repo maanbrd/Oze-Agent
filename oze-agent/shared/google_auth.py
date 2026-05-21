@@ -5,8 +5,11 @@ All functions use the service key via shared.database.
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
@@ -28,10 +31,21 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
 ]
 
+OAUTH_STATE_MAX_AGE_SECONDS = 600
+
 
 def _base64url_encode(payload: dict) -> str:
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _state_secret() -> bytes:
+    secret = (Config.ENCRYPTION_KEY or Config.GOOGLE_CLIENT_SECRET or "").strip()
+    return secret.encode("utf-8")
+
+
+def _state_signature(payload: str) -> str:
+    return hmac.new(_state_secret(), payload.encode("ascii"), hashlib.sha256).hexdigest()
 
 
 def _base64url_decode(value: str) -> dict | None:
@@ -81,14 +95,46 @@ def _trusted_return_url(return_url: str | None) -> str | None:
 
 
 def build_oauth_state(user_id: str, return_url: str | None = None) -> str:
-    payload = {"user_id": user_id}
+    payload = {
+        "user_id": user_id,
+        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
+        "nonce": secrets.token_urlsafe(16),
+    }
     trusted_return_url = _trusted_return_url(return_url)
     if trusted_return_url:
         payload["return_url"] = trusted_return_url
-    return _base64url_encode(payload)
+    encoded = _base64url_encode(payload)
+    return f"v1.{encoded}.{_state_signature(encoded)}"
 
 
 def parse_oauth_state(state: str) -> dict[str, str | None]:
+    if state.startswith("v1."):
+        parts = state.split(".", 2)
+        if len(parts) != 3:
+            return {"user_id": None, "return_url": None}
+        _, encoded, signature = parts
+        if not hmac.compare_digest(_state_signature(encoded), signature):
+            return {"user_id": None, "return_url": None}
+        payload = _base64url_decode(encoded)
+        if not payload:
+            return {"user_id": None, "return_url": None}
+        try:
+            issued_at = int(payload.get("iat") or 0)
+        except (TypeError, ValueError):
+            return {"user_id": None, "return_url": None}
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+        if issued_at <= 0 or now - issued_at > OAUTH_STATE_MAX_AGE_SECONDS:
+            return {"user_id": None, "return_url": None}
+        user_id = str(payload.get("user_id") or "").strip()
+        if not user_id:
+            return {"user_id": None, "return_url": None}
+        return {
+            "user_id": user_id,
+            "return_url": _trusted_return_url(
+                str(payload.get("return_url") or "").strip() or None
+            ),
+        }
+
     payload = _base64url_decode(state)
     if not payload:
         return {"user_id": state, "return_url": None}

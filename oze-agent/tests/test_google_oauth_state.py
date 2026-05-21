@@ -87,6 +87,18 @@ def test_google_oauth_state_keeps_legacy_plain_user_id():
     assert parsed == {"user_id": "legacy-user-id", "return_url": None}
 
 
+def test_google_oauth_state_rejects_tampering(monkeypatch):
+    from bot.config import Config
+    from shared.google_auth import build_oauth_state, parse_oauth_state
+
+    monkeypatch.setattr(Config, "ENCRYPTION_KEY", "abcdefghijklmnopqrstuvwxyzABCDEF12345678=", raising=False)
+
+    state = build_oauth_state("user-1")
+    tampered = state[:-1] + ("A" if state[-1] != "A" else "B")
+
+    assert parse_oauth_state(tampered) == {"user_id": None, "return_url": None}
+
+
 @pytest.mark.asyncio
 async def test_google_callback_redirects_to_state_return_url(monkeypatch):
     from api.routes import google_oauth

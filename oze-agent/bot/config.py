@@ -17,6 +17,7 @@ SECRET_ENV_NAMES = (
     "ENCRYPTION_KEY",
     "PRZELEWY24_API_KEY",
     "PRZELEWY24_CRC",
+    "BILLING_INTERNAL_SECRET",
     "SENTRY_DSN",
     "GMAIL_SMTP_PASSWORD",
 )
@@ -60,6 +61,7 @@ class Config:
     PRZELEWY24_MERCHANT_ID = os.getenv("PRZELEWY24_MERCHANT_ID", "")
     PRZELEWY24_API_KEY = _clean_env("PRZELEWY24_API_KEY")
     PRZELEWY24_CRC = _clean_env("PRZELEWY24_CRC")
+    BILLING_INTERNAL_SECRET = _clean_env("BILLING_INTERNAL_SECRET")
 
     # Pricing
     ACTIVATION_FEE_PLN = int(os.getenv("ACTIVATION_FEE_PLN", "0"))
@@ -85,6 +87,7 @@ class Config:
     BASE_URL = os.getenv("BASE_URL", "")
     DASHBOARD_URL = os.getenv("DASHBOARD_URL", "")
     ADMIN_URL = os.getenv("ADMIN_URL", "")
+    CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "")
 
     # Email
     GMAIL_SMTP_USER = os.getenv("GMAIL_SMTP_USER", "")

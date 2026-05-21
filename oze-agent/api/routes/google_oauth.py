@@ -37,13 +37,8 @@ _ERROR_HTML = """
 
 @router.get("/google/url/{user_id}")
 async def get_oauth_url(user_id: str):
-    """Return the Google OAuth authorization URL for this user."""
-    try:
-        url = build_oauth_url(user_id)
-        return {"url": url}
-    except Exception as e:
-        logger.error("get_oauth_url(%s): %s", user_id, e)
-        raise HTTPException(status_code=500, detail="Nie udało się wygenerować URL autoryzacji.")
+    """Legacy public OAuth URL endpoint retired for user-id spoofing safety."""
+    raise HTTPException(status_code=410, detail="Use authenticated onboarding OAuth endpoint.")
 
 
 def _configured_dashboard_google_success_url() -> str | None:

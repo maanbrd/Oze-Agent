@@ -147,6 +147,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  if (event.livemode) {
+    console.error("Live Stripe events are disabled", event.id);
+    return NextResponse.json(
+      { error: "Live Stripe events are disabled" },
+      { status: 400 },
+    );
+  }
+
   if (!FORWARDED_EVENTS.has(event.type)) {
     return NextResponse.json({ received: true, forwarded: false });
   }

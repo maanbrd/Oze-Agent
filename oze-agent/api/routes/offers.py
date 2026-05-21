@@ -1,17 +1,17 @@
 """Offer generator API routes.
 
-Auth/onboarding enforcement belongs to the web/API auth layer. Until that layer
-is finalized, these routes accept the current user id from `X-User-Id` or
-`user_id` so the generator logic can be wired and tested end-to-end.
+Routes resolve the internal user id from the authenticated Supabase JWT.
 """
 
 import base64
 import logging
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api.auth import AuthUser, get_current_auth_user
+from shared.database import get_supabase_client
 from shared.offers.email_template import EMAIL_VARIABLES, validate_email_template
 from shared.offers.email_utils import sanitize_filename_part
 from shared.offers.pdf import TEST_CLIENT, render_offer_pdf
@@ -42,11 +42,18 @@ class ReorderPayload(BaseModel):
     ordered_template_ids: list[str]
 
 
-def _user_id(x_user_id: str | None = Header(default=None), user_id: str | None = Query(default=None)) -> str:
-    resolved = x_user_id or user_id
-    if not resolved:
-        raise HTTPException(status_code=401, detail="Brak identyfikatora użytkownika.")
-    return resolved
+def _user_id(auth_user: AuthUser = Depends(get_current_auth_user)) -> str:
+    result = (
+        get_supabase_client()
+        .table("users")
+        .select("id, auth_user_id")
+        .eq("auth_user_id", auth_user.user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Profil użytkownika nie istnieje.")
+    return result.data[0]["id"]
 
 
 def _repo() -> OfferRepository:
@@ -65,10 +72,20 @@ def _logo_mime_type(path: str | None) -> str:
 def _profile_response(profile: dict | None) -> dict:
     clean = {k: v for k, v in (profile or {}).items() if k != "logo_bytes"}
     logo_bytes = (profile or {}).get("logo_bytes")
-    if logo_bytes:
+    if logo_bytes and len(logo_bytes) <= MAX_LOGO_BYTES:
         encoded = base64.b64encode(logo_bytes).decode("ascii")
         clean["logo_data_url"] = f"data:{_logo_mime_type(clean.get('logo_path'))};base64,{encoded}"
     return clean
+
+
+def _logo_extension_from_magic(content: bytes) -> str | None:
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if content.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "webp"
+    return None
 
 
 def _validate_profile_payload(data: dict) -> None:
@@ -83,15 +100,13 @@ def _validate_profile_payload(data: dict) -> None:
 
 
 @router.get("/templates")
-async def list_templates(user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def list_templates(uid: str = Depends(_user_id)):
     repo = _repo()
     return {"templates": repo.list_templates(uid)}
 
 
 @router.post("/templates")
-async def create_template(payload: TemplatePayload, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def create_template(payload: TemplatePayload, uid: str = Depends(_user_id)):
     repo = _repo()
     created = repo.create_template(uid, payload.data)
     if not created:
@@ -100,8 +115,7 @@ async def create_template(payload: TemplatePayload, user_id: str = Query(default
 
 
 @router.patch("/templates/{template_id}")
-async def update_template(template_id: str, payload: TemplatePayload, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def update_template(template_id: str, payload: TemplatePayload, uid: str = Depends(_user_id)):
     repo = _repo()
     current = repo.get_template(uid, template_id)
     if not current:
@@ -116,16 +130,14 @@ async def update_template(template_id: str, payload: TemplatePayload, user_id: s
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def delete_template(template_id: str, uid: str = Depends(_user_id)):
     repo = _repo()
     repo.delete_template(uid, template_id)
     return {"ok": True}
 
 
 @router.post("/templates/{template_id}/publish")
-async def publish_template(template_id: str, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def publish_template(template_id: str, uid: str = Depends(_user_id)):
     repo = _repo()
     current = repo.get_template(uid, template_id)
     if not current:
@@ -138,8 +150,7 @@ async def publish_template(template_id: str, user_id: str = Query(default=None),
 
 
 @router.post("/templates/{template_id}/duplicate")
-async def duplicate_template(template_id: str, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def duplicate_template(template_id: str, uid: str = Depends(_user_id)):
     repo = _repo()
     duplicated = repo.duplicate_as_draft(uid, template_id)
     if not duplicated:
@@ -148,22 +159,19 @@ async def duplicate_template(template_id: str, user_id: str = Query(default=None
 
 
 @router.post("/templates/reorder")
-async def reorder_templates(payload: ReorderPayload, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def reorder_templates(payload: ReorderPayload, uid: str = Depends(_user_id)):
     repo = _repo()
     return {"templates": repo.reorder_ready(uid, payload.ordered_template_ids)}
 
 
 @router.get("/profile")
-async def get_profile(user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def get_profile(uid: str = Depends(_user_id)):
     repo = _repo()
     return {"profile": _profile_response(repo.get_seller_profile(uid))}
 
 
 @router.put("/profile")
-async def upsert_profile(payload: ProfilePayload, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def upsert_profile(payload: ProfilePayload, uid: str = Depends(_user_id)):
     _validate_profile_payload(payload.data)
     repo = _repo()
     profile = repo.upsert_seller_profile(uid, payload.data)
@@ -171,13 +179,12 @@ async def upsert_profile(payload: ProfilePayload, user_id: str = Query(default=N
 
 
 @router.get("/email-variables")
-async def email_variables():
+async def email_variables(_auth_user: AuthUser = Depends(get_current_auth_user)):
     return {"variables": EMAIL_VARIABLES}
 
 
 @router.post("/profile/logo")
-async def upload_logo(file: UploadFile = File(...), user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def upload_logo(file: UploadFile = File(...), uid: str = Depends(_user_id)):
     repo = _repo()
     content_type = file.content_type or ""
     if content_type not in ALLOWED_LOGO_TYPES:
@@ -185,14 +192,18 @@ async def upload_logo(file: UploadFile = File(...), user_id: str = Query(default
     content = await file.read()
     if len(content) > MAX_LOGO_BYTES:
         raise HTTPException(status_code=400, detail="Logo może mieć maksymalnie 2 MB.")
-    path = repo.upload_logo(uid, file.filename or f"logo.{ALLOWED_LOGO_TYPES[content_type]}", content, content_type)
+    magic_ext = _logo_extension_from_magic(content)
+    if magic_ext is None:
+        raise HTTPException(status_code=400, detail="Logo ma nieprawidłową zawartość pliku.")
+    if magic_ext != ALLOWED_LOGO_TYPES[content_type]:
+        raise HTTPException(status_code=400, detail="Typ logo nie zgadza się z zawartością pliku.")
+    path = repo.upload_logo(uid, f"logo.{magic_ext}", content, content_type)
     profile = repo.upsert_seller_profile(uid, {"logo_path": path})
     return {"logo_path": path, "profile": _profile_response(repo.get_seller_profile(uid) if profile else profile)}
 
 
 @router.get("/templates/{template_id}/test-pdf")
-async def test_pdf(template_id: str, user_id: str = Query(default=None), x_user_id: str | None = Header(default=None)):
-    uid = _user_id(x_user_id, user_id)
+async def test_pdf(template_id: str, uid: str = Depends(_user_id)):
     repo = _repo()
     template = repo.get_template(uid, template_id)
     if not template:
