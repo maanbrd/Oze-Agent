@@ -85,9 +85,12 @@ def _has_active_live_payment(user: dict) -> bool:
     period_end = _parse_subscription_period_end(
         user.get("subscription_current_period_end")
     )
+    status_value = user.get("subscription_status")
     return (
-        user.get("subscription_status") == "active"
-        and bool(user.get("activation_paid"))
+        (
+            (status_value == "active" and bool(user.get("activation_paid")))
+            or status_value == "trialing"
+        )
         and user.get("stripe_livemode") is True
         and period_end is not None
         and period_end > datetime.now(tz=timezone.utc)

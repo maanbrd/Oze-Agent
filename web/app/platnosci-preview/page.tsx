@@ -19,7 +19,9 @@ const previewAccount = {
     subscription_status: "inactive",
     subscription_plan: null,
     subscription_current_period_end: null,
+    subscription_cancel_at_period_end: false,
     stripe_livemode: false,
+    stripe_subscription_id: null,
     activation_paid: false,
     onboarding_completed: true,
     google_sheets_id: null,
@@ -115,13 +117,13 @@ export default function PaymentsPreviewPage() {
               Historia płatności pojawi się po pierwszej opłaconej subskrypcji.
             </h2>
             <p className="mt-3 text-sm leading-6 text-zinc-400">
-              Faktury są wysyłane na email użyty przy płatności. Po aktywacji
-              pokażemy tutaj ostatnią płatność, datę kolejnego odnowienia i
-              link do zarządzania rozliczeniem.
+              Faktury są wysyłane na email użyty przy płatności. W okresie
+              próbnym pokażemy datę końca testu, późniejszą cenę i spokojny
+              dostęp do opcji Zarządzaj / anuluj okres próbny.
             </p>
 
             <div className="mt-6 rounded-[8px] border border-white/10 bg-black/20 p-4">
-              <p className="text-sm font-semibold text-white">Po aktywacji zobaczysz tutaj:</p>
+              <p className="text-sm font-semibold text-white">Okres próbny</p>
               <div className="mt-4 grid gap-3 text-sm text-zinc-400 sm:grid-cols-3">
                 <div>Następna płatność</div>
                 <div>Ostatnia faktura</div>

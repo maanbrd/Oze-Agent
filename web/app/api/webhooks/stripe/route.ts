@@ -25,6 +25,7 @@ type StripeSubscriptionDetails = {
   status: Stripe.Subscription.Status;
   current_period_start: unknown;
   current_period_end: unknown;
+  trial_end: unknown;
   cancel_at_period_end: unknown;
   livemode: boolean;
 };
@@ -55,7 +56,8 @@ function compactSubscriptionDetails(
     current_period_start:
       raw.current_period_start ?? firstItem.current_period_start,
     current_period_end:
-      raw.current_period_end ?? firstItem.current_period_end,
+      raw.current_period_end ?? firstItem.current_period_end ?? raw.trial_end,
+    trial_end: raw.trial_end,
     cancel_at_period_end: raw.cancel_at_period_end,
     livemode: subscription.livemode,
   };
@@ -145,14 +147,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Stripe signature verification failed", error);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-  }
-
-  if (event.livemode) {
-    console.error("Live Stripe events are disabled", event.id);
-    return NextResponse.json(
-      { error: "Live Stripe events are disabled" },
-      { status: 400 },
-    );
   }
 
   if (!FORWARDED_EVENTS.has(event.type)) {

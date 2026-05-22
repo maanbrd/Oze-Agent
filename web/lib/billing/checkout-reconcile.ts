@@ -28,7 +28,10 @@ export function isPaidCheckoutSessionForAccount(
   return (
     session.mode === "subscription" &&
     session.status === "complete" &&
-    session.payment_status === "paid" &&
+    (
+      session.payment_status === "paid" ||
+      session.payment_status === "no_payment_required"
+    ) &&
     ownedByProfile &&
     authMatches
   );
@@ -39,6 +42,7 @@ type StripeSubscriptionDetails = {
   status: Stripe.Subscription.Status;
   current_period_start: unknown;
   current_period_end: unknown;
+  trial_end: unknown;
   cancel_at_period_end: unknown;
   livemode: boolean;
 };
@@ -51,7 +55,8 @@ function compactSubscriptionDetails(
     id: subscription.id,
     status: subscription.status,
     current_period_start: raw.current_period_start,
-    current_period_end: raw.current_period_end,
+    current_period_end: raw.current_period_end ?? raw.trial_end,
+    trial_end: raw.trial_end,
     cancel_at_period_end: raw.cancel_at_period_end,
     livemode: subscription.livemode,
   };

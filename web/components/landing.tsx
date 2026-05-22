@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BILLING_EMAIL, BrandLink, CONTACT_EMAIL, SUPPORT_EMAIL } from "@/components/brand";
+import { FirmaContactForm } from "@/components/firma-contact-form";
 
 const G = "#3DFF7A"; // bright OZE green from cinematic hero design
 const VOICE_WAVE_HEIGHTS = [3, 9, 12, 7, 5, 11, 8, 4, 10, 12, 6, 5, 9, 11, 7];
@@ -48,6 +49,7 @@ export function Landing() {
       <TwojeNarzedziaSection />
       <FAQSection />
       <FinalCTA />
+      <ContactSection />
       <FooterMin />
     </div>
   );
@@ -67,16 +69,17 @@ function TopBar() {
         alignItems: "center",
         justifyContent: "center",
         flexWrap: mobile ? "wrap" : "nowrap",
-        gap: 6,
+        gap: 8,
         width: "100%",
         boxSizing: "border-box",
-        background: hover ? "#0a0d10" : "#06080a",
-        borderBottom: `1px solid ${G}2D`,
-        padding: mobile ? "9px 14px" : "10px 16px",
+        background: hover ? "#52FF8A" : G,
+        borderBottom: "1px solid rgba(0,0,0,0.15)",
+        padding: mobile ? "14px 18px" : "16px 20px",
         textAlign: "center",
         textDecoration: "none",
-        color: "rgba(255,255,255,0.85)",
-        fontSize: mobile ? 12 : 13,
+        color: "#000",
+        fontWeight: 700,
+        fontSize: mobile ? 13 : 15,
         lineHeight: 1.4,
         transition: "background .15s",
         position: "relative",
@@ -84,7 +87,7 @@ function TopBar() {
         overflowWrap: "anywhere",
       }}
     >
-      <span aria-hidden="true">🏢</span>
+      <span aria-hidden="true" style={{ fontSize: mobile ? 15 : 17 }}>🏢</span>
       {mobile ? (
         <>Firmy OZE? Agent dla zespołu →</>
       ) : (
@@ -359,7 +362,7 @@ function CinematicHero() {
                 boxSizing: "border-box",
               }}
             >
-              Zacznij pilnować leadów <span aria-hidden="true">→</span>
+              Wypróbuj 3 dni za darmo <span aria-hidden="true">→</span>
             </Link>
             <a
               href="#dzien-handlowca"
@@ -1934,7 +1937,7 @@ function FinalCTA() {
             textDecoration: "none",
           }}
         >
-          Załóż konto <span aria-hidden="true">→</span>
+          Wypróbuj 3 dni za darmo <span aria-hidden="true">→</span>
         </Link>
         <div
           style={{
@@ -1950,12 +1953,84 @@ function FinalCTA() {
   );
 }
 
+// ── CONTACT ───────────────────────────────────────────────────────────────
+function ContactSection() {
+  const compact = useMediaQuery("(max-width: 860px)");
+  return (
+    <section
+      id="kontakt"
+      style={{
+        position: "relative",
+        padding: compact ? "72px 24px 88px" : "112px 32px 128px",
+        background: "#000",
+        borderTop: `1px solid ${G}1A`,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(circle at 20% 20%, rgba(61,255,122,0.06), transparent 32%), radial-gradient(circle at 80% 70%, rgba(61,255,122,0.04), transparent 36%)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          maxWidth: 520,
+          margin: "0 auto",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            color: G,
+            textTransform: "uppercase",
+            letterSpacing: 2,
+            fontSize: 12,
+            fontWeight: 800,
+            marginBottom: 18,
+          }}
+        >
+          — Wolisz porozmawiać?
+        </div>
+        <h2
+          style={{
+            fontSize: compact ? "clamp(28px, 7vw, 36px)" : "clamp(32px, 4vw, 48px)",
+            lineHeight: 1.1,
+            fontWeight: 600,
+            margin: "0 0 16px",
+            textWrap: "balance" as React.CSSProperties["textWrap"],
+          }}
+        >
+          Zostaw kontakt — odezwiemy się z konkretnym planem.
+        </h2>
+        <p
+          style={{
+            fontSize: "clamp(14px, 1.4vw, 16px)",
+            color: "rgba(255,255,255,0.6)",
+            margin: "0 0 32px",
+            lineHeight: 1.55,
+          }}
+        >
+          Indywidualni handlowcy i firmy OZE. Odpisujemy w 24h.
+        </p>
+        <div style={{ textAlign: "left" }}>
+          <FirmaContactForm />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── FOOTER ────────────────────────────────────────────────────────────────
 function FooterMin() {
   const compact = useMediaQuery("(max-width: 860px)");
   return (
     <footer
-      id="kontakt"
       style={{
         borderTop: `1px solid ${G}26`,
         padding: compact ? "48px 24px 24px" : "64px 32px 32px",

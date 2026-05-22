@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCurrentAccount } from "@/lib/api/account";
+import { hasCurrentBillingAccess } from "@/lib/billing/access";
 
 const planItems = [
   "Agent w Telegramie",
@@ -9,12 +10,19 @@ const planItems = [
   "Zdjęcia i pliki na Dysku Google",
 ];
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string }>;
+}) {
+  const params = await searchParams;
   const account = await getCurrentAccount();
   const profile = account.profile;
   const status = profile?.subscription_status ?? null;
-  const active = isCurrentLivePaid(profile);
-  const statusLabel = active ? "Aktywna" : billingStatusLabel(status);
+  const active = hasCurrentBillingAccess(profile);
+  const trialing = active && profile?.subscription_status === "trialing";
+  const cancelAtPeriodEnd = Boolean(profile?.subscription_cancel_at_period_end);
+  const statusLabel = billingStatusLabel(status);
   const periodLabel = active
     ? formatDate(profile?.subscription_current_period_end)
     : "brak aktywnego okresu";
@@ -34,6 +42,12 @@ export default async function PaymentsPage() {
         </p>
       </header>
 
+      {params.message ? (
+        <p className="rounded-[8px] border border-[#3DFF7A]/20 bg-[#3DFF7A]/10 px-4 py-3 text-sm leading-6 text-zinc-200">
+          {params.message}
+        </p>
+      ) : null}
+
       <section className="rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_86%_18%,rgba(61,255,122,0.14),transparent_32%),rgba(255,255,255,0.035)] p-6 shadow-[0_0_30px_rgba(61,255,122,0.04)]">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
@@ -45,17 +59,27 @@ export default async function PaymentsPage() {
                     : "h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.8)]"
                 }
               />
-              {active ? "Konto aktywne" : "Konto czeka na płatność"}
+              {active
+                ? trialing
+                  ? "Okres próbny"
+                  : "Konto aktywne"
+                : "Konto czeka na płatność"}
             </p>
             <h2 className="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white">
-              {active
-                ? "Subskrypcja działa. Możesz korzystać z Agent OZE."
-                : "Aktywuj subskrypcję, żeby korzystać z Agent OZE."}
+              {trialing
+                ? "Okres próbny działa. Możesz korzystać z Agent OZE."
+                : active
+                  ? "Subskrypcja działa. Możesz korzystać z Agent OZE."
+                  : "Aktywuj subskrypcję, żeby korzystać z Agent OZE."}
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-              {active
-                ? "Dane rozliczeniowe są przypisane do adresu email z konta. Gdy odnowienie będzie wymagało uwagi, pokażemy to tutaj."
-                : "Po opłaceniu planu konto przejdzie dalej do konfiguracji Google i Telegrama. Dane rozliczeniowe zostaną przypisane do adresu email z konta."}
+              {trialing
+                ? cancelAtPeriodEnd
+                  ? "Dostęp działa do końca okresu próbnego. Opłata nie zostanie naliczona."
+                  : "Pełny dostęp przez 3 dni. Po okresie próbnym 399 zł / mies."
+                : active
+                  ? "Dane rozliczeniowe są przypisane do adresu email z konta. Gdy odnowienie będzie wymagało uwagi, pokażemy to tutaj."
+                  : "Po uruchomieniu okresu próbnego konto przejdzie dalej do konfiguracji Google i Telegrama. Dane rozliczeniowe zostaną przypisane do adresu email z konta."}
             </p>
           </div>
 
@@ -72,7 +96,10 @@ export default async function PaymentsPage() {
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <BillingState label="Status" value={statusLabel} tone={active ? "ok" : "warn"} />
           <BillingState label="Plan" value={profile?.subscription_plan ?? "OZE-Agent"} />
-          <BillingState label="Cena" value="399 zł / mies." />
+          <BillingState
+            label="Cena"
+            value={trialing ? "0 zł dziś / 399 zł później" : "399 zł / mies."}
+          />
           <BillingState label="Okres" value={periodLabel} />
         </div>
       </section>
@@ -110,32 +137,50 @@ export default async function PaymentsPage() {
 
           <div className="mt-6 rounded-[8px] border border-white/10 bg-black/20 p-4">
             <p className="text-sm font-semibold text-white">
-              Po aktywacji zobaczysz tutaj:
+              {trialing ? "Okres próbny" : "Po aktywacji zobaczysz tutaj:"}
             </p>
-            <div className="mt-4 grid gap-3 text-sm text-zinc-400 sm:grid-cols-3">
-              <div>Następna płatność</div>
-              <div>Ostatnia faktura</div>
-              <div>Status odnowienia</div>
-            </div>
+            {trialing ? (
+              <div className="mt-4 space-y-4 text-sm leading-6 text-zinc-400">
+                <p>
+                  Po okresie próbnym subskrypcja odnowi się za 399 zł / mies.,
+                  jeśli wcześniej jej nie anulujesz.
+                </p>
+                {cancelAtPeriodEnd ? (
+                  <p className="rounded-[8px] border border-[#3DFF7A]/20 bg-[#3DFF7A]/10 px-4 py-3 text-zinc-200">
+                    Dostęp działa do końca okresu próbnego. Opłata nie zostanie naliczona.
+                  </p>
+                ) : (
+                  <details className="rounded-[8px] border border-white/10 bg-white/[0.03] p-4">
+                    <summary className="cursor-pointer text-sm font-medium text-zinc-300">
+                      Zarządzaj / anuluj okres próbny
+                    </summary>
+                    <p className="mt-3 text-sm leading-6 text-zinc-400">
+                      Anulowanie zatrzyma przyszłe obciążenie. Dostęp zostaje
+                      aktywny do końca okresu próbnego.
+                    </p>
+                    <form action="/platnosci/anuluj-trial" method="post">
+                      <button
+                        type="submit"
+                        className="mt-4 inline-flex rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-white/30 hover:bg-white/10"
+                      >
+                        Potwierdzam anulowanie po okresie próbnym
+                      </button>
+                    </form>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-3 text-sm text-zinc-400 sm:grid-cols-3">
+                <div>Następna płatność</div>
+                <div>Ostatnia faktura</div>
+                <div>Status odnowienia</div>
+              </div>
+            )}
           </div>
         </article>
       </section>
     </div>
   );
-}
-
-function isCurrentLivePaid(
-  profile: Awaited<ReturnType<typeof getCurrentAccount>>["profile"],
-) {
-  if (!profile) return false;
-  if (profile.subscription_status !== "active" || !profile.activation_paid) {
-    return false;
-  }
-  if (profile.stripe_livemode !== true) return false;
-  const periodEnd = profile.subscription_current_period_end
-    ? Date.parse(profile.subscription_current_period_end)
-    : Number.NaN;
-  return Number.isFinite(periodEnd) && periodEnd > Date.now();
 }
 
 function BillingState({

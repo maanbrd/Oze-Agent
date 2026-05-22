@@ -105,6 +105,44 @@ async def test_subscription_guard_rejects_expired_live_payment(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_subscription_guard_allows_live_trialing_user(monkeypatch):
+    fake = _FakeQuery([])
+    monkeypatch.setattr(telegram_helpers, "get_supabase_client", lambda: fake)
+
+    allowed = await telegram_helpers.check_subscription_active(
+        {
+            "auth_user_id": "auth-1",
+            "subscription_status": "trialing",
+            "activation_paid": False,
+            "stripe_livemode": True,
+            "subscription_current_period_end": _future_period_end(),
+            "is_suspended": False,
+        }
+    )
+
+    assert allowed is True
+
+
+@pytest.mark.asyncio
+async def test_subscription_guard_rejects_expired_live_trialing_user(monkeypatch):
+    fake = _FakeQuery([])
+    monkeypatch.setattr(telegram_helpers, "get_supabase_client", lambda: fake)
+
+    allowed = await telegram_helpers.check_subscription_active(
+        {
+            "auth_user_id": "auth-1",
+            "subscription_status": "trialing",
+            "activation_paid": False,
+            "stripe_livemode": True,
+            "subscription_current_period_end": _expired_period_end(),
+            "is_suspended": False,
+        }
+    )
+
+    assert allowed is False
+
+
+@pytest.mark.asyncio
 async def test_subscription_guard_allows_claimed_beta_access(monkeypatch):
     fake = _FakeQuery(
         [{"id": "grant-1", "auth_user_id": "auth-1", "status": "active"}]

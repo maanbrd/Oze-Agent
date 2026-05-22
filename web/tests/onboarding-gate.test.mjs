@@ -30,6 +30,7 @@ const checkoutRouteSource = readSource("../app/onboarding/checkout/route.ts");
 const betaAccessRouteSource = readSource("../app/onboarding/beta-access/route.ts");
 const paymentSuccessPageSource = readSource("../app/onboarding/sukces/page.tsx");
 const checkoutReconcileSource = readSource("../lib/billing/checkout-reconcile.ts");
+const billingAccessSource = readSource("../lib/billing/access.ts");
 const stripeEventForwardSource = readSource("../lib/billing/stripe-events.ts");
 const logoutRouteSource = readSource("../app/logout/route.ts");
 const accountSource = readSource("../lib/api/account.ts");
@@ -156,6 +157,9 @@ test("payment plans use a route handler post so checkout keeps browser cookies",
   assert.match(checkoutRouteSource, /getCurrentAccount/);
   assert.match(checkoutRouteSource, /NextResponse\.redirect/);
   assert.match(checkoutRouteSource, /line_items: \[\{ price: recurringPriceId, quantity: 1 \}\]/);
+  assert.match(checkoutRouteSource, /payment_method_collection:\s*"always"/);
+  assert.match(checkoutRouteSource, /trial_period_days:\s*3/);
+  assert.match(checkoutRouteSource, /trial_days:\s*"3"/);
   assert.equal(checkoutRouteSource.includes("activationPrice"), false);
   assert.equal(checkoutRouteSource.includes("yearly"), false);
 });
@@ -219,10 +223,25 @@ test("payment success reconciles a paid Checkout session before waiting for webh
   assert.match(checkoutReconcileSource, /stripe\.checkout\.sessions\.retrieve\(sessionId\)/);
   assert.match(checkoutReconcileSource, /session\.status === "complete"/);
   assert.match(checkoutReconcileSource, /session\.payment_status === "paid"/);
+  assert.match(checkoutReconcileSource, /session\.payment_status === "no_payment_required"/);
   assert.match(checkoutReconcileSource, /session\.client_reference_id === profile\.id/);
   assert.match(checkoutReconcileSource, /session\.metadata\?\.auth_user_id === profile\.auth_user_id/);
   assert.match(checkoutReconcileSource, /type: "checkout\.session\.completed"/);
+  assert.match(checkoutReconcileSource, /trial_end/);
   assert.match(checkoutReconcileSource, /forwardStripeEventToFastApi/);
+});
+
+test("preview billing gates accept Stripe test mode without weakening production", () => {
+  assert.match(billingAccessSource, /process\.env\.VERCEL_ENV === "preview"/);
+  assert.match(billingAccessSource, /stripeLivemode === false/);
+  assert.match(billingAccessSource, /stripeLivemode === true/);
+  assert.match(billingAccessSource, /subscription_status === "trialing"/);
+  assert.match(paymentSuccessPageSource, /hasCurrentBillingAccess\(account\.profile\)/);
+});
+
+test("stripe webhook forwards live subscription events after signature verification", () => {
+  assert.equal(stripeWebhookRouteSource.includes("Live Stripe events are disabled"), false);
+  assert.match(stripeWebhookRouteSource, /forwardStripeEventToFastApi\(await normalizeEvent\(event\)\)/);
 });
 
 test("FastAPI base URL ignores blank quoted env values before using fallback", () => {
