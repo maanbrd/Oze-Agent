@@ -173,8 +173,11 @@ def _subscription_period_end(value: dict[str, Any]) -> str | None:
     first_item = _first_subscription_item(value)
     return _stripe_timestamp_to_iso(
         details.get("current_period_end")
+        or details.get("trial_end")
         or value.get("current_period_end")
+        or value.get("trial_end")
         or first_item.get("current_period_end")
+        or first_item.get("trial_end")
         or value.get("subscription_current_period_end")
         or _line_period_end(value)
     )

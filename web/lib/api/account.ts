@@ -11,7 +11,7 @@ export type AccountProfile = {
   subscription_status: string | null;
   subscription_plan: string | null;
   subscription_current_period_end: string | null;
-  subscription_cancel_at_period_end: boolean | null;
+  subscription_cancel_at_period_end?: boolean | null;
   activation_paid: boolean | null;
   stripe_livemode: boolean | null;
   stripe_subscription_id: string | null;
@@ -38,7 +38,6 @@ const ACCOUNT_PROFILE_SELECT = [
   "subscription_status",
   "subscription_plan",
   "subscription_current_period_end",
-  "subscription_cancel_at_period_end",
   "activation_paid",
   "stripe_livemode",
   "stripe_subscription_id",

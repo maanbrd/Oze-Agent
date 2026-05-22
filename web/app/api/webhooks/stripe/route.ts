@@ -25,6 +25,7 @@ type StripeSubscriptionDetails = {
   status: Stripe.Subscription.Status;
   current_period_start: unknown;
   current_period_end: unknown;
+  trial_end: unknown;
   cancel_at_period_end: unknown;
   livemode: boolean;
 };
@@ -55,7 +56,8 @@ function compactSubscriptionDetails(
     current_period_start:
       raw.current_period_start ?? firstItem.current_period_start,
     current_period_end:
-      raw.current_period_end ?? firstItem.current_period_end,
+      raw.current_period_end ?? firstItem.current_period_end ?? raw.trial_end,
+    trial_end: raw.trial_end,
     cancel_at_period_end: raw.cancel_at_period_end,
     livemode: subscription.livemode,
   };

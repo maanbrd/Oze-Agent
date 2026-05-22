@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCurrentAccount } from "@/lib/api/account";
+import { hasCurrentBillingAccess } from "@/lib/billing/access";
 
 const planItems = [
   "Agent w Telegramie",
@@ -18,7 +19,7 @@ export default async function PaymentsPage({
   const account = await getCurrentAccount();
   const profile = account.profile;
   const status = profile?.subscription_status ?? null;
-  const active = isCurrentLiveAccess(profile);
+  const active = hasCurrentBillingAccess(profile);
   const trialing = active && profile?.subscription_status === "trialing";
   const cancelAtPeriodEnd = Boolean(profile?.subscription_cancel_at_period_end);
   const statusLabel = billingStatusLabel(status);
@@ -180,23 +181,6 @@ export default async function PaymentsPage({
       </section>
     </div>
   );
-}
-
-function isCurrentLiveAccess(
-  profile: Awaited<ReturnType<typeof getCurrentAccount>>["profile"],
-) {
-  if (!profile) return false;
-  const hasAccessStatus =
-    profile.subscription_status === "trialing" ||
-    (profile.subscription_status === "active" && Boolean(profile.activation_paid));
-  if (!hasAccessStatus) {
-    return false;
-  }
-  if (profile.stripe_livemode !== true) return false;
-  const periodEnd = profile.subscription_current_period_end
-    ? Date.parse(profile.subscription_current_period_end)
-    : Number.NaN;
-  return Number.isFinite(periodEnd) && periodEnd > Date.now();
 }
 
 function BillingState({

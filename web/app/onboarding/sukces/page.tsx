@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandLink } from "@/components/brand";
 import { getCurrentAccount } from "@/lib/api/account";
+import { hasCurrentBillingAccess } from "@/lib/billing/access";
 import { reconcileCheckoutSession } from "@/lib/billing/checkout-reconcile";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export default async function PaymentSuccessPage({
     redirect("/login?next=/onboarding/platnosc");
   }
 
-  const active = isCurrentLiveAccess(account.profile);
+  const active = hasCurrentBillingAccess(account.profile);
   const trial = account.profile?.subscription_status === "trialing";
 
   return (
@@ -68,21 +69,4 @@ export default async function PaymentSuccessPage({
       </section>
     </main>
   );
-}
-
-function isCurrentLiveAccess(
-  profile: Awaited<ReturnType<typeof getCurrentAccount>>["profile"],
-) {
-  if (!profile) return false;
-  const hasAccessStatus =
-    profile.subscription_status === "trialing" ||
-    (profile.subscription_status === "active" && profile.activation_paid);
-  if (!hasAccessStatus) {
-    return false;
-  }
-  if (profile.stripe_livemode !== true) return false;
-  const periodEnd = profile.subscription_current_period_end
-    ? Date.parse(profile.subscription_current_period_end)
-    : Number.NaN;
-  return Number.isFinite(periodEnd) && periodEnd > Date.now();
 }

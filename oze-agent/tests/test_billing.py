@@ -275,6 +275,58 @@ async def test_trial_checkout_completed_grants_trial_access_without_paid_activat
 
 
 @pytest.mark.asyncio
+async def test_trial_checkout_uses_trial_end_when_stripe_omits_period_end(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    event = {
+        "id": "evt_trial_checkout_period_fallback",
+        "type": "checkout.session.completed",
+        "livemode": False,
+        "object": {
+            "object": "checkout.session",
+            "id": "cs_trial_fallback",
+            "livemode": False,
+            "mode": "subscription",
+            "status": "complete",
+            "payment_status": "paid",
+            "amount_total": 0,
+            "currency": "pln",
+            "customer": "cus_trial_fallback",
+            "subscription": "sub_trial_fallback",
+            "subscription_details": {
+                "id": "sub_trial_fallback",
+                "status": "trialing",
+                "trial_end": 1779744167,
+                "cancel_at_period_end": False,
+                "livemode": False,
+            },
+            "metadata": {
+                "auth_user_id": "auth-1",
+                "user_id": "user-1",
+                "plan": "monthly",
+                "trial_days": "3",
+            },
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.users[0]["subscription_status"] == "trialing"
+    assert fake.users[0]["activation_paid"] is False
+    assert fake.users[0]["stripe_livemode"] is False
+    assert fake.users[0]["subscription_current_period_end"] == _iso(1779744167)
+    assert fake.payment_history == []
+
+
+@pytest.mark.asyncio
 async def test_invoice_payment_succeeded_updates_subscription_and_logs_snapshot(monkeypatch):
     from api.routes import billing
 
