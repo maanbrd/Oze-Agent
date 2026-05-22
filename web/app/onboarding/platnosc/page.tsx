@@ -42,8 +42,7 @@ export default async function PaymentStepPage({
               Rozpocznij 3 dni testu.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
-              Podajesz kartę teraz, dziś płacisz 0 zł. Jeśli nie anulujesz przed
-              końcem okresu próbnego, po 3 dniach rusza subskrypcja 399 zł / mies.
+              Pełny dostęp przez 3 dni. Po okresie próbnym 399 zł / mies.
             </p>
 
             {params.message ? (
@@ -92,7 +91,7 @@ export default async function PaymentStepPage({
                   <PlanCard
                     title="OZE-Agent"
                     price="0 zł dziś"
-                    note="Pełny dostęp przez 3 dni. Po okresie próbnym 399 zł / mies., jeśli wcześniej nie anulujesz."
+                    note="Pełny dostęp przez 3 dni. Po okresie próbnym 399 zł / mies."
                   />
                 </div>
               </div>

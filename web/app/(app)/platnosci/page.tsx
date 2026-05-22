@@ -75,7 +75,7 @@ export default async function PaymentsPage({
               {trialing
                 ? cancelAtPeriodEnd
                   ? "Dostęp działa do końca okresu próbnego. Opłata nie zostanie naliczona."
-                  : "Dziś płacisz 0 zł. Jeśli nie anulujesz przed końcem testu, po 3 dniach ruszy 399 zł / mies."
+                  : "Pełny dostęp przez 3 dni. Po okresie próbnym 399 zł / mies."
                 : active
                   ? "Dane rozliczeniowe są przypisane do adresu email z konta. Gdy odnowienie będzie wymagało uwagi, pokażemy to tutaj."
                   : "Po uruchomieniu okresu próbnego konto przejdzie dalej do konfiguracji Google i Telegrama. Dane rozliczeniowe zostaną przypisane do adresu email z konta."}
