@@ -54,21 +54,6 @@ export default async function RegistrationPage({
                 </span>
                 <span className="hidden sm:block">Załóż konto i przejdź do onboardingu.</span>
               </h1>
-              <p className="mt-7 max-w-2xl text-base leading-7 text-zinc-300 sm:text-lg sm:leading-8">
-                Ten krok tworzy bezpieczne konto. Płatność, Google i
-                parowanie Telegrama będą kolejnymi krokami tego samego flow.
-              </p>
-              <div className="mt-9 grid gap-3 sm:grid-cols-3">
-                {["Auth + RLS", "Płatność", "Google + Telegram"].map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-zinc-300"
-                  >
-                    <span className="mr-2 inline-block h-2 w-2 rounded-full bg-[#3DFF7A]" />
-                    {item}
-                  </div>
-                ))}
-              </div>
             </div>
 
             <form

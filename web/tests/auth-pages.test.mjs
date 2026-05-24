@@ -37,12 +37,9 @@ test("registration page renders a real server-action onboarding form instead of 
   }
 });
 
-test("registration form keeps the fuller onboarding content and three consent checkboxes", () => {
+test("registration form keeps the onboarding content and three consent checkboxes without step tiles", () => {
   for (const text of [
     "Załóż konto i przejdź do onboardingu.",
-    "Auth + RLS",
-    "Płatność",
-    "Google + Telegram",
     "Akceptuję regulamin i politykę prywatności.",
     "Chcę otrzymywać informacje o rozwoju Agent OZE.",
     "Możecie zadzwonić, jeśli onboarding utknie.",
@@ -50,6 +47,11 @@ test("registration form keeps the fuller onboarding content and three consent ch
     assert.equal(registrationPageSource.includes(text), true);
   }
 
+  assert.equal(registrationPageSource.includes("Auth + RLS"), false);
+  assert.equal(registrationPageSource.includes("Google + Telegram"), false);
+  assert.equal(registrationPageSource.includes("Ten krok tworzy bezpieczne konto."), false);
+  assert.equal(registrationPageSource.includes("parowanie Telegrama będą kolejnymi krokami"), false);
+  assert.equal(registrationPageSource.includes("sm:grid-cols-3"), false);
   assert.equal((registrationPageSource.match(/type="checkbox"/g) ?? []).length, 3);
   assert.equal(authActionsSource.includes("consent_terms"), true);
   assert.equal(authActionsSource.includes("consent_marketing"), true);
