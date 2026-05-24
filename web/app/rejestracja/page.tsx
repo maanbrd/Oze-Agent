@@ -101,6 +101,14 @@ export default async function RegistrationPage({
                 minLength={8}
                 placeholder="Minimum 8 znaków"
               />
+              <Field
+                label="Powtórz hasło"
+                name="repeatPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                placeholder="Powtórz hasło"
+              />
               <div className="mt-6 border-t border-white/10 pt-5">
                 <p className="text-sm font-semibold text-white">Krótka ankieta</p>
                 <p className="mt-1 text-xs leading-5 text-zinc-500">
@@ -132,7 +140,13 @@ export default async function RegistrationPage({
                 <SelectField
                   label="Branża"
                   name="specialty"
-                  options={["PV", "Pompy ciepła", "PV + magazyn", "Wszystko"]}
+                  options={[
+                    "PV + magazyn",
+                    "Pompy ciepła + piece",
+                    "Czyste powietrze",
+                    "Wszystkie",
+                    "Inna",
+                  ]}
                 />
                 <SelectField
                   label="Skąd nas znasz"
@@ -168,7 +182,7 @@ export default async function RegistrationPage({
               </label>
               <label className="mt-3 flex gap-3 text-sm leading-6 text-zinc-400">
                 <input name="phoneContact" type="checkbox" className="mt-1 h-4 w-4" />
-                <span>Możecie zadzwonić, jeśli onboarding utknie.</span>
+                <span>Wyrażam zgodę na kontakt telefoniczny.</span>
               </label>
               <button
                 type="submit"

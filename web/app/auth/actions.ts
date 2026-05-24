@@ -55,6 +55,7 @@ export async function signup(formData: FormData) {
   const phone = value(formData, "phone");
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
+  const repeatPassword = value(formData, "repeatPassword");
   const terms = formData.get("terms") === "on";
   const onboardingSurvey = {
     region: value(formData, "region"),
@@ -65,6 +66,10 @@ export async function signup(formData: FormData) {
 
   if (!terms) {
     redirect(encoded("/rejestracja", "Regulamin jest wymagany."));
+  }
+
+  if (password !== repeatPassword) {
+    redirect(encoded("/rejestracja", "Hasła nie są takie same."));
   }
 
   const configError = missingSupabaseEnvRedirectMessage();

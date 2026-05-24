@@ -32,7 +32,15 @@ test("registration page renders a real server-action onboarding form instead of 
   assert.equal(registrationPageSource.includes("Onboarding jest już w przygotowaniu"), false);
   assert.match(registrationPageSource, /action=\{signup\}/);
 
-  for (const label of ["Imię", "Nazwisko", "Telefon", "Email", "Hasło", "Dalej: płatność"]) {
+  for (const label of [
+    "Imię",
+    "Nazwisko",
+    "Telefon",
+    "Email",
+    "Hasło",
+    "Powtórz hasło",
+    "Dalej: płatność",
+  ]) {
     assert.equal(registrationPageSource.includes(label), true);
   }
 });
@@ -42,11 +50,12 @@ test("registration form keeps the onboarding content and three consent checkboxe
     "Załóż konto i przejdź do onboardingu.",
     "Akceptuję regulamin i politykę prywatności.",
     "Chcę otrzymywać informacje o rozwoju Agent OZE.",
-    "Możecie zadzwonić, jeśli onboarding utknie.",
+    "Wyrażam zgodę na kontakt telefoniczny.",
   ]) {
     assert.equal(registrationPageSource.includes(text), true);
   }
 
+  assert.equal(registrationPageSource.includes("Możecie zadzwonić, jeśli onboarding utknie."), false);
   assert.equal(registrationPageSource.includes("Auth + RLS"), false);
   assert.equal(registrationPageSource.includes("Google + Telegram"), false);
   assert.equal(registrationPageSource.includes("Ten krok tworzy bezpieczne konto."), false);
@@ -68,6 +77,10 @@ test("registration form keeps the onboarding survey before consent", () => {
     "Doświadczenie w OZE",
     "cała Polska",
     "PV + magazyn",
+    "Pompy ciepła + piece",
+    "Czyste powietrze",
+    "Wszystkie",
+    "Inna",
     "Polecenie",
     "3+ lata",
     "Dalej: płatność",
@@ -75,6 +88,7 @@ test("registration form keeps the onboarding survey before consent", () => {
     assert.equal(registrationPageSource.includes(text), true);
   }
 
+  assert.equal(registrationPageSource.includes('"PV", "Pompy ciepła", "PV + magazyn", "Wszystko"'), false);
   assert.equal(authActionsSource.includes("onboarding_survey"), true);
   assert.equal(authActionsSource.includes("referral_source"), true);
 });
@@ -87,6 +101,7 @@ test("auth forms provide concrete input placeholders", () => {
     "Kowalski",
     "500 600 700",
     "Minimum 8 znaków",
+    "Powtórz hasło",
   ]) {
     assert.equal(
       `${loginPageSource}\n${registrationPageSource}`.includes(`placeholder="${placeholder}"`),
@@ -94,6 +109,20 @@ test("auth forms provide concrete input placeholders", () => {
       `${placeholder} placeholder must be present`,
     );
   }
+});
+
+test("signup validates repeated password before creating an auth account", () => {
+  assert.equal(registrationPageSource.includes('name="repeatPassword"'), true);
+  assert.match(registrationPageSource, /label="Powtórz hasło"[\s\S]*name="repeatPassword"/);
+  assert.match(authActionsSource, /const repeatPassword = value\(formData, "repeatPassword"\);/);
+  assert.match(authActionsSource, /if \(password !== repeatPassword\)/);
+  assert.match(authActionsSource, /Hasła nie są takie same\./);
+
+  const mismatchCheckIndex = authActionsSource.indexOf("password !== repeatPassword");
+  const signUpIndex = authActionsSource.indexOf("supabase.auth.signUp");
+  assert.ok(mismatchCheckIndex > -1);
+  assert.ok(signUpIndex > -1);
+  assert.ok(mismatchCheckIndex < signUpIndex);
 });
 
 test("signup creates a real auth account and sends the seller to payment onboarding", () => {
