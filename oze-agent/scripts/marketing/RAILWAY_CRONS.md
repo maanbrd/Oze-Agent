@@ -28,8 +28,8 @@ commands below assume that working directory.
 
 All cron services need references to these vars from the `bot` service:
 
-- `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`
-- `META_APP_ID` + `META_APP_SECRET` + `META_FB_PAGE_TOKEN` + `META_FB_PAGE_ID` + `META_IG_BUSINESS_ID`
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+- `META_APP_ID` + `META_APP_SECRET` + `META_FB_PAGE_TOKEN` + `META_FB_PAGE_ID` + `META_IG_BUSINESS_ID` + `META_IG_USER_TOKEN`
 - `TELEGRAM_BOT_TOKEN`
 - `OPENAI_API_KEY`
 - `ENCRYPTION_KEY` (for decrypting per-user Google OAuth tokens)

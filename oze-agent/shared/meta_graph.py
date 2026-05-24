@@ -16,6 +16,7 @@ Environment variables (read at ``__init__``):
 - ``META_FB_PAGE_ID``       — Facebook Page numeric ID
 - ``META_FB_PAGE_TOKEN``    — Page Access Token (long-lived, 60-day)
 - ``META_IG_BUSINESS_ID``   — Instagram Business Account ID linked to the Page
+- ``META_IG_USER_TOKEN``    — optional user token for IG Content Publishing
 
 Missing any of these raises ``ValueError`` at construction time so the
 publisher cron fails loudly instead of silently no-oping.
@@ -94,6 +95,7 @@ class MetaGraphClient:
         self.page_id = os.environ.get("META_FB_PAGE_ID", "").strip()
         self.page_token = os.environ.get("META_FB_PAGE_TOKEN", "").strip()
         self.ig_business_id = os.environ.get("META_IG_BUSINESS_ID", "").strip()
+        self.ig_user_token = os.environ.get("META_IG_USER_TOKEN", "").strip()
 
         missing = [
             name
@@ -149,6 +151,7 @@ class MetaGraphClient:
         *,
         params: Optional[dict] = None,
         data: Optional[dict] = None,
+        access_token: Optional[str] = None,
         retry: int = _RETRY_ATTEMPTS,
     ) -> Optional[dict]:
         """Issue a Graph API request, returning the parsed JSON body or None.
@@ -162,7 +165,8 @@ class MetaGraphClient:
         - On network error → logs + returns None.
         """
         url = endpoint if endpoint.startswith("http") else f"{GRAPH_API_BASE}/{endpoint.lstrip('/')}"
-        headers = {"Authorization": f"Bearer {self.page_token}"}
+        token = access_token or self.page_token
+        headers = {"Authorization": f"Bearer {token}"}
 
         for attempt in range(retry + 1):
             try:
@@ -238,7 +242,10 @@ class MetaGraphClient:
         return None
 
     async def _wait_for_media_ready(
-        self, creation_id: str, timeout: int = _MEDIA_READY_TIMEOUT_S
+        self,
+        creation_id: str,
+        timeout: int = _MEDIA_READY_TIMEOUT_S,
+        access_token: Optional[str] = None,
     ) -> bool:
         """Poll a media container until status_code is FINISHED.
 
@@ -252,6 +259,7 @@ class MetaGraphClient:
                 "GET",
                 creation_id,
                 params={"fields": "status_code,status"},
+                access_token=access_token,
             )
             if data is None:
                 logger.error(
@@ -367,6 +375,8 @@ class MetaGraphClient:
             )
             return None
 
+        ig_token = self.ig_user_token or self.page_token
+
         # 1. Create child containers.
         child_ids: list[str] = []
         for index, image_url in enumerate(image_urls):
@@ -377,6 +387,7 @@ class MetaGraphClient:
                     "image_url": image_url,
                     "is_carousel_item": "true",
                 },
+                access_token=ig_token,
             )
             if data is None or "id" not in data:
                 logger.error(
@@ -389,7 +400,7 @@ class MetaGraphClient:
 
         # 2. Wait for all children to finish processing.
         for child_id in child_ids:
-            if not await self._wait_for_media_ready(child_id):
+            if not await self._wait_for_media_ready(child_id, access_token=ig_token):
                 logger.error(
                     "publish_ig_carousel: child %s never reached FINISHED", child_id
                 )
@@ -404,6 +415,7 @@ class MetaGraphClient:
                 "caption": caption,
                 "children": ",".join(child_ids),
             },
+            access_token=ig_token,
         )
         if parent is None or "id" not in parent:
             logger.error("publish_ig_carousel: parent container creation failed")
@@ -411,7 +423,7 @@ class MetaGraphClient:
         parent_id = parent["id"]
 
         # 4. Wait for parent to finish.
-        if not await self._wait_for_media_ready(parent_id):
+        if not await self._wait_for_media_ready(parent_id, access_token=ig_token):
             logger.error(
                 "publish_ig_carousel: parent %s never reached FINISHED", parent_id
             )
@@ -422,6 +434,7 @@ class MetaGraphClient:
             "POST",
             f"{self.ig_business_id}/media_publish",
             data={"creation_id": parent_id},
+            access_token=ig_token,
         )
         if published is None or "id" not in published:
             logger.error("publish_ig_carousel: media_publish failed")
@@ -435,6 +448,7 @@ class MetaGraphClient:
                 "POST",
                 f"{media_id}/comments",
                 data={"message": first_comment},
+                access_token=ig_token,
             )
             if comment is None:
                 logger.warning(
@@ -471,10 +485,13 @@ class MetaGraphClient:
             params["thumb_offset"] = "0"
             params["cover_url"] = thumbnail_url
 
+        ig_token = self.ig_user_token or self.page_token
+
         container = await self._request(
             "POST",
             f"{self.ig_business_id}/media",
             data=params,
+            access_token=ig_token,
         )
         if container is None or "id" not in container:
             logger.error("publish_ig_reel: container creation failed")
@@ -482,7 +499,11 @@ class MetaGraphClient:
         container_id = container["id"]
 
         # Reels can take 30-120s to process — extend timeout.
-        if not await self._wait_for_media_ready(container_id, timeout=180):
+        if not await self._wait_for_media_ready(
+            container_id,
+            timeout=180,
+            access_token=ig_token,
+        ):
             logger.error(
                 "publish_ig_reel: container %s never reached FINISHED", container_id
             )
@@ -492,6 +513,7 @@ class MetaGraphClient:
             "POST",
             f"{self.ig_business_id}/media_publish",
             data={"creation_id": container_id},
+            access_token=ig_token,
         )
         if published is None or "id" not in published:
             logger.error("publish_ig_reel: media_publish failed")
@@ -504,6 +526,7 @@ class MetaGraphClient:
                 "POST",
                 f"{media_id}/comments",
                 data={"message": first_comment},
+                access_token=ig_token,
             )
             if comment is None:
                 logger.warning(
