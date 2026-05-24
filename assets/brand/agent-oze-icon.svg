@@ -5,6 +5,9 @@
       <stop offset="62%" stop-color="#050607"/>
       <stop offset="100%" stop-color="#030404"/>
     </radialGradient>
+    <clipPath id="iconClip">
+      <circle cx="256" cy="256" r="232"/>
+    </clipPath>
     <filter id="greenGlow" x="-80%" y="-80%" width="260%" height="260%">
       <feGaussianBlur stdDeviation="22" result="blur"/>
       <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.239 0 0 0 0 1 0 0 0 0 0.478 0 0 0 0.78 0" result="glow"/>
@@ -14,9 +17,11 @@
       </feMerge>
     </filter>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <g filter="url(#greenGlow)">
-    <circle cx="256" cy="256" r="130" fill="none" stroke="#3DFF7A" stroke-width="30"/>
-    <circle cx="256" cy="256" r="34" fill="#3DFF7A"/>
+  <g clip-path="url(#iconClip)">
+    <circle cx="256" cy="256" r="232" fill="url(#bg)"/>
+    <g filter="url(#greenGlow)">
+      <circle cx="256" cy="256" r="130" fill="none" stroke="#3DFF7A" stroke-width="30"/>
+      <circle cx="256" cy="256" r="34" fill="#3DFF7A"/>
+    </g>
   </g>
 </svg>

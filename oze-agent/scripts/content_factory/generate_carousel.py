@@ -10,13 +10,20 @@ Usage (from oze-agent/ directory):
         python -m scripts.content_factory.generate_carousel \\
         --config /tmp/2026-05-19-typ-a.json \\
         [--output-dir ~/marketing-output] \\
+        [--owner-user-id ada45bc3-4e05-4e64-9f0d-2d98e138debd] \\
         [--skip-drive]
 
 Required env:
     OPENAI_API_KEY  (from Railway / bot.config.Config)
 
-Optional env:
-    OZE_OWNER_USER_ID  (Supabase users.id UUID of Maan — required for Drive upload)
+Drive owner (one of, in this priority order):
+    1. ``--owner-user-id`` CLI flag (overrides env)
+    2. ``OZE_OWNER_USER_ID`` env var
+    If neither is set and ``--skip-drive`` is also absent, the script fails.
+
+    Default future target: admin user ``ada45bc3-4e05-4e64-9f0d-2d98e138debd``
+    (admin@agent-oze.pl) so the Marketing Sheet can preview files without
+    cross-account access errors.
 
 JSON config format: see ~/.agents/skills/oze-content-factory/examples/carousel_config_example.json
 Brand kit + prompt rules: ~/.agents/skills/oze-content-factory/references/
@@ -410,9 +417,19 @@ def main() -> int:
         help="Local output dir (default: ~/marketing-output)",
     )
     parser.add_argument(
+        "--owner-user-id",
+        default=None,
+        help=(
+            "Supabase users.id UUID whose Google Drive receives the uploaded "
+            "carousel folder. Overrides OZE_OWNER_USER_ID env var. "
+            "Recommended default: ada45bc3-4e05-4e64-9f0d-2d98e138debd "
+            "(admin@agent-oze.pl)."
+        ),
+    )
+    parser.add_argument(
         "--skip-drive",
         action="store_true",
-        help="Skip Drive upload even if OZE_OWNER_USER_ID is set",
+        help="Skip Drive upload even if --owner-user-id or OZE_OWNER_USER_ID is set",
     )
     parser.add_argument(
         "--dry-run",
@@ -619,9 +636,32 @@ def main() -> int:
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("Saved meta: %s", meta_path)
 
-    drive_user = os.environ.get("OZE_OWNER_USER_ID")
-    if drive_user and not args.skip_drive:
-        logger.info("Uploading to Google Drive (user_id=%s)...", drive_user[:8] + "...")
+    # Resolve Drive owner: CLI flag > env var. Fail loudly if neither is set
+    # unless --skip-drive is in effect (then we just keep local files).
+    drive_user = args.owner_user_id or os.environ.get("OZE_OWNER_USER_ID")
+    drive_user_source = (
+        "--owner-user-id" if args.owner_user_id else
+        ("OZE_OWNER_USER_ID env" if drive_user else None)
+    )
+
+    if args.skip_drive:
+        logger.info("--skip-drive flag set — local files at: %s", output_dir)
+    elif not drive_user:
+        logger.error(
+            "No Drive owner provided: neither --owner-user-id nor "
+            "OZE_OWNER_USER_ID env var is set. Pass --owner-user-id "
+            "ada45bc3-4e05-4e64-9f0d-2d98e138debd (admin@agent-oze.pl), set "
+            "OZE_OWNER_USER_ID, or pass --skip-drive to keep files local only. "
+            "Local files at: %s",
+            output_dir,
+        )
+        return 7
+    else:
+        logger.info(
+            "Uploading to Google Drive (user_id=%s, source=%s)...",
+            drive_user[:8] + "...",
+            drive_user_source,
+        )
         try:
             result = asyncio.run(upload_folder_to_drive(drive_user, output_dir))
             logger.info("Drive folder: %s", result["folder_url"])
@@ -634,21 +674,15 @@ def main() -> int:
             logger.exception("Drive upload failed: %s", exc)
             logger.info("Local files still available at: %s", output_dir)
             return 5
-    else:
-        if not drive_user:
-            logger.info(
-                "OZE_OWNER_USER_ID not set — skipping Drive upload. "
-                "Local files at: %s",
-                output_dir,
-            )
-        else:
-            logger.info("--skip-drive flag set — local files at: %s", output_dir)
 
     print()
     print(f"✓ Campaign {campaign_id} generated: {len(generated_files)} slides")
     print(f"  Local: {output_dir}")
     if drive_user and not args.skip_drive:
-        print(f"  Drive: see {output_dir / 'drive.json'} for folder URL")
+        print(
+            f"  Drive: see {output_dir / 'drive.json'} for folder URL "
+            f"(owner={drive_user[:8]}..., source={drive_user_source})"
+        )
     return 0
 
 

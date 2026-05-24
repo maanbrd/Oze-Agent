@@ -5,6 +5,9 @@
       <stop offset="66%" stop-color="#050607"/>
       <stop offset="100%" stop-color="#030404"/>
     </radialGradient>
+    <clipPath id="iconClip">
+      <circle cx="216" cy="180" r="126"/>
+    </clipPath>
     <filter id="greenGlow" x="-80%" y="-80%" width="260%" height="260%">
       <feGaussianBlur stdDeviation="14" result="blur"/>
       <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.239 0 0 0 0 1 0 0 0 0 0.478 0 0 0 0.78 0" result="glow"/>
@@ -14,10 +17,10 @@
       </feMerge>
     </filter>
   </defs>
-  <rect width="1200" height="360" fill="url(#bg)"/>
+  <circle cx="216" cy="180" r="126" fill="url(#bg)" clip-path="url(#iconClip)"/>
   <g filter="url(#greenGlow)" transform="translate(96 60)">
     <circle cx="120" cy="120" r="78" fill="none" stroke="#3DFF7A" stroke-width="18"/>
     <circle cx="120" cy="120" r="20" fill="#3DFF7A"/>
   </g>
-  <text x="320" y="215" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="100" font-weight="700" letter-spacing="0">Agent OZE</text>
+  <text x="380" y="215" fill="#050607" font-family="Arial, Helvetica, sans-serif" font-size="100" font-weight="700" letter-spacing="0">Agent OZE</text>
 </svg>
