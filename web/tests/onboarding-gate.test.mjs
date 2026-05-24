@@ -157,6 +157,8 @@ test("payment plans use a route handler post so checkout keeps browser cookies",
   assert.match(checkoutRouteSource, /getCurrentAccount/);
   assert.match(checkoutRouteSource, /NextResponse\.redirect/);
   assert.match(checkoutRouteSource, /line_items: \[\{ price: recurringPriceId, quantity: 1 \}\]/);
+  assert.match(checkoutRouteSource, /payment_method_types:\s*\["card"\]/);
+  assert.match(onboardingActionsSource, /payment_method_types:\s*\["card"\]/);
   assert.match(checkoutRouteSource, /payment_method_collection:\s*"always"/);
   assert.match(checkoutRouteSource, /trial_period_days:\s*3/);
   assert.match(checkoutRouteSource, /trial_days:\s*"3"/);
