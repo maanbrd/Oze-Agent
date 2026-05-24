@@ -81,17 +81,40 @@ export default async function RegistrationPage({
                 </p>
               ) : null}
               <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&>label]:mt-0">
-                <Field label="Imię" name="firstName" autoComplete="given-name" />
-                <Field label="Nazwisko" name="lastName" autoComplete="family-name" />
+                <Field
+                  label="Imię"
+                  name="firstName"
+                  autoComplete="given-name"
+                  placeholder="Jan"
+                />
+                <Field
+                  label="Nazwisko"
+                  name="lastName"
+                  autoComplete="family-name"
+                  placeholder="Kowalski"
+                />
               </div>
-              <Field label="Email" name="email" type="email" autoComplete="email" />
-              <Field label="Telefon" name="phone" type="tel" autoComplete="tel" />
+              <Field
+                label="Email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="jan@firma.pl"
+              />
+              <Field
+                label="Telefon"
+                name="phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="500 600 700"
+              />
               <Field
                 label="Hasło"
                 name="password"
                 type="password"
                 autoComplete="new-password"
                 minLength={8}
+                placeholder="Minimum 8 znaków"
               />
               <div className="mt-6 border-t border-white/10 pt-5">
                 <p className="text-sm font-semibold text-white">Krótka ankieta</p>
@@ -139,7 +162,20 @@ export default async function RegistrationPage({
               </div>
               <label className="mt-5 flex gap-3 text-sm leading-6 text-zinc-300">
                 <input required name="terms" type="checkbox" className="mt-1 h-4 w-4" />
-                <span>Akceptuję regulamin i politykę prywatności.</span>
+                <span aria-label="Akceptuję regulamin i politykę prywatności.">
+                  Akceptuję{" "}
+                  <Link href="/regulamin" className="font-semibold text-[#3DFF7A]">
+                    regulamin
+                  </Link>{" "}
+                  i{" "}
+                  <Link
+                    href="/polityka-prywatnosci"
+                    className="font-semibold text-[#3DFF7A]"
+                  >
+                    politykę prywatności
+                  </Link>
+                  .
+                </span>
               </label>
               <label className="mt-3 flex gap-3 text-sm leading-6 text-zinc-400">
                 <input name="marketing" type="checkbox" className="mt-1 h-4 w-4" />
@@ -203,12 +239,14 @@ function Field({
   type = "text",
   autoComplete,
   minLength,
+  placeholder,
 }: {
   label: string;
   name: string;
   type?: string;
   autoComplete?: string;
   minLength?: number;
+  placeholder?: string;
 }) {
   return (
     <label className="mt-5 block min-w-0 text-sm font-medium text-zinc-200 first:mt-0">
@@ -219,7 +257,8 @@ function Field({
         name={name}
         autoComplete={autoComplete}
         minLength={minLength}
-        className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+        placeholder={placeholder}
+        className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[#3DFF7A]/70"
       />
     </label>
   );

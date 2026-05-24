@@ -77,6 +77,23 @@ test("registration form keeps the onboarding survey before consent", () => {
   assert.equal(authActionsSource.includes("referral_source"), true);
 });
 
+test("auth forms provide concrete input placeholders", () => {
+  for (const placeholder of [
+    "jan@firma.pl",
+    "Twoje hasło",
+    "Jan",
+    "Kowalski",
+    "500 600 700",
+    "Minimum 8 znaków",
+  ]) {
+    assert.equal(
+      `${loginPageSource}\n${registrationPageSource}`.includes(`placeholder="${placeholder}"`),
+      true,
+      `${placeholder} placeholder must be present`,
+    );
+  }
+});
+
 test("signup creates a real auth account and sends the seller to payment onboarding", () => {
   assert.equal(authActionsSource.includes('"use server"'), true);
   assert.equal(authActionsSource.includes("signUp"), true);

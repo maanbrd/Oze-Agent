@@ -66,7 +66,8 @@ export default async function LoginPage({
                 type="email"
                 name="email"
                 autoComplete="email"
-                className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+                placeholder="jan@firma.pl"
+                className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[#3DFF7A]/70"
               />
             </label>
             <label className="mt-5 block min-w-0 text-sm font-medium text-zinc-200">
@@ -76,7 +77,8 @@ export default async function LoginPage({
                 type="password"
                 name="password"
                 autoComplete="current-password"
-                className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-[#3DFF7A]/70"
+                placeholder="Twoje hasło"
+                className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[#3DFF7A]/70"
               />
             </label>
             <button

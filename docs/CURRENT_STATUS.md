@@ -124,9 +124,18 @@ Not yet proven end-to-end:
 - Controlled-address Gmail Sent check from staging/test user.
 - Deployed Supabase Storage bucket and logo upload in target environment.
 - Real Sheets partial-failure messaging after Gmail success.
-- Legal pages: `/regulamin` and `/polityka-prywatnosci` are currently
-  placeholder pages, not final legal documents. Final terms and privacy policy
-  must be created before public paid launch / Google OAuth verification.
+- Google OAuth verification is not yet complete in Google Cloud Console.
+  `/regulamin` and `/polityka-prywatnosci` have been replaced with public
+  non-placeholder legal pages on 24.05.2026 and then expanded for GREAT MF LLC
+  as temporary public operator, Google Limited Use, GDPR disclosures, product
+  analytics and review-safe business benefits. Remaining external steps are
+  tracked in `docs/GOOGLE_OAUTH_META_READINESS.md`.
+- B2B/team sales are not covered by the public signup terms. They require a
+  separate signed B2B agreement. Later migration to a Polish operating entity
+  requires legal-page updates and user notice.
+- Meta Ads readiness for Agent OZE is tracked in
+  `docs/GOOGLE_OAUTH_META_READINESS.md`. Use `Agent-OZE (958523370306013)`;
+  do not touch the unrelated restricted `Fortnite Merch` account.
 
 ### Operational environments — 27.04.2026
 
