@@ -83,5 +83,6 @@ app.include_router(billing_router, prefix="/internal/billing")
 
 
 @app.get("/health")
+@app.get("/healthz")
 async def health():
     return {"status": "ok", "version": "0.1.0"}
