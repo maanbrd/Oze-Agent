@@ -19,10 +19,10 @@ commands below assume that working directory.
 |---|---|---|---|---|
 | `marketing-generate-daily` | `0 5 * * *` | 06:00 | 07:00 | `python -m scripts.marketing.generate_daily` |
 | `marketing-iterate-feedback` | `0 6 * * *` | 07:00 | 08:00 | `python -m scripts.marketing.iterate_from_feedback` |
-| `marketing-publish-morning` | `30 6 * * *` | 07:30 | 08:30 | `python -m scripts.marketing.auto_publish --min-approved 2` |
+| `marketing-publish-morning` | `30 6 * * *` | 07:30 | 08:30 | `python -m scripts.marketing.auto_publish --min-approved 1` |
 | `marketing-digest` | `0 7 * * *` | 08:00 | 09:00 | `python -m scripts.marketing.morning_digest` |
 | `marketing-queue-alert` | `0 16 * * *` | 17:00 | 18:00 | `python -m scripts.marketing.queue_depth_alert` |
-| `marketing-publish-evening` | `0 18 * * *` | 19:00 | 20:00 | `python -m scripts.marketing.auto_publish --min-approved 2` |
+| `marketing-publish-evening` | `0 18 * * *` | 19:00 | 20:00 | `python -m scripts.marketing.auto_publish --min-approved 1` |
 
 ## Required env vars (reference from the `bot` service)
 
@@ -42,7 +42,7 @@ For each cron, after the first scheduled fire, check Railway logs:
 |---|---|---|
 | `marketing-generate-daily` | `generate_daily: DONE — row N = <campaign_id>` | `generate_daily: chosen type = X (not wired in MVP)` |
 | `marketing-iterate-feedback` | `iterate_from_feedback: processed N row(s)` | `iterate_from_feedback: found 0 row(s)` |
-| `auto-publish-*` | `auto_publish: PUBLISHED <campaign_id>` (or similar from publish_single flow) | `auto_publish: skipped — APPROVED queue depth=N < min=2` |
+| `auto-publish-*` | `auto_publish: PUBLISHED <campaign_id>` (or similar from publish_single flow) | `auto_publish: skipped — APPROVED queue depth=N < min=1` |
 | `marketing-digest` | `morning_digest: sent to telegram_id=<id>` | (always sends, even if empty) |
 | `marketing-queue-alert` | `queue_depth_alert: notification sent` | `queue_depth_alert: queue healthy, no notification sent` |
 
