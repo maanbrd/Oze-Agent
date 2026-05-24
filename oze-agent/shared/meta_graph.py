@@ -347,6 +347,68 @@ class MetaGraphClient:
 
     # ── Publishing — Instagram ───────────────────────────────────────────────
 
+    async def publish_ig_image(
+        self,
+        image_url: str,
+        caption: str,
+        first_comment: str = "",
+    ) -> Optional[str]:
+        """Publish a single Instagram image post via Content Publishing API."""
+        if not image_url:
+            logger.error("publish_ig_image: image_url is required")
+            return None
+
+        ig_token = self.ig_user_token or self.page_token
+
+        container = await self._request(
+            "POST",
+            f"{self.ig_business_id}/media",
+            data={
+                "image_url": image_url,
+                "caption": caption,
+            },
+            access_token=ig_token,
+        )
+        if container is None or "id" not in container:
+            logger.error("publish_ig_image: container creation failed")
+            return None
+        container_id = container["id"]
+
+        if not await self._wait_for_media_ready(container_id, access_token=ig_token):
+            logger.error(
+                "publish_ig_image: container %s never reached FINISHED",
+                container_id,
+            )
+            return None
+
+        published = await self._request(
+            "POST",
+            f"{self.ig_business_id}/media_publish",
+            data={"creation_id": container_id},
+            access_token=ig_token,
+        )
+        if published is None or "id" not in published:
+            logger.error("publish_ig_image: media_publish failed")
+            return None
+        media_id = published["id"]
+        logger.info("publish_ig_image: published media_id=%s", media_id)
+
+        if first_comment.strip():
+            comment = await self._request(
+                "POST",
+                f"{media_id}/comments",
+                data={"message": first_comment},
+                access_token=ig_token,
+            )
+            if comment is None:
+                logger.warning(
+                    "publish_ig_image: first_comment post failed for media %s "
+                    "(post still published)",
+                    media_id,
+                )
+
+        return media_id
+
     async def publish_ig_carousel(
         self,
         image_urls: list[str],
@@ -368,6 +430,12 @@ class MetaGraphClient:
         if not image_urls:
             logger.error("publish_ig_carousel: no image_urls supplied")
             return None
+        if len(image_urls) == 1:
+            return await self.publish_ig_image(
+                image_urls[0],
+                caption,
+                first_comment,
+            )
         if len(image_urls) < 2 or len(image_urls) > 10:
             logger.error(
                 "publish_ig_carousel: IG requires 2..10 children, got %d",

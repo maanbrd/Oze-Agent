@@ -289,12 +289,12 @@ async def _run(
 
     if platform in ("facebook", "both"):
         print("Publishing to Facebook...")
-        fb_post_id = await client.publish_fb_carousel(
+        fb_post_id = await client.publish_fb_post(
+            text=caption_fb,
             image_urls=urls,
-            caption=caption_fb,
         )
         if fb_post_id is None:
-            err_msg = "FB carousel publish returned None"
+            err_msg = "FB publish returned None"
             if ig_post_id:
                 err_msg = f"{err_msg} (IG already published as {ig_post_id})"
             await mark_failed(ADMIN_USER_ID, campaign_id, err_msg)
