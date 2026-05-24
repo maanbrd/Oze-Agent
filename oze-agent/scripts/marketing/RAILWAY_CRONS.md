@@ -3,7 +3,8 @@
 Maan sets these up in Railway dashboard → project `oze-agent` → **+ New** →
 **Empty Service** → Settings → **Cron Schedule**. Each cron runs as a fresh
 container in its own service and references the same env vars as the `bot`
-service.
+service. Set each cron service root directory to `/oze-agent`; the start
+commands below assume that working directory.
 
 > **Timezone:** Railway crons run in **UTC**. Times below are pinned to the
 > UTC equivalent of **Warsaw winter time** (UTC+1). Result: each spring
@@ -16,12 +17,12 @@ service.
 
 | Job | Cron (UTC) | Warsaw (winter) | Warsaw (summer) | Command |
 |---|---|---|---|---|
-| `marketing-generate-daily` | `0 5 * * *` | 06:00 | 07:00 | `cd oze-agent && .venv/bin/python3 -m scripts.marketing.generate_daily` |
-| `marketing-iterate-feedback` | `0 6 * * *` | 07:00 | 08:00 | `cd oze-agent && .venv/bin/python3 -m scripts.marketing.iterate_from_feedback` |
-| `marketing-publish-morning` | `30 6 * * *` | 07:30 | 08:30 | `cd oze-agent && .venv/bin/python3 -m scripts.marketing.auto_publish --min-approved 2` |
-| `marketing-digest` | `0 7 * * *` | 08:00 | 09:00 | `cd oze-agent && .venv/bin/python3 -m scripts.marketing.morning_digest` |
-| `marketing-queue-alert` | `0 16 * * *` | 17:00 | 18:00 | `cd oze-agent && .venv/bin/python3 -m scripts.marketing.queue_depth_alert` |
-| `marketing-publish-evening` | `0 18 * * *` | 19:00 | 20:00 | `cd oze-agent && .venv/bin/python3 -m scripts.marketing.auto_publish --min-approved 2` |
+| `marketing-generate-daily` | `0 5 * * *` | 06:00 | 07:00 | `python -m scripts.marketing.generate_daily` |
+| `marketing-iterate-feedback` | `0 6 * * *` | 07:00 | 08:00 | `python -m scripts.marketing.iterate_from_feedback` |
+| `marketing-publish-morning` | `30 6 * * *` | 07:30 | 08:30 | `python -m scripts.marketing.auto_publish --min-approved 2` |
+| `marketing-digest` | `0 7 * * *` | 08:00 | 09:00 | `python -m scripts.marketing.morning_digest` |
+| `marketing-queue-alert` | `0 16 * * *` | 17:00 | 18:00 | `python -m scripts.marketing.queue_depth_alert` |
+| `marketing-publish-evening` | `0 18 * * *` | 19:00 | 20:00 | `python -m scripts.marketing.auto_publish --min-approved 2` |
 
 ## Required env vars (reference from the `bot` service)
 
@@ -51,23 +52,23 @@ Each script supports `--dry-run` to test without writing. Examples:
 
 ```bash
 # Test generate (picks type, scenario; no Drive/Sheet write)
-railway run --service bot --environment production .venv/bin/python3 \
+railway run --service bot --environment production python \
     -m scripts.marketing.generate_daily --dry-run
 
 # Force a specific type (skip round-robin)
-railway run --service bot --environment production .venv/bin/python3 \
+railway run --service bot --environment production python \
     -m scripts.marketing.generate_daily --force-type D-AGENT
 
 # Process feedback now (e.g. between cron windows)
-railway run --service bot --environment production .venv/bin/python3 \
+railway run --service bot --environment production python \
     -m scripts.marketing.iterate_from_feedback
 
 # Publish ignoring the time-window check (manual catch-up)
-railway run --service bot --environment production .venv/bin/python3 \
+railway run --service bot --environment production python \
     -m scripts.marketing.auto_publish --force-now --min-approved 1
 
 # Send digest right now
-railway run --service bot --environment production .venv/bin/python3 \
+railway run --service bot --environment production python \
     -m scripts.marketing.morning_digest
 ```
 
