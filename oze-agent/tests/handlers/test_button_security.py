@@ -51,3 +51,25 @@ async def test_stale_save_callback_does_not_confirm_newer_pending_flow():
     handle_confirm.assert_not_awaited()
     update.callback_query.edit_message_text.assert_awaited_once()
     assert "Nieaktualny" in update.callback_query.edit_message_text.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_fresh_save_callback_in_same_second_confirms_pending_flow():
+    from bot.handlers.buttons import handle_button
+
+    update = _update("save:confirm")
+    sent_at = datetime(2026, 5, 25, 15, 55, 27, tzinfo=timezone.utc)
+    update.callback_query.message.date = sent_at
+    flow = {
+        "flow_type": "add_client",
+        "flow_data": {},
+        "updated_at": sent_at.replace(microsecond=293267).isoformat(),
+    }
+
+    with patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
+         patch("bot.handlers.buttons.handle_confirm", new=AsyncMock()) as handle_confirm:
+        await handle_button(update, MagicMock())
+
+    handle_confirm.assert_awaited_once()
+    update.callback_query.edit_message_text.assert_not_awaited()

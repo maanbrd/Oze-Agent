@@ -1,7 +1,7 @@
 """Inline button callback handler for OZE-Agent."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -81,7 +81,7 @@ def _callback_matches_pending_message(query, flow: dict | None) -> bool:
         message_date = message_date.replace(tzinfo=flow_updated_at.tzinfo)
     if flow_updated_at.tzinfo is None and message_date.tzinfo is not None:
         flow_updated_at = flow_updated_at.replace(tzinfo=message_date.tzinfo)
-    return message_date >= flow_updated_at
+    return message_date >= flow_updated_at - timedelta(seconds=1)
 
 
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
