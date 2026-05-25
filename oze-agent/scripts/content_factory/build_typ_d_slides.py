@@ -3,8 +3,8 @@
 
 Workflow:
 1. Capture mobile-viewport screenshot of agent-oze.pl scenario card (01/02/03/04)
-   via puppeteer (or reuse cached /tmp/landing-shots/card_NN.png if present
-   and fresh — bypass puppeteer for fast re-builds).
+   via puppeteer, reuse cached /tmp/landing-shots/card_NN.png if present, or
+   render a self-contained PIL fallback when Railway has neither.
 2. Compose source card onto 1080x1350 #0b0d10 canvas (center, leaving bottom
    170px for brand pill).
 3. Apply post_brand_overlay.composite_brand (canonical @agentoze bottom-center).
@@ -26,7 +26,6 @@ from today (Warsaw). Returns 0 on success, exit code 2 on errors.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import shutil
 import subprocess
@@ -35,7 +34,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from scripts.content_factory.post_brand_overlay import composite_brand
 
@@ -53,6 +52,25 @@ TOP_MARGIN = 30
 
 PUP_RUNNER = Path("/tmp/pup-runner")
 PUP_CAPTURE_SCRIPT = PUP_RUNNER / "capture_mobile_cards.mjs"
+
+FALLBACK_CARD_W = 760
+FALLBACK_CARD_H = 1180
+ACCENT = (61, 255, 122)
+PANEL_BG = (13, 17, 20)
+MUTED = (166, 177, 187)
+WHITE = (244, 248, 250)
+FONT_CANDIDATES = {
+    "regular": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+    ],
+    "bold": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf",
+    ],
+}
 
 SCENARIOS = {
     "01": {
@@ -118,16 +136,153 @@ def _normalize_n(raw: str) -> str:
     return s
 
 
+def _load_font(size: int, *, bold: bool = False):
+    for candidate in FONT_CANDIDATES["bold" if bold else "regular"]:
+        try:
+            return ImageFont.truetype(candidate, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    lines: list[str] = []
+    for paragraph in text.splitlines():
+        if not paragraph.strip():
+            lines.append("")
+            continue
+        current = ""
+        for word in paragraph.split():
+            candidate = f"{current} {word}".strip()
+            bbox = draw.textbbox((0, 0), candidate, font=font)
+            if bbox[2] - bbox[0] <= max_width or not current:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+    return lines
+
+
+def _draw_wrapped(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    xy: tuple[int, int],
+    font,
+    *,
+    fill: tuple[int, int, int],
+    max_width: int,
+    line_gap: int,
+) -> int:
+    x, y = xy
+    lines = _wrap_text(draw, text, font, max_width)
+    for line in lines:
+        if line:
+            draw.text((x, y), line, font=font, fill=fill)
+        bbox = draw.textbbox((0, 0), line or "Ag", font=font)
+        y += bbox[3] - bbox[1] + line_gap
+    return y
+
+
+def _caption_body(caption: str) -> str:
+    paragraphs = [
+        p.strip()
+        for p in caption.split("\n\n")
+        if p.strip() and not p.strip().startswith("@agentoze")
+    ]
+    return "\n\n".join(paragraphs[:3])
+
+
+def _render_fallback_card(n: str, out: Path) -> Path:
+    """Render a self-contained source card when Railway has no screenshot cache."""
+    scenario = SCENARIOS[n]
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    img = Image.new("RGB", (FALLBACK_CARD_W, FALLBACK_CARD_H), BG_COLOR)
+    glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    glow_draw.rounded_rectangle(
+        [28, 28, FALLBACK_CARD_W - 28, FALLBACK_CARD_H - 28],
+        radius=46,
+        outline=(*ACCENT, 160),
+        width=3,
+    )
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=10))
+    img = Image.alpha_composite(img.convert("RGBA"), glow)
+
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(
+        [34, 34, FALLBACK_CARD_W - 34, FALLBACK_CARD_H - 34],
+        radius=42,
+        fill=PANEL_BG,
+        outline=(*ACCENT, 185),
+        width=2,
+    )
+
+    icon_path = REPO_ROOT / "assets" / "brand" / "agent-oze-icon.png"
+    if icon_path.is_file():
+        icon = Image.open(icon_path).convert("RGBA").resize((58, 58), Image.LANCZOS)
+        img.alpha_composite(icon, (FALLBACK_CARD_W - 116, 72))
+
+    font_brand = _load_font(28, bold=True)
+    font_label = _load_font(22, bold=True)
+    font_headline = _load_font(54, bold=True)
+    font_body = _load_font(28)
+    font_footer = _load_font(24, bold=True)
+
+    x = 76
+    max_width = FALLBACK_CARD_W - 152
+    draw.text((x, 80), "AGENT OZE", font=font_brand, fill=ACCENT)
+    draw.text((x, 124), f"SCENARIUSZ {n}", font=font_label, fill=MUTED)
+
+    y = _draw_wrapped(
+        draw,
+        scenario["headline"],
+        (x, 210),
+        font_headline,
+        fill=WHITE,
+        max_width=max_width,
+        line_gap=12,
+    )
+    y += 34
+    draw.rounded_rectangle([x, y, x + 104, y + 8], radius=4, fill=ACCENT)
+    y += 42
+
+    y = _draw_wrapped(
+        draw,
+        _caption_body(scenario["caption"]),
+        (x, y),
+        font_body,
+        fill=(218, 226, 232),
+        max_width=max_width,
+        line_gap=9,
+    )
+
+    footer = "Telegram -> CRM -> follow-up"
+    footer_bbox = draw.textbbox((0, 0), footer, font=font_footer)
+    footer_w = footer_bbox[2] - footer_bbox[0]
+    footer_y = FALLBACK_CARD_H - 132
+    draw.rounded_rectangle(
+        [x, footer_y - 16, x + footer_w + 36, footer_y + 48],
+        radius=24,
+        fill=(5, 6, 7),
+        outline=(*ACCENT, 110),
+        width=1,
+    )
+    draw.text((x + 18, footer_y), footer, font=font_footer, fill=ACCENT)
+
+    img.convert("RGB").save(out, "PNG", quality=95)
+    return out
+
+
 def _capture_card(n: str) -> Path:
     """Run puppeteer to capture card_NN.png. Reuses cached file if present."""
     out = SHOTS / f"card_{n}.png"
     if out.is_file() and out.stat().st_size > 0:
         return out
     if not PUP_CAPTURE_SCRIPT.is_file():
-        raise SystemExit(
-            f"cached {out} missing and puppeteer script {PUP_CAPTURE_SCRIPT} not "
-            "installed. Run capture once manually then retry."
-        )
+        return _render_fallback_card(n, out)
     SHOTS.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["node", str(PUP_CAPTURE_SCRIPT)],
@@ -191,7 +346,7 @@ def build(scenario_n: str, out_root: Path, *, skip_capture: bool = False) -> Pat
         "scenario_number": n,
         "language": "pl",
         "generated_at": datetime.now(WARSAW).isoformat(),
-        "source": "agent-oze.pl landing page (mobile viewport, scenario card crop)",
+        "source": "agent-oze.pl landing page screenshot or self-contained PIL fallback",
         "aspect_ratio": f"{FINAL_W}x{FINAL_H}",
         "brand_overlay_version": "v4_forward",
         "audio_track": str(AUDIO),
@@ -214,7 +369,7 @@ def build(scenario_n: str, out_root: Path, *, skip_capture: bool = False) -> Pat
         "caption_fb": scenario["caption"],
         "hashtags": scenario["hashtags"],
         "scheduled_at": None,
-        "notes": "Typ D-AGENT — landing-page scenario card crop. Brand pill v4 bottom-center.",
+        "notes": "Typ D-AGENT — landing-page scenario card or PIL fallback. Brand pill v4 bottom-center.",
     }
     (out_dir / "instagram_post.json").write_text(
         json.dumps(ig_manifest, ensure_ascii=False, indent=2), encoding="utf-8"
