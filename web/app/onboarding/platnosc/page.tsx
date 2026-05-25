@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
+import { fallbackOnboardingProgress } from "@/lib/onboarding/fallback";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,11 @@ export default async function PaymentStepPage({
   const params = await searchParams;
   const { account, onboardingStatus } =
     await requireOnboardingStep("/onboarding/platnosc");
+  const fallback = fallbackOnboardingProgress(account.profile);
 
   const betaEligible = Boolean(onboardingStatus?.access?.betaEligible);
   const isBetaActive = onboardingStatus?.access?.type === "beta";
-  const isActive = Boolean(onboardingStatus?.access?.active);
+  const isActive = Boolean(onboardingStatus?.access?.active ?? fallback.access.active);
 
   return (
     <main className="min-h-screen bg-[#050607] text-zinc-100">

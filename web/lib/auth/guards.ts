@@ -3,6 +3,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getCurrentAccount } from "@/lib/api/account";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
+import { fallbackOnboardingProgress } from "@/lib/onboarding/fallback";
 import { safeLocalPath } from "@/lib/routes";
 
 export async function requireCompletedOnboarding(currentPath: string) {
@@ -13,12 +14,11 @@ export async function requireCompletedOnboarding(currentPath: string) {
   }
 
   const status = await getOnboardingStatus();
-  const completed = status
-    ? status.completed
-    : Boolean(account.profile?.onboarding_completed);
+  const fallback = fallbackOnboardingProgress(account.profile);
+  const completed = status ? status.completed : fallback.completed;
 
   if (!completed) {
-    redirect(safeLocalPath(status?.nextStep, "/onboarding/platnosc"));
+    redirect(safeLocalPath(status?.nextStep ?? fallback.nextStep, "/onboarding/platnosc"));
   }
 
   return { account, onboardingStatus: status };
@@ -32,20 +32,24 @@ export async function requireOnboardingStep(currentPath: string) {
   }
 
   const status = await getOnboardingStatus();
-  const completed = status
-    ? status.completed
-    : Boolean(account.profile?.onboarding_completed);
+  const fallback = fallbackOnboardingProgress(account.profile);
+  const completed = status ? status.completed : fallback.completed;
 
   if (completed) {
     redirect("/dashboard");
   }
 
   const resolvedNextStep = safeLocalPath(
-    status?.nextStep,
+    status?.nextStep ?? fallback.nextStep,
     "/onboarding/platnosc",
   );
+  const canShowPaidFallbackPaymentStep =
+    !status &&
+    currentPath === "/onboarding/platnosc" &&
+    fallback.access.active &&
+    fallback.nextStep === "/onboarding/google";
 
-  if (resolvedNextStep !== currentPath) {
+  if (resolvedNextStep !== currentPath && !canShowPaidFallbackPaymentStep) {
     redirect(resolvedNextStep);
   }
 

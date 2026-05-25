@@ -3,6 +3,7 @@ import { startGoogleOAuthAction } from "@/app/onboarding/actions";
 import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
+import { fallbackOnboardingProgress } from "@/lib/onboarding/fallback";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,10 @@ export default async function GoogleOnboardingPage({
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const params = await searchParams;
-  const { onboardingStatus: status } =
+  const { account, onboardingStatus: status } =
     await requireOnboardingStep("/onboarding/google");
-  const connected = status?.steps.google;
+  const fallback = fallbackOnboardingProgress(account.profile);
+  const connected = status?.steps.google ?? fallback.steps.google;
 
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-zinc-100">

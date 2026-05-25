@@ -15,6 +15,7 @@ const dashboardPageSource = readSource("../app/(app)/dashboard/page.tsx");
 const offersPageSource = readSource("../app/(app)/oferty/page.tsx");
 const crmShellSource = readSource("../components/crm-shell.tsx");
 const guardSource = readSource("../lib/auth/guards.ts");
+const onboardingFallbackSource = readSource("../lib/onboarding/fallback.ts");
 const loginPageSource = readSource("../app/login/page.tsx");
 const onboardingActionsSource = readSource("../app/onboarding/actions.ts");
 const onboardingApiSource = readSource("../lib/api/onboarding.ts");
@@ -44,8 +45,9 @@ test("private app pages require completed onboarding", () => {
   assert.match(crmLayoutSource, /getCurrentAccount/);
   assert.match(crmLayoutSource, /redirect\("\/login\?next=\/dashboard"\)/);
   assert.match(crmLayoutSource, /getOnboardingStatus/);
-  assert.match(crmLayoutSource, /onboardingStatus\s*\?\s*onboardingStatus\.completed\s*:\s*Boolean\(account\.profile\?\.onboarding_completed\)/);
-  assert.match(crmLayoutSource, /safeLocalPath\(onboardingStatus\?\.nextStep, "\/onboarding\/platnosc"\)/);
+  assert.match(crmLayoutSource, /fallbackOnboardingProgress\(account\.profile\)/);
+  assert.match(crmLayoutSource, /onboardingStatus\s*\?\s*onboardingStatus\.completed\s*:\s*fallback\.completed/);
+  assert.match(crmLayoutSource, /safeLocalPath\(\s*onboardingStatus\?\.nextStep \?\? fallback\.nextStep,\s*"\/onboarding\/platnosc",\s*\)/);
   assert.match(dashboardPageSource, /getCrmDashboardData/);
   assert.equal(existsSync(flatOffersPath), false);
   assert.match(offersPageSource, /<OfferGenerator \/>/);
@@ -67,8 +69,9 @@ test("landing page remains public and does not use the private app gate", () => 
 test("central gate redirects unauthenticated and incomplete accounts correctly", () => {
   assert.match(guardSource, /redirect\(`\/login\?next=\$\{encodeURIComponent\(currentPath\)\}`\)/);
   assert.match(guardSource, /getOnboardingStatus/);
-  assert.match(guardSource, /safeLocalPath\(status\?\.nextStep, "\/onboarding\/platnosc"\)/);
-  assert.match(guardSource, /status\s*\?\s*status\.completed\s*:\s*Boolean\(account\.profile\?\.onboarding_completed\)/);
+  assert.match(guardSource, /fallbackOnboardingProgress\(account\.profile\)/);
+  assert.match(guardSource, /safeLocalPath\(status\?\.nextStep \?\? fallback\.nextStep, "\/onboarding\/platnosc"\)/);
+  assert.match(guardSource, /status\s*\?\s*status\.completed\s*:\s*fallback\.completed/);
 });
 
 test("login preserves next path without bypassing onboarding gate", () => {
@@ -113,6 +116,27 @@ test("onboarding steps enforce sequence and cannot be opened through a stale nex
   assert.match(googlePageSource, /requireOnboardingStep\("\/onboarding\/google"\)/);
   assert.match(resourcesPageSource, /requireOnboardingStep\("\/onboarding\/zasoby"\)/);
   assert.match(telegramPageSource, /requireOnboardingStep\("\/onboarding\/telegram"\)/);
+});
+
+test("onboarding guard falls back to Supabase profile progress when FastAPI status is unavailable", () => {
+  assert.match(onboardingFallbackSource, /hasCurrentBillingAccess\(profile\)/);
+  assert.match(onboardingFallbackSource, /nextStep = "\/onboarding\/google"/);
+  assert.match(onboardingFallbackSource, /payment && Boolean\(profile\?\.onboarding_completed\)/);
+  assert.doesNotMatch(onboardingFallbackSource, /Boolean\(profile\?\.onboarding_completed\) \|\|/);
+  assert.match(onboardingFallbackSource, /google:\s*false/);
+  assert.match(onboardingFallbackSource, /resources:\s*false/);
+  assert.match(paymentPageSource, /fallbackOnboardingProgress\(account\.profile\)/);
+  assert.match(paymentPageSource, /onboardingStatus\?\.access\?\.active \?\? fallback\.access\.active/);
+  assert.match(googlePageSource, /fallbackOnboardingProgress\(account\.profile\)/);
+  assert.match(googlePageSource, /status\?\.steps\.google \?\? fallback\.steps\.google/);
+});
+
+test("payment step stays renderable under paid fallback so the user can continue to Google", () => {
+  assert.match(guardSource, /currentPath === "\/onboarding\/platnosc"/);
+  assert.match(guardSource, /fallback\.access\.active/);
+  assert.match(guardSource, /fallback\.nextStep === "\/onboarding\/google"/);
+  assert.match(paymentPageSource, /Płatność jest zaksięgowana/);
+  assert.match(paymentPageSource, /Przejdź do Google/);
 });
 
 test("Google OAuth starts with the current preview success URL", () => {

@@ -4,6 +4,7 @@ import { getCurrentAccount } from "@/lib/api/account";
 import { getDecisionsCount } from "@/lib/api/decisions";
 import { getOnboardingStatus } from "@/lib/api/onboarding";
 import { isOwnerAdminAccount } from "@/lib/admin/owner-admin";
+import { fallbackOnboardingProgress } from "@/lib/onboarding/fallback";
 import { safeLocalPath } from "@/lib/routes";
 
 export default async function LoggedInLayout({
@@ -21,12 +22,16 @@ export default async function LoggedInLayout({
   }
 
   const onboardingStatus = await getOnboardingStatus();
-  const completed = onboardingStatus
-    ? onboardingStatus.completed
-    : Boolean(account.profile?.onboarding_completed);
+  const fallback = fallbackOnboardingProgress(account.profile);
+  const completed = onboardingStatus ? onboardingStatus.completed : fallback.completed;
 
   if (!completed) {
-    redirect(safeLocalPath(onboardingStatus?.nextStep, "/onboarding/platnosc"));
+    redirect(
+      safeLocalPath(
+        onboardingStatus?.nextStep ?? fallback.nextStep,
+        "/onboarding/platnosc",
+      ),
+    );
   }
 
   const decisionsCount = await getDecisionsCount();
