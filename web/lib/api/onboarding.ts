@@ -1,7 +1,9 @@
 import "server-only";
 
+import { createHmac } from "crypto";
 import { fastApiBaseUrl } from "@/lib/api/base-url";
-import { getCurrentAccount } from "@/lib/api/account";
+import { getCurrentAccount, type AccountProfile } from "@/lib/api/account";
+import { hasCurrentBillingAccess } from "@/lib/billing/access";
 
 export type OnboardingStatus = {
   fetchedAt: string;
@@ -30,6 +32,11 @@ export type TelegramPairingStatus = {
 
 const FASTAPI_ONBOARDING_TIMEOUT_MS = 8000;
 const RESOURCE_CREATION_TIMEOUT_MS = 60000;
+
+function envValue(name: string) {
+  const value = process.env[name]?.trim();
+  return value && value !== `""` && value !== "''" ? value : "";
+}
 
 async function fetchOnboarding(
   url: string,
@@ -109,6 +116,50 @@ export async function startGoogleOAuth(returnUrl?: string): Promise<string> {
     method: "POST",
     body: JSON.stringify({ returnUrl }),
   });
+  const payload = (await response.json()) as { url: string };
+  return payload.url;
+}
+
+function signInternalBody(body: string, timestamp: string, secret: string) {
+  return createHmac("sha256", secret)
+    .update(`${timestamp}.${body}`)
+    .digest("hex");
+}
+
+export async function startGoogleOAuthWithPaidFallback(
+  profile: AccountProfile | null | undefined,
+  returnUrl?: string,
+): Promise<string> {
+  if (!profile?.id || !hasCurrentBillingAccess(profile)) {
+    throw new Error("Aktywna płatność jest wymagana przed Google OAuth.");
+  }
+
+  const baseUrl = fastApiBaseUrl();
+  const secret = envValue("BILLING_INTERNAL_SECRET");
+  if (!baseUrl || !secret) {
+    throw new Error("Brak konfiguracji fallbacku Google OAuth.");
+  }
+
+  const body = JSON.stringify({ userId: profile.id, returnUrl });
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = signInternalBody(body, timestamp, secret);
+  const response = await fetchOnboarding(
+    `${baseUrl}/api/onboarding/google/oauth-url/internal`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-OZE-Timestamp": timestamp,
+        "X-OZE-Signature": `sha256=${signature}`,
+      },
+      body,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`API fallback error ${response.status}`);
+  }
+
   const payload = (await response.json()) as { url: string };
   return payload.url;
 }

@@ -141,9 +141,21 @@ test("payment step stays renderable under paid fallback so the user can continue
 
 test("Google OAuth starts with the current preview success URL", () => {
   assert.match(onboardingActionsSource, /resolveCheckoutReturnBaseUrl/);
-  assert.match(onboardingActionsSource, /startGoogleOAuth\(`\$\{returnBaseUrl\}\/onboarding\/google\/sukces`\)/);
+  assert.match(onboardingActionsSource, /returnUrl = `\$\{returnBaseUrl\}\/onboarding\/google\/sukces`/);
+  assert.match(onboardingActionsSource, /startGoogleOAuth\(returnUrl\)/);
+  assert.match(onboardingActionsSource, /startGoogleOAuthWithPaidFallback/);
   assert.match(onboardingApiSource, /returnUrl\?: string/);
   assert.match(onboardingApiSource, /body: JSON\.stringify\(\{ returnUrl \}\)/);
+});
+
+test("Google OAuth has a paid Supabase fallback when bearer FastAPI auth is unavailable", () => {
+  assert.match(onboardingApiSource, /startGoogleOAuthWithPaidFallback/);
+  assert.match(onboardingApiSource, /hasCurrentBillingAccess\(profile\)/);
+  assert.match(onboardingApiSource, /BILLING_INTERNAL_SECRET/);
+  assert.match(onboardingApiSource, /createHmac\("sha256", secret\)/);
+  assert.match(onboardingApiSource, /\/api\/onboarding\/google\/oauth-url\/internal/);
+  assert.match(onboardingApiSource, /"X-OZE-Timestamp"/);
+  assert.match(onboardingApiSource, /"X-OZE-Signature"/);
 });
 
 test("Google resource creation tolerates slow Google APIs and blocks duplicate submits", () => {

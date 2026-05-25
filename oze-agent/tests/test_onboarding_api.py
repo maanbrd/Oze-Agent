@@ -1,8 +1,13 @@
 import asyncio
+import hashlib
+import hmac
+import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
 
 
 class _FakeQuery:
@@ -46,6 +51,35 @@ def _future_period_end() -> str:
 
 def _expired_period_end() -> str:
     return (datetime.now(tz=timezone.utc) - timedelta(seconds=1)).isoformat()
+
+
+def _signed_headers(body: bytes, secret: str):
+    timestamp = str(int(datetime.now(tz=timezone.utc).timestamp()))
+    digest = hmac.new(
+        secret.encode(),
+        f"{timestamp}.".encode() + body,
+        hashlib.sha256,
+    ).hexdigest()
+    return [
+        (b"content-type", b"application/json"),
+        (b"x-oze-timestamp", timestamp.encode()),
+        (b"x-oze-signature", f"sha256={digest}".encode()),
+    ]
+
+
+def _request(body: bytes, headers: list[tuple[bytes, bytes]]) -> Request:
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/onboarding/google/oauth-url/internal",
+            "headers": headers,
+        },
+        receive,
+    )
 
 
 @pytest.mark.asyncio
@@ -154,6 +188,83 @@ async def test_google_oauth_url_uses_authenticated_user(monkeypatch):
         "return_url": "https://app.example/onboarding/google/sukces",
     }
     assert "auth-1" not in result["url"]
+
+
+@pytest.mark.asyncio
+async def test_google_oauth_internal_fallback_requires_signed_paid_user(monkeypatch):
+    from api.routes import onboarding
+
+    secret = "test-billing-secret"
+    body = json.dumps(
+        {
+            "userId": "user-1",
+            "returnUrl": "https://agent-oze.pl/onboarding/google/sukces",
+        },
+        separators=(",", ":"),
+    ).encode()
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "trialing",
+                "activation_paid": False,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
+            }
+        ]
+    )
+    captured: dict[str, str | None] = {}
+
+    def fake_build_oauth_url(user_id: str, return_url: str | None = None) -> str:
+        captured["user_id"] = user_id
+        captured["return_url"] = return_url
+        return "https://accounts.google.com/o/oauth2/auth"
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+    monkeypatch.setattr(onboarding, "build_oauth_url", fake_build_oauth_url)
+
+    result = await onboarding.start_google_oauth_internal(
+        _request(body, _signed_headers(body, secret))
+    )
+
+    assert result == {"url": "https://accounts.google.com/o/oauth2/auth"}
+    assert captured == {
+        "user_id": "user-1",
+        "return_url": "https://agent-oze.pl/onboarding/google/sukces",
+    }
+
+
+@pytest.mark.asyncio
+async def test_google_oauth_internal_fallback_rejects_unpaid_user(monkeypatch):
+    from api.routes import onboarding
+
+    secret = "test-billing-secret"
+    body = b'{"userId":"user-1"}'
+    fake = _FakeSupabase(
+        [
+            {
+                "id": "user-1",
+                "auth_user_id": "auth-1",
+                "email": "jan@example.pl",
+                "subscription_status": "pending_payment",
+                "activation_paid": False,
+                "stripe_livemode": True,
+                "subscription_current_period_end": _future_period_end(),
+            }
+        ]
+    )
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(onboarding, "get_supabase_client", lambda: fake)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await onboarding.start_google_oauth_internal(
+            _request(body, _signed_headers(body, secret))
+        )
+
+    assert exc_info.value.status_code == 402
 
 
 @pytest.mark.asyncio

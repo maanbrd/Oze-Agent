@@ -6,6 +6,7 @@ import {
   createGoogleResources,
   generateTelegramCode,
   startGoogleOAuth,
+  startGoogleOAuthWithPaidFallback,
   updateAccount,
 } from "@/lib/api/onboarding";
 import { getCurrentAccount } from "@/lib/api/account";
@@ -155,19 +156,38 @@ export async function createCheckoutSession(formData: FormData) {
 
 export async function startGoogleOAuthAction() {
   let url: string;
+  let returnUrl: string;
   try {
     const returnBaseUrl = await resolveCheckoutReturnBaseUrl(
       envValue("NEXT_PUBLIC_APP_URL"),
     );
-    url = await startGoogleOAuth(`${returnBaseUrl}/onboarding/google/sukces`);
+    returnUrl = `${returnBaseUrl}/onboarding/google/sukces`;
   } catch (error) {
-    console.error("startGoogleOAuthAction failed", error);
+    console.error("startGoogleOAuthAction return URL failed", error);
     redirect(
       encoded(
         "/onboarding/google",
         "Nie udało się uruchomić autoryzacji Google. Spróbuj ponownie.",
       ),
     );
+  }
+
+  try {
+    url = await startGoogleOAuth(returnUrl);
+  } catch (error) {
+    console.error("startGoogleOAuthAction primary failed", error);
+    try {
+      const account = await getCurrentAccount();
+      url = await startGoogleOAuthWithPaidFallback(account.profile, returnUrl);
+    } catch (fallbackError) {
+      console.error("startGoogleOAuthAction fallback failed", fallbackError);
+      redirect(
+        encoded(
+          "/onboarding/google",
+          "Nie udało się uruchomić autoryzacji Google. Spróbuj ponownie.",
+        ),
+      );
+    }
   }
   const trustedGoogleUrl = trustedExternalUrl(url, [
     "https://accounts.google.com",

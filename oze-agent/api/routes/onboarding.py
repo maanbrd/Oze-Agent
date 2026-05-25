@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from api.auth import AuthUser, get_current_auth_user
+from api.routes.billing import verify_internal_signature
 from shared.database import get_supabase_client
 from shared.google_auth import build_oauth_url
 from shared.google_calendar import create_calendar
@@ -48,6 +50,20 @@ def _get_user_for_auth(auth_user: AuthUser) -> dict[str, Any]:
         .table("users")
         .select(USER_SELECT)
         .eq("auth_user_id", auth_user.user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    return result.data[0]
+
+
+def _get_user_by_id(user_id: str) -> dict[str, Any]:
+    result = (
+        get_supabase_client()
+        .table("users")
+        .select(USER_SELECT)
+        .eq("id", user_id)
         .limit(1)
         .execute()
     )
@@ -361,6 +377,41 @@ async def start_google_oauth(
             detail="Payment is required before Google OAuth.",
         )
     return_url = str((payload or {}).get("returnUrl") or "").strip() or None
+    return {"url": build_oauth_url(user["id"], return_url=return_url)}
+
+
+@router.post("/google/oauth-url/internal")
+async def start_google_oauth_internal(request: Request):
+    body = await request.body()
+    verify_internal_signature(
+        body,
+        request.headers.get("x-oze-timestamp"),
+        request.headers.get("x-oze-signature", ""),
+    )
+
+    try:
+        payload = json.loads(body.decode("utf-8") or "{}")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth fallback payload.",
+        ) from exc
+
+    user_id = str(payload.get("userId") or "").strip()
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing userId.",
+        )
+
+    user = _get_user_by_id(user_id)
+    if not _has_payment(user):
+        raise HTTPException(
+            status_code=402,
+            detail="Payment is required before Google OAuth.",
+        )
+
+    return_url = str(payload.get("returnUrl") or "").strip() or None
     return {"url": build_oauth_url(user["id"], return_url=return_url)}
 
 
