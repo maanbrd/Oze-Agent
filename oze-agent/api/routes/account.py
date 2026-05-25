@@ -14,7 +14,7 @@ router = APIRouter()
 ACCOUNT_PROFILE_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
     "subscription_plan, subscription_current_period_end, activation_paid, "
-    "stripe_livemode, subscription_cancel_at_period_end, stripe_subscription_id, "
+    "stripe_livemode, stripe_subscription_id, "
     "onboarding_completed, google_sheets_id, google_calendar_id, "
     "google_drive_folder_id, telegram_id"
 )

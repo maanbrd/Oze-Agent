@@ -3,6 +3,12 @@ from __future__ import annotations
 import pytest
 
 
+def test_api_me_select_does_not_require_unapplied_trial_migration():
+    from api.routes import account
+
+    assert "subscription_cancel_at_period_end" not in account.ACCOUNT_PROFILE_SELECT
+
+
 @pytest.mark.asyncio
 async def test_api_me_returns_authenticated_account_profile(monkeypatch):
     from api.auth import AuthUser

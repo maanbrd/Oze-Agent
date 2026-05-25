@@ -29,7 +29,7 @@ _RESOURCE_CREATION_LOCKS: dict[str, asyncio.Lock] = {}
 USER_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
     "subscription_plan, subscription_current_period_end, activation_paid, "
-    "stripe_livemode, subscription_cancel_at_period_end, "
+    "stripe_livemode, "
     "google_access_token, google_refresh_token, google_token_expiry, "
     "google_sheets_id, google_sheets_name, google_calendar_id, "
     "google_calendar_name, google_drive_folder_id, telegram_id, "

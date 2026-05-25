@@ -82,6 +82,12 @@ def _request(body: bytes, headers: list[tuple[bytes, bytes]]) -> Request:
     )
 
 
+def test_onboarding_select_does_not_require_unapplied_trial_migration():
+    from api.routes import onboarding
+
+    assert "subscription_cancel_at_period_end" not in onboarding.USER_SELECT
+
+
 @pytest.mark.asyncio
 async def test_onboarding_status_next_step_payment(monkeypatch):
     from api.auth import AuthUser
