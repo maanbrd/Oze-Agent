@@ -53,3 +53,20 @@ test("offer generator has a dev-only preview route without local login", () => {
   assert.equal(previewOffersSource.includes("OfferGenerator"), true);
   assert.equal(previewOffersSource.includes("getCurrentAccount"), false);
 });
+
+test("production offer generator does not show demo offers when API has no templates", () => {
+  assert.match(offerSource, /useState<OfferTemplate\[\]>\(\(\) => \(apiEnabled \? \[\] : initialOffers\)\)/);
+  assert.match(offerSource, /setOffers\(loadedOffers\);/);
+  assert.match(offerSource, /setSelectedId\(""\);/);
+  assert.match(offerSource, /setEditor\(emptyDraft\(\)\);/);
+});
+
+test("production draft creation does not fall back to phantom local offers after API failure", () => {
+  const createDraftStart = offerSource.indexOf("async function createDraft");
+  const saveEditorStart = offerSource.indexOf("async function saveEditor");
+  const createDraftSource = offerSource.slice(createDraftStart, saveEditorStart);
+
+  assert.ok(createDraftStart > 0);
+  assert.match(createDraftSource, /catch \(error\) \{[\s\S]*setApiError\([\s\S]*Nie udało się utworzyć szkicu\.[\s\S]*return;/);
+  assert.match(createDraftSource, /if \(!apiReady\) \{[\s\S]*setOffers\(\(current\) => \[draft, \.\.\.current\]\);/);
+});

@@ -80,3 +80,38 @@ def test_offers_routes_ignore_spoofed_user_id_and_use_authenticated_profile(monk
     assert response.status_code == 200
     assert captured["user_id"] == "owner-user"
     assert response.json()["templates"][0]["user_id"] == "owner-user"
+
+
+def test_offer_template_routes_reject_non_uuid_ids_before_repository_lookup(monkeypatch):
+    from api.main import app
+    from api import auth
+    from api.routes import offers
+
+    class FakeOfferRepository:
+        def get_template(self, *_args, **_kwargs):
+            raise AssertionError("repository should not receive a non-UUID template id")
+
+    monkeypatch.setattr(
+        auth,
+        "_decode_supabase_jwt",
+        lambda token: {
+            "sub": "auth-owner",
+            "email": "owner@example.pl",
+        },
+    )
+    monkeypatch.setattr(
+        offers,
+        "get_supabase_client",
+        lambda: _FakeSupabase([{"id": "owner-user", "auth_user_id": "auth-owner"}]),
+        raising=False,
+    )
+    monkeypatch.setattr(offers, "OfferRepository", FakeOfferRepository)
+
+    client = TestClient(app)
+    response = client.patch(
+        "/offers/templates/demo-ready-pv",
+        headers={"Authorization": "Bearer signed-token"},
+        json={"data": {"name": "PV"}},
+    )
+
+    assert response.status_code == 422

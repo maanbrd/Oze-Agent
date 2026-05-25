@@ -705,12 +705,12 @@ async function downloadTestPdf(offer: OfferTemplate, profile: SellerProfile) {
 }
 
 export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } = {}) {
-  const [offers, setOffers] = useState<OfferTemplate[]>(initialOffers);
+  const [offers, setOffers] = useState<OfferTemplate[]>(() => (apiEnabled ? [] : initialOffers));
   const [profile, setProfile] = useState<SellerProfile>(defaultProfile);
   const [emailVariables, setEmailVariables] = useState<EmailVariable[]>(defaultEmailVariables);
   const [apiError, setApiError] = useState("");
-  const [selectedId, setSelectedId] = useState(initialOffers[0]?.id ?? "");
-  const [editor, setEditor] = useState<OfferTemplate>(initialOffers[0] ?? emptyDraft());
+  const [selectedId, setSelectedId] = useState(() => (apiEnabled ? "" : initialOffers[0]?.id ?? ""));
+  const [editor, setEditor] = useState<OfferTemplate>(() => (apiEnabled ? emptyDraft() : initialOffers[0] ?? emptyDraft()));
   const [activeStep, setActiveStep] = useState<StepKey>("podstawy");
   const [errors, setErrors] = useState<string[]>([]);
   const [profileErrors, setProfileErrors] = useState<string[]>([]);
@@ -741,10 +741,13 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
         const variablesBody = await variablesResponse.json();
         if (cancelled) return;
         const loadedOffers = (templatesBody.templates ?? []).map((row: Record<string, unknown>) => fromApi(row));
+        setOffers(loadedOffers);
         if (loadedOffers.length) {
-          setOffers(loadedOffers);
           setSelectedId(loadedOffers[0].id);
           setEditor(loadedOffers[0]);
+        } else {
+          setSelectedId("");
+          setEditor(emptyDraft());
         }
         if (profileBody.profile) {
           setProfile((current) => ({ ...current, ...profileFromApi(profileBody.profile) }));
@@ -784,10 +787,13 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
         return;
       } catch (error) {
         setApiError(error instanceof Error ? error.message : "Nie udało się utworzyć szkicu.");
+        return;
       }
     }
-    setOffers((current) => [draft, ...current]);
-    selectOffer(draft);
+    if (!apiReady) {
+      setOffers((current) => [draft, ...current]);
+      selectOffer(draft);
+    }
   }
 
   async function saveEditor() {

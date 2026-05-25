@@ -5,6 +5,7 @@ Routes resolve the internal user id from the authenticated Supabase JWT.
 
 import base64
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -115,9 +116,10 @@ async def create_template(payload: TemplatePayload, uid: str = Depends(_user_id)
 
 
 @router.patch("/templates/{template_id}")
-async def update_template(template_id: str, payload: TemplatePayload, uid: str = Depends(_user_id)):
+async def update_template(template_id: UUID, payload: TemplatePayload, uid: str = Depends(_user_id)):
     repo = _repo()
-    current = repo.get_template(uid, template_id)
+    template_id_str = str(template_id)
+    current = repo.get_template(uid, template_id_str)
     if not current:
         raise HTTPException(status_code=404, detail="Oferta nie istnieje.")
     merged = {**current, **payload.data}
@@ -125,34 +127,35 @@ async def update_template(template_id: str, payload: TemplatePayload, uid: str =
         validation = validate_offer_template(merged)
         if not validation.is_valid:
             raise HTTPException(status_code=400, detail={"errors": validation.errors})
-    updated = repo.update_template(uid, template_id, payload.data)
+    updated = repo.update_template(uid, template_id_str, payload.data)
     return {"template": updated}
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str, uid: str = Depends(_user_id)):
+async def delete_template(template_id: UUID, uid: str = Depends(_user_id)):
     repo = _repo()
-    repo.delete_template(uid, template_id)
+    repo.delete_template(uid, str(template_id))
     return {"ok": True}
 
 
 @router.post("/templates/{template_id}/publish")
-async def publish_template(template_id: str, uid: str = Depends(_user_id)):
+async def publish_template(template_id: UUID, uid: str = Depends(_user_id)):
     repo = _repo()
-    current = repo.get_template(uid, template_id)
+    template_id_str = str(template_id)
+    current = repo.get_template(uid, template_id_str)
     if not current:
         raise HTTPException(status_code=404, detail="Oferta nie istnieje.")
     validation = validate_offer_template(current)
     if not validation.is_valid:
         raise HTTPException(status_code=400, detail={"errors": validation.errors})
-    published = repo.publish_template(uid, template_id)
+    published = repo.publish_template(uid, template_id_str)
     return {"template": published}
 
 
 @router.post("/templates/{template_id}/duplicate")
-async def duplicate_template(template_id: str, uid: str = Depends(_user_id)):
+async def duplicate_template(template_id: UUID, uid: str = Depends(_user_id)):
     repo = _repo()
-    duplicated = repo.duplicate_as_draft(uid, template_id)
+    duplicated = repo.duplicate_as_draft(uid, str(template_id))
     if not duplicated:
         raise HTTPException(status_code=404, detail="Oferta nie istnieje.")
     return {"template": duplicated}
@@ -203,9 +206,9 @@ async def upload_logo(file: UploadFile = File(...), uid: str = Depends(_user_id)
 
 
 @router.get("/templates/{template_id}/test-pdf")
-async def test_pdf(template_id: str, uid: str = Depends(_user_id)):
+async def test_pdf(template_id: UUID, uid: str = Depends(_user_id)):
     repo = _repo()
-    template = repo.get_template(uid, template_id)
+    template = repo.get_template(uid, str(template_id))
     if not template:
         raise HTTPException(status_code=404, detail="Oferta nie istnieje.")
     if not has_pdf_minimum(template):
