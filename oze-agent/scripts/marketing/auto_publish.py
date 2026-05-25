@@ -44,6 +44,7 @@ from zoneinfo import ZoneInfo
 
 from scripts.marketing.publish_single import (
     _build_caption,
+    _facebook_post_image_urls,
     _now_warsaw_iso,
     resolve_slide_urls,
 )
@@ -200,7 +201,7 @@ async def _run(
         print("Publishing to Facebook...")
         fb_post_id = await client.publish_fb_post(
             text=caption_fb,
-            image_urls=urls,
+            image_urls=_facebook_post_image_urls(urls),
         )
         if fb_post_id is None:
             err_msg = "FB publish returned None"

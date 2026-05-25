@@ -174,6 +174,11 @@ def _build_caption(base: str, hashtags: str) -> str:
     return f"{base}\n\n{normalized}"
 
 
+def _facebook_post_image_urls(image_urls: list[str]) -> list[str]:
+    """Use a single hero image on Facebook to avoid multi-photo grid posts."""
+    return image_urls[:1]
+
+
 def _now_warsaw_iso() -> str:
     return datetime.now(WARSAW_TZ).strftime("%Y-%m-%d %H:%M")
 
@@ -291,7 +296,7 @@ async def _run(
         print("Publishing to Facebook...")
         fb_post_id = await client.publish_fb_post(
             text=caption_fb,
-            image_urls=urls,
+            image_urls=_facebook_post_image_urls(urls),
         )
         if fb_post_id is None:
             err_msg = "FB publish returned None"
