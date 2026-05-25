@@ -68,6 +68,15 @@ class _FakeTable:
             rows = [row for row in rows if row.get(key) == value]
 
         if self._update_payload is not None:
+            self.supabase.user_update_attempts += 1
+            if (
+                self.supabase.fail_missing_subscription_cancel_column
+                and "subscription_cancel_at_period_end" in self._update_payload
+            ):
+                raise RuntimeError(
+                    "Could not find the 'subscription_cancel_at_period_end' "
+                    "column of 'users' in the schema cache"
+                )
             for row in rows:
                 row.update(self._update_payload)
             return _FakeResult(rows)
@@ -91,6 +100,8 @@ class _FakeSupabase:
         ]
         self.webhook_logs: list[dict] = []
         self.payment_history: list[dict] = []
+        self.fail_missing_subscription_cancel_column = False
+        self.user_update_attempts = 0
 
     def table(self, name: str):
         return _FakeTable(self, name)
@@ -272,6 +283,58 @@ async def test_trial_checkout_completed_grants_trial_access_without_paid_activat
     assert fake.users[0]["subscription_current_period_end"] == _iso(1778278200)
     assert fake.users[0]["subscription_cancel_at_period_end"] is False
     assert fake.payment_history == []
+
+
+@pytest.mark.asyncio
+async def test_trial_checkout_retries_without_unapplied_cancel_column(monkeypatch):
+    from api.routes import billing
+
+    secret = "test-secret"
+    fake = _FakeSupabase()
+    fake.fail_missing_subscription_cancel_column = True
+    event = {
+        "id": "evt_trial_checkout_missing_cancel_column",
+        "type": "checkout.session.completed",
+        "livemode": True,
+        "object": {
+            "object": "checkout.session",
+            "id": "cs_trial_missing_cancel_column",
+            "livemode": True,
+            "mode": "subscription",
+            "status": "complete",
+            "payment_status": "no_payment_required",
+            "amount_total": 0,
+            "currency": "pln",
+            "customer": "cus_trial_missing_cancel_column",
+            "subscription": "sub_trial_missing_cancel_column",
+            "subscription_details": {
+                "id": "sub_trial_missing_cancel_column",
+                "status": "trialing",
+                "current_period_end": 1778278200,
+                "cancel_at_period_end": False,
+                "livemode": True,
+            },
+            "metadata": {
+                "auth_user_id": "auth-1",
+                "user_id": "user-1",
+                "plan": "monthly",
+                "trial_days": "3",
+            },
+        },
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+
+    monkeypatch.setenv("BILLING_INTERNAL_SECRET", secret)
+    monkeypatch.setattr(billing, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(billing, "get_supabase_client", lambda: fake)
+
+    result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
+
+    assert result["processed"] is True
+    assert fake.user_update_attempts == 2
+    assert fake.users[0]["subscription_status"] == "trialing"
+    assert fake.users[0]["stripe_subscription_id"] == "sub_trial_missing_cancel_column"
+    assert "subscription_cancel_at_period_end" not in fake.users[0]
 
 
 @pytest.mark.asyncio

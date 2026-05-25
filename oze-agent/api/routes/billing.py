@@ -324,13 +324,34 @@ def _update_user(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         key: value for key, value in payload.items() if value is not None
     }
     update_payload["updated_at"] = _now_iso()
-    result = (
-        get_supabase_client()
-        .table("users")
-        .update(update_payload)
-        .eq("id", user_id)
-        .execute()
-    )
+
+    def run_update(data: dict[str, Any]):
+        return (
+            get_supabase_client()
+            .table("users")
+            .update(data)
+            .eq("id", user_id)
+            .execute()
+        )
+
+    try:
+        result = run_update(update_payload)
+    except Exception as exc:
+        message = str(exc)
+        missing_cancel_column = (
+            "subscription_cancel_at_period_end" in update_payload
+            and "subscription_cancel_at_period_end" in message
+            and (
+                "PGRST204" in message
+                or "schema cache" in message
+                or "column" in message
+            )
+        )
+        if not missing_cancel_column:
+            raise
+        retry_payload = dict(update_payload)
+        retry_payload.pop("subscription_cancel_at_period_end", None)
+        result = run_update(retry_payload)
     return result.data[0] if result.data else update_payload
 
 
