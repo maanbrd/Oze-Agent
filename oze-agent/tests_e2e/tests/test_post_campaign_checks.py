@@ -56,6 +56,17 @@ def test_offer_smoke_client_name_avoids_offer_trigger_word():
     assert "oferta" not in name.lower()
 
 
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Oferta wysłana.",
+        "Wysyłam ofertę. Dam znać po zakończeniu.",
+    ],
+)
+def test_offer_send_reply_acknowledges_sync_and_async_copy(reply):
+    assert checks._offer_send_reply_acknowledged(reply)
+
+
 def test_find_matching_card_ignores_wrong_button_card():
     voice_card = _ObservedMessage(
         id=1,

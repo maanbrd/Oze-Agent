@@ -147,6 +147,14 @@ def _cleanup_offer_attempts_for_client(
     )
 
 
+def _offer_send_reply_acknowledged(text: str) -> bool:
+    normalized = " ".join(text.lower().split())
+    return (
+        "oferta wysłana" in normalized
+        or "wysyłam ofertę" in normalized
+    )
+
+
 async def _hard_cancel(harness: TelegramE2EHarness) -> None:
     await harness.send("/cancel")
     await harness.collect_messages(duration_s=3.0)
@@ -417,7 +425,11 @@ async def run_offer_gmail_smoke(config: E2EConfig) -> ScenarioResult:
             replies = await harness.collect_messages(duration_s=20.0)
             result.context["offer_send_replies"] = [m.text[:300] for m in replies]
             sent_text = "\n".join(m.text for m in replies)
-            result.add("telegram_offer_send_confirmed", "Oferta wysłana" in sent_text, detail=sent_text[:300])
+            result.add(
+                "telegram_offer_send_acknowledged",
+                _offer_send_reply_acknowledged(sent_text),
+                detail=sent_text[:300],
+            )
             attempts_after_send = _offer_attempts_for_client(repo, user_id, name, city)
             sent_attempts = [a for a in attempts_after_send if a.get("status") == "sent"]
             result.context["offer_attempts_after_send"] = attempts_after_send
