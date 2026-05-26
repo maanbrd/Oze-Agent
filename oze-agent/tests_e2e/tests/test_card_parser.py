@@ -223,6 +223,9 @@ def test_is_post_mvp_reply():
 def test_is_vision_only_reply():
     txt = "Reschedule jest poza aktualnym MVP scope (vision-only)."
     assert is_vision_only_reply(txt) is True
+    assert is_vision_only_reply(
+        "Poza aktualnym zakresem. Wymaga osobnej decyzji przed wejściem do roadmapy."
+    ) is True
 
 
 def test_empty_text_returns_empty_card():

@@ -60,7 +60,7 @@ _EDIT_CLIENT_RE = re.compile(
     re.IGNORECASE,
 )
 _RESCHEDULE_RE = re.compile(
-    r"\b(?:przełóż|przeloz|przesuń|przesun)\b.*\bspotkan\w*",
+    r"\b(?:przełóż|przeloz|przesuń|przesun)\b",
     re.IGNORECASE,
 )
 _FREE_SLOTS_RE = re.compile(

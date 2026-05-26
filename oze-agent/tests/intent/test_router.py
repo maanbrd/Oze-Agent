@@ -560,6 +560,7 @@ async def test_meeting_preflight_does_not_fire_for_show_day_plan():
         ("ilu mam klientów?", "POST_MVP_ROADMAP", "pipeline_dashboard"),
         ("zmień telefon Jana Kowalskiego na 609222333", "POST_MVP_ROADMAP", "edit_client"),
         ("przełóż spotkanie z Janem na piątek", "VISION_ONLY", "reschedule_meeting"),
+        ("przełóż Jana Kowalskiego z Warszawy na piątek o 10", "VISION_ONLY", "reschedule_meeting"),
         ("jakie mam wolne okna w czwartek?", "VISION_ONLY", "free_slots"),
         ("usuń z bazy Jana Kowalskiego z Warszawy", "VISION_ONLY", "delete_client"),
         ("ustaw przypomnienie 30 minut przed spotkaniem", "UNPLANNED", "pre_meeting_reminders"),

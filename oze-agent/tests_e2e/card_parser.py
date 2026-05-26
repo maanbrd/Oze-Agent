@@ -213,7 +213,12 @@ NOT_UNDERSTOOD_MARKERS = (
     "Co chcesz zrobić",  # bot copy for gibberish — graceful "what do you want to do?"
 )
 POST_MVP_MARKERS = ("post-MVP", "post mvp", "post-mvp")
-VISION_ONLY_MARKERS = ("vision-only", "vision only", "poza aktualnym MVP scope")
+VISION_ONLY_MARKERS = (
+    "vision-only",
+    "vision only",
+    "poza aktualnym MVP scope",
+    "poza aktualnym zakresem",
+)
 PAST_DATE_MARKERS = ("przeszłości", "Data ", "podaj datę przyszłą")
 
 
