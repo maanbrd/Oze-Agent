@@ -144,7 +144,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         flow = get_pending_flow(telegram_id)
         if flow:
             delete_pending_flow(telegram_id)
-        await edit_message_text(query, "Anulowane.")
+        await edit_message_text(query, "❌ Anulowane.")
 
     elif action == "merge":
         # R1: duplicate merge only selects the target row; save still needs confirmation.

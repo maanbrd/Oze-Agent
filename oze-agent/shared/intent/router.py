@@ -50,6 +50,31 @@ _STATUS_MARKER_RE = re.compile(
     r"\b(podpisał\w*|podpisan\w*|rezygn\w*|zamontowan\w*|umow\w*|status)\b",
     re.IGNORECASE,
 )
+_PIPELINE_DASHBOARD_RE = re.compile(
+    r"\b(?:ilu|ile)\s+mam\s+klient\w*|"
+    r"\b(?:statystyk\w*|lejek|lejka|dashboard|panel)\b",
+    re.IGNORECASE,
+)
+_EDIT_CLIENT_RE = re.compile(
+    r"\b(?:zmień|zmien|edytuj|popraw|aktualizuj)\b",
+    re.IGNORECASE,
+)
+_RESCHEDULE_RE = re.compile(
+    r"\b(?:przełóż|przeloz|przesuń|przesun)\b.*\bspotkan\w*",
+    re.IGNORECASE,
+)
+_FREE_SLOTS_RE = re.compile(
+    r"\b(?:wolne\s+(?:okna|terminy)|okna\s+w\s+kalendarzu|wolny\s+termin)\b",
+    re.IGNORECASE,
+)
+_DELETE_CLIENT_RE = re.compile(
+    r"\b(?:usuń|usun|skasuj|wykasuj)\b.*\b(?:klient\w*|baz\w*)",
+    re.IGNORECASE,
+)
+_PRE_MEETING_REMINDER_RE = re.compile(
+    r"\bprzypomn\w*\b.*\bprzed\s+spotkan\w*",
+    re.IGNORECASE,
+)
 
 
 def _meeting_preflight_hint(message: str) -> bool:
@@ -86,6 +111,71 @@ def _add_note_preflight_hint(message: str) -> bool:
         and not _TEMPORAL_MARKER_RE.search(message)
         and not _STATUS_MARKER_RE.search(message)
     )
+
+
+def _out_of_scope_preflight(message: str) -> IntentResult | None:
+    """Deterministic routing for obvious non-MVP commands.
+
+    These phrases were observed drifting through the general handler in live
+    smoke tests. They do not need LLM judgment and must return the frozen R5
+    banner categories.
+    """
+    if _PIPELINE_DASHBOARD_RE.search(message):
+        return IntentResult(
+            intent=IntentType.POST_MVP_ROADMAP,
+            scope_tier=ScopeTier.POST_MVP_ROADMAP,
+            entities={},
+            confidence=1.0,
+            feature_key="pipeline_dashboard",
+            reason="deterministic_preflight",
+        )
+    if _EDIT_CLIENT_RE.search(message) and "status" not in message.lower():
+        return IntentResult(
+            intent=IntentType.POST_MVP_ROADMAP,
+            scope_tier=ScopeTier.POST_MVP_ROADMAP,
+            entities={},
+            confidence=1.0,
+            feature_key="edit_client",
+            reason="deterministic_preflight",
+        )
+    if _RESCHEDULE_RE.search(message):
+        return IntentResult(
+            intent=IntentType.VISION_ONLY,
+            scope_tier=ScopeTier.VISION_ONLY,
+            entities={},
+            confidence=1.0,
+            feature_key="reschedule_meeting",
+            reason="deterministic_preflight",
+        )
+    if _FREE_SLOTS_RE.search(message):
+        return IntentResult(
+            intent=IntentType.VISION_ONLY,
+            scope_tier=ScopeTier.VISION_ONLY,
+            entities={},
+            confidence=1.0,
+            feature_key="free_slots",
+            reason="deterministic_preflight",
+        )
+    if _DELETE_CLIENT_RE.search(message):
+        return IntentResult(
+            intent=IntentType.VISION_ONLY,
+            scope_tier=ScopeTier.VISION_ONLY,
+            entities={},
+            confidence=1.0,
+            feature_key="delete_client",
+            reason="deterministic_preflight",
+        )
+    if _PRE_MEETING_REMINDER_RE.search(message):
+        return IntentResult(
+            intent=IntentType.UNPLANNED,
+            scope_tier=ScopeTier.UNPLANNED,
+            entities={},
+            confidence=1.0,
+            feature_key="pre_meeting_reminders",
+            reason="deterministic_preflight",
+        )
+    return None
+
 
 _INTENT_TO_SCOPE: dict[IntentType, ScopeTier] = {
     IntentType.ADD_CLIENT: ScopeTier.MVP,
@@ -168,6 +258,16 @@ def _to_intent_result(result: dict) -> IntentResult:
 
 
 async def classify(message: str, telegram_id: int) -> IntentResult:
+    preflight_result = _out_of_scope_preflight(message)
+    if preflight_result is not None:
+        logger.info(
+            "intent classify: deterministic_preflight intent=%s feature=%s message_len=%d",
+            preflight_result.intent.value,
+            preflight_result.feature_key,
+            len(message),
+        )
+        return preflight_result
+
     history = get_conversation_history(
         telegram_id,
         limit=HISTORY_LIMIT,

@@ -275,7 +275,7 @@ async def test_out_of_scope_category_feature_key_mismatch_falls_back():
     with p1, p2:
         from shared.intent.intents import IntentType
         from shared.intent.router import classify
-        result = await classify("przełóż spotkanie z Kowalskim", 1)
+        result = await classify("funkcja legacy poza zakresem", 1)
     assert result.intent == IntentType.GENERAL_QUESTION
     assert result.confidence == 0.0
 
@@ -551,3 +551,33 @@ async def test_meeting_preflight_does_not_fire_for_show_day_plan():
 
     from shared.intent.intents import IntentType
     assert result.intent == IntentType.SHOW_DAY_PLAN
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("message", "expected_intent", "expected_feature_key"),
+    [
+        ("ilu mam klientów?", "POST_MVP_ROADMAP", "pipeline_dashboard"),
+        ("zmień telefon Jana Kowalskiego na 609222333", "POST_MVP_ROADMAP", "edit_client"),
+        ("przełóż spotkanie z Janem na piątek", "VISION_ONLY", "reschedule_meeting"),
+        ("jakie mam wolne okna w czwartek?", "VISION_ONLY", "free_slots"),
+        ("usuń z bazy Jana Kowalskiego z Warszawy", "VISION_ONLY", "delete_client"),
+        ("ustaw przypomnienie 30 minut przed spotkaniem", "UNPLANNED", "pre_meeting_reminders"),
+    ],
+)
+async def test_out_of_scope_preflight_routes_without_llm(
+    message,
+    expected_intent,
+    expected_feature_key,
+):
+    from shared.intent.intents import IntentType
+    from shared.intent.router import classify
+
+    mock_claude = AsyncMock(return_value=_tool_result("record_general_question", {}))
+    with patch("shared.intent.router.get_conversation_history", return_value=[]), \
+         patch("shared.intent.router.call_claude_with_tools", new=mock_claude):
+        result = await classify(message, 1)
+
+    assert result.intent == getattr(IntentType, expected_intent)
+    assert result.feature_key == expected_feature_key
+    mock_claude.assert_not_awaited()

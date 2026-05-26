@@ -78,6 +78,26 @@ async def test_fresh_save_callback_in_same_second_confirms_pending_flow():
 
 
 @pytest.mark.asyncio
+async def test_cancel_callback_uses_canonical_cancel_copy():
+    from bot.handlers.buttons import handle_button
+
+    update = _update("cancel:any")
+    flow = {
+        "flow_type": "add_client",
+        "flow_data": {},
+        "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+    with patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
+         patch("bot.handlers.buttons.delete_pending_flow") as delete_pending:
+        await handle_button(update, MagicMock())
+
+    delete_pending.assert_called_once_with(123)
+    update.callback_query.edit_message_text.assert_awaited_once_with("❌ Anulowane.")
+
+
+@pytest.mark.asyncio
 async def test_duplicate_merge_callback_shows_r1_card_without_sheets_write():
     from bot.handlers.buttons import handle_button
 
