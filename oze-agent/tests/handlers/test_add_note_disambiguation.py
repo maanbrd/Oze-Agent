@@ -148,6 +148,7 @@ async def test_add_note_multi_exact_match_asks_which_one():
     assert saved_flow.flow_data == {
         "intent": "add_note",
         "note_text": "dzwonił wczoraj",
+        "candidate_rows": [7, 11],
     }
     reply = upd.effective_message.reply_text.call_args
     text = reply.args[0]

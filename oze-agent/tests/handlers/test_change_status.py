@@ -117,6 +117,7 @@ async def test_change_status_without_entities_name_disambiguates_many_results():
     assert saved_flow.flow_data == {
         "intent": "change_status",
         "new_status": "Podpisane",
+        "candidate_rows": [8, 9],
     }
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Mam 2 klientów:" in response
@@ -150,6 +151,7 @@ async def test_change_status_single_name_token_disambiguates_many_results():
     assert saved_flow.flow_data == {
         "intent": "change_status",
         "new_status": "Podpisane",
+        "candidate_rows": [8, 9],
     }
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Jan Mazur" in response
@@ -338,6 +340,7 @@ async def test_change_status_multi_exact_match_asks_which_one():
     assert saved_flow.flow_data == {
         "intent": "change_status",
         "new_status": "Podpisane",
+        "candidate_rows": [7, 11],
     }
     response = upd.effective_message.reply_text.call_args.args[0]
     assert "Mam 2 klientów:" in response
