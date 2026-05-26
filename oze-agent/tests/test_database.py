@@ -38,6 +38,12 @@ def _make_client(data=None, raises=False):
     return chain
 
 
+def _assert_utc_offset_timestamp(value: str) -> None:
+    parsed = datetime.fromisoformat(value)
+    assert parsed.tzinfo is not None
+    assert parsed.utcoffset() == timedelta(0)
+
+
 # ── get_user_by_telegram_id ───────────────────────────────────────────────────
 
 
@@ -92,6 +98,19 @@ def test_update_user_refreshes_cached_user_rows():
             assert get_user_by_id("user-1") == after
 
     assert client.execute.call_count == 2
+
+
+def test_update_user_sets_timezone_aware_updated_at():
+    after = {"id": "user-1", "telegram_id": 123, "name": "Jan Updated"}
+    client = _make_client(data=[after])
+
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import update_user
+
+        update_user("user-1", {"name": "Jan Updated"})
+
+    payload = client.update.call_args.args[0]
+    _assert_utc_offset_timestamp(payload["updated_at"])
 
 
 # ── create_user ───────────────────────────────────────────────────────────────
@@ -216,6 +235,18 @@ def test_get_conversation_history_with_since_applies_gte():
 # ── pending flows ─────────────────────────────────────────────────────────────
 
 
+def test_save_pending_flow_sets_timezone_aware_updated_at():
+    client = _make_client(data=[])
+
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import save_pending_flow
+
+        save_pending_flow(123, "add_client", {"name": "Jan"})
+
+    payload = client.upsert.call_args.args[0]
+    _assert_utc_offset_timestamp(payload["updated_at"])
+
+
 def test_get_pending_flow_returns_none_when_not_found():
     with patch("shared.database.get_supabase_client", return_value=_make_client(data=None, raises=True)):
         from shared.database import get_pending_flow
@@ -229,3 +260,35 @@ def test_get_pending_flow_returns_flow():
         from shared.database import get_pending_flow
         result = get_pending_flow(123)
     assert result == flow
+
+
+def test_save_active_photo_session_sets_timezone_aware_updated_at():
+    client = _make_client(data=[])
+
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import save_active_photo_session
+
+        save_active_photo_session(
+            123,
+            "user-1",
+            7,
+            "folder-1",
+            "https://drive.google.com/drive/folders/folder-1",
+            "Jan Kowalski, Warszawa",
+            datetime.now(timezone.utc),
+        )
+
+    payload = client.upsert.call_args.args[0]
+    _assert_utc_offset_timestamp(payload["updated_at"])
+
+
+def test_update_pending_followup_sets_timezone_aware_asked_at():
+    client = _make_client(data=[])
+
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import update_pending_followup
+
+        update_pending_followup("followup-1", "asked")
+
+    payload = client.update.call_args.args[0]
+    _assert_utc_offset_timestamp(payload["asked_at"])

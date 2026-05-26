@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 _client: Optional[Client] = None
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
 def get_supabase_client() -> Client:
     """Return a singleton Supabase client using the service key."""
     global _client
@@ -106,7 +110,7 @@ def create_user(data: dict) -> Optional[dict]:
 def update_user(user_id: str, data: dict) -> Optional[dict]:
     """Update user fields by UUID. Returns updated user dict or None."""
     try:
-        data["updated_at"] = datetime.utcnow().isoformat()
+        data["updated_at"] = _utc_now_iso()
         result = (
             get_supabase_client()
             .table("users")
@@ -321,7 +325,7 @@ def save_pending_flow(telegram_id: int, flow_type: str, flow_data: dict) -> None
                 "flow_type": flow_type,
                 "flow_data": flow_data,
                 "reminder_sent": False,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": _utc_now_iso(),
             }
         ).execute()
     except Exception as e:
@@ -406,7 +410,7 @@ def save_active_photo_session(
                 "folder_link": folder_link,
                 "display_label": display_label,
                 "expires_at": expires_at.isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": _utc_now_iso(),
             }
         ).execute()
     except Exception as e:
@@ -530,7 +534,7 @@ def update_pending_followup(followup_id: str, status: str) -> None:
     try:
         data: dict = {"status": status}
         if status == "asked":
-            data["asked_at"] = datetime.utcnow().isoformat()
+            data["asked_at"] = _utc_now_iso()
         get_supabase_client().table("pending_followups").update(data).eq(
             "id", followup_id
         ).execute()
