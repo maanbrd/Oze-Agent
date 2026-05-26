@@ -238,6 +238,13 @@ class TelegramE2EHarness:
             "e2e_harness.clicked label=%r on msg=%s", label, message.id
         )
 
+    async def refetch_message(self, message: _ObservedMessage) -> _ObservedMessage:
+        """Fetch a message again, useful for edit-in-place callbacks."""
+        if self._client is None or self._bot_entity is None:
+            raise RuntimeError("Harness not connected (use 'async with').")
+        refreshed = await self._client.get_messages(self._bot_entity, ids=message.id)
+        return _ObservedMessage.from_telethon(refreshed)
+
     # ── Receive ──────────────────────────────────────────────────────────────
 
     async def wait_for_messages(

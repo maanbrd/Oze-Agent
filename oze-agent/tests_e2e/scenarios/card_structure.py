@@ -64,14 +64,9 @@ async def _click_cancel_and_verify(
 
     # Bot should produce *some* response (edited card or new message).
     if not cancel_replies:
-        # Edit-in-place doesn't trigger NewMessage event — accept.
-        result.add(
-            "cancel_acknowledged",
-            True,
-            detail="bot edited the card in place (no new message)",
-            tag="known_drift",
-            doc_ref="agent_behavior_spec_v5.md §2.R1 — '🫡 Anulowane.' as new line",
-        )
+        refreshed = await harness.refetch_message(card_msg)
+        ok, detail = assert_cancel_reply(refreshed)
+        result.add("cancel_reply_short_with_keyword", ok, f"edited card: {detail}")
         return
 
     cancel_msg = cancel_replies[-1]

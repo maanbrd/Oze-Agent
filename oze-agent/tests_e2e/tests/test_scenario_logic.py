@@ -14,11 +14,22 @@ from __future__ import annotations
 import pytest
 
 from tests_e2e.harness import _ObservedMessage
+from tests_e2e.scenarios._base import new_result
+from tests_e2e.scenarios.card_structure import _click_cancel_and_verify
 from tests_e2e.scenarios.debug_brief import run_debug_brief_scenario
 
 
 def _msg(mid: int, text: str) -> _ObservedMessage:
     return _ObservedMessage(id=mid, text=text, date_iso="2026-04-24T07:00:00+00:00")
+
+
+def _button_msg(mid: int, text: str, buttons: list[str]) -> _ObservedMessage:
+    return _ObservedMessage(
+        id=mid,
+        text=text,
+        date_iso="2026-04-24T07:00:00+00:00",
+        button_labels=buttons,
+    )
 
 
 class _FakeHarness:
@@ -42,6 +53,40 @@ class _FakeHarness:
         messages = self._pending
         self._pending = []
         return messages
+
+
+class _FakeCancelHarness:
+    def __init__(self, edited_message: _ObservedMessage) -> None:
+        self.edited_message = edited_message
+        self.clicked: list[tuple[int, str]] = []
+
+    async def click_button(self, message: _ObservedMessage, label: str) -> None:
+        self.clicked.append((message.id, label))
+
+    async def collect_messages(self, duration_s: float):
+        return []
+
+    async def refetch_message(self, message: _ObservedMessage) -> _ObservedMessage:
+        return self.edited_message
+
+
+@pytest.mark.asyncio
+async def test_cancel_verifier_accepts_edited_card_without_known_drift():
+    original = _button_msg(
+        10,
+        "✅ Dodać klienta?",
+        ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"],
+    )
+    edited = _msg(10, "❌ Anulowane.")
+    harness = _FakeCancelHarness(edited)
+    result = new_result("cancel_edit", "card_structure")
+
+    await _click_cancel_and_verify(harness, result, original)
+
+    assert harness.clicked == [(10, "❌ Anulować")]
+    by_name = {check.name: check for check in result.checks}
+    assert by_name["cancel_button_present"].tag == "pass"
+    assert by_name["cancel_reply_short_with_keyword"].tag == "pass"
 
 
 # ── First-run happy path ─────────────────────────────────────────────────────
