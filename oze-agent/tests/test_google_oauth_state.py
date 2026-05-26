@@ -79,12 +79,12 @@ def test_google_oauth_state_rejects_untrusted_return_url():
     assert parsed["return_url"] is None
 
 
-def test_google_oauth_state_keeps_legacy_plain_user_id():
+def test_google_oauth_state_rejects_legacy_plain_user_id():
     from shared.google_auth import parse_oauth_state
 
     parsed = parse_oauth_state("legacy-user-id")
 
-    assert parsed == {"user_id": "legacy-user-id", "return_url": None}
+    assert parsed == {"user_id": None, "return_url": None}
 
 
 def test_google_oauth_state_rejects_tampering(monkeypatch):
@@ -184,6 +184,27 @@ def test_handle_oauth_callback_fails_when_tokens_are_not_stored(monkeypatch):
     monkeypatch.setattr(google_auth, "get_user_by_id", lambda user_id: {"id": user_id})
 
     assert google_auth.handle_oauth_callback("oauth-code", "user-1") is None
+
+
+def test_handle_oauth_callback_rejects_invalid_state_before_fetch_token(monkeypatch):
+    from shared import google_auth
+
+    class FakeFlow:
+        credentials = None
+
+        def fetch_token(self, code: str) -> None:
+            raise AssertionError("fetch_token must not run for invalid state")
+
+    class FakeFlowFactory:
+        @staticmethod
+        def from_client_config(**kwargs):
+            return FakeFlow()
+
+    monkeypatch.setattr(google_auth, "Flow", FakeFlowFactory)
+    monkeypatch.setattr(google_auth, "store_google_tokens", lambda user_id, credentials: True)
+    monkeypatch.setattr(google_auth, "get_user_by_id", lambda user_id: {"id": user_id})
+
+    assert google_auth.handle_oauth_callback("oauth-code", "forged-user-id") is None
 
 
 @pytest.mark.asyncio

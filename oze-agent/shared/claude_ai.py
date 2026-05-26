@@ -15,11 +15,15 @@ import anthropic
 
 from bot.config import Config
 from shared.conversation_format import format_history_for_llm
+from shared.perf import log_duration
+from shared.observability import exception_type
 
 logger = logging.getLogger(__name__)
 
 MODEL_COMPLEX = "claude-sonnet-4-6"
 MODEL_SIMPLE = "claude-haiku-4-5-20251001"
+ANTHROPIC_TIMEOUT_SECONDS = 30.0
+ANTHROPIC_MAX_RETRIES = 2
 
 # Cost per million tokens (USD)
 COST_PER_MTOK_IN = {"complex": 3.0, "simple": 0.8}
@@ -50,17 +54,22 @@ async def call_claude(
         {"text": str, "tokens_in": int, "tokens_out": int, "cost_usd": float, "model": str}
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
-    client = anthropic.AsyncAnthropic(api_key=_anthropic_api_key())
+    client = anthropic.AsyncAnthropic(
+        api_key=_anthropic_api_key(),
+        timeout=ANTHROPIC_TIMEOUT_SECONDS,
+        max_retries=ANTHROPIC_MAX_RETRIES,
+    )
     system_prompt = _sanitize_model_text(system_prompt)
     user_message = _sanitize_model_text(user_message)
 
     try:
-        response = await client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
-        )
+        with log_duration(logger, f"llm.{model_type}.message"):
+            response = await client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_message}],
+            )
         tokens_in = response.usage.input_tokens
         tokens_out = response.usage.output_tokens
         cost = (
@@ -75,7 +84,7 @@ async def call_claude(
             "model": model,
         }
     except Exception as e:
-        logger.error("call_claude(%s): %s", model_type, e)
+        logger.error("call_claude(%s): exc_type=%s", model_type, exception_type(e))
         return {"text": "", "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "model": model}
 
 
@@ -103,7 +112,11 @@ async def call_claude_with_tools(
         }
     """
     model = MODEL_COMPLEX if model_type == "complex" else MODEL_SIMPLE
-    client = anthropic.AsyncAnthropic(api_key=_anthropic_api_key())
+    client = anthropic.AsyncAnthropic(
+        api_key=_anthropic_api_key(),
+        timeout=ANTHROPIC_TIMEOUT_SECONDS,
+        max_retries=ANTHROPIC_MAX_RETRIES,
+    )
     system_prompt = _sanitize_model_text(system_prompt)
     user_message = _sanitize_model_text(user_message)
 
@@ -119,7 +132,8 @@ async def call_claude_with_tools(
             request["tool_choice"] = {"type": "tool", "name": force_tool}
         elif force_tool:
             request["tool_choice"] = {"type": "any"}
-        response = await client.messages.create(**request)
+        with log_duration(logger, f"llm.{model_type}.tools"):
+            response = await client.messages.create(**request)
         tokens_in = response.usage.input_tokens
         tokens_out = response.usage.output_tokens
         cost = (
@@ -141,7 +155,7 @@ async def call_claude_with_tools(
         return {**base, "tool_name": None, "tool_input": {}, "text": text}
 
     except Exception as e:
-        logger.error("call_claude_with_tools(%s): %s", model_type, e)
+        logger.error("call_claude_with_tools(%s): exc_type=%s", model_type, exception_type(e))
         return {
             "tool_name": None, "tool_input": {}, "text": "",
             "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "model": model,
@@ -194,7 +208,7 @@ Zasady:
     try:
         parsed = json.loads(result["text"])
     except Exception:
-        logger.error("parse_voice_note: JSON parse failed: %s", result["text"][:200])
+        logger.error("parse_voice_note: JSON parse failed response_len=%d", len(result["text"]))
         parsed = {"client_data": {}, "missing_columns": [], "suggested_followup": {}}
 
     return {
@@ -257,7 +271,7 @@ Parsuj bez pytania:
     try:
         parsed = json.loads(raw)
     except Exception:
-        logger.error("extract_client_data: JSON parse failed: %s", result["text"][:200])
+        logger.error("extract_client_data: JSON parse failed response_len=%d", len(result["text"]))
         parsed = {"client_data": {}, "missing_columns": [], "suggested_followup": {}}
 
     return {
@@ -330,7 +344,7 @@ Jeśli bieżąca wiadomość używa skrótu bez klienta (np. "telefon jutro 10")
         parsed = json.loads(raw)
         meetings = parsed.get("meetings", [])
     except Exception:
-        logger.error("extract_meeting_data: JSON parse failed: %s", result["text"][:200])
+        logger.error("extract_meeting_data: JSON parse failed response_len=%d", len(result["text"]))
         meetings = []
 
     return {
@@ -376,7 +390,7 @@ Zasady:
     try:
         parsed = json.loads(raw)
     except Exception:
-        logger.error("extract_note_data: JSON parse failed: %s", result["text"][:200])
+        logger.error("extract_note_data: JSON parse failed response_len=%d", len(result["text"]))
         parsed = {"client_name": "", "city": "", "note": ""}
     return {
         **parsed,
@@ -447,7 +461,7 @@ Zwróć TYLKO JSON:
     try:
         parsed = json.loads(result["text"])
     except Exception:
-        logger.error("parse_followup_response: JSON parse failed: %s", result["text"][:200])
+        logger.error("parse_followup_response: JSON parse failed response_len=%d", len(result["text"]))
         parsed = {"updates": []}
 
     return {

@@ -10,6 +10,7 @@ from typing import Optional
 from supabase import Client, create_client
 
 from bot.config import Config
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def get_user_by_telegram_id(telegram_id: int) -> Optional[dict]:
         )
         return result.data
     except Exception as e:
-        logger.debug("get_user_by_telegram_id(%s): %s", telegram_id, e)
+        logger.debug("get_user_by_telegram_id telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
         return None
 
 
@@ -57,7 +58,7 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
         )
         return result.data
     except Exception as e:
-        logger.error("get_user_by_id(%s): %s", user_id, e)
+        logger.error("get_user_by_id user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return None
 
 
@@ -72,7 +73,7 @@ def create_user(data: dict) -> Optional[dict]:
         )
         return result.data[0] if result.data else None
     except Exception as e:
-        logger.error("create_user: %s", e)
+        logger.error("create_user: exc_type=%s", exception_type(e))
         return None
 
 
@@ -89,7 +90,7 @@ def update_user(user_id: str, data: dict) -> Optional[dict]:
         )
         return result.data[0] if result.data else None
     except Exception as e:
-        logger.error("update_user(%s): %s", user_id, e)
+        logger.error("update_user user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return None
 
 
@@ -112,7 +113,7 @@ def get_eligible_users_for_morning_brief() -> list[dict]:
         )
         return result.data if result.data else []
     except Exception as e:
-        logger.error("get_eligible_users_for_morning_brief: %s", e)
+        logger.error("get_eligible_users_for_morning_brief: exc_type=%s", exception_type(e))
         return []
 
 
@@ -124,7 +125,11 @@ def update_last_morning_brief_sent(user_id: str, sent_date: date) -> bool:
         ).eq("id", user_id).execute()
         return True
     except Exception as e:
-        logger.error("update_last_morning_brief_sent(%s): %s", user_id, e)
+        logger.error(
+            "update_last_morning_brief_sent user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return False
 
 
@@ -152,7 +157,7 @@ def log_interaction(
             }
         ).execute()
     except Exception as e:
-        logger.error("log_interaction(%s): %s", telegram_id, e)
+        logger.error("log_interaction telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
 
 
 def get_daily_interaction_count(telegram_id: int, day: date) -> int:
@@ -172,7 +177,12 @@ def get_daily_interaction_count(telegram_id: int, day: date) -> int:
             return row["count"] + row["borrowed_from_tomorrow"]
         return 0
     except Exception as e:
-        logger.debug("get_daily_interaction_count(%s, %s): %s", telegram_id, day, e)
+        logger.debug(
+            "get_daily_interaction_count telegram_hash=%s day=%s exc_type=%s",
+            id_hash(telegram_id),
+            day,
+            exception_type(e),
+        )
         return 0
 
 
@@ -200,7 +210,11 @@ def increment_daily_interaction_count(telegram_id: int, day: date) -> int:
             ).execute()
         return new_count
     except Exception as e:
-        logger.error("increment_daily_interaction_count(%s): %s", telegram_id, e)
+        logger.error(
+            "increment_daily_interaction_count telegram_hash=%s exc_type=%s",
+            id_hash(telegram_id),
+            exception_type(e),
+        )
         return 0
 
 
@@ -224,7 +238,11 @@ def save_conversation_message(
             }
         ).execute()
     except Exception as e:
-        logger.error("save_conversation_message(%s): %s", telegram_id, e)
+        logger.error(
+            "save_conversation_message telegram_hash=%s exc_type=%s",
+            id_hash(telegram_id),
+            exception_type(e),
+        )
 
 
 def get_conversation_history(
@@ -254,7 +272,11 @@ def get_conversation_history(
         )
         return list(reversed(result.data)) if result.data else []
     except Exception as e:
-        logger.error("get_conversation_history(%s): %s", telegram_id, e)
+        logger.error(
+            "get_conversation_history telegram_hash=%s exc_type=%s",
+            id_hash(telegram_id),
+            exception_type(e),
+        )
         return []
 
 
@@ -274,7 +296,12 @@ def save_pending_flow(telegram_id: int, flow_type: str, flow_data: dict) -> None
             }
         ).execute()
     except Exception as e:
-        logger.error("save_pending_flow(%s): %s", telegram_id, e)
+        logger.error(
+            "save_pending_flow telegram_hash=%s flow_type=%s exc_type=%s",
+            id_hash(telegram_id),
+            flow_type,
+            exception_type(e),
+        )
 
 
 def get_pending_flow(telegram_id: int) -> Optional[dict]:
@@ -290,7 +317,7 @@ def get_pending_flow(telegram_id: int) -> Optional[dict]:
         )
         return result.data
     except Exception as e:
-        logger.debug("get_pending_flow(%s): %s", telegram_id, e)
+        logger.debug("get_pending_flow telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
         return None
 
 
@@ -301,7 +328,7 @@ def delete_pending_flow(telegram_id: int) -> None:
             "telegram_id", telegram_id
         ).execute()
     except Exception as e:
-        logger.error("delete_pending_flow(%s): %s", telegram_id, e)
+        logger.error("delete_pending_flow telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
 
 
 # ── Active photo upload sessions ─────────────────────────────────────────────
@@ -356,11 +383,17 @@ def save_active_photo_session(
     except Exception as e:
         if _is_missing_photo_upload_sessions_table(e):
             logger.warning(
-                "photo_upload_sessions table missing; skipping save_active_photo_session(%s)",
-                telegram_id,
+                "photo_upload_sessions table missing; skipping save_active_photo_session telegram_hash=%s",
+                id_hash(telegram_id),
             )
             return
-        logger.error("save_active_photo_session(%s): %s", telegram_id, e)
+        logger.error(
+            "save_active_photo_session telegram_hash=%s user_hash=%s client_row=%s exc_type=%s",
+            id_hash(telegram_id),
+            id_hash(user_id),
+            client_row,
+            exception_type(e),
+        )
 
 
 def get_active_photo_session(telegram_id: int) -> Optional[dict]:
@@ -390,11 +423,11 @@ def get_active_photo_session(telegram_id: int) -> Optional[dict]:
     except Exception as e:
         if _is_missing_photo_upload_sessions_table(e):
             logger.debug(
-                "photo_upload_sessions table missing; get_active_photo_session(%s) skipped",
-                telegram_id,
+                "photo_upload_sessions table missing; get_active_photo_session telegram_hash=%s skipped",
+                id_hash(telegram_id),
             )
             return None
-        logger.debug("get_active_photo_session(%s): %s", telegram_id, e)
+        logger.debug("get_active_photo_session telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
         return None
 
 
@@ -407,11 +440,11 @@ def delete_active_photo_session(telegram_id: int) -> None:
     except Exception as e:
         if _is_missing_photo_upload_sessions_table(e):
             logger.debug(
-                "photo_upload_sessions table missing; delete_active_photo_session(%s) skipped",
-                telegram_id,
+                "photo_upload_sessions table missing; delete_active_photo_session telegram_hash=%s skipped",
+                id_hash(telegram_id),
             )
             return
-        logger.error("delete_active_photo_session(%s): %s", telegram_id, e)
+        logger.error("delete_active_photo_session telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
 
 
 # ── Pending follow-ups ────────────────────────────────────────────────────────
@@ -437,7 +470,12 @@ def save_pending_followup(
             }
         ).execute()
     except Exception as e:
-        logger.error("save_pending_followup(%s, %s): %s", telegram_id, event_id, e)
+        logger.error(
+            "save_pending_followup telegram_hash=%s event_hash=%s exc_type=%s",
+            id_hash(telegram_id),
+            id_hash(event_id),
+            exception_type(e),
+        )
 
 
 def get_pending_followups(telegram_id: int, status: str = "pending") -> list:
@@ -454,7 +492,7 @@ def get_pending_followups(telegram_id: int, status: str = "pending") -> list:
         )
         return result.data if result.data else []
     except Exception as e:
-        logger.error("get_pending_followups(%s): %s", telegram_id, e)
+        logger.error("get_pending_followups telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
         return []
 
 
@@ -468,4 +506,4 @@ def update_pending_followup(followup_id: str, status: str) -> None:
             "id", followup_id
         ).execute()
     except Exception as e:
-        logger.error("update_pending_followup(%s): %s", followup_id, e)
+        logger.error("update_pending_followup followup_hash=%s exc_type=%s", id_hash(followup_id), exception_type(e))

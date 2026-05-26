@@ -18,6 +18,7 @@ from shared.admin_mirror.google_io import (
     read_tab_values_sync,
 )
 from shared.database import get_supabase_client
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -101,7 +102,11 @@ def _get_user_profile(auth_user: AuthUser) -> dict[str, Any] | None:
         )
         return result.data if result.data else None
     except Exception as exc:
-        logger.warning("admin.profile_lookup_failed(%s): %s", auth_user.user_id, exc)
+        logger.warning(
+            "admin.profile_lookup_failed auth_user_hash=%s exc_type=%s",
+            id_hash(auth_user.user_id),
+            exception_type(exc),
+        )
         return None
 
 

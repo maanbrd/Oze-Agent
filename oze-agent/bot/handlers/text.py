@@ -101,8 +101,10 @@ from shared.offers.email_template import render_email_template
 from shared.offers.numbering import get_ready_offer_by_number, list_ready_with_numbers
 from shared.offers.pipeline import send_offer_after_confirmation
 from shared.offers.repository import OfferRepository
-from shared.clients import lookup_client, suggest_fuzzy_client
+from shared.clients import lookup_client, lookup_client_by_row, suggest_fuzzy_client
 from shared.matching import first_name_ok as _first_name_ok
+from shared.observability import exception_type, id_hash, summarize_client_data, summarize_mapping
+from shared.perf import log_duration
 from shared.search import detect_potential_duplicate
 
 logger = logging.getLogger(__name__)
@@ -582,9 +584,10 @@ async def handle_offer_list(
     message_text: str,
 ) -> None:
     try:
-        templates = OfferRepository().list_templates(user["id"])
+        with log_duration(logger, "telegram.offer.list_templates"):
+            templates = OfferRepository().list_templates(user["id"])
     except Exception as e:
-        logger.error("handle_offer_list: %s", e)
+        logger.error("handle_offer_list: exc_type=%s", exception_type(e))
         await reply_text(update, "Nie mogę teraz pobrać ofert.")
         return
     await _reply_offer_list(update, templates)
@@ -599,9 +602,10 @@ async def handle_send_offer(
 ) -> None:
     telegram_id = update.effective_user.id
     try:
-        templates = OfferRepository().list_templates(user["id"])
+        with log_duration(logger, "telegram.offer.list_templates"):
+            templates = OfferRepository().list_templates(user["id"])
     except Exception as e:
-        logger.error("handle_send_offer list_templates: %s", e)
+        logger.error("handle_send_offer list_templates: exc_type=%s", exception_type(e))
         await reply_text(update, "Nie mogę teraz pobrać ofert.")
         return
 
@@ -813,29 +817,31 @@ def _build_offer_send_confirmation_text(
 
 async def _confirm_offer_send(update, telegram_id: int, user_id: str, flow_data: dict) -> bool:
     repo = OfferRepository()
-    templates = repo.list_templates(user_id)
+    with log_duration(logger, "telegram.offer.confirm_total"):
+        templates = repo.list_templates(user_id)
     template = _find_template_by_id(templates, flow_data.get("template_id"))
     if not template or template.get("status") != "ready":
         await reply_text(update, "Ta oferta nie jest już dostępna.")
         return False
 
-    clients = await get_all_clients(user_id)
-    client = next((c for c in clients if c.get("_row") == flow_data.get("client_row")), None)
+    client = await lookup_client_by_row(user_id, flow_data.get("client_row") or 0)
     if not client:
         await reply_text(update, "Nie znalazłem klienta w arkuszu.")
         return False
 
-    result = await send_offer_after_confirmation(
-        user_id=user_id,
-        telegram_id=telegram_id,
-        idempotency_key=flow_data["idempotency_key"],
-        offer_number=flow_data.get("offer_number") or 0,
-        template=template,
-        seller_profile=repo.get_seller_profile(user_id),
-        client=client,
-        command_text=flow_data.get("command_text", ""),
-        repository=repo,
-    )
+    seller_profile = repo.get_seller_profile(user_id)
+    with log_duration(logger, "telegram.offer.send_pipeline"):
+        result = await send_offer_after_confirmation(
+            user_id=user_id,
+            telegram_id=telegram_id,
+            idempotency_key=flow_data["idempotency_key"],
+            offer_number=flow_data.get("offer_number") or 0,
+            template=template,
+            seller_profile=seller_profile,
+            client=client,
+            command_text=flow_data.get("command_text", ""),
+            repository=repo,
+        )
     if result.sent:
         if result.already_sent:
             await reply_text(update, "Ta oferta została już wysłana.")
@@ -1166,7 +1172,7 @@ async def _extract_meeting_client_data(
             if v
         }
     except Exception as e:
-        logger.warning("meeting client-data extraction failed: %s", e)
+        logger.warning("meeting client-data extraction failed: exc_type=%s", exception_type(e))
         llm_data = {}
 
     client_data = _merge_client_data_prefer_extra(deterministic, llm_data)
@@ -1434,7 +1440,7 @@ async def _route_pending_flow(
         try:
             templates = OfferRepository().list_templates(user["id"])
         except Exception as e:
-            logger.error("offer_select_offer list_templates: %s", e)
+            logger.error("offer_select_offer list_templates: exc_type=%s", exception_type(e))
             delete_pending_flow(telegram_id)
             await reply_text(update, "Nie mogę teraz pobrać ofert.")
             return True
@@ -1464,7 +1470,7 @@ async def _route_pending_flow(
         try:
             templates = OfferRepository().list_templates(user["id"])
         except Exception as e:
-            logger.error("offer_client_query list_templates: %s", e)
+            logger.error("offer_client_query list_templates: exc_type=%s", exception_type(e))
             delete_pending_flow(telegram_id)
             await reply_text(update, "Nie mogę teraz pobrać ofert.")
             return True
@@ -1491,7 +1497,7 @@ async def _route_pending_flow(
             repo = OfferRepository()
             templates = repo.list_templates(user["id"])
         except Exception as e:
-            logger.error("offer_missing_email list_templates: %s", e)
+            logger.error("offer_missing_email list_templates: exc_type=%s", exception_type(e))
             delete_pending_flow(telegram_id)
             await reply_text(update, "Nie mogę teraz pobrać ofert.")
             return True
@@ -1606,7 +1612,12 @@ async def _route_pending_flow(
         else:
             result = await extract_client_data(message_text, headers)
             new_data = {k: v for k, v in _filter_invalid_products(result.get("client_data", {})).items() if v}
-        logger.info("augment add_client: new_data=%s", new_data)
+        logger.info(
+            "augment add_client: user_hash=%s telegram_hash=%s new_data=%s",
+            id_hash(user_id),
+            id_hash(telegram_id),
+            summarize_mapping(new_data),
+        )
 
         if not new_data:
             # Claude extracted nothing — re-show existing card unchanged
@@ -1632,10 +1643,20 @@ async def _route_pending_flow(
             return True
 
         merged = {**old_client_data, **new_data}
-        logger.info("augment add_client: merged=%s", merged)
+        logger.info(
+            "augment add_client: user_hash=%s telegram_hash=%s merged=%s",
+            id_hash(user_id),
+            id_hash(telegram_id),
+            summarize_mapping(merged),
+        )
         sheet_columns = user.get("sheet_columns") or headers
         missing = canonical_missing_client_fields(sheet_columns, merged)
-        logger.info("augment add_client: missing=%s", missing)
+        logger.info(
+            "augment add_client: user_hash=%s telegram_hash=%s missing_fields=%s",
+            id_hash(user_id),
+            id_hash(telegram_id),
+            missing,
+        )
 
         if not missing:
             delete_pending_flow(telegram_id)
@@ -1699,7 +1720,8 @@ async def _route_pending_flow(
                 }
             except Exception as e:
                 logger.warning(
-                    "add_client_duplicate augment LLM extract failed: %s", e
+                    "add_client_duplicate augment LLM extract failed: exc_type=%s",
+                    exception_type(e),
                 )
                 inline_facts = {}
 
@@ -1851,7 +1873,7 @@ async def _route_pending_flow(
                 reply_markup=build_mutation_buttons("confirm"),
             )
         except Exception as e:
-            logger.error("add_meeting augment failed: %s", e)
+            logger.error("add_meeting augment failed: exc_type=%s", exception_type(e))
             await reply_markdown_v2(update, format_error("timeout"))
         return True
     elif flow_type == "add_note":
@@ -1873,7 +1895,10 @@ async def _route_pending_flow(
         new_note = f"{existing_note} {message_text}".strip() if existing_note else message_text
         row = flow_data.get("row")
         if row is None:
-            logger.error("add_note augment: pending flow_data without row: %s", flow_data)
+            logger.error(
+                "add_note augment: pending flow_data without row summary=%s",
+                summarize_mapping(flow_data),
+            )
             delete_pending_flow(telegram_id)
             await reply_markdown_v2(update, format_error("timeout"))
             return True
@@ -2101,6 +2126,11 @@ async def handle_add_note(
             flow_data=payload_to_flow_data(DisambiguationPayload(
                 intent="add_note",
                 note_text=note_text,
+                candidate_rows=[
+                    int(c.get("_row"))
+                    for c in result.clients[:10]
+                    if c.get("_row") is not None
+                ],
             )),
         ))
         await reply_text(update,
@@ -2118,7 +2148,7 @@ async def handle_add_note(
     c_city = client.get("Miasto", city)
 
     if row is None:
-        logger.error("handle_add_note: client without _row: %s", client)
+        logger.error("handle_add_note: client without _row summary=%s", summarize_client_data(client))
         await reply_markdown_v2(update, format_error("timeout"))
         return
 
@@ -2158,7 +2188,10 @@ def _build_add_client_duplicate_card(
     dup_city = duplicate.get("Miasto", "")
     duplicate_row = duplicate.get("_row")
     if duplicate_row is None:
-        logger.error("_build_add_client_duplicate_card: duplicate without _row: %s", duplicate)
+        logger.error(
+            "_build_add_client_duplicate_card: duplicate without _row summary=%s",
+            summarize_client_data(duplicate),
+        )
         return None
 
     has_conflict = any(
@@ -2306,7 +2339,7 @@ async def handle_search_client(
             card = format_client_card(client)
             await reply_markdown_v2(update, card)
         except Exception as e:
-            logger.error("format_client_card failed: %s", e)
+            logger.error("format_client_card failed: exc_type=%s", exception_type(e))
             name = client.get("Imię i nazwisko", "?")
             city = client.get("Miasto", "")
             await reply_text(update,
@@ -2344,7 +2377,12 @@ async def handle_edit_client(
     entities = intent_data.get("entities", {})
     query = entities.get("name") or message_text
 
-    logger.info("handle_edit_client: query=%r", query)
+    logger.info(
+        "handle_edit_client: user_hash=%s telegram_hash=%s query_len=%d",
+        id_hash(user_id),
+        id_hash(telegram_id),
+        len(query),
+    )
     results = await search_clients(user_id, query)
     if not results:
         await reply_text(update, f"Nie znalazłem klienta: '{query}'")
@@ -2353,10 +2391,15 @@ async def handle_edit_client(
     client = results[0]
     client_name = client.get("Imię i nazwisko", "klient")
     headers = await get_sheet_headers(user_id)
-    logger.info("handle_edit_client: client=%r headers=%s", client_name, len(headers))
+    logger.info(
+        "handle_edit_client: user_hash=%s client_row=%s headers=%s",
+        id_hash(user_id),
+        client.get("_row"),
+        len(headers),
+    )
     extracted = await extract_client_data(message_text, headers)
     updates = extracted.get("client_data", {})
-    logger.info("handle_edit_client: updates=%s", updates)
+    logger.info("handle_edit_client: updates=%s", summarize_mapping(updates))
 
     # Strip "Imię i nazwisko" if AI echoed the search key back as an update
     client_name_lower = client_name.lower()
@@ -2371,7 +2414,10 @@ async def handle_edit_client(
             )
         )
     }
-    logger.info("handle_edit_client: after name-echo filter updates=%s", updates)
+    logger.info(
+        "handle_edit_client: after name-echo filter updates=%s",
+        summarize_mapping(updates),
+    )
 
     msg_lower = message_text.lower()
 
@@ -2396,7 +2442,10 @@ async def handle_edit_client(
         content = " ".join(content.split()).strip()
         if content:
             updates["Notatki"] = content
-            logger.info("handle_edit_client: note-append detected, content=%r", content)
+            logger.info(
+                "handle_edit_client: note-append detected content_len=%d",
+                len(content),
+            )
 
     # Keyword fallback for measurements when AI missed the field
     if not updates:
@@ -2407,7 +2456,7 @@ async def handle_edit_client(
             nums = re.findall(r'\d+(?:[.,]\d+)?', search_text)
             if nums:
                 updates[roof_col] = nums[-1]
-                logger.info("handle_edit_client: roof fallback matched col=%r val=%r", roof_col, nums[-1])
+                logger.info("handle_edit_client: roof fallback matched col=%r", roof_col)
         elif not updates:
             house_col = next(
                 (h for h in headers if "domu" in h.lower() or ("metraż" in h.lower() and "dachu" not in h.lower())),
@@ -2417,7 +2466,7 @@ async def handle_edit_client(
                 nums = re.findall(r'\d+(?:[.,]\d+)?', message_text)
                 if nums:
                     updates[house_col] = nums[0]
-                    logger.info("handle_edit_client: house fallback matched col=%r val=%r", house_col, nums[0])
+                    logger.info("handle_edit_client: house fallback matched col=%r", house_col)
 
     if not updates:
         # Detect which keyword was mentioned and report missing column
@@ -2504,7 +2553,13 @@ async def handle_edit_client_v2(
     entities = intent_data.get("entities", {})
     query = entities.get("name") or message_text
 
-    logger.info("handle_edit_client_v2: query=%r msg=%r", query, message_text)
+    logger.info(
+        "handle_edit_client_v2: user_hash=%s telegram_hash=%s query_len=%d msg_len=%d",
+        id_hash(user_id),
+        id_hash(telegram_id),
+        len(query),
+        len(message_text),
+    )
     results = await search_clients(user_id, query)
     if not results:
         await reply_text(update, f"Nie znalazłem klienta: '{query}'")
@@ -2513,7 +2568,12 @@ async def handle_edit_client_v2(
     client = results[0]
     client_name = client.get("Imię i nazwisko", "klient")
     headers = await get_sheet_headers(user_id)
-    logger.info("handle_edit_client_v2: client=%r headers=%d", client_name, len(headers))
+    logger.info(
+        "handle_edit_client_v2: user_hash=%s client_row=%s headers=%d",
+        id_hash(user_id),
+        client.get("_row"),
+        len(headers),
+    )
 
     client_data_str = "\n".join(
         f"  {h}: {client.get(h, '')}" for h in headers if client.get(h)
@@ -2580,7 +2640,11 @@ Zasady:
     result = await call_claude_with_tools(system_prompt, message_text, tools, model_type="complex")
     tool_name = result.get("tool_name")
     tool_input = result.get("tool_input", {})
-    logger.info("handle_edit_client_v2: tool=%r input=%s", tool_name, tool_input)
+    logger.info(
+        "handle_edit_client_v2: tool=%r input=%s",
+        tool_name,
+        summarize_mapping(tool_input),
+    )
 
     if tool_name == "update_client_field":
         field_name = tool_input.get("field_name", "")
@@ -2596,7 +2660,7 @@ Zasady:
         })
         logger.info(
             "handle_edit_client_v2: flow saved row=%s updates=%s append=[]",
-            client.get("_row"), {field_name: new_value},
+            client.get("_row"), summarize_mapping({field_name: new_value}),
         )
 
         field_label = field_name.lower()
@@ -2619,8 +2683,8 @@ Zasady:
             "append_fields": ["Notatki"],
         })
         logger.info(
-            "handle_edit_client_v2: flow saved row=%s note_append=%r",
-            client.get("_row"), note_text,
+            "handle_edit_client_v2: flow saved row=%s note_append_len=%d",
+            client.get("_row"), len(note_text),
         )
 
         msg = (
@@ -2636,7 +2700,7 @@ Zasady:
 
     else:
         text = result.get("text") or "Nie rozpoznałem co chcesz zmienić. Opisz dokładniej."
-        logger.warning("handle_edit_client_v2: no tool called, text=%r", text[:100])
+        logger.warning("handle_edit_client_v2: no tool called text_len=%d", len(text))
         await reply_text(update, text)
 
 
@@ -2762,11 +2826,12 @@ async def _enrich_meeting(
     the user already identified in change_status/add_note/add_client_duplicate.
     """
     if known_client_row is not None:
-        all_clients = await get_all_clients(user_id)
-        match = next(
-            (c for c in all_clients if c.get("_row") == known_client_row),
-            None,
-        )
+        match = await lookup_client_by_row(user_id, known_client_row)
+        if match is None:
+            for row in await get_all_clients(user_id):
+                if row.get("_row") == known_client_row:
+                    match = row
+                    break
         if match is not None:
             return _build_enriched_from_client(match, client_name, location_hint, event_type=event_type)
         # Row vanished (deleted between confirms) — fall through to name lookup.
@@ -2906,7 +2971,8 @@ async def handle_add_meeting(
     # note_text so handle_confirm can append it to column H after the
     # meeting commits.
     compound_note_text = _extract_note_from_compound_trigger(message_text)
-    meeting_result = await extract_meeting_data(message_text, today_str, history=history)
+    with log_duration(logger, "telegram.add_meeting.extract"):
+        meeting_result = await extract_meeting_data(message_text, today_str, history=history)
     meetings = meeting_result.get("meetings", [])
 
     if not meetings:
@@ -3002,7 +3068,8 @@ async def handle_add_meeting(
             )
             return
 
-        conflicts = await check_conflicts(user_id, start_dt, end_dt)
+        with log_duration(logger, "telegram.add_meeting.conflict_check"):
+            conflicts = await check_conflicts(user_id, start_dt, end_dt)
         conflict_warning = ""
         if conflicts:
             conflict_warning = f"\n\n⚠️ Uwaga: masz już spotkanie o tej porze: *{escape_markdown_v2(conflicts[0].get('title', ''))}*"
@@ -3133,7 +3200,8 @@ async def handle_add_meeting(
                 event_type=event_type,
             )
 
-            conflicts = await check_conflicts(user_id, start_dt, end_dt)
+            with log_duration(logger, "telegram.add_meeting.conflict_check"):
+                conflicts = await check_conflicts(user_id, start_dt, end_dt)
             if conflicts:
                 conflict_warnings.append(f"⚠️ Konflikt {enriched['full_name']}: {conflicts[0].get('title', '')}")
 
@@ -3320,6 +3388,11 @@ async def handle_change_status(
                 flow_data=payload_to_flow_data(DisambiguationPayload(
                     intent="change_status",
                     new_status=new_status,
+                    candidate_rows=[
+                        int(c.get("_row"))
+                        for c in result.clients[:10]
+                        if c.get("_row") is not None
+                    ],
                 )),
             ))
             await reply_text(update,
@@ -3358,6 +3431,11 @@ async def handle_change_status(
                 flow_data=payload_to_flow_data(DisambiguationPayload(
                     intent="change_status",
                     new_status=new_status,
+                    candidate_rows=[
+                        int(c.get("_row"))
+                        for c in results[:10]
+                        if c.get("_row") is not None
+                    ],
                 )),
             ))
             await reply_text(update,
@@ -3400,7 +3478,10 @@ async def handle_change_status(
 
     row = client.get("_row")
     if row is None:
-        logger.error("handle_change_status: client without _row: %s", client)
+        logger.error(
+            "handle_change_status: client without _row summary=%s",
+            summarize_client_data(client),
+        )
         await reply_markdown_v2(update, format_error("timeout"))
         return
     save_pending(PendingFlow(
@@ -3698,20 +3779,21 @@ async def handle_confirm(
             current_status_hint = (flow_data.get("current_status") or "").strip()
             event_description = _calendar_description_for_meeting(flow_data)
 
-            result = await commit_add_meeting(
-                user_id,
-                title=title,
-                start=start,
-                end=end,
-                event_type=event_type,
-                location=flow_data.get("location") or "",
-                description=event_description or "",
-                client_row=enriched_client_row,
-                today=date.today(),
-                client_current_status=current_status_hint,
-                status_update=status_update,
-                client_updates=flow_data.get("client_updates") or None,
-            )
+            with log_duration(logger, "telegram.confirm.add_meeting"):
+                result = await commit_add_meeting(
+                    user_id,
+                    title=title,
+                    start=start,
+                    end=end,
+                    event_type=event_type,
+                    location=flow_data.get("location") or "",
+                    description=event_description or "",
+                    client_row=enriched_client_row,
+                    today=date.today(),
+                    client_current_status=current_status_hint,
+                    status_update=status_update,
+                    client_updates=flow_data.get("client_updates") or None,
+                )
 
             # Compound add_note + add_meeting (INTENCJE_MVP §4.3): when the
             # original trigger had a 'dodaj notatkę X: ...' prefix, write the
@@ -3738,8 +3820,8 @@ async def handle_confirm(
                     )
                 except Exception as e:
                     logger.warning(
-                        "compound add_note after meeting failed for row=%s: %s",
-                        compound_sync_row, e,
+                        "compound add_note after meeting failed for row=%s exc_type=%s",
+                        compound_sync_row, exception_type(e),
                     )
 
             if not result.success:
@@ -3889,7 +3971,7 @@ async def handle_confirm(
                     card = format_client_card(client)
                     await reply_markdown_v2(update, card)
                 except Exception as e:
-                    logger.error("format_client_card failed: %s", e)
+                    logger.error("format_client_card failed: exc_type=%s", exception_type(e))
                     name = client.get("Imię i nazwisko", "?")
                     city = client.get("Miasto", "")
                     await reply_text(update,
@@ -3902,7 +3984,7 @@ async def handle_confirm(
             await reply_text(update, "✅ Gotowe.")
 
     except Exception as e:
-        logger.error("handle_confirm(flow_type=%s): %s", flow_type, e)
+        logger.error("handle_confirm(flow_type=%s): exc_type=%s", flow_type, exception_type(e))
         await reply_markdown_v2(update, format_error("timeout"))
     finally:
         if not skip_delete:

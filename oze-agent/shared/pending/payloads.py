@@ -87,6 +87,7 @@ class DisambiguationPayload:
     intent: str
     note_text: Optional[str] = None
     new_status: Optional[str] = None
+    candidate_rows: Optional[list[int]] = None
 
 
 @dataclass

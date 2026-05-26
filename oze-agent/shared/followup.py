@@ -14,6 +14,7 @@ from shared.database import (
     update_pending_followup,
 )
 from shared.google_calendar import get_events_for_date
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,12 @@ async def check_unreported_meetings(
         return unreported
 
     except Exception as e:
-        logger.error("check_unreported_meetings(%s): %s", user_id, e)
+        logger.error(
+            "check_unreported_meetings user_hash=%s telegram_hash=%s exc_type=%s",
+            id_hash(user_id),
+            id_hash(telegram_id),
+            exception_type(e),
+        )
         return []
 
 
@@ -107,7 +113,12 @@ async def process_followup_response(
 
         return result
     except Exception as e:
-        logger.error("process_followup_response(%s): %s", user_id, e)
+        logger.error(
+            "process_followup_response user_hash=%s telegram_hash=%s exc_type=%s",
+            id_hash(user_id),
+            id_hash(telegram_id),
+            exception_type(e),
+        )
         return {"updates": [], "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0}
 
 
@@ -135,5 +146,8 @@ async def schedule_followup_reminder(
         )
     except Exception as e:
         logger.error(
-            "schedule_followup_reminder(%s, event=%s): %s", telegram_id, event_id, e
+            "schedule_followup_reminder telegram_hash=%s event_hash=%s exc_type=%s",
+            id_hash(telegram_id),
+            id_hash(event_id),
+            exception_type(e),
         )

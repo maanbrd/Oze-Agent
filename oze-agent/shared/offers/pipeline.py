@@ -1,15 +1,22 @@
 """Confirmed offer-send pipeline."""
 
 import inspect
+import logging
+import re
 from dataclasses import dataclass, field
 
 from shared.google_sheets import update_client, update_client_fields_without_touch
+from shared.observability import exception_type
+from shared.perf import log_duration
 
 from .email_utils import merge_offer_recipients
 from .gmail import send_offer_email
 from .pdf import render_offer_pdf
 from .repository import OfferRepository
 from .status_policy import OFFER_SENT_STATUS, should_mark_offer_sent
+
+logger = logging.getLogger(__name__)
+_SAFE_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_:-]{0,80}$")
 
 
 @dataclass(frozen=True)
@@ -37,6 +44,13 @@ def _combined_email_field(current_value: str, new_emails: list[str]) -> str:
             existing.append(email)
             lower.add(email.lower())
     return "; ".join(existing)
+
+
+def _safe_failure_code(exc: Exception) -> str:
+    text = str(exc).strip()
+    if _SAFE_ERROR_CODE_RE.fullmatch(text):
+        return text
+    return exception_type(exc)
 
 
 async def send_offer_after_confirmation(
@@ -110,18 +124,21 @@ async def send_offer_after_confirmation(
         )
 
     try:
-        pdf_bytes = render_offer_pdf(template, seller_profile, client)
+        with log_duration(logger, "offer.render_pdf"):
+            pdf_bytes = render_offer_pdf(template, seller_profile, client)
         sender = gmail_sender or send_offer_email
-        gmail_message_id = await _maybe_await(
-            sender(user_id, merge.recipients, template, seller_profile, client, pdf_bytes)
-        )
+        with log_duration(logger, "offer.gmail_send"):
+            gmail_message_id = await _maybe_await(
+                sender(user_id, merge.recipients, template, seller_profile, client, pdf_bytes)
+            )
     except Exception as exc:
-        repo.mark_send_failed(idempotency_key, str(exc))
+        failure_code = _safe_failure_code(exc)
+        repo.mark_send_failed(idempotency_key, failure_code)
         return SendOfferResult(
             sent=False,
             recipients=merge.recipients,
             invalid_recipients=merge.invalid_recipients,
-            error=str(exc),
+            error=failure_code,
         )
 
     repo.mark_send_sent(idempotency_key, gmail_message_id or "")
@@ -133,7 +150,8 @@ async def send_offer_after_confirmation(
         updater = update_email or (
             lambda uid, row_number, value: update_client_fields_without_touch(uid, row_number, {"Email": value})
         )
-        ok = await _maybe_await(updater(user_id, row, new_email_field))
+        with log_duration(logger, "offer.sheets_update_email"):
+            ok = await _maybe_await(updater(user_id, row, new_email_field))
         if not ok:
             sheets_errors.append("email")
 
@@ -141,7 +159,8 @@ async def send_offer_after_confirmation(
         updater = update_status or (
             lambda uid, row_number, value: update_client(uid, row_number, {"Status": value})
         )
-        ok = await _maybe_await(updater(user_id, row, OFFER_SENT_STATUS))
+        with log_duration(logger, "offer.sheets_update_status"):
+            ok = await _maybe_await(updater(user_id, row, OFFER_SENT_STATUS))
         if not ok:
             sheets_errors.append("status")
 

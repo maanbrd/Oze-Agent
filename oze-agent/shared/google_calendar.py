@@ -14,6 +14,8 @@ from googleapiclient.discovery import build
 from shared.database import get_user_by_id
 from shared.errors import ProactiveFetchError
 from shared.google_auth import get_google_credentials
+from shared.observability import exception_type, id_hash
+from shared.perf import log_duration
 
 logger = logging.getLogger(__name__)
 
@@ -121,13 +123,17 @@ async def create_calendar(user_id: str, name: str) -> Optional[str]:
                 try:
                     _apply_calendar_branding_sync(service, calendar_id)
                 except Exception as e:
-                    logger.warning("create_calendar(%s): branding skipped: %s", user_id, e)
+                    logger.warning(
+                        "create_calendar branding skipped user_hash=%s exc_type=%s",
+                        id_hash(user_id),
+                        exception_type(e),
+                    )
             return calendar_id
 
         calendar_id = await asyncio.to_thread(_create)
         return calendar_id
     except Exception as e:
-        logger.error("create_calendar(%s): %s", user_id, e)
+        logger.error("create_calendar user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return None
 
 
@@ -148,7 +154,11 @@ async def apply_calendar_branding(user_id: str) -> bool:
 
         return await asyncio.to_thread(_apply)
     except Exception as e:
-        logger.error("apply_calendar_branding(%s): %s", user_id, e)
+        logger.error(
+            "apply_calendar_branding user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return False
 
 
@@ -176,9 +186,15 @@ async def get_events_for_date(user_id: str, day: date) -> list[dict]:
             ).execute()
             return [_event_to_dict(e) for e in result.get("items", [])]
 
-        return await asyncio.to_thread(_fetch)
+        with log_duration(logger, "google.calendar.get_events_for_date"):
+            return await asyncio.to_thread(_fetch)
     except Exception as e:
-        logger.error("get_events_for_date(%s, %s): %s", user_id, day, e)
+        logger.error(
+            "get_events_for_date user_hash=%s day=%s exc_type=%s",
+            id_hash(user_id),
+            day,
+            exception_type(e),
+        )
         return []
 
 
@@ -205,9 +221,10 @@ async def get_events_for_range(
             ).execute()
             return [_event_to_dict(e) for e in result.get("items", [])]
 
-        return await asyncio.to_thread(_fetch)
+        with log_duration(logger, "google.calendar.get_events_for_range"):
+            return await asyncio.to_thread(_fetch)
     except Exception as e:
-        logger.error("get_events_for_range(%s): %s", user_id, e)
+        logger.error("get_events_for_range user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return []
 
 
@@ -222,7 +239,7 @@ async def get_events_for_range_or_raise(
     """
     user = get_user_by_id(user_id)
     if not user:
-        raise ProactiveFetchError(f"user_not_found:{user_id}")
+        raise ProactiveFetchError("user_not_found")
     if not user.get("google_calendar_id"):
         raise ProactiveFetchError("calendar_not_configured")
     calendar_id = user["google_calendar_id"]
@@ -240,7 +257,8 @@ async def get_events_for_range_or_raise(
         ).execute()
 
     try:
-        result = await asyncio.to_thread(_fetch)
+        with log_duration(logger, "google.calendar.get_events_for_range_or_raise"):
+            result = await asyncio.to_thread(_fetch)
     except ProactiveFetchError:
         raise
     except Exception as e:
@@ -290,9 +308,10 @@ async def create_event(
             ).execute()
             return _event_to_dict(event)
 
-        return await asyncio.to_thread(_create)
+        with log_duration(logger, "google.calendar.create_event"):
+            return await asyncio.to_thread(_create)
     except Exception as e:
-        logger.error("create_event(%s): %s", user_id, e)
+        logger.error("create_event user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return None
 
 
@@ -338,9 +357,15 @@ async def update_event(
             ).execute()
             return _event_to_dict(updated)
 
-        return await asyncio.to_thread(_update)
+        with log_duration(logger, "google.calendar.update_event"):
+            return await asyncio.to_thread(_update)
     except Exception as e:
-        logger.error("update_event(%s, %s): %s", user_id, event_id, e)
+        logger.error(
+            "update_event user_hash=%s event_hash=%s exc_type=%s",
+            id_hash(user_id),
+            id_hash(event_id),
+            exception_type(e),
+        )
         return None
 
 
@@ -363,7 +388,12 @@ async def delete_event(user_id: str, event_id: str) -> bool:
 
         return await asyncio.to_thread(_delete)
     except Exception as e:
-        logger.error("delete_event(%s, %s): %s", user_id, event_id, e)
+        logger.error(
+            "delete_event user_hash=%s event_hash=%s exc_type=%s",
+            id_hash(user_id),
+            id_hash(event_id),
+            exception_type(e),
+        )
         return False
 
 
@@ -427,7 +457,12 @@ async def get_free_slots(
 
         return slots
     except Exception as e:
-        logger.error("get_free_slots(%s, %s): %s", user_id, day, e)
+        logger.error(
+            "get_free_slots user_hash=%s day=%s exc_type=%s",
+            id_hash(user_id),
+            day,
+            exception_type(e),
+        )
         return []
 
 
@@ -440,5 +475,9 @@ async def get_todays_last_event(user_id: str) -> Optional[dict]:
         # Events are sorted by start time; return the one with the latest end
         return max(events, key=lambda e: e.get("end") or "")
     except Exception as e:
-        logger.error("get_todays_last_event(%s): %s", user_id, e)
+        logger.error(
+            "get_todays_last_event user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return None

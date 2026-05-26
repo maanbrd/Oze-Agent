@@ -29,6 +29,8 @@ from shared.errors import ProactiveFetchError
 from shared.formatting import format_morning_brief_short
 from shared.google_calendar import get_events_for_range_or_raise
 from shared.google_sheets import get_all_clients_or_raise
+from shared.observability import exception_type, id_hash
+from shared.perf import log_duration
 
 logger = logging.getLogger(__name__)
 
@@ -166,32 +168,35 @@ async def run_morning_brief(bot: Bot) -> MorningBriefRunResult:
 
         try:
             start_warsaw, end_warsaw = _warsaw_day_bounds(today)
-            events = await get_events_for_range_or_raise(user_id, start_warsaw, end_warsaw)
-            open_next_steps = await _fetch_open_next_steps(user_id, today)
+            with log_duration(logger, "morning_brief.fetch_calendar"):
+                events = await get_events_for_range_or_raise(user_id, start_warsaw, end_warsaw)
+            with log_duration(logger, "morning_brief.fetch_sheets"):
+                open_next_steps = await _fetch_open_next_steps(user_id, today)
             text = format_morning_brief_short(events, open_next_steps)
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=text,
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
+            with log_duration(logger, "morning_brief.telegram_send"):
+                await bot.send_message(
+                    chat_id=telegram_id,
+                    text=text,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                )
             if not update_last_morning_brief_sent(user_id, today):
                 logger.error(
-                    "morning_brief.dedup_write_failed user_id=%s "
+                    "morning_brief.dedup_write_failed user_hash=%s "
                     "brief_delivered=True possible_double_send_risk=True",
-                    user_id,
+                    id_hash(user_id),
                 )
             result.sent += 1
         except ProactiveFetchError as e:
             logger.warning(
-                "morning_brief.skipped_fetch_error user_id=%s reason=%s",
-                user_id,
+                "morning_brief.skipped_fetch_error user_hash=%s reason=%s",
+                id_hash(user_id),
                 e,
             )
             result.skipped_error += 1
         except Exception as e:
             logger.error(
-                "morning_brief.send_failed user_id=%s telegram_id=%s err=%s",
-                user_id, telegram_id, e,
+                "morning_brief.send_failed user_hash=%s telegram_hash=%s exc_type=%s",
+                id_hash(user_id), id_hash(telegram_id), exception_type(e),
             )
             result.skipped_error += 1
 

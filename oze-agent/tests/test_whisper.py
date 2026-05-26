@@ -147,3 +147,28 @@ async def test_transcribe_voice_handles_mixed_segment_types():
         result = await transcribe_voice(b"audio")
 
     assert result["confidence"] > 0.7
+
+
+@pytest.mark.asyncio
+async def test_transcribe_voice_configures_timeout_and_retries():
+    mock_response = MagicMock()
+    mock_response.text = "test"
+    mock_response.segments = []
+    mock_response.duration = 1.0
+
+    mock_client = MagicMock()
+    mock_client.audio.transcriptions.create = AsyncMock(return_value=mock_response)
+
+    with (
+        patch("shared.whisper_stt.Config.OPENAI_API_KEY", "sk-test"),
+        patch("shared.whisper_stt.openai.AsyncOpenAI", return_value=mock_client) as constructor,
+    ):
+        from shared.whisper_stt import OPENAI_MAX_RETRIES, OPENAI_TIMEOUT_SECONDS, transcribe_voice
+
+        await transcribe_voice(b"audio")
+
+    constructor.assert_called_once_with(
+        api_key="sk-test",
+        timeout=OPENAI_TIMEOUT_SECONDS,
+        max_retries=OPENAI_MAX_RETRIES,
+    )

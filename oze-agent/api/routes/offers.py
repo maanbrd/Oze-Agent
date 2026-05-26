@@ -100,6 +100,14 @@ def _validate_profile_payload(data: dict) -> None:
         )
 
 
+def _validate_ready_template(data: dict) -> None:
+    if data.get("status") != "ready":
+        return
+    validation = validate_offer_template(data)
+    if not validation.is_valid:
+        raise HTTPException(status_code=400, detail={"errors": validation.errors})
+
+
 @router.get("/templates")
 async def list_templates(uid: str = Depends(_user_id)):
     repo = _repo()
@@ -108,6 +116,7 @@ async def list_templates(uid: str = Depends(_user_id)):
 
 @router.post("/templates")
 async def create_template(payload: TemplatePayload, uid: str = Depends(_user_id)):
+    _validate_ready_template(payload.data)
     repo = _repo()
     created = repo.create_template(uid, payload.data)
     if not created:
@@ -123,10 +132,7 @@ async def update_template(template_id: UUID, payload: TemplatePayload, uid: str 
     if not current:
         raise HTTPException(status_code=404, detail="Oferta nie istnieje.")
     merged = {**current, **payload.data}
-    if current.get("status") == "ready":
-        validation = validate_offer_template(merged)
-        if not validation.is_valid:
-            raise HTTPException(status_code=400, detail={"errors": validation.errors})
+    _validate_ready_template(merged)
     updated = repo.update_template(uid, template_id_str, payload.data)
     return {"template": updated}
 
@@ -164,6 +170,12 @@ async def duplicate_template(template_id: UUID, uid: str = Depends(_user_id)):
 @router.post("/templates/reorder")
 async def reorder_templates(payload: ReorderPayload, uid: str = Depends(_user_id)):
     repo = _repo()
+    templates_by_id = {str(template.get("id")): template for template in repo.list_templates(uid)}
+    if len(set(payload.ordered_template_ids)) != len(payload.ordered_template_ids):
+        raise HTTPException(status_code=400, detail="Kolejność można zmieniać tylko dla gotowych ofert.")
+    for template_id in payload.ordered_template_ids:
+        if templates_by_id.get(template_id, {}).get("status") != "ready":
+            raise HTTPException(status_code=400, detail="Kolejność można zmieniać tylko dla gotowych ofert.")
     return {"templates": repo.reorder_ready(uid, payload.ordered_template_ids)}
 
 

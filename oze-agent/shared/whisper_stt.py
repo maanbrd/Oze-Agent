@@ -10,6 +10,9 @@ import openai
 
 from bot.config import Config
 
+OPENAI_TIMEOUT_SECONDS = 60.0
+OPENAI_MAX_RETRIES = 2
+
 
 def _segment_avg_logprob(segment, default: float = -0.3) -> float:
     """Extract avg_logprob from a Whisper segment, compatible with both
@@ -28,7 +31,11 @@ async def transcribe_voice(audio_bytes: bytes, filename: str = "voice.ogg") -> d
     Raises:
         RuntimeError on API failure.
     """
-    client = openai.AsyncOpenAI(api_key=Config.OPENAI_API_KEY)
+    client = openai.AsyncOpenAI(
+        api_key=Config.OPENAI_API_KEY,
+        timeout=OPENAI_TIMEOUT_SECONDS,
+        max_retries=OPENAI_MAX_RETRIES,
+    )
 
     audio_file = io.BytesIO(audio_bytes)
     audio_file.name = filename

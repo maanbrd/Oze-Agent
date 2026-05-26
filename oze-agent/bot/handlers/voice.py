@@ -19,6 +19,8 @@ from bot.utils.telegram_helpers import (
 from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from shared.database import save_pending_flow
 from shared.formatting import escape_markdown_v2, format_error
+from shared.observability import exception_type, id_hash
+from shared.perf import log_duration
 from shared.voice_postproc import _redacted_postproc_summary, normalize_polish_names
 from shared.whisper_stt import transcribe_voice
 
@@ -52,6 +54,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     telegram_id = update.effective_user.id
+    telegram_hash = id_hash(telegram_id)
     await send_processing_stage(context, telegram_id, "transcribing")
 
     # ── 1. Download voice file ─────────────────────────────────────────────
@@ -60,22 +63,31 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         file = await context.bot.get_file(voice.file_id)
         audio_bytes = await file.download_as_bytearray()
     except Exception as e:
-        logger.error("handle_voice: download failed for %s: %s", telegram_id, e)
+        logger.error(
+            "handle_voice: download failed telegram_hash=%s exc_type=%s",
+            telegram_hash,
+            exception_type(e),
+        )
         await reply_text(update, "❌ Nie udało się pobrać pliku. Spróbuj ponownie.")
         return
 
     # ── 2. Transcribe with timeout ─────────────────────────────────────────
     try:
-        result = await asyncio.wait_for(
-            transcribe_voice(bytes(audio_bytes), filename="voice.ogg"),
-            timeout=WHISPER_TIMEOUT_SECONDS,
-        )
+        with log_duration(logger, "telegram.voice.whisper"):
+            result = await asyncio.wait_for(
+                transcribe_voice(bytes(audio_bytes), filename="voice.ogg"),
+                timeout=WHISPER_TIMEOUT_SECONDS,
+            )
     except asyncio.TimeoutError:
-        logger.warning("handle_voice: Whisper timeout for %s", telegram_id)
+        logger.warning("handle_voice: Whisper timeout telegram_hash=%s", telegram_hash)
         await reply_markdown_v2(update, format_error("timeout"))
         return
     except RuntimeError as e:
-        logger.error("handle_voice: transcription failed for %s: %s", telegram_id, e)
+        logger.error(
+            "handle_voice: transcription failed telegram_hash=%s exc_type=%s",
+            telegram_hash,
+            exception_type(e),
+        )
         await reply_text(update,
             "❌ Nie udało się przetworzyć nagrania. Spróbuj wysłać wiadomość tekstową."
         )
@@ -91,7 +103,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     # ── 3. Polish name post-processing (Claude haiku) ─────────────────────
-    postproc = await normalize_polish_names(raw_transcription)
+    with log_duration(logger, "telegram.voice.postproc"):
+        postproc = await normalize_polish_names(raw_transcription)
     transcription = postproc["corrected"]
     postproc_cost = postproc.get("cost_usd", 0.0)
     total_cost = whisper_cost + postproc_cost

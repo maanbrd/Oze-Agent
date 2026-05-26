@@ -22,6 +22,7 @@ from google_auth_oauthlib.flow import Flow
 from bot.config import Config
 from shared.database import get_user_by_id, update_user
 from shared.encryption import decrypt_token, encrypt_token
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 
@@ -145,20 +146,7 @@ def parse_oauth_state(state: str) -> dict[str, str | None]:
             ),
         }
 
-    payload = _base64url_decode(state)
-    if not payload:
-        return {"user_id": state, "return_url": None}
-
-    user_id = str(payload.get("user_id") or "").strip()
-    if not user_id:
-        return {"user_id": state, "return_url": None}
-
-    return {
-        "user_id": user_id,
-        "return_url": _trusted_return_url(
-            str(payload.get("return_url") or "").strip() or None
-        ),
-    }
+    return {"user_id": None, "return_url": None}
 
 
 def get_google_credentials(user_id: str) -> Optional[Credentials]:
@@ -170,7 +158,7 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
     try:
         user = get_user_by_id(user_id)
         if not user:
-            logger.error("get_google_credentials: user %s not found", user_id)
+            logger.error("get_google_credentials: user_hash=%s not found", id_hash(user_id))
             return None
 
         access_token = user.get("google_access_token")
@@ -178,14 +166,18 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
         token_expiry = user.get("google_token_expiry")
 
         if not refresh_token:
-            logger.info("get_google_credentials: no refresh token for user %s", user_id)
+            logger.info("get_google_credentials: no refresh token user_hash=%s", id_hash(user_id))
             return None
 
         try:
             decrypted_access = decrypt_token(access_token) if access_token else None
             decrypted_refresh = decrypt_token(refresh_token)
         except Exception as e:
-            logger.error("get_google_credentials: decryption failed for user %s: %s", user_id, e)
+            logger.error(
+                "get_google_credentials: decryption failed user_hash=%s exc_type=%s",
+                id_hash(user_id),
+                exception_type(e),
+            )
             return None
 
         if token_expiry:
@@ -208,15 +200,23 @@ def get_google_credentials(user_id: str) -> Optional[Credentials]:
             try:
                 creds.refresh(Request())
                 store_google_tokens(user_id, creds)
-                logger.info("get_google_credentials: refreshed token for user %s", user_id)
+                logger.info("get_google_credentials: refreshed token user_hash=%s", id_hash(user_id))
             except Exception as e:
-                logger.error("get_google_credentials: refresh failed for user %s: %s", user_id, e)
+                logger.error(
+                    "get_google_credentials: refresh failed user_hash=%s exc_type=%s",
+                    id_hash(user_id),
+                    exception_type(e),
+                )
                 return None
 
         return creds
 
     except Exception as e:
-        logger.error("get_google_credentials: unexpected error for user %s: %s", user_id, e)
+        logger.error(
+            "get_google_credentials: unexpected error user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return None
 
 
@@ -224,10 +224,10 @@ def store_google_tokens(user_id: str, credentials: Credentials) -> bool:
     """Encrypt and store Google tokens in Supabase users table."""
     try:
         if not credentials.token:
-            logger.error("store_google_tokens: missing access token for user %s", user_id)
+            logger.error("store_google_tokens: missing access token user_hash=%s", id_hash(user_id))
             return False
         if not credentials.refresh_token:
-            logger.error("store_google_tokens: missing refresh token for user %s", user_id)
+            logger.error("store_google_tokens: missing refresh token user_hash=%s", id_hash(user_id))
             return False
 
         data = {
@@ -237,7 +237,11 @@ def store_google_tokens(user_id: str, credentials: Credentials) -> bool:
         }
         return update_user(user_id, data) is not None
     except Exception as e:
-        logger.error("store_google_tokens: failed for user %s: %s", user_id, e)
+        logger.error(
+            "store_google_tokens: failed user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return False
 
 
@@ -266,10 +270,16 @@ def build_oauth_url(user_id: str, return_url: str | None = None) -> str:
 def handle_oauth_callback(code: str, state: str) -> Optional[dict]:
     """Exchange OAuth code for tokens and store them.
 
-    state is the user_id set in build_oauth_url.
+    state is a signed, short-lived payload set in build_oauth_url.
     Returns user dict on success, None on failure.
     """
     try:
+        parsed_state = parse_oauth_state(state)
+        user_id = parsed_state["user_id"]
+        if not user_id:
+            logger.warning("handle_oauth_callback: rejected invalid state")
+            return None
+
         flow = Flow.from_client_config(
             client_config={
                 "web": {
@@ -284,8 +294,6 @@ def handle_oauth_callback(code: str, state: str) -> Optional[dict]:
         )
         flow.fetch_token(code=code)
         credentials = flow.credentials
-        parsed_state = parse_oauth_state(state)
-        user_id = parsed_state["user_id"]
         if not store_google_tokens(user_id, credentials):
             return None
         user = get_user_by_id(user_id)
@@ -293,7 +301,7 @@ def handle_oauth_callback(code: str, state: str) -> Optional[dict]:
             user["_oauth_return_url"] = parsed_state["return_url"]
         return user
     except Exception as e:
-        logger.error("handle_oauth_callback: failed for state=%s: %s", state, e)
+        logger.error("handle_oauth_callback: failed exc_type=%s", exception_type(e))
         return None
 
 
@@ -316,7 +324,11 @@ def revoke_google_tokens(user_id: str) -> bool:
             headers={"content-type": "application/x-www-form-urlencoded"},
         )
         if response.status_code not in (200, 400):
-            logger.warning("revoke_google_tokens: unexpected status %s for user %s", response.status_code, user_id)
+            logger.warning(
+                "revoke_google_tokens: unexpected status %s user_hash=%s",
+                response.status_code,
+                id_hash(user_id),
+            )
 
         update_user(user_id, {
             "google_access_token": None,
@@ -325,5 +337,9 @@ def revoke_google_tokens(user_id: str) -> bool:
         })
         return True
     except Exception as e:
-        logger.error("revoke_google_tokens: failed for user %s: %s", user_id, e)
+        logger.error(
+            "revoke_google_tokens: failed user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return False

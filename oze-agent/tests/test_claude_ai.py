@@ -97,10 +97,29 @@ async def test_call_claude_strips_anthropic_api_key():
         patch("shared.claude_ai.Config.ANTHROPIC_API_KEY", "sk-test\u2028"),
         patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client) as constructor,
     ):
-        from shared.claude_ai import call_claude
+        from shared.claude_ai import ANTHROPIC_MAX_RETRIES, ANTHROPIC_TIMEOUT_SECONDS, call_claude
         await call_claude("system", "user", model_type="simple")
 
-    constructor.assert_called_once_with(api_key="sk-test")
+    constructor.assert_called_once_with(
+        api_key="sk-test",
+        timeout=ANTHROPIC_TIMEOUT_SECONDS,
+        max_retries=ANTHROPIC_MAX_RETRIES,
+    )
+
+
+@pytest.mark.asyncio
+async def test_call_claude_configures_timeout_and_retries():
+    client = _mock_client("ok")
+    with patch("shared.claude_ai.anthropic.AsyncAnthropic", return_value=client) as constructor:
+        from shared.claude_ai import ANTHROPIC_MAX_RETRIES, ANTHROPIC_TIMEOUT_SECONDS, call_claude
+
+        await call_claude("system", "user", model_type="simple")
+
+    constructor.assert_called_once_with(
+        api_key="",
+        timeout=ANTHROPIC_TIMEOUT_SECONDS,
+        max_retries=ANTHROPIC_MAX_RETRIES,
+    )
 
 
 # ── model routing cost calculation ───────────────────────────────────────────

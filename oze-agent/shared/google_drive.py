@@ -15,6 +15,7 @@ from googleapiclient.http import MediaIoBaseUpload
 
 from shared.database import get_user_by_id, update_user
 from shared.google_auth import get_google_credentials
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ async def create_root_folder(user_id: str, folder_name: str | None = None) -> Op
             update_user(user_id, {"google_drive_folder_id": folder_id})
         return folder_id
     except Exception as e:
-        logger.error("create_root_folder(%s): %s", user_id, e)
+        logger.error("create_root_folder user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return None
 
 
@@ -152,7 +153,11 @@ async def create_client_folder(
 
         return await asyncio.to_thread(_create)
     except Exception as e:
-        logger.error("create_client_folder(%s, %s, %s): %s", user_id, client_name, city, e)
+        logger.error(
+            "create_client_folder user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return None
 
 
@@ -193,7 +198,11 @@ async def get_or_create_client_folder(
             return existing_id
         return await create_client_folder(user_id, client_name, city)
     except Exception as e:
-        logger.error("get_or_create_client_folder(%s): %s", user_id, e)
+        logger.error(
+            "get_or_create_client_folder user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return None
 
 
@@ -236,9 +245,9 @@ async def get_or_create_client_photo_folder(
                         return existing
                 except Exception as e:
                     logger.warning(
-                        "get_or_create_client_photo_folder: existing folder %s invalid: %s",
-                        existing_folder_id,
-                        e,
+                        "get_or_create_client_photo_folder: existing folder invalid user_hash=%s exc_type=%s",
+                        id_hash(user_id),
+                        exception_type(e),
                     )
 
             escaped_name = _escape_drive_query_value(folder_name)
@@ -276,7 +285,11 @@ async def get_or_create_client_photo_folder(
             "webViewLink": folder.get("webViewLink") or f"{FOLDER_URL_PREFIX}{folder_id}",
         }
     except Exception as e:
-        logger.error("get_or_create_client_photo_folder(%s): %s", user_id, e)
+        logger.error(
+            "get_or_create_client_photo_folder user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return None
 
 
@@ -294,7 +307,13 @@ async def upload_photo(
             if not service:
                 return None
             file_stream = io.BytesIO(file_bytes)
-            mime_type = "image/jpeg" if filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg") else "image/png"
+            lower_name = filename.lower()
+            if lower_name.endswith((".jpg", ".jpeg")):
+                mime_type = "image/jpeg"
+            elif lower_name.endswith(".webp"):
+                mime_type = "image/webp"
+            else:
+                mime_type = "image/png"
             media = MediaIoBaseUpload(file_stream, mimetype=mime_type)
             metadata = {"name": filename, "parents": [folder_id]}
             if description:
@@ -308,7 +327,13 @@ async def upload_photo(
 
         return await asyncio.to_thread(_upload)
     except Exception as e:
-        logger.error("upload_photo(%s, folder=%s, file=%s): %s", user_id, folder_id, filename, e)
+        logger.error(
+            "upload_photo user_hash=%s folder_hash=%s filename_len=%d exc_type=%s",
+            id_hash(user_id),
+            id_hash(folder_id),
+            len(filename or ""),
+            exception_type(e),
+        )
         return None
 
 
@@ -333,5 +358,10 @@ async def get_client_photos(user_id: str, folder_id: str) -> list[dict]:
 
         return await asyncio.to_thread(_list)
     except Exception as e:
-        logger.error("get_client_photos(%s, folder=%s): %s", user_id, folder_id, e)
+        logger.error(
+            "get_client_photos user_hash=%s folder_hash=%s exc_type=%s",
+            id_hash(user_id),
+            id_hash(folder_id),
+            exception_type(e),
+        )
         return []

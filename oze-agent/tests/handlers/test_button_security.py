@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from shared.pending import PendingFlowType
+
 
 def _update(callback_data: str = "set_status:7:Podpisane", telegram_id: int = 123):
     update = MagicMock()
@@ -73,3 +75,69 @@ async def test_fresh_save_callback_in_same_second_confirms_pending_flow():
 
     handle_confirm.assert_awaited_once()
     update.callback_query.edit_message_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_merge_callback_shows_r1_card_without_sheets_write():
+    from bot.handlers.buttons import handle_button
+
+    update = _update("merge:confirm")
+    flow = {
+        "flow_type": "add_client_duplicate",
+        "flow_data": {
+            "duplicate_row": 7,
+            "client_data": {
+                "Imię i nazwisko": "Jan Kowalski",
+                "Miasto": "Warszawa",
+                "Telefon": "600100200",
+            },
+            "client_name": "Jan Kowalski",
+            "city": "Warszawa",
+        },
+    }
+
+    with patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
+         patch("bot.handlers.buttons.update_client", new=AsyncMock()) as update_client, \
+         patch("bot.handlers.buttons.delete_pending_flow") as delete_pending, \
+         patch("bot.handlers.buttons.save_pending") as save_pending:
+        await handle_button(update, MagicMock())
+
+    update_client.assert_not_awaited()
+    delete_pending.assert_not_called()
+    saved_flow = save_pending.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.ADD_CLIENT_DUPLICATE
+    assert saved_flow.flow_data["duplicate_row"] == 7
+    labels = [
+        button.text
+        for row in update.callback_query.edit_message_text.await_args.kwargs["reply_markup"].inline_keyboard
+        for button in row
+    ]
+    assert labels == ["✅ Zapisać", "➕ Dopisać", "❌ Anulować"]
+
+
+@pytest.mark.asyncio
+async def test_generic_disambiguation_rejects_row_outside_candidate_allowlist():
+    from bot.handlers.buttons import handle_button
+
+    update = _update("select_client:99")
+    flow = {
+        "flow_type": "disambiguation",
+        "flow_data": {
+            "intent": "add_note",
+            "note_text": "test",
+            "candidate_rows": [7, 11],
+        },
+    }
+
+    with patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
+         patch("bot.handlers.buttons.get_all_clients", new=AsyncMock()) as get_all_clients, \
+         patch("bot.handlers.buttons.save_pending") as save_pending, \
+         patch("bot.handlers.buttons.delete_pending_flow") as delete_pending:
+        await handle_button(update, MagicMock())
+
+    get_all_clients.assert_not_awaited()
+    save_pending.assert_not_called()
+    delete_pending.assert_called_once_with(123)
+    assert "Nieprawidłowy wybór" in update.callback_query.edit_message_text.await_args.args[0]

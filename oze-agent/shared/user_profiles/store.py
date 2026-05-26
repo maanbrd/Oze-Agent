@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from shared.database import get_supabase_client
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def list_profile_agent_users() -> list[dict[str, Any]]:
         )
         return result.data or []
     except Exception as exc:
-        logger.error("user_profile_agent.list_users: %s", exc)
+        logger.error("user_profile_agent.list_users: exc_type=%s", exception_type(exc))
         return []
 
 
@@ -52,7 +53,11 @@ def get_current_profile_state(user_id: str) -> dict[str, Any] | None:
         )
         return result.data or None
     except Exception as exc:
-        logger.warning("user_profile_agent.profile_state(%s): %s", user_id, exc)
+        logger.warning(
+            "user_profile_agent.profile_state user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(exc),
+        )
         return None
 
 

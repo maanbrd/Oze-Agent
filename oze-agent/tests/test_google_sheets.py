@@ -128,6 +128,47 @@ async def test_search_clients_empty_sheet():
     assert results == []
 
 
+@pytest.mark.asyncio
+async def test_get_client_by_row_reads_only_requested_row():
+    from shared.google_sheets import DEFAULT_COLUMNS, get_client_by_row
+
+    values = _ValuesService(get_result={"values": [
+        [
+            "Jan Kowalski",
+            "600100200",
+            "jan@example.com",
+            "Warszawa",
+        ]
+    ]})
+    service = _SheetsService(values)
+
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_verified_sheet_headers",
+        new=AsyncMock(return_value=DEFAULT_COLUMNS),
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=service,
+    ):
+        client = await get_client_by_row("user-1", 7)
+
+    assert values.get_kwargs["range"] == "A7:P7"
+    assert client["_row"] == 7
+    assert client["Imię i nazwisko"] == "Jan Kowalski"
+    assert client["Telefon"] == "600100200"
+    assert client["Email"] == "jan@example.com"
+    assert client["Miasto"] == "Warszawa"
+
+
+@pytest.mark.asyncio
+async def test_get_client_by_row_rejects_header_row():
+    from shared.google_sheets import get_client_by_row
+
+    assert await get_client_by_row("user-1", 1) is None
+
+
 # ── get_pipeline_stats ────────────────────────────────────────────────────────
 
 

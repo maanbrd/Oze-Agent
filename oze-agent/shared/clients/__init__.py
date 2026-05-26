@@ -9,6 +9,7 @@ from .find import (
     ClientLookupResult,
     FuzzySuggestion,
     lookup_client,
+    lookup_client_by_row,
     suggest_fuzzy_client,
 )
 
@@ -18,6 +19,7 @@ __all__ = [
     "create_client_row",
     "list_all_clients",
     "lookup_client",
+    "lookup_client_by_row",
     "suggest_fuzzy_client",
     "update_client_row_touching_contact",
 ]

@@ -29,10 +29,10 @@ from shared.database import (
     increment_daily_interaction_count,
 )
 from shared.pending import (
+    AddClientDuplicatePayload,
     AddClientPayload,
     AddMeetingPayload,
     AddNotePayload,
-    AwaitingNextStepPayload,
     ChangeStatusPayload,
     PendingFlow,
     PendingFlowType,
@@ -47,10 +47,21 @@ from shared.formatting import (
 )
 from shared.google_calendar import check_conflicts
 from shared.google_sheets import get_all_clients, update_client
+from shared.observability import summarize_client_data
 
 logger = logging.getLogger(__name__)
 
 _DAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
+
+
+def _candidate_rows(flow_data: dict) -> set[int]:
+    rows: set[int] = set()
+    for raw in flow_data.get("candidate_rows") or []:
+        try:
+            rows.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return rows
 
 
 def _pending_updated_at(flow: dict) -> datetime | None:
@@ -100,7 +111,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     data = query.data or ""
 
     if ":" not in data:
-        logger.warning("handle_button: unexpected callback_data=%s", data)
+        logger.warning("handle_button: unexpected callback_len=%d", len(data))
         return
 
     action, _, value = data.partition(":")
@@ -136,7 +147,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await edit_message_text(query, "Anulowane.")
 
     elif action == "merge":
-        # R4: update existing client with new data from duplicate flow
+        # R1: duplicate merge only selects the target row; save still needs confirmation.
         await _handle_duplicate_merge(query, telegram_id, user["id"])
 
     elif action == "new":
@@ -254,7 +265,11 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _handle_phone_choice(query, telegram_id, user["id"], value)
 
     else:
-        logger.warning("handle_button: unhandled action=%s value=%s", action, value)
+        logger.warning(
+            "handle_button: unhandled action=%s value_len=%d",
+            action,
+            len(value),
+        )
 
 
 async def _handle_select_client(query, context, user: dict, row_str: str) -> None:
@@ -281,6 +296,13 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
         await edit_message_text(query, "❌ Nieprawidłowy wybór.")
         return
 
+    if flow and flow.get("flow_type") in {"offer_client_disambiguation", "disambiguation"}:
+        allowed_rows = _candidate_rows(flow.get("flow_data", {}))
+        if allowed_rows and row not in allowed_rows:
+            delete_pending_flow(telegram_id)
+            await edit_message_text(query, "❌ Nieprawidłowy wybór.")
+            return
+
     clients = await get_all_clients(user["id"])
     client = next((c for c in clients if c.get("_row") == row), None)
     if not client:
@@ -289,11 +311,6 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
 
     if flow and flow.get("flow_type") == "offer_client_disambiguation":
         flow_data = flow.get("flow_data", {})
-        allowed_rows = set(flow_data.get("candidate_rows") or [])
-        if allowed_rows and row not in allowed_rows:
-            delete_pending_flow(telegram_id)
-            await edit_message_text(query, "❌ Nieprawidłowy wybór.")
-            return
         from bot.handlers.text import _find_template_by_id, _start_offer_send_confirmation
         from shared.offers.repository import OfferRepository
 
@@ -342,7 +359,10 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                 return
             row = client.get("_row")
             if row is None:
-                logger.error("buttons change_status: client without _row: %s", client)
+                logger.error(
+                    "buttons change_status: client without _row summary=%s",
+                    summarize_client_data(client),
+                )
                 await edit_message_text(query, "❌ Wystąpił błąd. Spróbuj ponownie.")
                 return
             save_pending(PendingFlow(
@@ -371,7 +391,10 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
             c_city = client.get("Miasto", "")
             row = client.get("_row")
             if row is None:
-                logger.error("buttons add_note: client without _row: %s", client)
+                logger.error(
+                    "buttons add_note: client without _row summary=%s",
+                    summarize_client_data(client),
+                )
                 await edit_message_text(query, "❌ Wystąpił błąd. Spróbuj ponownie.")
                 return
             save_pending(PendingFlow(
@@ -428,7 +451,7 @@ async def _handle_phone_choice(query, telegram_id: int, user_id: str, value: str
 
 
 async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None:
-    """R4: update existing client row with new data from the duplicate detection flow."""
+    """Resume duplicate merge by showing the standard R1 confirmation card."""
     flow = get_pending_flow(telegram_id)
     if not flow or flow.get("flow_type") != "add_client_duplicate":
         await edit_message_text(query, "Brak aktywnego duplikatu.")
@@ -442,29 +465,25 @@ async def _handle_duplicate_merge(query, telegram_id: int, user_id: str) -> None
         await edit_message_text(query, "Brak wiersza do aktualizacji.")
         return
 
-    delete_pending_flow(telegram_id)
-    ok = await update_client(user_id, duplicate_row, new_data)
-    if ok:
-        client_name = flow_data.get("client_name", "")
-        city = flow_data.get("city", "")
-        name_city = f"{client_name} ({city})" if city else (client_name or "klient")
-        save_pending(PendingFlow(
-            telegram_id=telegram_id,
-            flow_type=PendingFlowType.AWAITING_NEXT_STEP,
-            flow_data=payload_to_flow_data(AwaitingNextStepPayload(
-                client_name=client_name,
-                city=city,
-                client_row=duplicate_row,
-                current_status=new_data.get("Status") or "",
-            )),
-        ))
-        await edit_message_text(query, "✅ Dane zaktualizowane.")
-        await reply_text(query,
-            f"Co dalej — {name_city}? Spotkanie, telefon, mail, odłożyć na później?",
-            reply_markup=build_choice_buttons([("❌ Anuluj / nic", "cancel:r7")]),
-        )
-    else:
-        await edit_message_text(query, "❌ Nie udało się zaktualizować. Sprawdź połączenie z Google.")
+    client_name = flow_data.get("client_name", "")
+    city = flow_data.get("city", "")
+    save_pending(PendingFlow(
+        telegram_id=telegram_id,
+        flow_type=PendingFlowType.ADD_CLIENT_DUPLICATE,
+        flow_data=payload_to_flow_data(AddClientDuplicatePayload(
+            client_data=new_data,
+            duplicate_row=duplicate_row,
+            client_name=client_name,
+            city=city,
+        )),
+    ))
+    updated_fields = ", ".join(new_data.keys()) or "nowe dane"
+    city_part = f" ({city})" if city else ""
+    await edit_message_text(
+        query,
+        f"Mam już {client_name or 'tego klienta'}{city_part}.\nZaktualizować o: {updated_fields}?",
+        reply_markup=build_mutation_buttons("confirm"),
+    )
 
 
 async def _handle_edit_choice(query, telegram_id: int, user_id: str, value: str) -> None:

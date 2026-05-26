@@ -17,6 +17,8 @@ from googleapiclient.errors import HttpError
 from shared.database import get_user_by_id, update_user
 from shared.errors import ProactiveFetchError
 from shared.google_auth import get_google_credentials
+from shared.observability import exception_type, id_hash
+from shared.perf import log_duration
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +113,9 @@ def _canonical_schema_matches(headers: list[str]) -> bool:
 
 def _log_schema_mismatch(user_id: str, headers: list[str]) -> None:
     logger.error(
-        "sheet_schema_mismatch(%s): expected=%r actual=%r. "
+        "sheet_schema_mismatch user_hash=%s expected=%r actual=%r. "
         "Repair required: restore A1:P1 to the canonical OZE-Agent CRM headers.",
-        user_id,
+        id_hash(user_id),
         DEFAULT_COLUMNS,
         headers,
     )
@@ -543,14 +545,15 @@ async def get_sheet_headers(user_id: str) -> list[str]:
             ).execute()
             return result.get("values", [[]])[0]
 
-        headers = await asyncio.to_thread(_read)
+        with log_duration(logger, "google.sheets.get_sheet_headers"):
+            headers = await asyncio.to_thread(_read)
         if headers and _canonical_schema_matches(headers):
             update_user(user_id, {"sheet_columns": headers})
         elif headers:
             _log_schema_mismatch(user_id, headers)
         return headers
     except Exception as e:
-        logger.error("get_sheet_headers(%s): %s", user_id, e)
+        logger.error("get_sheet_headers user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return []
 
 
@@ -581,10 +584,61 @@ async def get_all_clients(user_id: str) -> list[dict]:
                 clients.append(client)
             return clients
 
-        return await asyncio.to_thread(_read)
+        with log_duration(logger, "google.sheets.get_all_clients"):
+            return await asyncio.to_thread(_read)
     except Exception as e:
-        logger.error("get_all_clients(%s): %s", user_id, e)
+        logger.error("get_all_clients user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return []
+
+
+async def get_client_by_row(user_id: str, row_number: int) -> Optional[dict]:
+    """Return one client row by 1-indexed Sheets row number, or None.
+
+    This avoids full-sheet reads in pending flows that already resolved the row.
+    Row 1 is the header and is never a client.
+    """
+    if row_number < 2:
+        return None
+    try:
+        user = get_user_by_id(user_id)
+        if not user or not user.get("google_sheets_id"):
+            return None
+        spreadsheet_id = user["google_sheets_id"]
+
+        headers = await _get_verified_sheet_headers(user_id)
+        if not headers:
+            return None
+
+        last_col_letter = chr(ord("A") + len(headers) - 1)
+        row_range = f"A{row_number}:{last_col_letter}{row_number}"
+
+        def _read():
+            service = _get_sheets_service_sync(user_id)
+            if not service:
+                return None
+            result = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=row_range,
+            ).execute()
+            rows = result.get("values", [])
+            if not rows:
+                return None
+            row = rows[0]
+            padded = row + [""] * (len(headers) - len(row))
+            client = dict(zip(headers, padded))
+            client["_row"] = row_number
+            return client
+
+        with log_duration(logger, "google.sheets.get_client_by_row"):
+            return await asyncio.to_thread(_read)
+    except Exception as e:
+        logger.error(
+            "get_client_by_row user_hash=%s row=%s exc_type=%s",
+            id_hash(user_id),
+            row_number,
+            exception_type(e),
+        )
+        return None
 
 
 async def get_all_clients_or_raise(user_id: str) -> list[dict]:
@@ -596,7 +650,7 @@ async def get_all_clients_or_raise(user_id: str) -> list[dict]:
     """
     user = get_user_by_id(user_id)
     if not user:
-        raise ProactiveFetchError(f"user_not_found:{user_id}")
+        raise ProactiveFetchError("user_not_found")
     if not user.get("google_sheets_id"):
         raise ProactiveFetchError("sheets_not_configured")
     spreadsheet_id = user["google_sheets_id"]
@@ -732,9 +786,13 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
         def _append():
             service = _get_sheets_service_sync(user_id)
             if not service:
-                logger.error("add_client: no service for user %s", user_id)
+                logger.error("add_client: no service user_hash=%s", id_hash(user_id))
                 return None
-            logger.info("add_client: appending %d-cell row to %s", len(row), spreadsheet_id)
+            logger.info(
+                "add_client: appending row user_hash=%s cell_count=%d",
+                id_hash(user_id),
+                len(row),
+            )
             result = service.spreadsheets().values().append(
                 spreadsheetId=spreadsheet_id,
                 range="A1",
@@ -743,18 +801,23 @@ async def add_client(user_id: str, client_data: dict) -> Optional[int]:
                 body={"values": [row]},
             ).execute()
             updated_range = result.get("updates", {}).get("updatedRange", "")
-            logger.info("add_client: updatedRange=%s", updated_range)
+            logger.info("add_client: updated_range_present=%s", bool(updated_range))
             # Extract row number from range like "Sheet1!A5:Q5"
             try:
                 row_num = int(updated_range.split("!")[1].split(":")[0][1:])
                 return row_num
             except Exception as e:
-                logger.error("add_client: row_num parse failed, updatedRange=%r: %s", updated_range, e)
+                logger.error(
+                    "add_client: row_num parse failed updated_range_present=%s exc_type=%s",
+                    bool(updated_range),
+                    exception_type(e),
+                )
                 return None
 
-        return await asyncio.to_thread(_append)
+        with log_duration(logger, "google.sheets.add_client"):
+            return await asyncio.to_thread(_append)
     except Exception as e:
-        logger.error("add_client(%s): %s", user_id, e)
+        logger.error("add_client user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
         return None
 
 
@@ -793,9 +856,15 @@ async def update_client(user_id: str, row_number: int, updates: dict) -> bool:
             ).execute()
             return True
 
-        return await asyncio.to_thread(_update)
+        with log_duration(logger, "google.sheets.update_client"):
+            return await asyncio.to_thread(_update)
     except Exception as e:
-        logger.error("update_client(%s, row=%s): %s", user_id, row_number, e)
+        logger.error(
+            "update_client user_hash=%s row=%s exc_type=%s",
+            id_hash(user_id),
+            row_number,
+            exception_type(e),
+        )
         return False
 
 
@@ -837,13 +906,14 @@ async def update_client_fields_without_touch(user_id: str, row_number: int, upda
             ).execute()
             return True
 
-        return await asyncio.to_thread(_update)
+        with log_duration(logger, "google.sheets.update_client_fields_without_touch"):
+            return await asyncio.to_thread(_update)
     except Exception as e:
         logger.error(
-            "update_client_fields_without_touch(%s, row=%s): %s",
-            user_id,
+            "update_client_fields_without_touch user_hash=%s row=%s exc_type=%s",
+            id_hash(user_id),
             row_number,
-            e,
+            exception_type(e),
         )
         return False
 
@@ -896,13 +966,14 @@ async def update_client_photo_metadata(
             ).execute()
             return True
 
-        return await asyncio.to_thread(_update)
+        with log_duration(logger, "google.sheets.update_client_photo_metadata"):
+            return await asyncio.to_thread(_update)
     except Exception as e:
         logger.error(
-            "update_client_photo_metadata(%s, row=%s): %s",
-            user_id,
+            "update_client_photo_metadata user_hash=%s row=%s exc_type=%s",
+            id_hash(user_id),
             row_number,
-            e,
+            exception_type(e),
         )
         return False
 
@@ -953,7 +1024,12 @@ async def delete_client(user_id: str, row_number: int) -> bool:
 
         return await asyncio.to_thread(_delete)
     except Exception as e:
-        logger.error("delete_client(%s, row=%s): %s", user_id, row_number, e)
+        logger.error(
+            "delete_client user_hash=%s row=%s exc_type=%s",
+            id_hash(user_id),
+            row_number,
+            exception_type(e),
+        )
         return False
 
 
@@ -1004,7 +1080,11 @@ async def create_spreadsheet(user_id: str, name: str) -> Optional[str]:
 
         return await asyncio.to_thread(_create)
     except Exception as e:
-        logger.error("create_spreadsheet(%s): %s", user_id, e)
+        logger.error(
+            "create_spreadsheet user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(e),
+        )
         return None
 
 

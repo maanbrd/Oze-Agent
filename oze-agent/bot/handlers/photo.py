@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 PHOTO_SESSION_MINUTES = 15
 PHOTO_FLOW_TYPE = "photo_upload"
 PHOTO_ADD_CLIENT_FLOW_TYPE = "photo_add_client"
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+_PHOTO_EXT_BY_MIME = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
 
 
 def _client_label(client: dict) -> str:
@@ -62,6 +69,35 @@ def _file_id_from_update(update: Update) -> Optional[str]:
     mime_type = getattr(document, "mime_type", "") if document else ""
     if document and mime_type.startswith("image/"):
         return document.file_id
+    return None
+
+
+def _file_size_from_update(update: Update) -> int | None:
+    message = update.effective_message
+    if not message:
+        return None
+    photos = getattr(message, "photo", None) or []
+    if photos:
+        size = getattr(photos[-1], "file_size", None)
+        return size if isinstance(size, int) else None
+    document = getattr(message, "document", None)
+    if document:
+        size = getattr(document, "file_size", None)
+        return size if isinstance(size, int) else None
+    return None
+
+
+def _detect_photo_mime(file_bytes: bytes) -> str | None:
+    if file_bytes.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if file_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if (
+        len(file_bytes) >= 12
+        and file_bytes.startswith(b"RIFF")
+        and file_bytes[8:12] == b"WEBP"
+    ):
+        return "image/webp"
     return None
 
 
@@ -224,6 +260,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     caption = _caption_from_update(update)
     if not file_id:
         await reply_text(update, "❌ Nie udało się odczytać zdjęcia.")
+        return
+    file_size = _file_size_from_update(update)
+    if file_size is not None and file_size > MAX_PHOTO_BYTES:
+        await reply_text(update, "❌ Zdjęcie może mieć maksymalnie 10 MB.")
         return
 
     session = get_active_photo_session(telegram_id)
@@ -397,6 +437,13 @@ async def upload_photo_for_client(
     """Download Telegram file, upload to Drive, update Sheets N/O, and session."""
     telegram_file = await context.bot.get_file(file_id)
     photo_bytes = bytes(await telegram_file.download_as_bytearray())
+    if len(photo_bytes) > MAX_PHOTO_BYTES:
+        logger.warning("photo_upload_rejected: size=%d reason=too_large", len(photo_bytes))
+        return False
+    mime_type = _detect_photo_mime(photo_bytes)
+    if not mime_type:
+        logger.warning("photo_upload_rejected: size=%d reason=invalid_magic", len(photo_bytes))
+        return False
 
     folder = None
     if folder_id and folder_link:
@@ -408,7 +455,7 @@ async def upload_photo_for_client(
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", client.get("Imię i nazwisko", "klient")).strip("_")
-    filename = f"{safe_name or 'klient'}_{timestamp}.jpg"
+    filename = f"{safe_name or 'klient'}_{timestamp}.{_PHOTO_EXT_BY_MIME[mime_type]}"
     link = await upload_photo(user_id, folder["id"], photo_bytes, filename, description=caption)
     if not link:
         return False

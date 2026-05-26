@@ -16,6 +16,7 @@ from shared.google_sheets import (
     _digits_only,
     _is_phone_query,
     get_all_clients,
+    get_client_by_row,
     search_clients,
 )
 from shared.matching import first_name_ok
@@ -247,3 +248,15 @@ async def suggest_fuzzy_client(
     if best_row is None:
         return None
     return FuzzySuggestion(candidate=best_row, distance=best_distance)
+
+
+async def lookup_client_by_row(user_id: str, row_number: int) -> dict | None:
+    """Fetch one already-resolved client row without fuzzy matching."""
+    client = await get_client_by_row(user_id, row_number)
+    if client is not None:
+        return client
+
+    for row in await get_all_clients(user_id):
+        if row.get("_row") == row_number:
+            return row
+    return None

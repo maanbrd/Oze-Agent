@@ -30,6 +30,28 @@ def _make_photo_update(caption: str | None = None, telegram_id: int = 12345):
     return update
 
 
+def _make_document_update(
+    *,
+    caption: str | None = None,
+    content_type: str = "image/png",
+    file_size: int | None = None,
+    telegram_id: int = 12345,
+):
+    update = MagicMock()
+    update.effective_user = MagicMock()
+    update.effective_user.id = telegram_id
+    update.message = MagicMock()
+    update.effective_message = update.message
+    update.message.caption = caption
+    update.message.photo = []
+    update.message.document = MagicMock()
+    update.message.document.file_id = "document-file-id"
+    update.message.document.mime_type = content_type
+    update.message.document.file_size = file_size
+    update.message.reply_text = AsyncMock()
+    return update
+
+
 def _make_context():
     context = MagicMock()
     context.bot = MagicMock()
@@ -110,6 +132,55 @@ async def test_photo_without_caption_asks_for_client_and_stores_file_id_only():
     assert mock_save.call_args.args[1] == "photo_upload"
     assert mock_save.call_args.args[2] == {"file_id": "photo-file-id", "caption": ""}
     assert "Do którego klienta przypisać zdjęcie" in mock_reply.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_image_document_over_size_limit_is_rejected_before_download():
+    from bot.handlers.photo import MAX_PHOTO_BYTES
+
+    update = _make_document_update(file_size=MAX_PHOTO_BYTES + 1)
+    context = _make_context()
+
+    with patch("bot.handlers.photo.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.photo._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.photo.get_active_photo_session") as get_session, \
+         patch("bot.handlers.photo.save_pending_flow") as mock_save, \
+         patch("bot.handlers.photo.reply_text", new=AsyncMock()) as mock_reply:
+        from bot.handlers.photo import handle_photo
+
+        await handle_photo(update, context)
+
+    context.bot.get_file.assert_not_called()
+    get_session.assert_not_called()
+    mock_save.assert_not_called()
+    assert "maksymalnie 10 MB" in mock_reply.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_upload_photo_rejects_spoofed_image_document_magic_bytes():
+    from bot.handlers.photo import upload_photo_for_client
+
+    context = _make_context()
+    telegram_file = MagicMock()
+    telegram_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"not really an image"))
+    context.bot.get_file = AsyncMock(return_value=telegram_file)
+
+    with patch("bot.handlers.photo.get_or_create_client_photo_folder", new=AsyncMock()) as get_folder, \
+         patch("bot.handlers.photo.upload_photo", new=AsyncMock()) as upload_photo, \
+         patch("bot.handlers.photo.update_client_photo_metadata", new=AsyncMock()) as update_metadata:
+        ok = await upload_photo_for_client(
+            context,
+            "user-1",
+            7,
+            _client(),
+            "document-file-id",
+            "dach",
+        )
+
+    assert ok is False
+    get_folder.assert_not_awaited()
+    upload_photo.assert_not_awaited()
+    update_metadata.assert_not_awaited()
 
 
 @pytest.mark.asyncio

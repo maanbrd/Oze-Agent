@@ -10,6 +10,7 @@ from bot.config import Config
 from bot.utils.conversation_reply import reply_text
 from bot.utils.telegram_helpers import is_private_chat
 from shared.database import get_supabase_client, get_user_by_telegram_id, update_user
+from shared.observability import exception_type, id_hash
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ async def _handle_linking_code(
         )
         user = result.data
     except Exception as e:
-        logger.error("start_command linking: DB lookup failed: %s", e)
+        logger.error("start_command linking: DB lookup failed exc_type=%s", exception_type(e))
         logger.warning(
             "start_command linking result: code_found=false expired=false update_success=false telegram_id_already_used=false"
         )
@@ -161,5 +162,9 @@ async def _handle_linking_code(
     logger.info(
         "start_command linking result: code_found=true expired=false update_success=true telegram_id_already_used=false"
     )
-    logger.info("Linked telegram_id=%s to user_id=%s", telegram_id, user["id"])
+    logger.info(
+        "Linked telegram_hash=%s to user_hash=%s",
+        id_hash(telegram_id),
+        id_hash(user["id"]),
+    )
     await reply_text(update, _WELCOME_MESSAGE)
