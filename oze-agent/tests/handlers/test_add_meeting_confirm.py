@@ -617,7 +617,8 @@ async def test_add_meeting_confirm_calendar_fail_uses_calendar_down_error_key():
 async def test_add_meeting_confirm_forwards_flow_data_to_pipeline():
     """Regression guard: handler passes flow_data fields to commit_add_meeting
     including today as a keyword arg + the compound status_update dict."""
-    from datetime import date, datetime
+    from datetime import datetime
+    from bot.handlers.text import _today_warsaw
     flow_data = {
         "title": "Spotkanie - X",
         "start": "2027-05-10T14:00:00+02:00",
@@ -657,7 +658,7 @@ async def test_add_meeting_confirm_forwards_flow_data_to_pipeline():
     assert kwargs["event_type"] == "phone_call"
     assert kwargs["location"] == "ul. Testowa 1"
     assert kwargs["client_row"] == 11
-    assert kwargs["today"] == date.today()
+    assert kwargs["today"] == _today_warsaw()
     assert kwargs["client_current_status"] == "Oferta wysłana"
     assert kwargs["status_update"] is None
 

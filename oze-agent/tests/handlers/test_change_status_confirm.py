@@ -6,12 +6,11 @@ format_error key on failure, R7 firing with the resolved row/status,
 and the compound opt-out guard.
 """
 
-from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.handlers.text import handle_confirm
+from bot.handlers.text import _today_warsaw, handle_confirm
 from shared.mutations import ChangeStatusResult
 
 
@@ -89,7 +88,7 @@ async def test_handler_forwards_row_new_value_and_today_to_pipeline():
     assert args[0] == "u1"                      # user_id
     assert args[1] == 7                         # row
     assert args[2] == "Podpisane"               # new_status
-    assert args[3] == date.today()              # today
+    assert args[3] == _today_warsaw()           # today
 
 
 @pytest.mark.asyncio

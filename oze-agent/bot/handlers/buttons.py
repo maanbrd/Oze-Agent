@@ -12,6 +12,7 @@ from bot.handlers.text import (
     _client_data_summary,
     _client_updates_for_empty_fields,
     _normalize_compound_status_update,
+    _today_warsaw,
     handle_cancel_flow,
     handle_confirm,
     _run_guards,
@@ -172,8 +173,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     elif action == "borrow":
         if value == "yes":
-            from datetime import date, timedelta
-            tomorrow = date.today() + timedelta(days=1)
+            tomorrow = _today_warsaw() + timedelta(days=1)
             increment_daily_interaction_count(telegram_id, tomorrow)
             await edit_message_text(query, "✅ Pożyczono 1 interakcję z jutra.")
         else:

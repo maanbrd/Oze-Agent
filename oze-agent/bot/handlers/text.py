@@ -109,6 +109,12 @@ from shared.search import detect_potential_duplicate
 
 logger = logging.getLogger(__name__)
 
+
+def _today_warsaw() -> date:
+    """Return the user's business date in Europe/Warsaw."""
+    return datetime.now(tz=WARSAW).date()
+
+
 # Fields managed automatically — never show as "missing" to the user
 SYSTEM_FIELDS = {
     "Data pierwszego kontaktu", "Data ostatniego kontaktu", "Status",
@@ -3016,7 +3022,7 @@ async def handle_add_meeting(
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
-    today_str = date.today().isoformat()
+    today_str = _today_warsaw().isoformat()
     history = get_history_unless_pending(telegram_id)
     # Compound add_note + add_meeting (INTENCJE_MVP §4.3): if the trigger
     # starts with "dodaj notatkę X: ...", capture the post-colon text as
@@ -3366,7 +3372,7 @@ async def handle_show_day_plan(
 ) -> None:
     """Show meetings for a given day (or 7-day range). Read-only — no free slots."""
     user_id = user["id"]
-    today = date.today()
+    today = _today_warsaw()
 
     target = _parse_show_day_date(message_text, today)
 
@@ -3682,7 +3688,7 @@ async def _confirm_add_note(update, user_id, flow_data) -> bool:
         flow_data["row"],
         flow_data["note_text"],
         flow_data.get("old_notes", ""),
-        date.today(),
+        _today_warsaw(),
     )
     if result.success:
         await reply_text(update, "✅ Notatka dodana.")
@@ -3697,7 +3703,7 @@ async def _confirm_change_status(update, telegram_id, user_id, flow_data) -> boo
         user_id,
         flow_data["row"],
         flow_data["new_value"],
-        date.today(),
+        _today_warsaw(),
     )
     if not result.success:
         await reply_markdown_v2(update, format_error("google_down"))
@@ -3841,7 +3847,7 @@ async def handle_confirm(
                     location=flow_data.get("location") or "",
                     description=event_description or "",
                     client_row=enriched_client_row,
-                    today=date.today(),
+                    today=_today_warsaw(),
                     client_current_status=current_status_hint,
                     status_update=status_update,
                     client_updates=flow_data.get("client_updates") or None,
@@ -3868,7 +3874,7 @@ async def handle_confirm(
                         compound_sync_row,
                         compound_note_text,
                         flow_data.get("existing_notes", "") or "",
-                        date.today(),
+                        _today_warsaw(),
                     )
                 except Exception as e:
                     logger.warning(

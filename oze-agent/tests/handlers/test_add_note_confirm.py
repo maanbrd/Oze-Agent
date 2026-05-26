@@ -9,12 +9,11 @@ verify the handler layer wiring only:
 * error_message="google_down" → reply_markdown_v2 with format_error key
 """
 
-from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.handlers.text import handle_confirm
+from bot.handlers.text import _today_warsaw, handle_confirm
 from shared.mutations import AddNoteResult
 
 
@@ -73,7 +72,7 @@ async def test_handler_forwards_flow_data_to_pipeline():
     assert args[1] == 7                                      # row
     assert args[2] == "oddzwonił w sprawie oferty"           # note_text
     assert args[3] == "[15.04.2026]: pierwsza rozmowa"       # old_notes
-    assert args[4] == date.today()                           # today
+    assert args[4] == _today_warsaw()                        # today
 
 
 @pytest.mark.asyncio
