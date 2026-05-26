@@ -99,6 +99,7 @@ from shared.google_sheets import (
 from shared.offers.email_utils import extract_email_addresses, merge_offer_recipients
 from shared.offers.email_template import render_email_template
 from shared.offers.numbering import get_ready_offer_by_number, list_ready_with_numbers
+from shared.offers.pipeline import send_offer_after_confirmation
 from shared.offers.repository import OfferRepository
 from shared.clients import lookup_client, lookup_client_by_row, suggest_fuzzy_client
 from shared.matching import first_name_ok as _first_name_ok
@@ -835,21 +836,85 @@ async def _confirm_offer_send(update, telegram_id: int, user_id: str, flow_data:
         await reply_text(update, "Klient nie ma poprawnego maila. Podaj adres email.")
         return True
 
-    repo.enqueue_send_attempt(
-        idempotency_key=flow_data["idempotency_key"],
-        user_id=user_id,
-        telegram_id=telegram_id,
-        client_row=client.get("_row"),
-        client_name=client.get("Imię i nazwisko", ""),
-        client_city=client.get("Miasto", ""),
-        recipients=recipients.recipients,
-        invalid_recipients=recipients.invalid_recipients,
-        offer_template_id=template.get("id"),
-        offer_template_name=template.get("name"),
-        offer_number=flow_data.get("offer_number") or 0,
-        command_text=command_text,
-    )
+    try:
+        repo.enqueue_send_attempt(
+            idempotency_key=flow_data["idempotency_key"],
+            user_id=user_id,
+            telegram_id=telegram_id,
+            client_row=client.get("_row"),
+            client_name=client.get("Imię i nazwisko", ""),
+            client_city=client.get("Miasto", ""),
+            recipients=recipients.recipients,
+            invalid_recipients=recipients.invalid_recipients,
+            offer_template_id=template.get("id"),
+            offer_template_name=template.get("name"),
+            offer_number=flow_data.get("offer_number") or 0,
+            command_text=command_text,
+        )
+    except Exception as exc:
+        logger.warning(
+            "offer_send.queue_enqueue_failed fallback_inline=True user_hash=%s exc_type=%s",
+            id_hash(user_id),
+            exception_type(exc),
+        )
+        return await _send_offer_inline_after_queue_fallback(
+            update=update,
+            telegram_id=telegram_id,
+            user_id=user_id,
+            flow_data=flow_data,
+            template=template,
+            seller_profile=seller_profile,
+            client=client,
+            repository=repo,
+        )
     await reply_text(update, "Wysyłam ofertę. Dam znać po zakończeniu.")
+    return False
+
+
+async def _send_offer_inline_after_queue_fallback(
+    *,
+    update,
+    telegram_id: int,
+    user_id: str,
+    flow_data: dict,
+    template: dict,
+    seller_profile: dict,
+    client: dict,
+    repository: OfferRepository,
+) -> bool:
+    with log_duration(logger, "telegram.offer.send_pipeline"):
+        result = await send_offer_after_confirmation(
+            user_id=user_id,
+            telegram_id=telegram_id,
+            idempotency_key=flow_data["idempotency_key"],
+            offer_number=flow_data.get("offer_number") or 0,
+            template=template,
+            seller_profile=seller_profile,
+            client=client,
+            command_text=flow_data.get("command_text", ""),
+            repository=repository,
+        )
+    if result.sent:
+        if result.already_sent:
+            await reply_text(update, "Ta oferta została już wysłana.")
+            return False
+        lines = ["✅ Oferta wysłana."]
+        if result.invalid_recipients:
+            lines.append(f"Pominięte błędne adresy: {', '.join(result.invalid_recipients)}.")
+        if result.sheets_errors:
+            labels = {
+                "email": "nowy email",
+                "status": "status",
+            }
+            failed = ", ".join(labels.get(item, item) for item in result.sheets_errors)
+            lines.append(f"Nie udało się zapisać w arkuszu: {failed}.")
+        await reply_text(update, "\n".join(lines))
+        return False
+
+    if result.error == "missing_valid_email":
+        await reply_text(update, "Klient nie ma poprawnego maila. Podaj adres email.")
+        return True
+    await reply_text(update, "Nie udało się wysłać maila. Arkusz nie został zmieniony.")
     return False
 
 

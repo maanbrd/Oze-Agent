@@ -52,7 +52,14 @@ async def process_offer_send_queue_once(
     """Claim and process a small batch of due offer-send attempts."""
     repo = repository or OfferRepository()
     owner = lock_owner or f"offer-worker-{uuid4()}"
-    attempts = repo.claim_due_send_attempts(limit=limit, lock_owner=owner)
+    try:
+        attempts = repo.claim_due_send_attempts(limit=limit, lock_owner=owner)
+    except Exception as exc:
+        logger.warning(
+            "offer_queue.claim_failed processed=0 exc_type=%s",
+            exception_type(exc),
+        )
+        return 0
     processed = 0
 
     for attempt in attempts:

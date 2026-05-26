@@ -35,6 +35,11 @@ class FakeRepo:
         self.notified.append(idempotency_key)
 
 
+class FailingClaimRepo:
+    def claim_due_send_attempts(self, limit, lock_owner):
+        raise RuntimeError("queue_schema_missing")
+
+
 def _attempt(**overrides):
     base = {
         "idempotency_key": "key-1",
@@ -120,3 +125,16 @@ async def test_offer_queue_worker_reports_permanent_missing_email_failure(monkey
     bot.send_message.assert_awaited_once()
     assert "Klient nie ma poprawnego maila" in bot.send_message.await_args.kwargs["text"]
     assert repo.notified == ["key-1"]
+
+
+@pytest.mark.asyncio
+async def test_offer_queue_worker_noops_when_queue_schema_is_missing():
+    from shared.offers.queue_worker import process_offer_send_queue_once
+
+    processed = await process_offer_send_queue_once(
+        AsyncMock(),
+        repository=FailingClaimRepo(),
+        lock_owner="worker-1",
+    )
+
+    assert processed == 0
