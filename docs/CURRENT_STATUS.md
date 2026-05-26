@@ -1,6 +1,6 @@
 # OZE-Agent — Current Status
 
-_Last updated: 04.05.2026_
+_Last updated: 26.05.2026_
 
 ---
 
@@ -181,6 +181,9 @@ Current active track:
 4. Separate test backend resources (Sheets / Calendar / Supabase) before destructive or high-volume testing.
 5. Run offer-generator smoke separately on fictional clients and controlled email addresses before any real customer send.
 6. Return to broad web app/dashboard implementation after the core Telegram agent is stable.
+7. Track security follow-ups in `docs/IMPLEMENTATION_PLAN.md`: production `.env`
+   loading policy, legacy mutation-path isolation/removal, and local env files
+   remaining gitignored but not part of runtime contract.
 
 ---
 

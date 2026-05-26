@@ -1,6 +1,6 @@
 # OZE-Agent — Implementation Plan
 
-_Last updated: 04.05.2026_
+_Last updated: 26.05.2026_
 
 ---
 
@@ -33,6 +33,21 @@ surface, but the product's core value is the agent in Telegram.
 - Plan separate staging Google/Supabase resources before destructive testing.
 - Run a controlled offer-generator smoke on fictional clients and controlled
   addresses before any real customer send.
+
+## Security Follow-up Decisions — 26.05.2026
+
+These are follow-up decisions from the security audit remediation, tracked as
+selective-rewrite work rather than immediate hotfixes:
+
+1. `load_dotenv()` stays unchanged for now. Later task: production entrypoints
+   should explicitly ignore `.env`; local development may load `.env.local`.
+2. Do not bulk-delete legacy `edit_client`, `delete_client`, or `add_meetings`
+   code now. First isolate routing and add tests proving legacy paths cannot
+   mutate without R1. Remove dead code only after the replacement flows are
+   stable.
+3. Local `.env.local` / test env files may stay gitignored, but they are not a
+   runtime contract. `oze-agent/.env` must not exist and must not be required by
+   the code.
 
 ## Offer Generator Slice — baseline implemented
 
