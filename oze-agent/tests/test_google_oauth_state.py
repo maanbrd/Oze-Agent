@@ -183,7 +183,9 @@ def test_handle_oauth_callback_fails_when_tokens_are_not_stored(monkeypatch):
     monkeypatch.setattr(google_auth, "store_google_tokens", lambda user_id, credentials: False)
     monkeypatch.setattr(google_auth, "get_user_by_id", lambda user_id: {"id": user_id})
 
-    assert google_auth.handle_oauth_callback("oauth-code", "user-1") is None
+    state = google_auth.build_oauth_state("user-1")
+
+    assert google_auth.handle_oauth_callback("oauth-code", state) is None
 
 
 def test_handle_oauth_callback_rejects_invalid_state_before_fetch_token(monkeypatch):
