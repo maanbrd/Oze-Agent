@@ -13,6 +13,7 @@ whole run. The dedup column is updated only on successful send — a failed
 user retries naturally the next weekday.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -21,6 +22,7 @@ from zoneinfo import ZoneInfo
 from telegram import Bot
 from telegram.constants import ParseMode
 
+from bot.config import Config
 from shared.database import (
     get_eligible_users_for_morning_brief,
     update_last_morning_brief_sent,
@@ -31,6 +33,7 @@ from shared.google_calendar import get_events_for_range_or_raise
 from shared.google_sheets import get_all_clients_or_raise
 from shared.observability import exception_type, id_hash
 from shared.perf import log_duration
+from shared.request_context import request_context
 
 logger = logging.getLogger(__name__)
 
@@ -154,17 +157,34 @@ async def run_morning_brief(bot: Bot) -> MorningBriefRunResult:
     today = _today_warsaw()
     eligible = get_eligible_users_for_morning_brief()
     result.total_eligible = len(eligible)
+    concurrency = max(1, int(getattr(Config, "MORNING_BRIEF_CONCURRENCY", 5) or 5))
+    semaphore = asyncio.Semaphore(concurrency)
 
-    for row in eligible:
+    async def _process_user(row: dict) -> str:
+        async with semaphore:
+            with request_context():
+                return await _send_morning_brief_to_user(bot, row, today)
+
+    outcomes = await asyncio.gather(*[_process_user(row) for row in eligible])
+    for outcome in outcomes:
+        if outcome == "sent":
+            result.sent += 1
+        elif outcome == "deduped":
+            result.skipped_deduped += 1
+        else:
+            result.skipped_error += 1
+
+    return result
+
+
+async def _send_morning_brief_to_user(bot: Bot, row: dict, today: date) -> str:
         user_id = row.get("id")
         telegram_id = row.get("telegram_id")
         if not user_id or not telegram_id:
-            result.skipped_error += 1
-            continue
+            return "error"
 
         if _already_sent_today(row, today):
-            result.skipped_deduped += 1
-            continue
+            return "deduped"
 
         try:
             start_warsaw, end_warsaw = _warsaw_day_bounds(today)
@@ -185,19 +205,17 @@ async def run_morning_brief(bot: Bot) -> MorningBriefRunResult:
                     "brief_delivered=True possible_double_send_risk=True",
                     id_hash(user_id),
                 )
-            result.sent += 1
+            return "sent"
         except ProactiveFetchError as e:
             logger.warning(
                 "morning_brief.skipped_fetch_error user_hash=%s reason=%s",
                 id_hash(user_id),
                 e,
             )
-            result.skipped_error += 1
+            return "error"
         except Exception as e:
             logger.error(
                 "morning_brief.send_failed user_hash=%s telegram_hash=%s exc_type=%s",
                 id_hash(user_id), id_hash(telegram_id), exception_type(e),
             )
-            result.skipped_error += 1
-
-    return result
+            return "error"

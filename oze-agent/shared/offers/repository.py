@@ -17,6 +17,11 @@ def _expires_90_days() -> str:
     return (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
 
 
+def _retry_at(attempt_count: int) -> str:
+    delay_seconds = min(300, max(15, attempt_count * 30))
+    return (datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)).isoformat()
+
+
 class OfferRepository:
     def __init__(self, client=None):
         self.client = client or get_supabase_client()
@@ -182,6 +187,50 @@ class OfferRepository:
             return existing
         raise RuntimeError("offer_attempt_create_failed")
 
+    def enqueue_send_attempt(self, **kwargs) -> dict:
+        payload = {
+            **kwargs,
+            "status": "pending",
+            "queued_at": kwargs.get("queued_at") or _now_iso(),
+            "next_attempt_at": kwargs.get("next_attempt_at") or _now_iso(),
+            "attempt_count": kwargs.get("attempt_count") or 0,
+            "expires_at": kwargs.get("expires_at") or _expires_90_days(),
+        }
+        return self.ensure_send_attempt(**payload)
+
+    def claim_due_send_attempts(self, limit: int, lock_owner: str) -> list[dict]:
+        now = _now_iso()
+        result = (
+            self.client.table("offer_send_attempts")
+            .select("*")
+            .eq("status", "pending")
+            .lte("next_attempt_at", now)
+            .order("created_at")
+            .limit(limit)
+            .execute()
+        )
+        rows = result.data or []
+        claimed: list[dict] = []
+        for row in rows:
+            attempt_count = int(row.get("attempt_count") or 0) + 1
+            update = {
+                "status": "sending",
+                "attempt_count": attempt_count,
+                "locked_at": now,
+                "lock_owner": lock_owner,
+                "updated_at": now,
+            }
+            result = (
+                self.client.table("offer_send_attempts")
+                .update(update)
+                .eq("idempotency_key", row["idempotency_key"])
+                .eq("status", "pending")
+                .execute()
+            )
+            if result.data:
+                claimed.append(result.data[0])
+        return claimed
+
     def claim_send_attempt(self, idempotency_key: str) -> dict | None:
         result = (
             self.client.table("offer_send_attempts")
@@ -215,6 +264,41 @@ class OfferRepository:
         self.client.table("offer_send_attempts").update({
             "status": "failed",
             "error": error[:1000],
+            "updated_at": _now_iso(),
+        }).eq("idempotency_key", idempotency_key).execute()
+
+    def release_or_fail_send_attempt(
+        self,
+        idempotency_key: str,
+        error: str,
+        permanent: bool = False,
+        max_attempts: int = 3,
+    ) -> dict | None:
+        current = self.get_send_attempt(idempotency_key) or {}
+        attempt_count = int(current.get("attempt_count") or 0)
+        final = permanent or attempt_count >= max_attempts
+        payload = {
+            "status": "failed" if final else "pending",
+            "error": error[:1000],
+            "locked_at": None,
+            "lock_owner": None,
+            "updated_at": _now_iso(),
+        }
+        if final:
+            payload["next_attempt_at"] = None
+        else:
+            payload["next_attempt_at"] = _retry_at(attempt_count)
+        result = (
+            self.client.table("offer_send_attempts")
+            .update(payload)
+            .eq("idempotency_key", idempotency_key)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    def mark_result_notified(self, idempotency_key: str) -> None:
+        self.client.table("offer_send_attempts").update({
+            "telegram_result_sent_at": _now_iso(),
             "updated_at": _now_iso(),
         }).eq("idempotency_key", idempotency_key).execute()
 

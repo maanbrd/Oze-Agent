@@ -23,7 +23,13 @@ from bot.handlers.photo import handle_photo
 from bot.handlers.start import start_command
 from bot.handlers.text import handle_refresh_columns_command, handle_text
 from bot.handlers.voice import handle_voice
-from bot.scheduler import register_admin_mirror, register_morning_brief, register_user_profile_agent
+from bot.scheduler import (
+    register_admin_mirror,
+    register_morning_brief,
+    register_offer_send_queue,
+    register_user_profile_agent,
+)
+from shared.request_context import with_request_context
 
 logging.basicConfig(
     level=logging.INFO,
@@ -85,18 +91,19 @@ def main():
 
     # Order matters — first match wins
     app.add_handler(TypeHandler(Update, mark_update_seen), group=-1)
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("cancel", handle_cancel_command))
-    app.add_handler(CommandHandler("debug_brief", debug_brief_command))
-    app.add_handler(CommandHandler("odswiez_kolumny", handle_refresh_columns_command))
-    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(CallbackQueryHandler(handle_button))
-    app.add_handler(MessageHandler(filters.ALL, handle_fallback))
+    app.add_handler(CommandHandler("start", with_request_context(start_command)))
+    app.add_handler(CommandHandler("cancel", with_request_context(handle_cancel_command)))
+    app.add_handler(CommandHandler("debug_brief", with_request_context(debug_brief_command)))
+    app.add_handler(CommandHandler("odswiez_kolumny", with_request_context(handle_refresh_columns_command)))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, with_request_context(handle_voice)))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, with_request_context(handle_photo)))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, with_request_context(handle_text)))
+    app.add_handler(CallbackQueryHandler(with_request_context(handle_button)))
+    app.add_handler(MessageHandler(filters.ALL, with_request_context(handle_fallback)))
     app.add_error_handler(error_handler)
 
     register_morning_brief(app)
+    register_offer_send_queue(app)
     register_admin_mirror(app)
     register_user_profile_agent(app)
 

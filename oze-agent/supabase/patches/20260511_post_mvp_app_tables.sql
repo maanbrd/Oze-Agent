@@ -78,6 +78,13 @@ CREATE TABLE IF NOT EXISTS public.offer_send_attempts (
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
     gmail_message_id TEXT,
     error TEXT,
+    queued_at TIMESTAMPTZ,
+    next_attempt_at TIMESTAMPTZ,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    locked_at TIMESTAMPTZ,
+    lock_owner TEXT,
+    telegram_result_sent_at TIMESTAMPTZ,
+    command_text TEXT,
     sent_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -89,6 +96,10 @@ CREATE INDEX IF NOT EXISTS idx_offer_templates_user_status_order
 
 CREATE INDEX IF NOT EXISTS idx_offer_send_attempts_user_created
     ON public.offer_send_attempts(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_offer_send_attempts_queue_due
+    ON public.offer_send_attempts(status, next_attempt_at, created_at)
+    WHERE status = 'pending';
 
 ALTER TABLE public.offer_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.offer_seller_profiles ENABLE ROW LEVEL SECURITY;

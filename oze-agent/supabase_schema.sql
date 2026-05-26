@@ -285,6 +285,13 @@ CREATE TABLE offer_send_attempts (
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
     gmail_message_id TEXT,
     error TEXT,
+    queued_at TIMESTAMPTZ,
+    next_attempt_at TIMESTAMPTZ,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    locked_at TIMESTAMPTZ,
+    lock_owner TEXT,
+    telegram_result_sent_at TIMESTAMPTZ,
+    command_text TEXT,
     sent_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -309,6 +316,9 @@ CREATE INDEX idx_user_behavior_profiles_last_run ON user_behavior_profiles(last_
 CREATE INDEX idx_user_behavior_profile_runs_user_created ON user_behavior_profile_runs(user_id, created_at DESC);
 CREATE INDEX idx_offer_templates_user_status_order ON offer_templates(user_id, status, sort_order);
 CREATE INDEX idx_offer_send_attempts_user_created ON offer_send_attempts(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_offer_send_attempts_queue_due
+    ON offer_send_attempts(status, next_attempt_at, created_at)
+    WHERE status = 'pending';
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -428,6 +438,13 @@ CREATE TABLE IF NOT EXISTS offer_send_attempts (
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
     gmail_message_id TEXT,
     error TEXT,
+    queued_at TIMESTAMPTZ,
+    next_attempt_at TIMESTAMPTZ,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    locked_at TIMESTAMPTZ,
+    lock_owner TEXT,
+    telegram_result_sent_at TIMESTAMPTZ,
+    command_text TEXT,
     sent_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -439,6 +456,9 @@ CREATE INDEX IF NOT EXISTS idx_offer_templates_user_status_order
 
 CREATE INDEX IF NOT EXISTS idx_offer_send_attempts_user_created
     ON offer_send_attempts(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_offer_send_attempts_queue_due
+    ON offer_send_attempts(status, next_attempt_at, created_at)
+    WHERE status = 'pending';
 
 ALTER TABLE offer_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offer_seller_profiles ENABLE ROW LEVEL SECURITY;

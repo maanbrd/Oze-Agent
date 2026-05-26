@@ -4,6 +4,7 @@ Mocks Supabase, Calendar, Sheets, and the Telegram Bot to exercise the
 full per-user flow without touching any external service.
 """
 
+import asyncio
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -307,6 +308,48 @@ async def test_error_isolation_one_user_failure_does_not_block_others():
     assert result.total_eligible == 3
     assert result.sent == 2
     assert result.skipped_error == 1
+
+
+@pytest.mark.asyncio
+async def test_run_morning_brief_processes_users_concurrently_with_limit():
+    users = [
+        _user(user_id=f"u{idx}", telegram_id=100 + idx, last_sent=None)
+        for idx in range(5)
+    ]
+    active = 0
+    max_active = 0
+
+    async def _fetch_events(*_args):
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return []
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    with patch(
+        "shared.proactive.morning_brief.Config.MORNING_BRIEF_CONCURRENCY",
+        2,
+        create=True,
+    ), patch(
+        "shared.proactive.morning_brief.get_eligible_users_for_morning_brief",
+        return_value=users,
+    ), patch(
+        "shared.proactive.morning_brief.get_events_for_range_or_raise",
+        new=AsyncMock(side_effect=_fetch_events),
+    ), patch(
+        "shared.proactive.morning_brief.get_all_clients_or_raise",
+        new=AsyncMock(return_value=[]),
+    ), patch(
+        "shared.proactive.morning_brief.update_last_morning_brief_sent",
+        return_value=True,
+    ):
+        result = await run_morning_brief(bot)
+
+    assert result.sent == 5
+    assert max_active == 2
 
 
 @pytest.mark.asyncio

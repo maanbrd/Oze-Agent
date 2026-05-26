@@ -67,6 +67,7 @@ async def send_offer_after_confirmation(
     gmail_sender=None,
     update_email=None,
     update_status=None,
+    preclaimed: bool = False,
 ) -> SendOfferResult:
     """Send the PDF via Gmail, then best-effort update Sheets.
 
@@ -99,7 +100,7 @@ async def send_offer_after_confirmation(
             sheets_errors=[],
         )
 
-    claimed = repo.claim_send_attempt(idempotency_key)
+    claimed = {"idempotency_key": idempotency_key, "status": "sending"} if preclaimed else repo.claim_send_attempt(idempotency_key)
     if not claimed:
         current = repo.get_send_attempt(idempotency_key) or {}
         if current.get("status") == "sent":

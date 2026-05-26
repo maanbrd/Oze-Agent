@@ -22,11 +22,13 @@ class _ValuesService:
         self.get_result = get_result if get_result is not None else {"values": []}
         self.get_error = get_error
         self.get_kwargs = None
+        self.get_call_count = 0
         self.update_kwargs = None
         self.append_kwargs = None
         self.batch_update_kwargs = None
 
     def get(self, **kwargs):
+        self.get_call_count += 1
         self.get_kwargs = kwargs
         return _Execute(self.get_result, self.get_error)
 
@@ -167,6 +169,61 @@ async def test_get_client_by_row_rejects_header_row():
     from shared.google_sheets import get_client_by_row
 
     assert await get_client_by_row("user-1", 1) is None
+
+
+@pytest.mark.asyncio
+async def test_get_all_clients_uses_request_cache_inside_context():
+    from shared.google_sheets import get_all_clients
+    from shared.request_context import request_context
+
+    values = _ValuesService(get_result={"values": [
+        ["Imię i nazwisko", "Miasto"],
+        ["Jan Kowalski", "Warszawa"],
+    ]})
+    service = _SheetsService(values)
+
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=service,
+    ):
+        with request_context():
+            first = await get_all_clients("user-1")
+            second = await get_all_clients("user-1")
+
+    assert first == second == [{"Imię i nazwisko": "Jan Kowalski", "Miasto": "Warszawa", "_row": 2}]
+    assert values.get_call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_update_client_invalidates_request_client_cache():
+    from shared.google_sheets import update_client, get_all_clients
+    from shared.request_context import request_context
+
+    values = _ValuesService(get_result={"values": [
+        ["Imię i nazwisko", "Miasto", "Data ostatniego kontaktu"],
+        ["Jan Kowalski", "Warszawa", ""],
+    ]})
+    service = _SheetsService(values)
+
+    with patch(
+        "shared.google_sheets.get_user_by_id",
+        return_value={"google_sheets_id": "sheet-1"},
+    ), patch(
+        "shared.google_sheets._get_verified_sheet_headers",
+        new=AsyncMock(return_value=["Imię i nazwisko", "Miasto", "Data ostatniego kontaktu"]),
+    ), patch(
+        "shared.google_sheets._get_sheets_service_sync",
+        return_value=service,
+    ):
+        with request_context():
+            await get_all_clients("user-1")
+            assert await update_client("user-1", 2, {"Miasto": "Kraków"})
+            await get_all_clients("user-1")
+
+    assert values.get_call_count == 2
 
 
 # ── get_pipeline_stats ────────────────────────────────────────────────────────

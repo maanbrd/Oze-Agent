@@ -56,6 +56,44 @@ def test_get_user_by_telegram_id_not_found():
     assert result is None
 
 
+def test_get_user_by_id_uses_request_cache_within_context():
+    user = {"id": "user-1", "telegram_id": 123, "name": "Jan"}
+    client = _make_client(data=user)
+
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import get_user_by_id
+        from shared.request_context import request_context
+
+        with request_context():
+            assert get_user_by_id("user-1") == user
+            assert get_user_by_id("user-1") == user
+
+    assert client.execute.call_count == 1
+
+
+def test_update_user_refreshes_cached_user_rows():
+    before = {"id": "user-1", "telegram_id": 123, "name": "Jan"}
+    after = {"id": "user-1", "telegram_id": 123, "name": "Jan Updated"}
+    first = MagicMock()
+    first.data = before
+    second = MagicMock()
+    second.data = [after]
+
+    client = _make_client()
+    client.execute.side_effect = [first, second]
+
+    with patch("shared.database.get_supabase_client", return_value=client):
+        from shared.database import get_user_by_id, update_user
+        from shared.request_context import request_context
+
+        with request_context():
+            assert get_user_by_id("user-1") == before
+            assert update_user("user-1", {"name": "Jan Updated"}) == after
+            assert get_user_by_id("user-1") == after
+
+    assert client.execute.call_count == 2
+
+
 # ── create_user ───────────────────────────────────────────────────────────────
 
 

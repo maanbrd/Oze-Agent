@@ -11,6 +11,14 @@ from supabase import Client, create_client
 
 from bot.config import Config
 from shared.observability import exception_type, id_hash
+from shared.request_context import (
+    cache_missing_user_by_id,
+    cache_missing_user_by_telegram_id,
+    cache_user,
+    get_cached_user_by_id,
+    get_cached_user_by_telegram_id,
+    refresh_cached_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +39,10 @@ def get_supabase_client() -> Client:
 def get_user_by_telegram_id(telegram_id: int) -> Optional[dict]:
     """Return user dict or None if not found."""
     try:
+        return get_cached_user_by_telegram_id(telegram_id)
+    except KeyError:
+        pass
+    try:
         result = (
             get_supabase_client()
             .table("users")
@@ -39,14 +51,23 @@ def get_user_by_telegram_id(telegram_id: int) -> Optional[dict]:
             .single()
             .execute()
         )
+        if result.data:
+            cache_user(result.data)
+        else:
+            cache_missing_user_by_telegram_id(telegram_id)
         return result.data
     except Exception as e:
         logger.debug("get_user_by_telegram_id telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
+        cache_missing_user_by_telegram_id(telegram_id)
         return None
 
 
 def get_user_by_id(user_id: str) -> Optional[dict]:
     """Return user dict by UUID or None if not found."""
+    try:
+        return get_cached_user_by_id(user_id)
+    except KeyError:
+        pass
     try:
         result = (
             get_supabase_client()
@@ -56,9 +77,14 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
             .single()
             .execute()
         )
+        if result.data:
+            cache_user(result.data)
+        else:
+            cache_missing_user_by_id(user_id)
         return result.data
     except Exception as e:
         logger.error("get_user_by_id user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
+        cache_missing_user_by_id(user_id)
         return None
 
 
@@ -88,9 +114,12 @@ def update_user(user_id: str, data: dict) -> Optional[dict]:
             .eq("id", user_id)
             .execute()
         )
-        return result.data[0] if result.data else None
+        updated = result.data[0] if result.data else None
+        refresh_cached_user(user_id, updated)
+        return updated
     except Exception as e:
         logger.error("update_user user_hash=%s exc_type=%s", id_hash(user_id), exception_type(e))
+        refresh_cached_user(user_id, None)
         return None
 
 
