@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from shared.database import delete_active_photo_session
+from shared.database import delete_active_photo_session, delete_pending_flow
 from shared.google_drive import (
     _get_drive_service_sync,
     extract_folder_id,
@@ -28,7 +28,7 @@ from shared.offers.repository import OfferRepository
 
 from tests_e2e.config import E2EConfig
 from tests_e2e.fixtures import cleanup_synthetic_data
-from tests_e2e.harness import TelegramE2EHarness
+from tests_e2e.harness import TelegramE2EHarness, _ObservedMessage
 from tests_e2e.report import ScenarioResult, write_report
 from tests_e2e.scenarios._base import new_result, stamp_end
 from tests_e2e.scenarios._helpers import (
@@ -64,6 +64,89 @@ def _email(slug: str, run_id: str) -> str:
     return f"{slug}+{run_id}@{SYNTHETIC_DOMAIN}"
 
 
+def _offer_smoke_client_name(run_id: str) -> str:
+    return f"E2E Beta Klient {run_id}"
+
+
+def _message_has_required_buttons(
+    message: _ObservedMessage,
+    required_buttons: tuple[str, ...],
+) -> bool:
+    return all(label in message.button_labels for label in required_buttons)
+
+
+def _message_has_text_markers(
+    message: _ObservedMessage,
+    text_markers: tuple[str, ...],
+) -> bool:
+    text = message.text.lower()
+    return all(marker.lower() in text for marker in text_markers)
+
+
+def _find_matching_card_message(
+    messages: list[_ObservedMessage],
+    *,
+    required_buttons: tuple[str, ...],
+    text_markers: tuple[str, ...] = (),
+) -> _ObservedMessage | None:
+    for message in messages:
+        if not _message_has_required_buttons(message, required_buttons):
+            continue
+        if not _message_has_text_markers(message, text_markers):
+            continue
+        return message
+    return None
+
+
+async def _wait_for_matching_card(
+    harness: TelegramE2EHarness,
+    *,
+    required_buttons: tuple[str, ...],
+    text_markers: tuple[str, ...] = (),
+    timeout_s: float = 30.0,
+) -> list[_ObservedMessage]:
+    messages: list[_ObservedMessage] = []
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout_s
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            break
+        batch = await harness.wait_for_messages(count=1, timeout_s=remaining)
+        if not batch:
+            break
+        messages.extend(batch)
+        if _find_matching_card_message(
+            messages,
+            required_buttons=required_buttons,
+            text_markers=text_markers,
+        ) is not None:
+            break
+    return messages
+
+
+def _reset_post_campaign_state(config: E2EConfig) -> None:
+    delete_pending_flow(config.admin_telegram_id)
+    delete_active_photo_session(config.admin_telegram_id)
+
+
+def _cleanup_offer_attempts_for_client(
+    repo: OfferRepository,
+    *,
+    user_id: str,
+    name: str,
+    city: str,
+) -> None:
+    (
+        repo.client.table("offer_send_attempts")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("client_name", name)
+        .eq("client_city", city)
+        .execute()
+    )
+
+
 async def _hard_cancel(harness: TelegramE2EHarness) -> None:
     await harness.send("/cancel")
     await harness.collect_messages(duration_s=3.0)
@@ -91,9 +174,18 @@ async def _add_client(
     result.context["add_client_trigger"] = trigger
     await reset_pending(harness)
     await harness.send(trigger)
-    card_replies = await wait_for_card_messages(harness, timeout_s=30.0)
+    card_replies = await _wait_for_matching_card(
+        harness,
+        required_buttons=("✅ Zapisać", "❌ Anulować"),
+        text_markers=(name,),
+        timeout_s=30.0,
+    )
     result.context["add_client_card_replies"] = [m.text[:240] for m in card_replies]
-    card = find_card_message(card_replies)
+    card = _find_matching_card_message(
+        card_replies,
+        required_buttons=("✅ Zapisać", "❌ Anulować"),
+        text_markers=(name,),
+    )
     if card is None:
         result.add_blocker("add_client_card", "no confirmation card")
         return None
@@ -142,6 +234,7 @@ async def run_drive_photo_smoke(config: E2EConfig) -> ScenarioResult:
     email = _email("agnieszka.lewandowska", run_id)
     folder_id = ""
     try:
+        _reset_post_campaign_state(config)
         user_id = await resolve_user_id(config.admin_telegram_id)
         if not user_id:
             result.add_blocker("user_id", "could not resolve Supabase user id")
@@ -219,6 +312,7 @@ async def run_drive_photo_smoke(config: E2EConfig) -> ScenarioResult:
         logger.exception("drive photo smoke crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
     finally:
+        _reset_post_campaign_state(config)
         stamp_end(result)
     return result
 
@@ -227,10 +321,13 @@ async def run_offer_gmail_smoke(config: E2EConfig) -> ScenarioResult:
     result = new_result("post_offer_gmail_smoke", "post_campaign_apps")
     recipient = os.getenv(OFFER_RECIPIENT_ENV, "").strip()
     run_id = _run_id()
-    name = "Piotr Malinowski"
+    name = _offer_smoke_client_name(run_id)
     city = "Opole"
-    email = recipient or _email("piotr.malinowski", run_id)
+    email = recipient or _email("e2e.beta.klient", run_id)
+    user_id = ""
+    repo: OfferRepository | None = None
     try:
+        _reset_post_campaign_state(config)
         user_id = await resolve_user_id(config.admin_telegram_id)
         if not user_id:
             result.add_blocker("user_id", "could not resolve Supabase user id")
@@ -292,9 +389,18 @@ async def run_offer_gmail_smoke(config: E2EConfig) -> ScenarioResult:
             command = f"wyślij ofertę nr {offer_number} dla {name} {city}"
             result.context["offer_send_trigger"] = command
             await harness.send(command)
-            card_replies = await wait_for_card_messages(harness, timeout_s=30.0)
+            card_replies = await _wait_for_matching_card(
+                harness,
+                required_buttons=("✅ Wysłać", "❌ Anulować"),
+                text_markers=(name, str(template.get("name") or "")),
+                timeout_s=30.0,
+            )
             result.context["offer_card_replies"] = [m.text[:300] for m in card_replies]
-            card = find_card_message(card_replies)
+            card = _find_matching_card_message(
+                card_replies,
+                required_buttons=("✅ Wysłać", "❌ Anulować"),
+                text_markers=(name, str(template.get("name") or "")),
+            )
             if card is None:
                 result.add_blocker("offer_send_confirm_card", "no offer confirmation card")
                 return result
@@ -359,6 +465,9 @@ async def run_offer_gmail_smoke(config: E2EConfig) -> ScenarioResult:
         logger.exception("offer gmail smoke crashed")
         result.add_blocker("scenario_crash", f"{type(e).__name__}: {e}")
     finally:
+        _reset_post_campaign_state(config)
+        if repo is not None and user_id:
+            _cleanup_offer_attempts_for_client(repo, user_id=user_id, name=name, city=city)
         stamp_end(result)
     return result
 
