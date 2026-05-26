@@ -42,6 +42,8 @@ class Config:
     # AI
     ANTHROPIC_API_KEY = _clean_env("ANTHROPIC_API_KEY")
     OPENAI_API_KEY = _clean_env("OPENAI_API_KEY")
+    VOICE_STT_MODEL = _clean_env("VOICE_STT_MODEL", "gpt-4o-transcribe")
+    VOICE_STT_FALLBACK_MODEL = _clean_env("VOICE_STT_FALLBACK_MODEL", "whisper-1")
 
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")

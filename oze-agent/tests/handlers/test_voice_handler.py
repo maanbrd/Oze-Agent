@@ -54,8 +54,20 @@ def _make_context():
     return context
 
 
-def _whisper_result(text: str, confidence: float = 0.9, duration: float = 5.0) -> dict:
-    return {"text": text, "confidence": confidence, "duration_seconds": duration}
+def _whisper_result(
+    text: str,
+    confidence: float | None = None,
+    duration: float = 5.0,
+    model: str = "gpt-4o-transcribe",
+    fallback_used: bool = False,
+) -> dict:
+    return {
+        "text": text,
+        "confidence": confidence,
+        "duration_seconds": duration,
+        "model": model,
+        "fallback_used": fallback_used,
+    }
 
 
 def _postproc_result(corrected: str, fallback: str | None = None, cost: float = 0.0001) -> dict:
@@ -112,6 +124,56 @@ async def test_low_confidence_creates_same_pending_card_flow():
 
 
 @pytest.mark.asyncio
+async def test_voice_card_hides_technical_confidence():
+    update = _make_voice_update()
+    ctx = _make_context()
+    with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.voice._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
+         patch("bot.handlers.voice.send_processing_stage", new=AsyncMock()), \
+         patch("bot.handlers.voice.transcribe_voice",
+               new=AsyncMock(return_value=_whisper_result("Jan", confidence=0.41))), \
+         patch("bot.handlers.voice.normalize_polish_names",
+               new=AsyncMock(return_value=_postproc_result("Jan"))), \
+         patch("bot.handlers.voice.increment_interaction", new=AsyncMock()), \
+         patch("bot.handlers.voice.save_pending_flow"):
+        from bot.handlers.voice import handle_voice
+        await handle_voice(update, ctx)
+
+    md_text = update.message.reply_markdown_v2.call_args.args[0]
+    assert "pewność" not in md_text.lower()
+    assert "41%" not in md_text
+    assert "Jeśli tekst się zgadza" in md_text
+
+
+@pytest.mark.asyncio
+async def test_pending_flow_carries_stt_metadata_without_empty_confidence():
+    update = _make_voice_update()
+    ctx = _make_context()
+    with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.voice._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
+         patch("bot.handlers.voice.send_processing_stage", new=AsyncMock()), \
+         patch("bot.handlers.voice.transcribe_voice",
+               new=AsyncMock(return_value=_whisper_result(
+                   "Jan",
+                   confidence=None,
+                   model="gpt-4o-transcribe",
+                   fallback_used=False,
+               ))), \
+         patch("bot.handlers.voice.normalize_polish_names",
+               new=AsyncMock(return_value=_postproc_result("Jan"))), \
+         patch("bot.handlers.voice.increment_interaction", new=AsyncMock()), \
+         patch("bot.handlers.voice.save_pending_flow") as mock_save_pending:
+        from bot.handlers.voice import handle_voice
+        await handle_voice(update, ctx)
+
+    saved_data = mock_save_pending.call_args.args[2]
+    assert saved_data["stt_model"] == "gpt-4o-transcribe"
+    assert saved_data["stt_fallback_used"] is False
+    assert saved_data["duration_seconds"] == 5.0
+    assert "confidence" not in saved_data
+
+
+@pytest.mark.asyncio
 async def test_postproc_corrected_text_goes_to_card():
     """Whisper raw 'Jan Kowalsky' → Claude haiku corrects to 'Jan Kowalski'
     → card and pending payload BOTH carry the corrected text."""
@@ -161,7 +223,7 @@ async def test_postproc_fallback_does_not_crash():
 
 @pytest.mark.asyncio
 async def test_cost_log_fires_after_transcribe():
-    """Whisper + Claude cost logged ZARAZ — independent of user click."""
+    """STT + Claude cost logged ZARAZ — independent of user click."""
     update = _make_voice_update()
     ctx = _make_context()
     with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
@@ -178,10 +240,10 @@ async def test_cost_log_fires_after_transcribe():
 
     mock_inc.assert_awaited_once()
     args = mock_inc.call_args.args
-    # Expect (telegram_id, "voice_transcription", "whisper-1+haiku", 0, 0, total_cost)
+    # Expect (telegram_id, "voice_transcription", "<stt-model>+haiku", 0, 0, total_cost)
     assert args[1] == "voice_transcription"
-    assert args[2] == "whisper-1+haiku"
-    # whisper_cost = (60/60) * 0.006 = 0.006; postproc_cost = 0.0002; total = 0.0062
+    assert args[2] == "gpt-4o-transcribe+haiku"
+    # gpt-4o-transcribe estimated cost = (60/60) * 0.006; postproc_cost = 0.0002
     assert args[5] == pytest.approx(0.0062, rel=0.01)
 
 

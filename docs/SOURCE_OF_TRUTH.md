@@ -53,7 +53,7 @@ Baseline implementacji: `09e0957 feat: add offer generator`.
 
 Fragmenty batch/multi-meeting traktujemy jako legacy reference, nie kontrakt.
 
-Voice transcription — **live od 25.04.2026** (post-MVP slice). Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path.
+Voice transcription — **live od 25.04.2026** (post-MVP slice). OpenAI STT (`gpt-4o-transcribe` default, `whisper-1` fallback) + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card bez procentu pewności. Po potwierdzeniu transkrypcja idzie przez normalny text path.
 
 Photo upload — **active post-MVP slice**. Zdjęcia z Telegrama trafiają na Google Drive po karcie `✅ Zapisać`; pierwsze potwierdzenie otwiera 15-minutową sesję uploadu do tego klienta. Sheets `N=Zdjęcia`, `O=Link do zdjęć`.
 
@@ -212,7 +212,7 @@ Jeśli kod albo inny dokument opisuje inne kolumny, wygrywa `INTENCJE_MVP.md`.
 
 ### Voice transcription (live od 25.04.2026)
 
-- Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj) — `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`.
+- OpenAI STT (`gpt-4o-transcribe` default, `whisper-1` fallback) + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card (Zapisz/Anuluj, bez procentu pewności) — `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`.
 - Po Zapisz transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) — voice działa jako input adapter, nie odrębny intent type.
 - Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
 

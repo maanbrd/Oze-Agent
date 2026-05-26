@@ -79,9 +79,10 @@ Current batch/multi-meeting fragments are legacy reference only.
 ### Active post-MVP slice (live)
 
 - **Voice transcription** — live since 25.04.2026 (post-MVP slice, 5 commits
-  `8beecba..6a8b1d4` on main). Whisper STT → Polish name post-pass via Claude
-  haiku → 2-button confirm card (Zapisz/Anuluj). Confirmed transcription flows
-  through normal text path via `handle_text(text_override=...)`.
+  `8beecba..6a8b1d4` on main). OpenAI STT (`gpt-4o-transcribe` default,
+  `whisper-1` fallback) → Polish name post-pass via Claude haiku → 2-button
+  confirm card (Zapisz/Anuluj, no confidence percentage). Confirmed
+  transcription flows through normal text path via `handle_text(text_override=...)`.
 - **Google Drive photo upload** — active post-MVP slice. Telegram photos/images
   use an R1 `✅ Zapisać` card before the first Drive write, update Sheets N/O,
   and open a 15-minute same-client upload session that can be switched by

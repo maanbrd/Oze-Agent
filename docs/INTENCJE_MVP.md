@@ -622,7 +622,7 @@ Plan dnia filtruje po **dedykowanym OZE calendar** (events tworzone tylko w tym 
 | `multi-meeting` | Batch kilku spotkań w jednej wiadomości. MVP obsługuje single meeting tylko. |
 | `proactive morning brief` | Scheduler-driven, wymaga APScheduler + dedupy. |
 
-> **Active post-MVP slice (live od 25.04.2026):** Voice transcription jako input adapter — Whisper STT + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card. Po potwierdzeniu transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) i podlega standardowej intent classification. Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
+> **Active post-MVP slice (live od 25.04.2026):** Voice transcription jako input adapter — OpenAI STT (`gpt-4o-transcribe` default, `whisper-1` fallback) + post-pass polskich nazwisk (Claude haiku) + 2-button confirm card bez procentu pewności. Po potwierdzeniu transkrypcja idzie przez normalny text path (`handle_text(text_override=...)`) i podlega standardowej intent classification. Voice-specific richer flows (proactive voice responses, voice-only commands) zostają vision/POST-MVP.
 
 > **Active post-MVP slice:** Google Drive photo upload. Zdjęcie z podpisem `Jan Kowalski Warszawa` pomija pytanie "do którego klienta?", ale nadal wymaga karty `✅ Zapisać`. Pierwszy zapis tworzy/używa folderu Drive klienta, aktualizuje Sheets N/O i otwiera 15-minutową sesję kolejnych zdjęć do tego klienta. Zmiana klienta w trakcie sesji wymaga podpisu `zdjęcia do [imię nazwisko miasto]` albo jednoznacznego imię+nazwisko+miasto.
 
