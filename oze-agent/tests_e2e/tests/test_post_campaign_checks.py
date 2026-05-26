@@ -39,6 +39,15 @@ def test_zero_runs_are_rejected():
     assert error == "at least one post-campaign app run is required"
 
 
+def test_ready_offer_numbers_accepts_numbered_template_dicts():
+    ready = [
+        {"number": 1, "name": "PV"},
+        {"number": "2", "name": "Magazyn"},
+    ]
+
+    assert checks._ready_offer_numbers(ready) == [1, 2]
+
+
 @pytest.mark.asyncio
 async def test_post_campaign_cleanup_preserves_fixtures_by_default(monkeypatch):
     calls = []

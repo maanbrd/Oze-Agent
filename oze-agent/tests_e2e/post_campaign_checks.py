@@ -52,6 +52,10 @@ _PNG_1PX = (
 )
 
 
+def _ready_offer_numbers(ready: list[dict]) -> list[int]:
+    return [int(template.get("number") or 0) for template in ready]
+
+
 def _run_id() -> str:
     return datetime.now(timezone.utc).strftime("%H%M%S") + "-" + uuid4().hex[:6]
 
@@ -251,14 +255,19 @@ async def run_offer_gmail_smoke(config: E2EConfig) -> ScenarioResult:
 
         ready = list_ready_with_numbers(templates)
         result.context["ready_offer_count"] = len(ready)
-        result.add("ready_offer_templates_present", bool(ready), detail=str([t[0] for t in ready[:5]]))
+        result.add(
+            "ready_offer_templates_present",
+            bool(ready),
+            detail=str(_ready_offer_numbers(ready[:5])),
+        )
         if not ready:
             return result
         result.add("offer_recipient_configured", bool(recipient), detail=OFFER_RECIPIENT_ENV)
         if not recipient:
             return result
 
-        offer_number, template = ready[0]
+        template = ready[0]
+        offer_number = int(template.get("number") or 0)
         result.context["offer_number"] = offer_number
         result.context["offer_name"] = template.get("name")
         attempts_before_command = _offer_attempts_for_client(repo, user_id, name, city)
