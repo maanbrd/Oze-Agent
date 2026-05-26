@@ -111,10 +111,10 @@
 
 > **Bot:** 🎙️ Transkrybuję...
 
-> **Bot:** 🎙️ Transkrypcja (pewność: 54%):
+> **Bot:** 🎙️ Transkrypcja:
 > Dodaj spotkanie z Janem Testowym na jutro o 14...
 > 
-> Co z tym?
+> Jeśli tekst się zgadza, zapisz.
 
 > **Użytkownik:** klika ✅ Zapisz
 
@@ -212,10 +212,10 @@ Decyzja Maana: OK / zmienić / doprecyzować: ______________________________
 
 > **Użytkownik:** [wiadomość głosowa niewyraźna]
 
-> **Bot:** 🎙️ Transkrypcja (pewność: 32%):
+> **Bot:** 🎙️ Transkrypcja:
 > Zapisz spotkanie z Janem... może jutro...
 > 
-> Co z tym?
+> Jeśli tekst się zgadza, zapisz.
 
 > **Użytkownik:** klika ❌ Anuluj albo wysyła poprawny tekst
 

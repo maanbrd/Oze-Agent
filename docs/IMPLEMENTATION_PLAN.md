@@ -282,7 +282,7 @@ the relevant subset passes on production after promotion:
 
 ## Active post-MVP slices (live)
 
-- **Voice transcription** — Whisper STT + Polish name post-pass (Claude haiku) + 2-button confirm card (Zapisz/Anuluj). Live since 25.04.2026 (post-Phase 7 slice). Confirmed transcription flows through normal text path via `handle_text(text_override=...)`. Voice acts as input adapter — no separate voice intent type. Files: `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`, `bot/handlers/cancel.py`.
+- **Voice transcription** — OpenAI STT (`gpt-4o-transcribe` default, `whisper-1` fallback) + Polish name post-pass (Claude haiku) + 2-button confirm card (Zapisz/Anuluj, no confidence percentage). Live since 25.04.2026 (post-Phase 7 slice). Confirmed transcription flows through normal text path via `handle_text(text_override=...)`. Voice acts as input adapter — no separate voice intent type. Files: `bot/handlers/voice.py`, `shared/voice_postproc.py`, `shared/whisper_stt.py`, `bot/handlers/cancel.py`.
 - **Photo upload** — Telegram photo/image → R1 Drive card → Google Drive folder + Sheets N/O update + 15-minute active client photo session.
 
 ## Approved product slice outside the 6 bot intents

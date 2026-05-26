@@ -1,4 +1,4 @@
-"""Voice message handler — transcribe with Whisper, normalize Polish names,
+"""Voice message handler — transcribe with OpenAI STT, normalize Polish names,
 always-show transcript with 2-button confirmation (Zapisz/Anuluj). After
 "Zapisz" the transcription is fed into handle_text via text_override and
 flows through the normal text path."""
@@ -20,7 +20,7 @@ from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from shared.database import save_pending_flow
 from shared.formatting import escape_markdown_v2, format_error
 from shared.voice_postproc import _redacted_postproc_summary, normalize_polish_names
-from shared.whisper_stt import transcribe_voice
+from shared.whisper_stt import estimate_transcription_cost, transcribe_voice
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     Flow (revised, post-MVP voice slice 25.04.2026):
       1. Standard guards.
       2. Download voice file.
-      3. Transcribe with Whisper (60s timeout).
+      3. Transcribe with OpenAI STT (60s timeout).
       4. Normalize Polish names via Claude haiku post-pass (defensive — never
          raises, falls back to raw Whisper output on any guard trip).
-      5. Log Whisper + Claude cost ZARAZ — independent of subsequent user
+      5. Log STT + Claude cost ZARAZ — independent of subsequent user
          action (vision: cost is committed once we paid for the call).
       6. ALWAYS save pending + show 2-button transcript card (Zapisz/Anuluj).
          No "fast path" for high-confidence — vision requires explicit user
@@ -71,7 +71,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             timeout=WHISPER_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        logger.warning("handle_voice: Whisper timeout for %s", telegram_id)
+        logger.warning("handle_voice: STT timeout for %s", telegram_id)
         await reply_markdown_v2(update, format_error("timeout"))
         return
     except RuntimeError as e:
@@ -82,9 +82,19 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     raw_transcription = result["text"].strip()
-    confidence = float(result.get("confidence", 0.0))
-    duration = float(result.get("duration_seconds", 0.0))
-    whisper_cost = (duration / 60) * 0.006
+    raw_confidence = result.get("confidence")
+    confidence = (
+        float(raw_confidence)
+        if isinstance(raw_confidence, (int, float))
+        else None
+    )
+    duration = _coerce_duration(result.get("duration_seconds"))
+    voice_duration = getattr(voice, "duration", None)
+    if duration <= 0:
+        duration = _coerce_duration(voice_duration)
+    stt_model = str(result.get("model") or "unknown")
+    stt_fallback_used = bool(result.get("fallback_used", False))
+    transcription_cost = estimate_transcription_cost(stt_model, duration)
 
     if not raw_transcription:
         await reply_text(update, "❌ Nie rozpoznano żadnych słów w nagraniu.")
@@ -94,40 +104,57 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     postproc = await normalize_polish_names(raw_transcription)
     transcription = postproc["corrected"]
     postproc_cost = postproc.get("cost_usd", 0.0)
-    total_cost = whisper_cost + postproc_cost
+    total_cost = transcription_cost + postproc_cost
 
     # PII-safe summary log: NO raw transcription, NO change pairs.
     logger.info(
-        "handle_voice.postproc summary=%s confidence=%.2f duration_s=%.1f whisper_cost=%.6f",
-        _redacted_postproc_summary(postproc), confidence, duration, whisper_cost,
+        "handle_voice.postproc summary=%s stt_model=%s stt_fallback=%s "
+        "confidence=%s duration_s=%.1f transcription_cost=%.6f",
+        _redacted_postproc_summary(postproc),
+        stt_model,
+        stt_fallback_used,
+        f"{confidence:.2f}" if confidence is not None else "n/a",
+        duration,
+        transcription_cost,
     )
 
     # ── 4. Cost log — fires ONCE here, regardless of user's next action ──
     await increment_interaction(
-        telegram_id, "voice_transcription", "whisper-1+haiku",
+        telegram_id, "voice_transcription", f"{stt_model}+haiku",
         0, 0, total_cost,
     )
 
-    # ── 5. Always-show transcript card with 4 buttons ─────────────────────
-    save_pending_flow(telegram_id, "voice_transcription", {
+    # ── 5. Always-show transcript card with 2 buttons ─────────────────────
+    pending_data = {
         "transcription": transcription,
-        "confidence": confidence,
-        "whisper_cost": whisper_cost,
+        "stt_model": stt_model,
+        "stt_fallback_used": stt_fallback_used,
+        "duration_seconds": duration,
+        "transcription_cost": transcription_cost,
         "postproc_cost": postproc_cost,
         "fallback": postproc.get("fallback"),
-    })
+    }
+    if confidence is not None:
+        pending_data["confidence"] = confidence
+    if result.get("fallback_from"):
+        pending_data["stt_fallback_from"] = result["fallback_from"]
+    save_pending_flow(telegram_id, "voice_transcription", pending_data)
 
     # Render transcript as a quoted italic block, MarkdownV2-escaped so
     # special chars in user speech (e.g. "Kowalski (Warszawa)") don't
     # break Telegram parsing.
     escaped_text = escape_markdown_v2(transcription)
-    confidence_pct = max(0, min(100, int(round(confidence * 100))))
-    badge = f"🎙 *Transkrypcja* \\(pewność: {confidence_pct}%\\)"
+    badge = "🎙 *Transkrypcja*"
+    instruction = escape_markdown_v2("Jeśli tekst się zgadza, zapisz.")
 
     await reply_markdown_v2(update,
-        f"{badge}:\n\n_{escaped_text}_\n\nCo z tym?",
+        f"{badge}:\n\n_{escaped_text}_\n\n{instruction}",
         reply_markup=build_choice_buttons([
             ("✅ Zapisz", "voice_confirm:yes"),
             ("❌ Anuluj", "voice_confirm:cancel"),
         ]),
     )
+
+
+def _coerce_duration(value) -> float:
+    return float(value) if isinstance(value, (int, float)) else 0.0

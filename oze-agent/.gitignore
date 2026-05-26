@@ -44,6 +44,7 @@ Thumbs.db
 # reports are per-machine artifacts.
 tests_e2e/.env
 tests_e2e/.sessions/
+tests_e2e/.voice_benchmark/
 *.session
 *.session-journal
 test_results_e2e.md
