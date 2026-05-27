@@ -14,6 +14,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+def _voice_extraction_result(fields: dict | None = None, cost: float = 0.0) -> dict:
+    return {
+        "fields": fields or {},
+        "tokens_in": 80,
+        "tokens_out": 30,
+        "cost_usd": cost,
+        "model": "claude-haiku-4-5-20251001",
+        "fallback": None,
+    }
+
+
+@pytest.fixture(autouse=True)
+def _mock_voice_extraction():
+    with patch(
+        "bot.handlers.voice.extract_voice_fields",
+        new=AsyncMock(return_value=_voice_extraction_result()),
+    ) as mock_extract:
+        yield mock_extract
+
+
 # ── Test fixtures (mocked Telegram Update) ─────────────────────────────────
 
 
@@ -174,6 +194,47 @@ async def test_pending_flow_carries_stt_metadata_without_empty_confidence():
 
 
 @pytest.mark.asyncio
+async def test_pending_flow_carries_voice_extraction_metadata(_mock_voice_extraction):
+    update = _make_voice_update()
+    ctx = _make_context()
+    _mock_voice_extraction.return_value = _voice_extraction_result(
+        {
+            "intent": "add_client",
+            "name": "Jan Kowalski",
+            "city": "Warszawa",
+            "phone": "600100200",
+            "product_or_next_action": "PV",
+        },
+        cost=0.0003,
+    )
+
+    with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.voice._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
+         patch("bot.handlers.voice.send_processing_stage", new=AsyncMock()), \
+         patch("bot.handlers.voice.transcribe_voice",
+               new=AsyncMock(return_value=_whisper_result("dodaj klienta Jan Kowalski"))), \
+         patch("bot.handlers.voice.normalize_polish_names",
+               new=AsyncMock(return_value=_postproc_result("dodaj klienta Jan Kowalski"))), \
+         patch("bot.handlers.voice.increment_interaction", new=AsyncMock()) as mock_increment, \
+         patch("bot.handlers.voice.save_pending_flow") as mock_save_pending:
+        from bot.handlers.voice import handle_voice
+        await handle_voice(update, ctx)
+
+    saved_data = mock_save_pending.call_args.args[2]
+    assert saved_data["extracted_fields"] == {
+        "intent": "add_client",
+        "name": "Jan Kowalski",
+        "city": "Warszawa",
+        "phone": "600100200",
+        "product_or_next_action": "PV",
+    }
+    assert saved_data["extraction_model"] == "claude-haiku-4-5-20251001"
+    assert saved_data["extraction_cost"] == 0.0003
+    assert saved_data["extraction_fallback"] is None
+    assert mock_increment.await_args.args[2] == "gpt-4o-transcribe+haiku+extractor"
+
+
+@pytest.mark.asyncio
 async def test_postproc_corrected_text_goes_to_card():
     """Whisper raw 'Jan Kowalsky' → Claude haiku corrects to 'Jan Kowalski'
     → card and pending payload BOTH carry the corrected text."""
@@ -200,6 +261,32 @@ async def test_postproc_corrected_text_goes_to_card():
 
 
 @pytest.mark.asyncio
+async def test_voice_spoken_email_małpa_is_normalized_before_pending_and_card():
+    update = _make_voice_update()
+    ctx = _make_context()
+    spoken_email = "email maciej.mitura małpa gmail kropka com"
+
+    with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
+         patch("bot.handlers.voice._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
+         patch("bot.handlers.voice.send_processing_stage", new=AsyncMock()), \
+         patch("bot.handlers.voice.transcribe_voice",
+               new=AsyncMock(return_value=_whisper_result(spoken_email))), \
+         patch("bot.handlers.voice.normalize_polish_names",
+               new=AsyncMock(return_value=_postproc_result(spoken_email))), \
+         patch("bot.handlers.voice.increment_interaction", new=AsyncMock()), \
+         patch("bot.handlers.voice.save_pending_flow") as mock_save_pending:
+        from bot.handlers.voice import handle_voice
+        await handle_voice(update, ctx)
+
+    saved_data = mock_save_pending.call_args.args[2]
+    assert saved_data["transcription"] == "email maciej.mitura@gmail.com"
+
+    md_call = update.message.reply_markdown_v2.call_args
+    assert "maciej\\.mitura@gmail\\.com" in md_call.args[0]
+    assert "małpa" not in md_call.args[0]
+
+
+@pytest.mark.asyncio
 async def test_postproc_fallback_does_not_crash():
     """Claude haiku failure → handle_voice continues with raw Whisper text."""
     update = _make_voice_update()
@@ -222,10 +309,11 @@ async def test_postproc_fallback_does_not_crash():
 
 
 @pytest.mark.asyncio
-async def test_cost_log_fires_after_transcribe():
-    """STT + Claude cost logged ZARAZ — independent of user click."""
+async def test_cost_log_fires_after_transcribe(_mock_voice_extraction):
+    """STT + Claude post-pass + extraction cost logged before user click."""
     update = _make_voice_update()
     ctx = _make_context()
+    _mock_voice_extraction.return_value = _voice_extraction_result(cost=0.0003)
     with patch("bot.handlers.voice.is_private_chat", new=AsyncMock(return_value=True)), \
          patch("bot.handlers.voice._run_guards", new=AsyncMock(return_value={"id": "uid"})), \
          patch("bot.handlers.voice.send_processing_stage", new=AsyncMock()), \
@@ -240,11 +328,10 @@ async def test_cost_log_fires_after_transcribe():
 
     mock_inc.assert_awaited_once()
     args = mock_inc.call_args.args
-    # Expect (telegram_id, "voice_transcription", "<stt-model>+haiku", 0, 0, total_cost)
     assert args[1] == "voice_transcription"
-    assert args[2] == "gpt-4o-transcribe+haiku"
-    # gpt-4o-transcribe estimated cost = (60/60) * 0.006; postproc_cost = 0.0002
-    assert args[5] == pytest.approx(0.0062, rel=0.01)
+    assert args[2] == "gpt-4o-transcribe+haiku+extractor"
+    # gpt-4o-transcribe estimated cost = 0.006; postproc = 0.0002; extraction = 0.0003
+    assert args[5] == pytest.approx(0.0065, rel=0.01)
 
 
 @pytest.mark.asyncio

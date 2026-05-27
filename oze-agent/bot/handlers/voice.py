@@ -18,9 +18,11 @@ from bot.utils.telegram_helpers import (
 )
 from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from shared.database import save_pending_flow
+from shared.email_parsing import normalize_spoken_email_text
 from shared.formatting import escape_markdown_v2, format_error
 from shared.observability import exception_type, id_hash
 from shared.perf import log_duration
+from shared.voice_extraction import extract_voice_fields
 from shared.voice_postproc import _redacted_postproc_summary, normalize_polish_names
 from shared.whisper_stt import estimate_transcription_cost, transcribe_voice
 
@@ -115,9 +117,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # ── 3. Polish name post-processing (Claude haiku) ─────────────────────
     with log_duration(logger, "telegram.voice.postproc"):
         postproc = await normalize_polish_names(raw_transcription)
-    transcription = postproc["corrected"]
+    transcription = normalize_spoken_email_text(postproc["corrected"])
     postproc_cost = postproc.get("cost_usd", 0.0)
-    total_cost = transcription_cost + postproc_cost
+    with log_duration(logger, "telegram.voice.extraction"):
+        extraction = await extract_voice_fields(transcription)
+    extraction_cost = float(extraction.get("cost_usd") or 0.0)
+    total_cost = transcription_cost + postproc_cost + extraction_cost
 
     # PII-safe summary log: NO raw transcription, NO change pairs.
     logger.info(
@@ -133,7 +138,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # ── 4. Cost log — fires ONCE here, regardless of user's next action ──
     await increment_interaction(
-        telegram_id, "voice_transcription", f"{stt_model}+haiku",
+        telegram_id, "voice_transcription", f"{stt_model}+haiku+extractor",
         0, 0, total_cost,
     )
 
@@ -146,6 +151,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "transcription_cost": transcription_cost,
         "postproc_cost": postproc_cost,
         "fallback": postproc.get("fallback"),
+        "extracted_fields": extraction.get("fields", {}),
+        "extraction_model": extraction.get("model"),
+        "extraction_cost": extraction_cost,
+        "extraction_fallback": extraction.get("fallback"),
     }
     if confidence is not None:
         pending_data["confidence"] = confidence

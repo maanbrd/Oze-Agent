@@ -23,6 +23,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from shared.email_parsing import normalize_spoken_email_value
+from shared.voice_extraction import extract_voice_fields
 from shared.whisper_stt import transcribe_voice
 
 DEFAULT_MODELS = (
@@ -116,6 +118,25 @@ def _field_matches(transcript: str, field: str, expected: str) -> bool:
     return _phrase_matches(transcript, expected)
 
 
+def _extracted_field_matches(extracted: dict[str, str], field: str, expected: str) -> bool:
+    if field in {"date/time", "date_time"}:
+        value = " ".join(
+            part
+            for part in (str(extracted.get("date", "")), str(extracted.get("time", "")))
+            if part
+        )
+    else:
+        value = str(extracted.get(field, ""))
+    if field == "phone":
+        expected_digits = _digits(expected)
+        return bool(expected_digits) and expected_digits in _digits(value)
+    if field == "email":
+        return normalize_spoken_email_value(value) == normalize_spoken_email_value(expected)
+    if field == "intent":
+        return value == expected
+    return _phrase_matches(value, expected)
+
+
 def score_transcript(transcript: str, expected: dict[str, str]) -> FieldScore:
     total = len(expected)
     missing = [
@@ -128,7 +149,24 @@ def score_transcript(transcript: str, expected: dict[str, str]) -> FieldScore:
     return FieldScore(matched=matched, total=total, ratio=ratio, missing=missing)
 
 
-async def _benchmark_case(case: BenchmarkCase, models: Iterable[str]) -> dict:
+def score_extracted_fields(extracted: dict[str, str], expected: dict[str, str]) -> FieldScore:
+    total = len(expected)
+    missing = [
+        field
+        for field, value in expected.items()
+        if not _extracted_field_matches(extracted, field, value)
+    ]
+    matched = total - len(missing)
+    ratio = matched / total if total else 0.0
+    return FieldScore(matched=matched, total=total, ratio=ratio, missing=missing)
+
+
+async def _benchmark_case(
+    case: BenchmarkCase,
+    models: Iterable[str],
+    *,
+    score_mode: str = "extracted",
+) -> dict:
     audio_bytes = case.audio_path.read_bytes()
     results = []
     for model in models:
@@ -139,11 +177,18 @@ async def _benchmark_case(case: BenchmarkCase, models: Iterable[str]) -> dict:
             fallback_model="",
             allow_fallback=False,
         )
-        score = score_transcript(result["text"], case.expected)
+        transcript_score = score_transcript(result["text"], case.expected)
+        extraction = None
+        score = transcript_score
+        if score_mode == "extracted":
+            extraction = await extract_voice_fields(result["text"])
+            score = score_extracted_fields(extraction.get("fields", {}), case.expected)
         results.append({
             "model": model,
             "text": result["text"],
             "score": asdict(score),
+            "transcript_score": asdict(transcript_score),
+            "extraction": extraction,
             "duration_seconds": result.get("duration_seconds", 0.0),
         })
     return {
@@ -169,16 +214,23 @@ def _summarize(case_reports: list[dict], models: Iterable[str]) -> dict:
     return summary
 
 
-async def run_benchmark(manifest: Path, models: tuple[str, ...], output: Path) -> dict:
+async def run_benchmark(
+    manifest: Path,
+    models: tuple[str, ...],
+    output: Path,
+    *,
+    score_mode: str = "extracted",
+) -> dict:
     cases = load_cases(manifest)
     if not cases:
         raise ValueError(f"manifest has no cases: {manifest}")
 
-    reports = [await _benchmark_case(case, models) for case in cases]
+    reports = [await _benchmark_case(case, models, score_mode=score_mode) for case in cases]
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "manifest": str(manifest),
         "models": list(models),
+        "score_mode": score_mode,
         "summary": _summarize(reports, models),
         "cases": reports,
     }
@@ -203,13 +255,26 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODELS))
+    parser.add_argument(
+        "--score-mode",
+        choices=("extracted", "transcript"),
+        default="extracted",
+        help="Score extracted structured fields by default; transcript mode uses text matching only.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     output = args.output or _default_output(args.manifest)
-    payload = asyncio.run(run_benchmark(args.manifest, tuple(args.models), output))
+    payload = asyncio.run(
+        run_benchmark(
+            args.manifest,
+            tuple(args.models),
+            output,
+            score_mode=args.score_mode,
+        )
+    )
     print(json.dumps(payload["summary"], ensure_ascii=False, indent=2))
     print(f"Report: {output}")
 

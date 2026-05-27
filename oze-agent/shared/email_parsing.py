@@ -22,6 +22,13 @@ def normalize_spoken_email_text(text: str) -> str:
     return re.sub(r"\s*([@.])\s*", r"\1", normalized)
 
 
+def normalize_spoken_email_value(value: str) -> str:
+    """Normalize a field that should contain a single spoken email address."""
+    compact = re.sub(r"\s+", "", normalize_spoken_email_text(value or ""))
+    email = normalize_email(compact)
+    return email if is_valid_email(email) else ""
+
+
 def is_valid_email(value: str) -> bool:
     return bool(VALID_EMAIL_RE.match(normalize_email(value)))
 
