@@ -11,6 +11,7 @@ from tests_e2e.scenarios import (  # noqa: F401  (registration side effect)
     card_structure,
     core_smoke,
     debug_brief,
+    edge_cases,
     error_paths,
     mutating_core,
     notes,
