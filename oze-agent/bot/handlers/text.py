@@ -105,7 +105,7 @@ from shared.clients import lookup_client, lookup_client_by_row, suggest_fuzzy_cl
 from shared.matching import first_name_ok as _first_name_ok
 from shared.observability import exception_type, id_hash, summarize_client_data, summarize_mapping
 from shared.perf import log_duration
-from shared.search import detect_potential_duplicate
+from shared.search import detect_potential_duplicate, normalize_polish
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,14 @@ logger = logging.getLogger(__name__)
 def _today_warsaw() -> date:
     """Return the user's business date in Europe/Warsaw."""
     return datetime.now(tz=WARSAW).date()
+
+
+def _text_mentions_value(text: str, value: str) -> bool:
+    if not text or not value:
+        return False
+    normalized_text = normalize_polish(text)
+    normalized_value = normalize_polish(value)
+    return bool(re.search(rf"(?<!\w){re.escape(normalized_value)}(?!\w)", normalized_text))
 
 
 # Fields managed automatically — never show as "missing" to the user
@@ -2154,14 +2162,28 @@ async def handle_add_note(
         )
         return
 
+    explicit_city = city if _text_mentions_value(message_text, city) else ""
+
     if active_client is not None:
         result = None
         client = active_client
     else:
-        result = await lookup_client(user_id, client_name, city)
+        result = await lookup_client(user_id, client_name, explicit_city)
+        if result.status == "unique" and not explicit_city:
+            candidate = result.clients[0]
+            candidate_city = candidate.get("Miasto", candidate.get("Miejscowość", ""))
+            candidate_name = candidate.get("Imię i nazwisko", "")
+            if (
+                candidate_name
+                and normalize_polish(candidate_name) != normalize_polish(client_name)
+                and not _text_mentions_value(message_text, candidate_city)
+            ):
+                broad_result = await lookup_client(user_id, candidate_name, "")
+                if broad_result.status == "multi":
+                    result = broad_result
 
     if result is not None and result.status == "not_found":
-        city_part = f" ({city})" if city else ""
+        city_part = f" ({explicit_city})" if explicit_city else ""
         await reply_text(update,
             f"Nie znalazłem klienta: '{client_name}{city_part}'"
         )

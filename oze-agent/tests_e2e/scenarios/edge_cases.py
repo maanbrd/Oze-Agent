@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from shared.database import delete_active_photo_session, delete_pending_flow
 from shared.google_drive import extract_folder_id, get_client_photos
+from shared.google_sheets import update_client
 from shared.offers.numbering import list_ready_with_numbers
 from shared.offers.repository import OfferRepository
 from tests_e2e.asserts import (
@@ -60,8 +61,9 @@ def _run_id() -> str:
     return datetime.now(tz=WARSAW).strftime("%H%M%S") + "-" + uuid4().hex[:6]
 
 
-def _edge_name(run_id: str, suffix: str) -> str:
-    return f"E2E Beta Klient {run_id} {suffix}"
+def _edge_name(run_id: str, suffix: str = "") -> str:
+    base = f"E2E Beta Klient {run_id}"
+    return f"{base} {suffix}" if suffix else base
 
 
 def _edge_email(slug: str, run_id: str) -> str:
@@ -89,6 +91,14 @@ def _looks_like_missing_email_offer_reply(text: str) -> bool:
     return "email" in lower and any(marker in lower for marker in ("brak", "brakuje", "podaj", "uzupełnij", "uzupelnij"))
 
 
+def _has_mutation_buttons(messages: list[_ObservedMessage]) -> bool:
+    mutation_labels = {"✅ Zapisać", "➕ Dopisać", "❌ Anulować", "✅ Wysłać"}
+    return any(
+        any(label in mutation_labels for label in message.button_labels)
+        for message in messages
+    )
+
+
 def _next_named_weekday(start: date, *, target_weekday: int, force_next: bool) -> date:
     delta = (target_weekday - start.weekday()) % 7
     if delta == 0 or force_next:
@@ -107,6 +117,16 @@ async def _cleanup_after(harness: TelegramE2EHarness, result: ScenarioResult, *,
         result.context["cleanup"] = cleanup
     except Exception as exc:
         result.context["cleanup_error"] = f"{type(exc).__name__}: {exc}"
+
+
+async def _hard_reset(harness: TelegramE2EHarness) -> None:
+    await reset_pending(harness)
+    telegram_id = harness.authenticated_user_id
+    if telegram_id is None:
+        return
+    delete_pending_flow(telegram_id)
+    delete_active_photo_session(telegram_id)
+    await harness.collect_messages(duration_s=1.0)
 
 
 async def _user_id_or_blocker(harness: TelegramE2EHarness, result: ScenarioResult) -> str | None:
@@ -231,7 +251,7 @@ async def run_stale_save_button_rejected(harness: TelegramE2EHarness) -> Scenari
     name_old = _edge_name(run_id, "Stary")
     name_new = _edge_name(run_id, "Nowy")
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
             return result
@@ -289,7 +309,7 @@ async def run_duplicate_same_name_two_cities_show_client(harness: TelegramE2EHar
     run_id = _run_id()
     name = _edge_name(run_id, "Duplikat")
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         if not await setup_existing_client(harness, result, name, CITY_A, f"600100210, PV, email {_edge_email('dup.a', run_id)}"):
             return result
         if not await setup_existing_client(harness, result, name, CITY_B, f"600100211, PV, email {_edge_email('dup.b', run_id)}"):
@@ -324,7 +344,7 @@ async def run_duplicate_add_note_requires_city_or_choice(harness: TelegramE2EHar
     name = _edge_name(run_id, "Notatka")
     marker = f"edge-notatka-{run_id}"
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
             return result
@@ -337,7 +357,7 @@ async def run_duplicate_add_note_requires_city_or_choice(harness: TelegramE2EHar
         text = _all_text(replies)
         result.context["note_reply"] = text[:400]
         result.add("reply_requires_choice", _looks_like_disambiguation(text), detail=text[:240])
-        result.add("no_mutation_card_before_choice", find_card_message(replies) is None, detail=str([m.button_labels for m in replies]))
+        result.add("no_mutation_card_before_choice", not _has_mutation_buttons(replies), detail=str([m.button_labels for m in replies]))
         row_a = await find_client_row(user_id, name, CITY_A)
         row_b = await find_client_row(user_id, name, CITY_B)
         notes = f"{(row_a or {}).get('Notatki', '')}\n{(row_b or {}).get('Notatki', '')}"
@@ -362,7 +382,7 @@ async def run_pending_dopisac_then_unrelated_command(harness: TelegramE2EHarness
     run_id = _run_id()
     name = _edge_name(run_id, "Dopisac")
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
             return result
@@ -406,7 +426,7 @@ async def run_multi_intent_status_plus_meeting(harness: TelegramE2EHarness) -> S
     name = _edge_name(run_id, "Compound")
     target = _next_named_weekday(datetime.now(tz=WARSAW).date(), target_weekday=4, force_next=True)
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
             return result
@@ -455,7 +475,9 @@ async def run_relative_date_next_friday(harness: TelegramE2EHarness) -> Scenario
     name = _edge_name(run_id, "Piatek")
     expected = _next_named_weekday(datetime.now(tz=WARSAW).date(), target_weekday=4, force_next=True)
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
+        if not await setup_existing_client(harness, result, name, CITY_A, f"ul. Testowa 1, 600100235, PV, email {_edge_email('friday', run_id)}"):
+            return result
         await harness.send(f"spotkanie z {name} z {CITY_A} w przyszły piątek o 10")
         replies = await wait_for_card_messages(harness, timeout_s=30.0)
         card = find_card_message(replies)
@@ -489,7 +511,7 @@ async def run_past_date_no_card(harness: TelegramE2EHarness) -> ScenarioResult:
     run_id = _run_id()
     name = _edge_name(run_id, "Past")
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         await harness.send(f"wczoraj o 10 spotkanie z {name} z {CITY_A}")
         replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
         text = _all_text(replies)
@@ -515,7 +537,7 @@ async def run_active_client_pronoun_not_silent_write(harness: TelegramE2EHarness
     result = new_result("active_client_pronoun_not_silent_write", CATEGORY)
     marker = f"edge-pronoun-{_run_id()}"
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         await harness.send(f"dopisz mu notatkę: {marker}")
         replies = await harness.wait_for_messages(count=2, timeout_s=25.0)
         text = _all_text(replies)
@@ -541,11 +563,11 @@ async def run_active_client_pronoun_not_silent_write(harness: TelegramE2EHarness
 async def run_offer_missing_email_no_send(harness: TelegramE2EHarness) -> ScenarioResult:
     result = new_result("offer_missing_email_no_send", CATEGORY)
     run_id = _run_id()
-    name = _edge_name(run_id, "NoEmail")
+    name = _edge_name(run_id)
     city = CITY_A
     repo: OfferRepository | None = None
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
             return result
@@ -582,12 +604,12 @@ async def run_offer_two_emails_single_attempt(harness: TelegramE2EHarness) -> Sc
     result = new_result("offer_two_emails_single_attempt", CATEGORY)
     recipient = os.getenv(OFFER_RECIPIENT_ENV, "").strip()
     run_id = _run_id()
-    name = _edge_name(run_id, "TwoEmail")
+    name = _edge_name(run_id)
     city = CITY_A
     repo: OfferRepository | None = None
     user_id = ""
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         result.add("offer_recipient_configured", bool(recipient), detail=OFFER_RECIPIENT_ENV)
         if not recipient:
             return result
@@ -642,12 +664,12 @@ async def run_offer_invalid_extra_email_skipped(harness: TelegramE2EHarness) -> 
     result = new_result("offer_invalid_extra_email_skipped", CATEGORY)
     recipient = os.getenv(OFFER_RECIPIENT_ENV, "").strip()
     run_id = _run_id()
-    name = _edge_name(run_id, "InvalidEmail")
+    name = _edge_name(run_id)
     city = CITY_A
     repo: OfferRepository | None = None
     user_id = ""
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         result.add("offer_recipient_configured", bool(recipient), detail=OFFER_RECIPIENT_ENV)
         if not recipient:
             return result
@@ -659,6 +681,15 @@ async def run_offer_invalid_extra_email_skipped(harness: TelegramE2EHarness) -> 
             return result
         if not await _add_client_and_save(harness, result, name=name, city=city, extra_fields=f"600100260, PV, email {recipient}", check_key="client"):
             return result
+        row = await find_client_row(user_id, name, city)
+        row_number = int((row or {}).get("_row") or 0)
+        result.add("client_row_found_for_invalid_email_setup", row_number > 0, detail=str(row))
+        if not row_number:
+            return result
+        updated = await update_client(user_id, row_number, {"Email": f"{recipient}; zły-email"})
+        result.add("invalid_email_fixture_written", updated, detail=f"row={row_number}")
+        if not updated:
+            return result
         card = await _send_offer_and_get_card(
             harness,
             result,
@@ -666,13 +697,12 @@ async def run_offer_invalid_extra_email_skipped(harness: TelegramE2EHarness) -> 
             city=city,
             offer_number=int(template["number"]),
             template_name=str(template.get("name") or ""),
-            command_suffix=" oraz zły-email",
         )
         if card is None:
             result.add_blocker("offer_card", "no offer card")
             return result
         result.add("valid_recipient_present", recipient in card.text, detail=card.text[:300])
-        result.add("invalid_recipient_not_in_recipients", "zły-email" not in card.text and "zly-email" not in card.text, detail=card.text[:300])
+        result.add("invalid_recipient_skip_visible", "Pominięte błędne adresy" in card.text, detail=card.text[:300])
         await harness.click_button(card, "✅ Wysłać")
         replies = await harness.collect_messages(duration_s=20.0)
         result.add("telegram_offer_send_acknowledged", _offer_send_reply_acknowledged(_all_text(replies)), detail=_all_text(replies)[:240])
@@ -703,7 +733,7 @@ async def run_photo_session_three_files(harness: TelegramE2EHarness) -> Scenario
     city = CITY_A
     folder_id = ""
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         delete_active_photo_session(harness.authenticated_user_id or 0)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
@@ -760,7 +790,7 @@ async def run_photo_session_switch_client(harness: TelegramE2EHarness) -> Scenar
     new_name = _edge_name(run_id, "PhotoNew")
     folder_id = ""
     try:
-        await reset_pending(harness)
+        await _hard_reset(harness)
         user_id = await _user_id_or_blocker(harness, result)
         if not user_id:
             return result

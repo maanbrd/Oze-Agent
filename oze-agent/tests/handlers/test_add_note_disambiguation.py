@@ -162,6 +162,79 @@ async def test_add_note_multi_exact_match_asks_which_one():
 
 
 @pytest.mark.asyncio
+async def test_add_note_ignores_inferred_city_when_message_does_not_mention_it():
+    """LLM/history-inferred city must not silently narrow duplicated clients."""
+    upd = _update()
+    extract = AsyncMock(return_value={
+        "client_name": "Mariusz Krzywinski",
+        "city": "Marki",
+        "note": "dzwonił wczoraj",
+    })
+    clients = [
+        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki"},
+        {"_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin"},
+    ]
+    result = ClientLookupResult(status="multi", clients=clients, normalized_query="mariusz krzywinski")
+    lookup = AsyncMock(return_value=result)
+
+    with patch("bot.handlers.text.extract_note_data", new=extract), \
+         patch("bot.handlers.text.lookup_client", new=lookup), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_note(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {}},
+            "dodaj notatkę do Mariusz Krzywinski: dzwonił wczoraj",
+        )
+
+    lookup.assert_awaited_once_with(1, "Mariusz Krzywinski", "")
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
+
+
+@pytest.mark.asyncio
+async def test_add_note_rechecks_base_name_when_llm_puts_inferred_city_in_client_name():
+    upd = _update()
+    extract = AsyncMock(return_value={
+        "client_name": "Mariusz Krzywinski Marki",
+        "city": "",
+        "note": "dzwonił wczoraj",
+    })
+    clients = [
+        {"_row": 7, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Marki"},
+        {"_row": 11, "Imię i nazwisko": "Mariusz Krzywinski", "Miasto": "Wołomin"},
+    ]
+    narrowed = ClientLookupResult(
+        status="unique",
+        clients=[clients[0]],
+        normalized_query="mariusz krzywinski marki",
+    )
+    broad = ClientLookupResult(
+        status="multi",
+        clients=clients,
+        normalized_query="mariusz krzywinski",
+    )
+    lookup = AsyncMock(side_effect=[narrowed, broad])
+
+    with patch("bot.handlers.text.extract_note_data", new=extract), \
+         patch("bot.handlers.text.lookup_client", new=lookup), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_note(
+            upd,
+            MagicMock(),
+            {"id": 1},
+            {"entities": {}},
+            "dodaj notatkę do Mariusz Krzywinski: dzwonił wczoraj",
+        )
+
+    assert lookup.await_args_list[0].args == (1, "Mariusz Krzywinski Marki", "")
+    assert lookup.await_args_list[1].args == (1, "Mariusz Krzywinski", "")
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type is PendingFlowType.DISAMBIGUATION
+
+
+@pytest.mark.asyncio
 async def test_add_note_unique_via_city_narrows():
     """lookup_client=unique (city narrowed) → auto-pick, save ADD_NOTE pending."""
     upd = _update()

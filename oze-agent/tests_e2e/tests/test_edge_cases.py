@@ -62,3 +62,22 @@ def test_next_friday_helper_returns_future_friday():
     result = edge_cases._next_named_weekday(start, target_weekday=4, force_next=True)
 
     assert result == edge_cases.date(2026, 6, 5)
+
+
+def test_edge_name_suffix_is_optional():
+    assert edge_cases._edge_name("123456-abcdef") == "E2E Beta Klient 123456-abcdef"
+    assert edge_cases._edge_name("123456-abcdef", "Duplikat") == "E2E Beta Klient 123456-abcdef Duplikat"
+
+
+class _Message:
+    def __init__(self, labels):
+        self.button_labels = labels
+
+
+def test_mutation_button_detection_ignores_disambiguation_choices():
+    assert edge_cases._has_mutation_buttons([
+        _Message(["1. Jan Kowalski — Opole", "2. Jan Kowalski — Kraków"]),
+    ]) is False
+    assert edge_cases._has_mutation_buttons([
+        _Message(["✅ Zapisać", "➕ Dopisać", "❌ Anulować"]),
+    ]) is True
