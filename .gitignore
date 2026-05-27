@@ -25,6 +25,12 @@ Thumbs.db
 # Worktrees (Claude Code)
 .claude/worktrees/
 
+# Generated review media
+output/video/
+tmp/google-oauth-video-review/
+tmp/google-oauth-video-watch/
+tmp/google-oauth-video-watch-complete/
+
 # Per-project ignores live in subfolders (oze-agent/, web/, services/billing/)
 .vercel
 .env*.local

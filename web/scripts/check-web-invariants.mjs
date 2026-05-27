@@ -332,7 +332,7 @@ assert.match(
 );
 assert.match(
   appLayout,
-  /safeLocalPath\(onboardingStatus\?\.nextStep/,
+  /safeLocalPath\(\s*onboardingStatus\?\.nextStep/s,
   "Logged-in layout must redirect incomplete onboarding users through the sanitized next step.",
 );
 assert.match(
