@@ -1226,7 +1226,7 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
       <ConfirmDialog
         open={!!deleteCandidate}
         title="Czy na pewno usunąć szablon?"
-        description={deleteCandidate ? `${deleteCandidate.name} zostanie nieodwracalnie usunięta.` : undefined}
+        description={deleteCandidate ? `${deleteCandidate.name} zostanie nieodwracalnie usunięty.` : undefined}
         confirmLabel="Usuń"
         variant="destructive"
         onCancel={() => setDeleteCandidate(null)}
