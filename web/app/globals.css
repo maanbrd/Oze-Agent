@@ -7,7 +7,7 @@
   --accent: #16a34a;
 
   /* loading-ux brand tokens */
-  --brand-green: #3DFF7A;
+  --brand-green: #3dff7a;
   --brand-bg: #0b0d10;
   --brand-bg-deep: #050607;
   --brand-bg-inset: #060709;
@@ -15,12 +15,13 @@
   --ui-text-primary: #f5f7fa;
   --ui-text-muted: #6b7280;
   --ui-text-deep: #4a5460;
-  --state-error: #FF6464;
+  --state-error: #ff6464;
   --state-neutral: #9aa5b1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .motion-safe-only {
+  .motion-safe-only,
+  .motion-safe-only * {
     animation: none !important;
     transition: none !important;
   }
