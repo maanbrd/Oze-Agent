@@ -33,6 +33,8 @@ export function NavigationProgressProvider({ children }: { children: ReactNode }
 
   useEffect(() => {
     if (!visible) return;
+    // Safety backstop: auto-hide after 8s if hide() is never called
+    // (navigation error, unmounted consumer, etc.). Not a loading-complete signal.
     const id = window.setTimeout(hide, 8000);
     return () => window.clearTimeout(id);
   }, [visible, hide]);
