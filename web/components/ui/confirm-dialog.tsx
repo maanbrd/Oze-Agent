@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandSpinner } from "./brand-spinner";
 
 type Props = {
@@ -25,12 +25,40 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const [pending, setPending] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
+
+    // Move focus into the dialog on open (safest: cancel button for destructive ops).
+    cancelRef.current?.focus();
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !pending) onCancel();
+      if (e.key === "Escape" && !pending) {
+        e.preventDefault();
+        onCancel();
+        return;
+      }
+      if (e.key === "Tab") {
+        const cancel = cancelRef.current;
+        const confirm = confirmRef.current;
+        if (!cancel || !confirm) return;
+        // Two-button trap: Tab cycles between cancel and confirm.
+        if (e.shiftKey) {
+          if (document.activeElement === cancel) {
+            e.preventDefault();
+            confirm.focus();
+          }
+        } else {
+          if (document.activeElement === confirm) {
+            e.preventDefault();
+            cancel.focus();
+          }
+        }
+      }
     }
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, pending, onCancel]);
@@ -76,6 +104,7 @@ export function ConfirmDialog({
         )}
         <div style={{ marginTop: 22, display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
+            ref={cancelRef}
             type="button"
             onClick={onCancel}
             disabled={pending}
@@ -91,6 +120,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
+            ref={confirmRef}
             type="button"
             disabled={pending}
             onClick={async () => {

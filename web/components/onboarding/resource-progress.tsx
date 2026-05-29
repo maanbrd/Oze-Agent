@@ -29,8 +29,10 @@ export function ResourceProgress() {
 
   useEffect(() => {
     let cancelled = false;
+    let redirectId: number | null = null;
 
     async function poll() {
+      if (redirectId !== null) return; // already redirecting; ignore further polls
       try {
         const res = await fetch("/api/onboarding/resources-progress", { cache: "no-store" });
         if (!res.ok) throw new Error(`status ${res.status}`);
@@ -38,8 +40,10 @@ export function ResourceProgress() {
         if (cancelled) return;
         setCurrent(payload.step);
         setElapsedMs(payload.elapsed_ms);
-        if (payload.step === "done") {
-          setTimeout(() => router.push("/onboarding/telegram"), 800);
+        if (payload.step === "done" && redirectId === null) {
+          redirectId = window.setTimeout(() => {
+            router.push("/onboarding/telegram");
+          }, 800);
         }
       } catch (err) {
         if (cancelled) return;
@@ -55,6 +59,7 @@ export function ResourceProgress() {
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      if (redirectId !== null) window.clearTimeout(redirectId);
     };
   }, [router]);
 
