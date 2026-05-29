@@ -220,7 +220,10 @@ export async function createGoogleResourcesAction(formData: FormData) {
       ),
     );
   }
-  redirect("/onboarding/telegram");
+  // Redirect to the progress canvas. ResourceProgress polls
+  // /api/onboarding/resources-progress and navigates to /onboarding/telegram
+  // once the backend reports step === "done".
+  redirect("/onboarding/zasoby?progress=1");
 }
 
 export async function generateTelegramCodeAction() {

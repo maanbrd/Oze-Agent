@@ -23,7 +23,7 @@ const apiBaseUrlSource = readSource("../lib/api/base-url.ts");
 const paymentPageSource = readSource("../app/onboarding/platnosc/page.tsx");
 const googlePageSource = readSource("../app/onboarding/google/page.tsx");
 const resourcesPageSource = readSource("../app/onboarding/zasoby/page.tsx");
-const resourceSubmitButtonSource = readSource("../components/onboarding/resource-submit-button.tsx");
+const submitButtonSource = readSource("../components/ui/submit-button.tsx");
 const telegramPageSource = readSource("../app/onboarding/telegram/page.tsx");
 const stripeServerSource = readSource("../lib/stripe/server.ts");
 const stripeWebhookRouteSource = readSource("../app/api/webhooks/stripe/route.ts");
@@ -161,14 +161,16 @@ test("Google OAuth has a paid Supabase fallback when bearer FastAPI auth is unav
 test("Google resource creation tolerates slow Google APIs and blocks duplicate submits", () => {
   assert.match(onboardingApiSource, /RESOURCE_CREATION_TIMEOUT_MS\s*=\s*60000/);
   assert.match(onboardingApiSource, /timeoutMs:\s*RESOURCE_CREATION_TIMEOUT_MS/);
-  assert.match(resourcesPageSource, /ResourceSubmitButton/);
+  assert.match(resourcesPageSource, /ResourceProgress/);
+  assert.equal(resourcesPageSource.includes("ResourceSubmitButton"), false);
+  assert.match(resourcesPageSource, /SubmitButton/);
   assert.match(resourcesPageSource, /cleanResourceOwnerName/);
   assert.match(resourcesPageSource, /name="driveFolderName"/);
   assert.match(resourcesPageSource, /OZE Klienci - \$\{defaultName\}/);
   assert.match(onboardingActionsSource, /driveFolderName: String\(formData\.get\("driveFolderName"\)/);
   assert.match(onboardingApiSource, /driveFolderName\?: string/);
-  assert.match(resourceSubmitButtonSource, /useFormStatus/);
-  assert.match(resourceSubmitButtonSource, /disabled=\{pending\}/);
+  assert.match(submitButtonSource, /useFormStatus/);
+  assert.match(submitButtonSource, /disabled=\{pending\}/);
 });
 
 test("stripe checkout returns to the current request origin, not a stale preview URL", () => {
