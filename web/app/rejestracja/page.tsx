@@ -185,7 +185,7 @@ export default async function RegistrationPage({
                 <input name="phoneContact" type="checkbox" className="mt-1 h-4 w-4" />
                 <span>Wyrażam zgodę na kontakt telefoniczny.</span>
               </label>
-              <SubmitButton pendingLabel="Rejestruję konto" variant="solid" fullWidth className="mt-7">
+              <SubmitButton pendingLabel="Rejestruję konto…" variant="solid" fullWidth className="mt-7">
                 Dalej: płatność
               </SubmitButton>
               <p className="mt-5 text-sm leading-6 text-zinc-400">

@@ -135,7 +135,7 @@ function BetaAccessCard() {
             płatności i skonfigurować Google oraz Telegram.
           </p>
         </div>
-        <SubmitButton pendingLabel="Aktywuję dostęp" variant="solid">
+        <SubmitButton pendingLabel="Aktywuję dostęp…" variant="outline">
           Kontynuuj jako beta tester
         </SubmitButton>
       </div>
@@ -185,7 +185,7 @@ function PlanCard({
         </div>
       </div>
       <p className="mt-4 min-h-12 text-sm leading-6 text-zinc-400">{note}</p>
-      <SubmitButton pendingLabel="Przygotowuję płatność" variant="solid" fullWidth className="mt-5">
+      <SubmitButton pendingLabel="Przygotowuję płatność…" variant="solid" fullWidth className="mt-5">
         Rozpocznij 3 dni testu
       </SubmitButton>
     </form>

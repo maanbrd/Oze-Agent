@@ -240,7 +240,7 @@ export function TelegramPairingCard({
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <form action={generateTelegramCodeAction}>
             <SubmitButton
-              pendingLabel="Generuję nowy kod"
+              pendingLabel="Generuję nowy kod…"
               variant={expired ? "solid" : "outline"}
             >
               Wygeneruj nowy kod

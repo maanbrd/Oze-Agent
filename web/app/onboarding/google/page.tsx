@@ -49,7 +49,7 @@ export default async function GoogleOnboardingPage({
           </Link>
         ) : (
           <form action={startGoogleOAuthAction} className="mt-6">
-            <SubmitButton pendingLabel="Łączę z Google" variant="solid">
+            <SubmitButton pendingLabel="Łączę z Google…" variant="solid" fullWidth>
               Połącz konto Google
             </SubmitButton>
           </form>

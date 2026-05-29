@@ -61,7 +61,7 @@ export default async function SettingsPage({
             className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
           />
         </label>
-        <SubmitButton pendingLabel="Zapisuję" variant="outline">
+        <SubmitButton pendingLabel="Zapisuję…" variant="outline">
           Zapisz ustawienia konta
         </SubmitButton>
       </form>

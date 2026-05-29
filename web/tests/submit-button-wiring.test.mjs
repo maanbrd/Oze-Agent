@@ -8,15 +8,15 @@ function readSource(path) {
 }
 
 const expectations = [
-  { file: "../app/rejestracja/page.tsx", pendingLabel: "Rejestruję konto" },
-  { file: "../app/login/page.tsx", pendingLabel: "Loguję" },
-  { file: "../app/onboarding/platnosc/page.tsx", pendingLabel: "Przygotowuję płatność" },
-  { file: "../app/onboarding/platnosc/page.tsx", pendingLabel: "Aktywuję dostęp" },
-  { file: "../app/onboarding/google/page.tsx", pendingLabel: "Łączę z Google" },
-  { file: "../app/(app)/ustawienia/page.tsx", pendingLabel: "Zapisuję" },
-  { file: "../app/(app)/platnosci/page.tsx", pendingLabel: "Anuluję trial" },
-  { file: "../components/auth/logout-link.tsx", pendingLabel: "Wylogowuję" },
-  { file: "../components/onboarding/telegram-pairing-card.tsx", pendingLabel: "Generuję nowy kod" },
+  { file: "../app/rejestracja/page.tsx", pendingLabel: "Rejestruję konto…" },
+  { file: "../app/login/page.tsx", pendingLabel: "Loguję…" },
+  { file: "../app/onboarding/platnosc/page.tsx", pendingLabel: "Przygotowuję płatność…" },
+  { file: "../app/onboarding/platnosc/page.tsx", pendingLabel: "Aktywuję dostęp…" },
+  { file: "../app/onboarding/google/page.tsx", pendingLabel: "Łączę z Google…" },
+  { file: "../app/(app)/ustawienia/page.tsx", pendingLabel: "Zapisuję…" },
+  { file: "../app/(app)/platnosci/page.tsx", pendingLabel: "Anuluję trial…" },
+  { file: "../components/auth/logout-link.tsx", pendingLabel: "Wylogowuję…" },
+  { file: "../components/onboarding/telegram-pairing-card.tsx", pendingLabel: "Generuję nowy kod…" },
 ];
 
 for (const { file, pendingLabel } of expectations) {

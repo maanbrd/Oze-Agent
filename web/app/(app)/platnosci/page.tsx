@@ -160,7 +160,7 @@ export default async function PaymentsPage({
                       aktywny do końca okresu próbnego.
                     </p>
                     <form action="/platnosci/anuluj-trial" method="post">
-                      <SubmitButton pendingLabel="Anuluję trial" variant="outline" className="mt-4">
+                      <SubmitButton pendingLabel="Anuluję trial…" variant="outline" className="mt-4">
                         Potwierdzam anulowanie po okresie próbnym
                       </SubmitButton>
                     </form>

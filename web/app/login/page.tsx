@@ -82,7 +82,7 @@ export default async function LoginPage({
                 className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[#3DFF7A]/70"
               />
             </label>
-            <SubmitButton pendingLabel="Loguję" variant="solid" fullWidth className="mt-7">
+            <SubmitButton pendingLabel="Loguję…" variant="solid" fullWidth className="mt-7">
               Zaloguj się
             </SubmitButton>
             <p className="mt-5 text-sm leading-6 text-zinc-400">
