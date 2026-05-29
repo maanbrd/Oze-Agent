@@ -17,6 +17,7 @@ export function BrandSpinner({
     <span
       role="status"
       aria-live="polite"
+      aria-atomic="true"
       style={{ display: "inline-flex", filter: dropShadow }}
     >
       <span className="sr-only">{label}</span>
@@ -50,6 +51,9 @@ export function BrandSpinner({
           50%  { stroke-dasharray: 80 45; stroke-dashoffset: -30; }
           100% { stroke-dasharray: 5 120; stroke-dashoffset: -125; }
         }
+        /* Authoritative local fallback — duplicates the global .motion-safe-only
+           guard in globals.css so this spinner still respects reduced motion
+           when rendered in isolation (e.g. without globals.css loaded). */
         @media (prefers-reduced-motion: reduce) {
           .brand-spinner-svg, .brand-spinner-circle {
             animation: none !important;

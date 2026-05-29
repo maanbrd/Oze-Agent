@@ -28,5 +28,6 @@ test("BrandSpinner exposes accessible status role", () => {
 });
 
 test("BrandSpinner has motion-safe-only class on animation for reduced-motion respect", () => {
-  assert.match(src, /motion-safe-only/);
+  const matches = [...src.matchAll(/motion-safe-only/g)];
+  assert.ok(matches.length >= 2, "motion-safe-only must appear on both animated elements");
 });
