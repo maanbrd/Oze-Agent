@@ -227,3 +227,16 @@ body {
 .oze-offers .text-\[\#9b1c1c\] {
   color: #fca5a5;
 }
+
+/* Sonner brand overrides */
+.sonner-brand-error {
+  border-color: var(--state-error) !important;
+  box-shadow:
+    0 0 0 1px #ff646422,
+    0 0 18px #ff646422,
+    0 12px 36px #00000088 !important;
+}
+
+.sonner-brand-success {
+  border-color: #3dff7a !important;
+}

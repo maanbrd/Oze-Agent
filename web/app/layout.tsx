@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { NavigationProgressProvider } from "@/components/ui/navigation-bar";
+import { BrandToaster } from "@/components/ui/brand-toaster";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col">
         <NavigationProgressProvider>
           {children}
+          <BrandToaster />
         </NavigationProgressProvider>
         <Analytics />
         <SpeedInsights />
