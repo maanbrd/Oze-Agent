@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 
 type StepStatus = "done" | "active" | "pending";
 type Step = { label: string; status: StepStatus };
