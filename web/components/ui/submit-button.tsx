@@ -12,6 +12,14 @@ type SubmitButtonProps = {
   fullWidth?: boolean;
 };
 
+/**
+ * Submit button that reads pending state from the nearest enclosing `<form>`
+ * via `useFormStatus()`. Renders `<BrandSpinner>` and swaps to `pendingLabel`
+ * while the form action is in-flight, and disables itself to block double-submit.
+ *
+ * MUST be a descendant of a `<form action={…}>` element — outside a form,
+ * `pending` is always `false` and the spinner never appears.
+ */
 export function SubmitButton({
   children,
   pendingLabel,
@@ -33,7 +41,12 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm transition-opacity disabled:cursor-wait disabled:opacity-80 ${base} ${widthClass} ${className}`.trim()}
+      className={[
+        "inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm transition-opacity disabled:cursor-wait disabled:opacity-80",
+        base,
+        widthClass,
+        className,
+      ].filter(Boolean).join(" ")}
       style={{
         boxShadow:
           variant === "outline"
