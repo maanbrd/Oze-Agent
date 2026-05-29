@@ -4,6 +4,7 @@ import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 import { fallbackOnboardingProgress } from "@/lib/onboarding/fallback";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -134,12 +135,9 @@ function BetaAccessCard() {
             płatności i skonfigurować Google oraz Telegram.
           </p>
         </div>
-        <button
-          type="submit"
-          className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98]"
-        >
+        <SubmitButton pendingLabel="Aktywuję dostęp" variant="solid">
           Kontynuuj jako beta tester
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -187,12 +185,9 @@ function PlanCard({
         </div>
       </div>
       <p className="mt-4 min-h-12 text-sm leading-6 text-zinc-400">{note}</p>
-      <button
-        type="submit"
-        className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98]"
-      >
+      <SubmitButton pendingLabel="Przygotowuję płatność" variant="solid" fullWidth className="mt-5">
         Rozpocznij 3 dni testu
-      </button>
+      </SubmitButton>
     </form>
   );
 }

@@ -4,6 +4,7 @@ import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 import { fallbackOnboardingProgress } from "@/lib/onboarding/fallback";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +49,9 @@ export default async function GoogleOnboardingPage({
           </Link>
         ) : (
           <form action={startGoogleOAuthAction} className="mt-6">
-            <button className="rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black">
+            <SubmitButton pendingLabel="Łączę z Google" variant="solid">
               Połącz konto Google
-            </button>
+            </SubmitButton>
           </form>
         )}
       </section>

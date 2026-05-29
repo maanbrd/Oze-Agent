@@ -6,6 +6,7 @@ import { BrandLink } from "@/components/brand";
 import { AuthConfigError } from "@/components/auth/auth-config-error";
 import { safeLocalPath } from "@/lib/routes";
 import { createClient, missingSupabaseEnvMessage } from "@/lib/supabase/server";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -81,12 +82,9 @@ export default async function LoginPage({
                 className="mt-2 w-full min-w-0 rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[#3DFF7A]/70"
               />
             </label>
-            <button
-              type="submit"
-              className="mt-7 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-6 py-3 text-sm font-semibold text-black shadow-[0_0_36px_rgba(61,255,122,0.22)] transition hover:bg-[#6DFF98]"
-            >
+            <SubmitButton pendingLabel="Loguję" variant="solid" fullWidth className="mt-7">
               Zaloguj się
-            </button>
+            </SubmitButton>
             <p className="mt-5 text-sm leading-6 text-zinc-400">
               Nie masz konta?{" "}
               <Link href="/rejestracja" className="font-semibold text-[#3DFF7A]">

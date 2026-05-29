@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentAccount } from "@/lib/api/account";
 import { hasCurrentBillingAccess } from "@/lib/billing/access";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 const planItems = [
   "Agent w Telegramie",
@@ -159,12 +160,9 @@ export default async function PaymentsPage({
                       aktywny do końca okresu próbnego.
                     </p>
                     <form action="/platnosci/anuluj-trial" method="post">
-                      <button
-                        type="submit"
-                        className="mt-4 inline-flex rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-white/30 hover:bg-white/10"
-                      >
+                      <SubmitButton pendingLabel="Anuluję trial" variant="outline" className="mt-4">
                         Potwierdzam anulowanie po okresie próbnym
-                      </button>
+                      </SubmitButton>
                     </form>
                   </details>
                 )}

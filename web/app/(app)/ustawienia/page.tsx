@@ -2,6 +2,7 @@ import Link from "next/link";
 import { updateAccountAction } from "@/app/onboarding/actions";
 import { CrmNotice } from "@/components/crm-notice";
 import { getCurrentAccount } from "@/lib/api/account";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function SettingsPage({
   searchParams,
@@ -60,9 +61,9 @@ export default async function SettingsPage({
             className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
           />
         </label>
-        <button className="w-fit rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black">
+        <SubmitButton pendingLabel="Zapisuję" variant="outline">
           Zapisz ustawienia konta
-        </button>
+        </SubmitButton>
       </form>
 
       <section className="rounded-[8px] border border-white/10 bg-white/[0.04] p-5">

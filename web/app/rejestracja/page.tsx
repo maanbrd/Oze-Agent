@@ -5,6 +5,7 @@ import { signup } from "@/app/auth/actions";
 import { BrandLink } from "@/components/brand";
 import { AuthConfigError } from "@/components/auth/auth-config-error";
 import { createClient, missingSupabaseEnvMessage } from "@/lib/supabase/server";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -184,12 +185,9 @@ export default async function RegistrationPage({
                 <input name="phoneContact" type="checkbox" className="mt-1 h-4 w-4" />
                 <span>Wyrażam zgodę na kontakt telefoniczny.</span>
               </label>
-              <button
-                type="submit"
-                className="mt-7 inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-6 py-3 text-sm font-semibold text-black shadow-[0_0_36px_rgba(61,255,122,0.22)] transition hover:bg-[#6DFF98]"
-              >
+              <SubmitButton pendingLabel="Rejestruję konto" variant="solid" fullWidth className="mt-7">
                 Dalej: płatność
-              </button>
+              </SubmitButton>
               <p className="mt-5 text-sm leading-6 text-zinc-400">
                 Masz konto?{" "}
                 <Link href="/login" className="font-semibold text-[#3DFF7A]">
