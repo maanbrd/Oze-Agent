@@ -336,6 +336,7 @@ Derived from `SOURCE_OF_TRUTH.md` §4. This plan must not silently promote visio
 - `per_user_brief_time` — respect existing `users.morning_brief_hour` column (currently hardcoded 07:00).
 - `morning_brief_polish_pass` — Polish declension / humanization of brief lines (MVP ships with `Akcja: Klient` nominative template).
 - `brief_persistent_jobstore` — APScheduler with SQLAlchemyJobStore so a missed 07:00 run retrofires after bot restart (PTB JobQueue does not).
+- `resources_progress_fastapi` — FastAPI must expose `GET /api/onboarding/resources-progress` returning `{step: "sheets"|"calendar"|"drive"|"done", elapsed_ms: number}` from current Google resource creation state. Required for webapp `<ResourceProgress>` (Wzorzec D from `docs/superpowers/specs/2026-05-29-webapp-loading-ux-design.md`) to show real step-by-step progress instead of stalled "sheets" state. Implementation: write state to Supabase `onboarding_progress` table (key: `user_id`) on each step of `create_google_resources` flow; route reads that state. Blocker for the full 3-step UX, not for safety — frontend handles missing endpoint gracefully.
 
 **Product vision only / requires separate Maan decision** (described in `poznaj_swojego_agenta_v5_FINAL.md`, but **not approved as roadmap**):
 

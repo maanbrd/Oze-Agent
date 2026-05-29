@@ -1,7 +1,8 @@
 import { createGoogleResourcesAction } from "@/app/onboarding/actions";
 import { BrandLink } from "@/components/brand";
 import { LogoutLink } from "@/components/auth/logout-link";
-import { ResourceSubmitButton } from "@/components/onboarding/resource-submit-button";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { ResourceProgress } from "@/components/onboarding/resource-progress";
 import { requireOnboardingStep } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,25 @@ function cleanResourceOwnerName(value: unknown) {
 export default async function ResourcesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; progress?: string }>;
 }) {
   const params = await searchParams;
   const { onboardingStatus: status } =
     await requireOnboardingStep("/onboarding/zasoby");
+
+  // After the form action fires, the action redirects back here with
+  // ?progress=1. While ResourceProgress is polling and awaiting the
+  // backend to finish, we show the progress canvas instead of the form.
+  const inProgress = params.progress === "1";
+
+  if (inProgress) {
+    return (
+      <main className="min-h-screen bg-[#050607] px-6 py-16">
+        <ResourceProgress />
+      </main>
+    );
+  }
+
   const profile = status?.profile;
   const defaultName =
     cleanResourceOwnerName(profile?.name) ||
@@ -86,7 +101,9 @@ export default async function ResourcesPage({
               className="mt-2 w-full rounded-[8px] border border-white/10 bg-black/30 px-4 py-3 text-white"
             />
           </label>
-          <ResourceSubmitButton />
+          <SubmitButton pendingLabel="Uruchamiam tworzenie zasobów…" variant="solid" fullWidth>
+            Utwórz brakujące zasoby
+          </SubmitButton>
         </form>
       </section>
     </main>

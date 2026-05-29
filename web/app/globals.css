@@ -5,6 +5,26 @@
   --foreground: #e4e4e7;
   --muted: #71717a;
   --accent: #16a34a;
+
+  /* loading-ux brand tokens */
+  --brand-green: #3dff7a;
+  --brand-bg: #0b0d10;
+  --brand-bg-deep: #050607;
+  --brand-bg-inset: #060709;
+  --ui-border-dim: #1f242b;
+  --ui-text-primary: #f5f7fa;
+  --ui-text-muted: #6b7280;
+  --ui-text-deep: #4a5460;
+  --state-error: #ff6464;
+  --state-neutral: #9aa5b1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe-only,
+  .motion-safe-only * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 @theme inline {
@@ -206,4 +226,17 @@ body {
 .oze-offers .text-\[\#8f1d1d\],
 .oze-offers .text-\[\#9b1c1c\] {
   color: #fca5a5;
+}
+
+/* Sonner brand overrides */
+.sonner-brand-error {
+  border-color: var(--state-error) !important;
+  box-shadow:
+    0 0 0 1px #ff646422,
+    0 0 18px #ff646422,
+    0 12px 36px #00000088 !important;
+}
+
+.sonner-brand-success {
+  border-color: #3dff7a !important;
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { generateTelegramCodeAction } from "@/app/onboarding/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 const PAIRING_TTL_SECONDS = 90;
 const POLL_INTERVAL_MS = 3000;
@@ -238,15 +239,12 @@ export function TelegramPairingCard({
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <form action={generateTelegramCodeAction}>
-            <button
-              className={
-                expired
-                  ? "inline-flex w-full items-center justify-center rounded-full bg-[#3DFF7A] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#6DFF98] sm:w-auto"
-                  : "inline-flex w-full items-center justify-center rounded-full border border-[#3DFF7A]/40 px-5 py-3 text-sm font-semibold text-[#3DFF7A] transition hover:border-[#3DFF7A]/70 hover:bg-[#3DFF7A]/10 sm:w-auto"
-              }
+            <SubmitButton
+              pendingLabel="Generuję nowy kod…"
+              variant={expired ? "solid" : "outline"}
             >
               Wygeneruj nowy kod
-            </button>
+            </SubmitButton>
           </form>
           <button
             type="button"

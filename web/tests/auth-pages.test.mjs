@@ -153,9 +153,10 @@ test("auth mutations invalidate the router cache before redirecting", () => {
   }
 });
 
-test("logout link does not prefetch the GET logout side effect", () => {
+test("logout link does not prefetch the logout side effect", () => {
   assert.equal(logoutLinkSource.includes("next/link"), false);
-  assert.match(logoutLinkSource, /<a\s+href="\/logout"/);
+  assert.match(logoutLinkSource, /action="\/logout"/);
+  assert.match(logoutLinkSource, /SubmitButton/);
 });
 
 test("auth pages show a controlled Supabase config error instead of crashing", () => {

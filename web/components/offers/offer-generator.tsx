@@ -2,6 +2,9 @@
 
 import type { PDFDocument, PDFFont, PDFImage, RGB } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { BrandSpinner } from "@/components/ui/brand-spinner";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { showSuccess, showError } from "@/lib/ui/toast";
 
 type ProductType = "PV" | "Magazyn energii" | "PV + Magazyn energii";
 type OfferStatus = "draft" | "ready";
@@ -704,11 +707,21 @@ async function downloadTestPdf(offer: OfferTemplate, profile: SellerProfile) {
   URL.revokeObjectURL(url);
 }
 
+type ActionKey =
+  | "createDraft"
+  | "moveReady"
+  | "duplicateOffer"
+  | "deleteOffer"
+  | "saveEditor"
+  | "publishEditor"
+  | "downloadPdf";
+
 export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } = {}) {
   const [offers, setOffers] = useState<OfferTemplate[]>(() => (apiEnabled ? [] : initialOffers));
   const [profile, setProfile] = useState<SellerProfile>(defaultProfile);
   const [emailVariables, setEmailVariables] = useState<EmailVariable[]>(defaultEmailVariables);
-  const [apiError, setApiError] = useState("");
+  const [actionLoading, setActionLoading] = useState<Partial<Record<ActionKey, boolean>>>({});
+  const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; name: string } | null>(null);
   const [selectedId, setSelectedId] = useState(() => (apiEnabled ? "" : initialOffers[0]?.id ?? ""));
   const [editor, setEditor] = useState<OfferTemplate>(() => (apiEnabled ? emptyDraft() : initialOffers[0] ?? emptyDraft()));
   const [activeStep, setActiveStep] = useState<StepKey>("podstawy");
@@ -716,6 +729,22 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
   const [profileErrors, setProfileErrors] = useState<string[]>([]);
   const [logoError, setLogoError] = useState("");
   const emailEditorRef = useRef<HTMLDivElement | null>(null);
+
+  async function withLoading<T>(key: ActionKey, fn: () => Promise<T>): Promise<T | null> {
+    setActionLoading((s) => ({ ...s, [key]: true }));
+    try {
+      return await fn();
+    } catch (err) {
+      showError(
+        "Coś poszło nie tak",
+        err instanceof Error ? err.message : "Spróbuj jeszcze raz.",
+        () => void withLoading(key, fn),
+      );
+      return null;
+    } finally {
+      setActionLoading((s) => ({ ...s, [key]: false }));
+    }
+  }
 
   const ready = useMemo(() => readyWithNumbers(offers), [offers]);
   const drafts = useMemo(() => draftsNewest(offers), [offers]);
@@ -730,7 +759,6 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
     let cancelled = false;
     async function load() {
       try {
-        setApiError("");
         const [templatesResponse, profileResponse, variablesResponse] = await Promise.all([
           apiRequest("/offers/templates"),
           apiRequest("/offers/profile"),
@@ -756,7 +784,10 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
           setEmailVariables(variablesBody.variables);
         }
       } catch (error) {
-        if (!cancelled) setApiError(error instanceof Error ? error.message : "Nie udało się pobrać ofert.");
+        if (!cancelled) showError(
+          "Nie udało się pobrać ofert",
+          error instanceof Error ? error.message : "Spróbuj odświeżyć stronę.",
+        );
       }
     }
     void load();
@@ -774,8 +805,7 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
   async function createDraft() {
     const draft = emptyDraft();
     if (apiReady) {
-      try {
-        setApiError("");
+      await withLoading("createDraft", async () => {
         const response = await apiRequest("/offers/templates", {
           method: "POST",
           body: JSON.stringify({ data: toApi(draft) }),
@@ -784,16 +814,12 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
         const created = fromApi(body.template);
         setOffers((current) => [created, ...current]);
         selectOffer(created);
-        return;
-      } catch (error) {
-        setApiError(error instanceof Error ? error.message : "Nie udało się utworzyć szkicu.");
-        return;
-      }
+        showSuccess("Szkic utworzony");
+      });
+      return;
     }
-    if (!apiReady) {
-      setOffers((current) => [draft, ...current]);
-      selectOffer(draft);
-    }
+    setOffers((current) => [draft, ...current]);
+    selectOffer(draft);
   }
 
   async function saveEditor() {
@@ -803,8 +829,7 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
       return;
     }
     if (apiReady) {
-      try {
-        setApiError("");
+      await withLoading("saveEditor", async () => {
         const response = await apiRequest(`/offers/templates/${editor.id}`, {
           method: "PATCH",
           body: JSON.stringify({ data: toApi(editor) }),
@@ -814,11 +839,9 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
         setEditor(saved);
         setOffers((current) => current.map((offer) => (offer.id === saved.id ? saved : offer)));
         setErrors([]);
-        return;
-      } catch (error) {
-        setErrors([error instanceof Error ? error.message : "Nie udało się zapisać oferty."]);
-        return;
-      }
+        showSuccess("Oferta zapisana");
+      });
+      return;
     }
     setOffers((current) => current.map((offer) => (offer.id === editor.id ? editor : offer)));
     setErrors([]);
@@ -831,8 +854,7 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
       return;
     }
     if (apiReady) {
-      try {
-        setApiError("");
+      await withLoading("publishEditor", async () => {
         await apiRequest(`/offers/templates/${editor.id}`, {
           method: "PATCH",
           body: JSON.stringify({ data: toApi(editor) }),
@@ -844,11 +866,9 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
         setSelectedId(published.id);
         setOffers((current) => current.map((offer) => (offer.id === published.id ? published : offer)));
         setErrors([]);
-        return;
-      } catch (error) {
-        setErrors([error instanceof Error ? error.message : "Nie udało się opublikować oferty."]);
-        return;
-      }
+        showSuccess("Oferta opublikowana");
+      });
+      return;
     }
     const maxOrder = Math.max(0, ...offers.filter((offer) => offer.status === "ready").map((offer) => offer.sortOrder ?? 0));
     const next = { ...editor, status: "ready" as const, sortOrder: maxOrder + 10, updatedAt: new Date().toISOString() };
@@ -860,14 +880,17 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
 
   async function deleteOffer(id: string) {
     if (apiReady) {
-      try {
-        setApiError("");
+      await withLoading("deleteOffer", async () => {
         await apiRequest(`/offers/templates/${id}`, { method: "DELETE" });
-      } catch (error) {
-        setApiError(error instanceof Error ? error.message : "Nie udało się usunąć oferty.");
-        return;
-      }
+        removeOfferLocally(id);
+        showSuccess("Szablon usunięty");
+      });
+      return;
     }
+    removeOfferLocally(id);
+  }
+
+  function removeOfferLocally(id: string) {
     setOffers((current) => {
       const remaining = current.filter((offer) => offer.id !== id);
       const reindexedReady = readyWithNumbers(remaining).map((offer) => ({
@@ -885,18 +908,15 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
 
   async function duplicateOffer(offer: OfferTemplate) {
     if (apiReady) {
-      try {
-        setApiError("");
+      await withLoading("duplicateOffer", async () => {
         const response = await apiRequest(`/offers/templates/${offer.id}/duplicate`, { method: "POST" });
         const body = await response.json();
         const draft = fromApi(body.template);
         setOffers((current) => [draft, ...current]);
         selectOffer(draft);
-        return;
-      } catch (error) {
-        setApiError(error instanceof Error ? error.message : "Nie udało się zduplikować oferty.");
-        return;
-      }
+        showSuccess("Oferta zduplikowana");
+      });
+      return;
     }
     const draft = {
       ...offer,
@@ -917,6 +937,7 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
     const target = index + direction;
     if (index < 0 || target < 0 || target >= ordered.length) return;
     [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    // Optimistic update first, then persist to API.
     setOffers((current) =>
       current.map((offer) => {
         const nextIndex = ordered.indexOf(offer.id);
@@ -924,15 +945,12 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
       }),
     );
     if (apiReady) {
-      try {
-        setApiError("");
+      await withLoading("moveReady", async () => {
         await apiRequest("/offers/templates/reorder", {
           method: "POST",
           body: JSON.stringify({ ordered_template_ids: ordered }),
         });
-      } catch (error) {
-        setApiError(error instanceof Error ? error.message : "Nie udało się zmienić kolejności.");
-      }
+      });
     }
   }
 
@@ -949,7 +967,6 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
     }
     if (apiReady) {
       try {
-        setApiError("");
         const form = new FormData();
         form.append("file", file);
         const response = await apiRequest("/offers/profile/logo", {
@@ -962,7 +979,10 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
           return;
         }
       } catch (error) {
-        setApiError(error instanceof Error ? error.message : "Nie udało się wysłać logo.");
+        showError(
+          "Nie udało się wysłać logo",
+          error instanceof Error ? error.message : "Spróbuj jeszcze raz.",
+        );
         return;
       }
     }
@@ -978,14 +998,17 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
       return;
     }
     try {
-      setApiError("");
       setProfileErrors([]);
       await apiRequest("/offers/profile", {
         method: "PUT",
         body: JSON.stringify({ data: profileToApi(profile) }),
       });
+      showSuccess("Profil zapisany");
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Nie udało się zapisać profilu.");
+      showError(
+        "Nie udało się zapisać profilu",
+        error instanceof Error ? error.message : "Spróbuj jeszcze raz.",
+      );
     }
   }
 
@@ -1019,12 +1042,9 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
   }
 
   async function downloadPdf(offer: OfferTemplate, currentProfile: SellerProfile) {
-    try {
-      setApiError("");
+    await withLoading("downloadPdf", async () => {
       await downloadTestPdf(offer, currentProfile);
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Nie udało się pobrać PDF.");
-    }
+    });
   }
 
   const rows = (items: (OfferTemplate & { number?: number })[], numbered: boolean) =>
@@ -1060,7 +1080,10 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
             <button className="rounded-[8px] border border-white/10 px-2 text-xs" onClick={() => void duplicateOffer(offer)}>
               Duplikuj
             </button>
-            <button className="rounded-[8px] border border-red-400/30 bg-red-500/10 px-2 text-xs text-red-300" onClick={() => void deleteOffer(offer.id)}>
+            <button
+              className="rounded-[8px] border border-red-400/30 bg-red-500/10 px-2 text-xs text-red-300"
+              onClick={() => setDeleteCandidate({ id: offer.id, name: offer.name || "Bez nazwy" })}
+            >
               Usuń
             </button>
           </div>
@@ -1077,16 +1100,13 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
           </div>
           <button
             onClick={() => void createDraft()}
-            className="h-10 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98] sm:col-start-3 sm:justify-self-end"
+            disabled={actionLoading.createDraft}
+            className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98] disabled:opacity-60 sm:col-start-3 sm:justify-self-end"
           >
+            {actionLoading.createDraft && <BrandSpinner variant="solid" size={18} />}
             Nowy szkic
           </button>
         </div>
-        {apiError ? (
-          <div className="mb-4 rounded-[8px] border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-300">
-            {apiError}
-          </div>
-        ) : null}
 
         <OfferTable title="Gotowe oferty" empty="Brak gotowych ofert." rows={rows(ready, true)} />
         <div className="h-5" />
@@ -1171,23 +1191,28 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
               <div className="mt-5 flex flex-wrap gap-2">
                 <button
                   onClick={() => void saveEditor()}
-                  className="h-10 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06]"
+                  disabled={actionLoading.saveEditor}
+                  className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06] disabled:opacity-60"
                 >
+                  {actionLoading.saveEditor && <BrandSpinner size={18} />}
                   Zapisz
                 </button>
                 {editor.status === "draft" ? (
                   <button
                     onClick={() => void publishEditor()}
-                    className="h-10 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98]"
+                    disabled={actionLoading.publishEditor}
+                    className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-[#3DFF7A] px-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(61,255,122,0.18)] hover:bg-[#6DFF98] disabled:opacity-60"
                   >
+                    {actionLoading.publishEditor && <BrandSpinner variant="solid" size={18} />}
                     Publikuj
                   </button>
                 ) : null}
                 <button
-                  disabled={!pdfAllowed}
+                  disabled={!pdfAllowed || actionLoading.downloadPdf}
                   onClick={() => void downloadPdf(editor, profile)}
-                  className="h-10 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-white/12 px-4 text-sm font-semibold text-zinc-200 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
                 >
+                  {actionLoading.downloadPdf && <BrandSpinner size={18} />}
                   Test PDF
                 </button>
               </div>
@@ -1197,6 +1222,20 @@ export function OfferGenerator({ apiEnabled = true }: { apiEnabled?: boolean } =
           <div className="p-5 text-sm text-zinc-400">Wybierz ofertę albo utwórz szkic.</div>
         )}
       </aside>
+
+      <ConfirmDialog
+        open={!!deleteCandidate}
+        title="Czy na pewno usunąć szablon?"
+        description={deleteCandidate ? `${deleteCandidate.name} zostanie nieodwracalnie usunięty.` : undefined}
+        confirmLabel="Usuń"
+        variant="destructive"
+        onCancel={() => setDeleteCandidate(null)}
+        onConfirm={async () => {
+          if (!deleteCandidate) return;
+          await deleteOffer(deleteCandidate.id);
+          setDeleteCandidate(null);
+        }}
+      />
     </div>
   );
 }

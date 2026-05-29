@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { DataFreshnessBadge } from "@/components/data-freshness-badge";
-import type { FunnelStatus } from "@/lib/crm/types";
+import { toast as sonnerToast } from "sonner";
+import { showSuccess, showError } from "@/lib/ui/toast";
 import {
   formatScheduleLabel,
   pad2,
@@ -24,28 +25,6 @@ const G = "#3DFF7A";
 const RED = "#EF4444";
 const AMBER = "#FBBF24";
 
-type ToastState =
-  | {
-      kind: "status";
-      clientId: string;
-      clientName: string;
-      oldStatus: FunnelStatus;
-      newStatus: FunnelStatus;
-      expiresAt: number;
-    }
-  | {
-      kind: "schedule";
-      clientId: string;
-      clientName: string;
-      whenLabel: string;
-      expiresAt: number;
-    }
-  | {
-      kind: "error";
-      message: string;
-      expiresAt: number;
-    };
-
 type ScheduleDraft = {
   client: PendingClient;
   date: string;
@@ -57,10 +36,6 @@ type ScheduleDraft = {
 type ReScheduleAsk = {
   client: PendingClient;
 };
-
-const TOAST_TTL_MS = 10_000;
-const SCHEDULE_TOAST_TTL_MS = 5_000;
-const ERROR_TOAST_TTL_MS = 6_000;
 
 function defaultPrefilledNote(client: PendingClient): string {
   const product = client.product?.trim();
@@ -80,28 +55,13 @@ export function DecyzjePreview({
 }) {
   const [clients, setClients] = useState<PendingClient[]>(initialClients);
   const [decided, setDecided] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<ToastState | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft | null>(null);
   const [reScheduleAsk, setReScheduleAsk] = useState<ReScheduleAsk | null>(null);
-  const [now, setNow] = useState<number>(() => Date.now());
   const [, startTransition] = useTransition();
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Server component passes `key={fetchedAt}` so the component re-mounts on
   // every server-side data refresh — that is what gives us a clean
   // `initialClients` snapshot without a setState-in-effect resync hack.
-
-  useEffect(() => {
-    if (!toast) {
-      if (countdownTimer.current) clearInterval(countdownTimer.current);
-      return;
-    }
-    countdownTimer.current = setInterval(() => setNow(Date.now()), 250);
-    return () => {
-      if (countdownTimer.current) clearInterval(countdownTimer.current);
-    };
-  }, [toast]);
 
   const visibleClients = useMemo(
     () =>
@@ -111,15 +71,7 @@ export function DecyzjePreview({
     [clients, decided],
   );
 
-  const queueErrorToast = (message: string) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ kind: "error", message, expiresAt: Date.now() + ERROR_TOAST_TTL_MS });
-    toastTimer.current = setTimeout(() => setToast(null), ERROR_TOAST_TTL_MS);
-  };
-
   const decideClient = (client: PendingClient, transition: Transition) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-
     // Optimistic state update.
     setDecided((prev) => new Set(prev).add(client.id));
     if (transition.tone !== "stay") {
@@ -128,15 +80,44 @@ export function DecyzjePreview({
       );
     }
 
-    setToast({
-      kind: "status",
-      clientId: client.id,
-      clientName: client.fullName,
-      oldStatus: client.status,
-      newStatus: transition.next,
-      expiresAt: Date.now() + TOAST_TTL_MS,
+    const undoLabel =
+      client.status === transition.next
+        ? `${client.fullName} · zostaje w „${client.status}"`
+        : `${client.fullName} · „${client.status}" → „${transition.next}"`;
+
+    // Status-change toasts use 10 000 ms to preserve the original undo window.
+    // showAction uses a fixed 6 s; we call sonnerToast() directly for this case.
+    sonnerToast("Zmieniono status", {
+      description: undoLabel,
+      duration: 10_000,
+      action: {
+        label: "Cofnij",
+        onClick: () => {
+          // Optimistic local revert.
+          setDecided((prev) => {
+            const next = new Set(prev);
+            next.delete(client.id);
+            return next;
+          });
+          setClients((prev) =>
+            prev.map((c) => (c.id === client.id ? { ...c, status: client.status } : c)),
+          );
+
+          startTransition(async () => {
+            // "Stay" undo is a no-op semantically — column J was already bumped
+            // and there is no reverse for that in MVP.
+            if (client.status === transition.next) return;
+            const result = await changeClientStatusAction(client.row, client.status);
+            if (!result.ok) {
+              showError(
+                "Cofnięcie nie powiodło się",
+                `Sprawdź ${client.fullName} w Sheets.`,
+              );
+            }
+          });
+        },
+      },
     });
-    toastTimer.current = setTimeout(() => setToast(null), TOAST_TTL_MS);
 
     startTransition(async () => {
       const result =
@@ -156,45 +137,9 @@ export function DecyzjePreview({
             prev.map((c) => (c.id === client.id ? { ...c, status: client.status } : c)),
           );
         }
-        queueErrorToast(
-          `Nie udało się zapisać w Sheets — ${client.fullName}. Spróbuj ponownie.`,
-        );
-      }
-    });
-  };
-
-  const undoStatusToast = () => {
-    if (!toast || toast.kind !== "status") return;
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-
-    const clientId = toast.clientId;
-    const oldStatus = toast.oldStatus;
-    const newStatus = toast.newStatus;
-    const client = clients.find((c) => c.id === clientId);
-    if (!client) {
-      setToast(null);
-      return;
-    }
-
-    // Optimistic local revert.
-    setDecided((prev) => {
-      const next = new Set(prev);
-      next.delete(clientId);
-      return next;
-    });
-    setClients((prev) =>
-      prev.map((c) => (c.id === clientId ? { ...c, status: oldStatus } : c)),
-    );
-    setToast(null);
-
-    startTransition(async () => {
-      // "Stay" undo is a no-op semantically — column J was already bumped and
-      // there is no reverse for that in MVP. We just dismiss the toast.
-      if (oldStatus === newStatus) return;
-      const result = await changeClientStatusAction(client.row, oldStatus);
-      if (!result.ok) {
-        queueErrorToast(
-          `Cofnięcie nie powiodło się — sprawdź ${client.fullName} w Sheets.`,
+        showError(
+          "Nie udało się zapisać w Sheets",
+          `${client.fullName}. Spróbuj ponownie.`,
         );
       }
     });
@@ -237,17 +182,9 @@ export function DecyzjePreview({
 
   const proceedReScheduleAsCancelOnly = (client: PendingClient) => {
     setReScheduleAsk(null);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
 
     setDecided((prev) => new Set(prev).add(client.id));
-    setToast({
-      kind: "schedule",
-      clientId: client.id,
-      clientName: client.fullName,
-      whenLabel: "telefon anulowany",
-      expiresAt: Date.now() + SCHEDULE_TOAST_TTL_MS,
-    });
-    toastTimer.current = setTimeout(() => setToast(null), SCHEDULE_TOAST_TTL_MS);
+    showSuccess("Telefon anulowany", `Klient: ${client.fullName}`);
 
     startTransition(async () => {
       const result = await scheduleClientCallAction({
@@ -263,8 +200,9 @@ export function DecyzjePreview({
           next.delete(client.id);
           return next;
         });
-        queueErrorToast(
-          `Nie udało się anulować poprzedniego telefonu (${client.fullName}). Spróbuj w Calendar ręcznie.`,
+        showError(
+          "Nie udało się anulować telefonu",
+          `${client.fullName} — sprawdź Calendar ręcznie.`,
         );
       }
     });
@@ -273,18 +211,12 @@ export function DecyzjePreview({
   const closeSchedule = () => setScheduleDraft(null);
 
   const submitSchedule = (draft: ScheduleDraft) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-
     setDecided((prev) => new Set(prev).add(draft.client.id));
-    setToast({
-      kind: "schedule",
-      clientId: draft.client.id,
-      clientName: draft.client.fullName,
-      whenLabel: formatScheduleLabel(draft.date, draft.time),
-      expiresAt: Date.now() + SCHEDULE_TOAST_TTL_MS,
-    });
+    showSuccess(
+      "Zaplanowano telefon",
+      `Klient: ${draft.client.fullName} · ${formatScheduleLabel(draft.date, draft.time)}`,
+    );
     setScheduleDraft(null);
-    toastTimer.current = setTimeout(() => setToast(null), SCHEDULE_TOAST_TTL_MS);
 
     startTransition(async () => {
       const result = await scheduleClientCallAction({
@@ -300,15 +232,13 @@ export function DecyzjePreview({
           next.delete(draft.client.id);
           return next;
         });
-        queueErrorToast(
-          `Nie udało się zapisać telefonu w Calendar (${draft.client.fullName}). Spróbuj ponownie.`,
+        showError(
+          "Nie udało się zapisać telefonu w Calendar",
+          `${draft.client.fullName} — spróbuj ponownie.`,
         );
       }
     });
   };
-
-  const remainingMs = toast ? Math.max(0, toast.expiresAt - now) : 0;
-  const remainingSec = Math.ceil(remainingMs / 1000);
 
   return (
     <div style={{ padding: "32px 24px", color: "#fff" }}>
@@ -483,80 +413,6 @@ export function DecyzjePreview({
           </div>
         )}
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            position: "fixed",
-            bottom: 24,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: toast.kind === "error" ? "rgba(40, 14, 14, 0.96)" : "rgba(20, 24, 28, 0.96)",
-            border: `1px solid ${toast.kind === "error" ? `${RED}66` : `${G}55`}`,
-            borderRadius: 12,
-            padding: "14px 18px",
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            color: "#fff",
-            fontSize: 14,
-            boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
-            zIndex: 100,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            maxWidth: "calc(100vw - 32px)",
-          }}
-        >
-          {toast.kind === "status" ? (
-            <>
-              <div>
-                <strong style={{ color: G }}>{toast.clientName}</strong>
-                {toast.oldStatus === toast.newStatus ? (
-                  <> · zostaje w „{toast.oldStatus}”</>
-                ) : (
-                  <>
-                    {" · "}„{toast.oldStatus}” → <strong>„{toast.newStatus}”</strong>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={undoStatusToast}
-                style={{
-                  background: "transparent",
-                  border: `1px solid ${G}`,
-                  color: G,
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                ↶ Cofnij ({remainingSec}s)
-              </button>
-            </>
-          ) : toast.kind === "schedule" ? (
-            <div>
-              <span style={{ marginRight: 8 }}>📅</span>
-              <strong style={{ color: G }}>{toast.clientName}</strong>
-              {" · "}
-              {toast.whenLabel}
-              {" · "}
-              <span style={{ color: "rgba(255,255,255,0.6)" }}>15 min · zapisane w Calendar</span>
-            </div>
-          ) : (
-            <div style={{ color: "#fff" }}>
-              <span style={{ marginRight: 8 }}>⚠️</span>
-              {toast.message}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Re-schedule confirmation */}
       {reScheduleAsk && (

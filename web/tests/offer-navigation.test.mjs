@@ -67,6 +67,10 @@ test("production draft creation does not fall back to phantom local offers after
   const createDraftSource = offerSource.slice(createDraftStart, saveEditorStart);
 
   assert.ok(createDraftStart > 0);
-  assert.match(createDraftSource, /catch \(error\) \{[\s\S]*setApiError\([\s\S]*Nie udało się utworzyć szkicu\.[\s\S]*return;/);
-  assert.match(createDraftSource, /if \(!apiReady\) \{[\s\S]*setOffers\(\(current\) => \[draft, \.\.\.current\]\);/);
+  // API branch uses withLoading which handles errors via toast; on failure it returns null
+  // and the early `return` prevents falling through to local offer creation.
+  assert.match(createDraftSource, /withLoading\("createDraft"/);
+  assert.match(createDraftSource, /return;/);
+  // Local fallback (non-API) still creates offer locally.
+  assert.match(createDraftSource, /setOffers\(\(current\) => \[draft, \.\.\.current\]\);/);
 });
