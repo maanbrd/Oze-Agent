@@ -5,6 +5,25 @@
   --foreground: #e4e4e7;
   --muted: #71717a;
   --accent: #16a34a;
+
+  /* loading-ux brand tokens */
+  --brand-green: #3DFF7A;
+  --brand-bg: #0b0d10;
+  --brand-bg-deep: #050607;
+  --brand-bg-inset: #060709;
+  --ui-border-dim: #1f242b;
+  --ui-text-primary: #f5f7fa;
+  --ui-text-muted: #6b7280;
+  --ui-text-deep: #4a5460;
+  --state-error: #FF6464;
+  --state-neutral: #9aa5b1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe-only {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 @theme inline {
