@@ -8,6 +8,13 @@ const lineStyles: Record<LineVariant, { height: string; width: string; opacity?:
   body: { height: "12px", width: "90%" },
 };
 
+/**
+ * Outline-pulse placeholder line for a single piece of text.
+ *
+ * MUST be rendered inside a `<SkeletonCard>` — the parent injects the shared
+ * `.sk-line` keyframe CSS. A standalone `<SkeletonLine />` renders an
+ * unstyled zero-height div.
+ */
 export function SkeletonLine({
   variant = "body",
   delay = 0,
@@ -29,6 +36,13 @@ export function SkeletonLine({
   );
 }
 
+/**
+ * Outline-pulse placeholder for a CTA button area.
+ *
+ * MUST be rendered inside a `<SkeletonCard>` — the parent injects the shared
+ * `.sk-cta` keyframe CSS. A standalone `<SkeletonCta />` renders an
+ * unstyled empty div.
+ */
 export function SkeletonCta({ delay = 0 }: { delay?: number }) {
   return (
     <div
@@ -43,7 +57,7 @@ export function SkeletonCard({ children }: { children: ReactNode }) {
   return (
     <div className="sk-card" role="status" aria-label="Ładuję zawartość">
       {children}
-      <style>{`
+      <style href="sk-card" precedence="default">{`
         .sk-card {
           border: 1.5px solid #3DFF7A;
           border-radius: 14px;
