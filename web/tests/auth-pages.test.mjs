@@ -129,7 +129,7 @@ test("signup creates a real auth account and sends the seller to payment onboard
   assert.equal(authActionsSource.includes('"use server"'), true);
   assert.equal(authActionsSource.includes("signUp"), true);
   assert.equal(authActionsSource.includes("name,"), false);
-  assert.equal(authActionsSource.includes('redirect("/onboarding/platnosc")'), true);
+  assert.equal(authActionsSource.includes('redirect("/onboarding/przekierowuje?to=stripe")'), true);
   assert.equal(authActionsSource.includes('router.push("/oferty")'), false);
   assert.equal(authActionsSource.includes('redirect("/oferty")'), false);
   assert.equal(authActionsSource.includes("localStorage.setItem"), false);
