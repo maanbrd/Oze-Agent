@@ -89,6 +89,19 @@ Current batch/multi-meeting fragments are legacy reference only.
   caption `zdjęcia do [imię nazwisko miasto]`.
 - **Global `/cancel` command** — universal escape hatch for any pending flow
   (added in `48e4a76`).
+- **Webapp loading UX visual language** — landed 2026-05-29 on
+  `worktree-loading-ux`. 6-wzorcowy system feedbacku dla każdej operacji
+  asynchronicznej: A `<BrandSpinner>` + `<SubmitButton>` (9 form actions),
+  B `<NavigationBar>` rail + `<BreadcrumbArrow>`, C `<Skeleton*>` w 6
+  `loading.tsx`, D `<ResourceProgress>` dla `createGoogleResources` (10–45 s),
+  E sonner z brand theme + helpery w `lib/ui/toast.ts`, F `<RedirectingScreen>`
+  + `/onboarding/przekierowuje` dla 3 redirect chains (Stripe / Google /
+  post-OAuth). Spec:
+  `docs/superpowers/specs/2026-05-29-webapp-loading-ux-design.md`. Plan:
+  `docs/superpowers/plans/2026-05-29-webapp-loading-ux-implementation.md`.
+  POST-MVP follow-up dla `oze-agent`: FastAPI musi udostępniać
+  `GET /api/onboarding/resources-progress` zwracające `{step, elapsed_ms}` —
+  do tego czasu progress indicator stoi na pierwszym kroku.
 
 ### Offer Generator baseline
 
