@@ -109,7 +109,7 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/onboarding/platnosc");
+  redirect("/onboarding/przekierowuje?to=stripe");
 }
 
 export async function logout() {

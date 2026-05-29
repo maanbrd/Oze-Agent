@@ -201,7 +201,7 @@ export async function startGoogleOAuthAction() {
     );
   }
 
-  redirect(trustedGoogleUrl);
+  redirect(`/onboarding/przekierowuje?to=google&url=${encodeURIComponent(trustedGoogleUrl)}`);
 }
 
 export async function createGoogleResourcesAction(formData: FormData) {

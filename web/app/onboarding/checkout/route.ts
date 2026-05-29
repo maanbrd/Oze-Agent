@@ -67,7 +67,7 @@ function localRedirect(request: Request, path: string) {
   return NextResponse.redirect(new URL(path, request.url), { status: 303 });
 }
 
-export async function POST(request: Request) {
+async function handleCheckout(request: Request) {
   const account = await getCurrentAccount();
 
   if (!account.authenticated) {
@@ -153,4 +153,14 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.redirect(trustedCheckoutUrl, { status: 303 });
+}
+
+// GET: interstitial navigates here via nextUrl after showing the loading screen.
+export async function GET(request: Request) {
+  return handleCheckout(request);
+}
+
+// POST: platnosc page form submits here directly.
+export async function POST(request: Request) {
+  return handleCheckout(request);
 }
