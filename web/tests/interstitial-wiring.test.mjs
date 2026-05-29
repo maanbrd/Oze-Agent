@@ -10,8 +10,11 @@ function readSource(path) {
 const authSrc = readSource("../app/auth/actions.ts");
 const onboardingSrc = readSource("../app/onboarding/actions.ts");
 
-test("signup redirects via przekierowuje?to=stripe", () => {
-  assert.match(authSrc, /przekierowuje\?to=stripe/);
+test("signup redirects to /onboarding/platnosc (plan choice screen, not interstitial)", () => {
+  // Signup lands on the plan-choice screen so the user can pick beta vs paid.
+  // The interstitial is triggered by the plan choice itself, not the signup.
+  assert.match(authSrc, /redirect\(['"]\/onboarding\/platnosc['"]\)/);
+  assert.equal(authSrc.includes("przekierowuje?to=stripe"), false);
 });
 
 test("createCheckoutSession redirects via przekierowuje?to=stripe (or directly to Stripe URL)", () => {
