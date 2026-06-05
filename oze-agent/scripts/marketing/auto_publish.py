@@ -7,17 +7,20 @@ Cron-friendly. Designed to run twice a day from Railway scheduled jobs:
 
 At each tick:
 
-1. Verify we are within ±30 min of a publish slot — guards against cron drift
-   and accidental manual runs at random times.
+1. Verify we are within the publish slot window — guards against random manual
+   runs while tolerating stale UTC cron config after DST shifts.
 2. Pop the oldest APPROVED row via ``list_approved_fifo(limit=1)``.
-3. Resolve slide URLs from Drive (reuses ``publish_single.resolve_slide_urls``).
+3. Resolve media URLs from Drive (reuses ``publish_single.resolve_media_asset``).
 4. Publish to IG + FB (default; ``--platform`` overrides).
 5. Mark row PUBLISHED with composite ``post_id`` (or FAILED + ``error_message``).
 
+Current content contract: Type C carousels only. One APPROVED row is enough
+for the next scheduled publish slot; there is no per-type buffer rotation.
+
 Exit codes:
 
-- ``0`` — published OK, OR skipped because outside publish window (cron OK).
-- ``1`` — queue empty at a publish slot (Railway will log + can alert).
+- ``0`` — published OK, OR skipped because outside publish window / queue below guard.
+- ``1`` — reserved for legacy queue-empty alert semantics.
 - ``2..6`` — publish errors (sheet update, Drive resolution, Meta API).
 
 Usage (from ``oze-agent/``)::
@@ -45,7 +48,8 @@ from zoneinfo import ZoneInfo
 from scripts.marketing.publish_single import (
     _build_caption,
     _now_warsaw_iso,
-    resolve_slide_urls,
+    publish_media_to_platforms,
+    resolve_media_asset,
 )
 from shared.marketing_sheets import (
     list_approved_fifo,
@@ -59,11 +63,11 @@ logger = logging.getLogger(__name__)
 ADMIN_USER_ID = "ada45bc3-4e05-4e64-9f0d-2d98e138debd"
 WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
-# Canonical publish slots (Warsaw local). Cron should fire ON these times;
-# the window tolerance below covers small drift (Railway cron precision,
-# manual --force-now overrides at adjacent minutes, etc.).
+# Canonical publish slots (Warsaw local). Cron should fire ON these times.
+# Keep tolerance wide enough to survive a stale UTC cron pinned one hour late
+# after DST changes; --force-now is still the preferred cron command.
 PUBLISH_SLOTS_WARSAW = [(7, 30), (19, 0)]
-WINDOW_MINUTES = 30
+WINDOW_MINUTES = 75
 
 
 def _within_publish_window(now: datetime) -> Optional[tuple[int, int]]:
@@ -101,10 +105,9 @@ async def _run(
     else:
         print(f"auto_publish: matched slot {matched_slot[0]:02d}:{matched_slot[1]:02d}")
 
-    # 1. Pop oldest APPROVED row. Adaptive guard: skip if APPROVED queue depth
-    # < min_approved (default 2). Phase 0.18 daily loop: while generate is
-    # 1/day, publish is 2/day FIFO — keep at least 1 buffer to avoid running
-    # the queue dry between Maan's reviews. Skip is exit 0 (clean), not error.
+    # 1. Pop oldest APPROVED row. Current carousel-only contract: each approved
+    # row is eligible for the next publish slot. ``--min-approved`` remains as
+    # an optional manual guard, but the default is 1.
     queue = await list_approved_fifo(ADMIN_USER_ID, limit=max(min_approved, 1))
     if len(queue) < min_approved:
         print(
@@ -133,17 +136,20 @@ async def _run(
     print(f"auto_publish: drive_folder={row.get('drive_folder')}")
     print()
 
-    # 2. Resolve image URLs.
-    print("Resolving image URLs from Drive...")
-    urls, err = await resolve_slide_urls(ADMIN_USER_ID, row.get("drive_folder", ""))
-    if urls is None:
+    # 2. Resolve media URLs.
+    print("Resolving media URLs from Drive...")
+    asset, err = await resolve_media_asset(ADMIN_USER_ID, row.get("drive_folder", ""))
+    if asset is None:
         print(f"ERROR: {err}", file=sys.stderr)
         if not dry_run:
             await mark_failed(
-                ADMIN_USER_ID, campaign_id, f"image resolution failed: {err}"
+                ADMIN_USER_ID, campaign_id, f"media resolution failed: {err}"
             )
         return 4
-    print(f"Resolved {len(urls)} slide URLs")
+    print(f"Resolved media type: {asset.media_type}")
+    if asset.video_url:
+        print(f"Resolved video URL: {asset.video_url}")
+    print(f"Resolved {len(asset.image_urls)} slide URL(s)")
     print()
 
     caption_ig = _build_caption(row.get("caption_ig", ""), row.get("hashtags", ""))
@@ -153,6 +159,7 @@ async def _run(
     if dry_run:
         print("─── DRY RUN ───")
         print(f"Would publish campaign {campaign_id} to {effective_platform}")
+        print(f"Media path: {'Reel/video' if asset.media_type == 'video' else 'image/carousel'}")
         print()
         print("=== IG caption ===")
         print(caption_ig[:400] + ("…" if len(caption_ig) > 400 else ""))
@@ -178,45 +185,28 @@ async def _run(
         print("ERROR: Meta page token invalid", file=sys.stderr)
         return 5
 
-    ig_post_id: Optional[str] = None
-    fb_post_id: Optional[str] = None
-
-    if effective_platform in ("instagram", "both"):
-        print("Publishing to Instagram...")
-        ig_post_id = await client.publish_ig_carousel(
-            image_urls=urls,
-            caption=caption_ig,
-            first_comment=first_comment,
-        )
-        if ig_post_id is None:
-            await mark_failed(
-                ADMIN_USER_ID, campaign_id, "IG carousel publish returned None"
-            )
-            print("ERROR: IG publish failed", file=sys.stderr)
-            return 6
-        print(f"  IG media_id: {ig_post_id}")
-
-    if effective_platform in ("facebook", "both"):
-        print("Publishing to Facebook...")
-        fb_post_id = await client.publish_fb_post(
-            text=caption_fb,
-            image_urls=urls,
-        )
-        if fb_post_id is None:
-            err_msg = "FB publish returned None"
-            if ig_post_id:
-                err_msg = f"{err_msg} (IG already published as {ig_post_id})"
-            await mark_failed(ADMIN_USER_ID, campaign_id, err_msg)
-            print("ERROR: FB publish failed", file=sys.stderr)
-            return 6
-        print(f"  FB post_id:  {fb_post_id}")
+    print(f"Publishing {asset.media_type} media to Meta...")
+    published, publish_err = await publish_media_to_platforms(
+        client,
+        platform=effective_platform,
+        asset=asset,
+        caption_ig=caption_ig,
+        caption_fb=caption_fb,
+        first_comment=first_comment,
+    )
+    if publish_err:
+        await mark_failed(ADMIN_USER_ID, campaign_id, publish_err)
+        print(f"ERROR: {publish_err}", file=sys.stderr)
+        return 6
+    for key, post_id in published.items():
+        print(f"  {key.upper()} post_id: {post_id}")
 
     # 4. Mark PUBLISHED.
     parts: list[str] = []
-    if ig_post_id:
-        parts.append(f"ig:{ig_post_id}")
-    if fb_post_id:
-        parts.append(f"fb:{fb_post_id}")
+    if "ig" in published:
+        parts.append(f"ig:{published['ig']}")
+    if "fb" in published:
+        parts.append(f"fb:{published['fb']}")
     composite_id = "|".join(parts) if parts else ""
     published_at = _now_warsaw_iso()
 
@@ -267,11 +257,11 @@ def main() -> int:
     parser.add_argument(
         "--min-approved",
         type=int,
-        default=2,
+        default=1,
         help=(
             "Adaptive queue guard: skip publish (clean exit 0) if APPROVED "
-            "queue depth < N. Phase 0.18 default 2 protects buffer while "
-            "generate is 1/day and publish is 2/day."
+            "queue depth < N. Default 1 publishes the next approved carousel "
+            "at each scheduled slot."
         ),
     )
     args = parser.parse_args()

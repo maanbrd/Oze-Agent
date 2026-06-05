@@ -706,6 +706,36 @@ class MetaGraphClient:
             return None
         return data["id"]
 
+    async def publish_fb_video(
+        self,
+        *,
+        video_url: str,
+        description: str,
+        thumbnail_url: Optional[str] = None,
+    ) -> Optional[str]:
+        """Publish a Facebook Page video from a publicly readable URL."""
+        if not video_url:
+            logger.error("publish_fb_video: video_url is required")
+            return None
+
+        payload = {
+            "file_url": video_url,
+            "description": description,
+            "published": "true",
+        }
+        if thumbnail_url:
+            payload["thumb"] = thumbnail_url
+
+        data = await self._request(
+            "POST",
+            f"{self.page_id}/videos",
+            data=payload,
+        )
+        if data is None or "id" not in data:
+            logger.error("publish_fb_video: video publish failed")
+            return None
+        return data["id"]
+
     # ── Insights ─────────────────────────────────────────────────────────────
 
     @staticmethod

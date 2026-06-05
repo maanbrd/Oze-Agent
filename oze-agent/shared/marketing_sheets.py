@@ -65,7 +65,7 @@ MARKETING_COLUMNS = [
     "caption_fb",        # E  — multi-line FB caption with clickable link
     "first_comment",     # F  — extra hashtags for IG
     "hashtags",          # G  — comma-separated
-    "drive_folder",      # H  — Drive folder URL (6 PNG + preview.mp4)
+    "drive_folder",      # H  — one-click review URL; publisher resolves folder if preview.mp4
     "thumbnail_url",     # I  — direct link to slide_01.png (Sheets renders preview)
     "post_id",           # J  — Meta post ID (populated by publisher)
     "published_at",      # K  — actual publish timestamp (populated by publisher)
