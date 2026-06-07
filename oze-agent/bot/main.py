@@ -107,20 +107,40 @@ def main():
     register_admin_mirror(app)
     register_user_profile_agent(app)
 
+    run_app(app)
+
+
+def run_app(app):
+    """Run the bot in polling (dev) or webhook (prod) mode.
+
+    In webhook mode a ``secret_token`` is passed to ``run_webhook`` so PTB both
+    registers the webhook with that token and rejects any inbound request whose
+    ``X-Telegram-Bot-Api-Secret-Token`` header does not match — closing the
+    forged-update vector for anyone who learns the webhook URL. We fail closed
+    rather than start an unauthenticated webhook.
+    """
     if Config.ENV == "dev":
         logger.info("Starting bot in POLLING mode (dev)")
         app.run_polling(drop_pending_updates=True)
-    else:
-        webhook_url = f"{Config.BASE_URL}/webhooks/telegram"
-        webhook_port = int(os.getenv("BOT_WEBHOOK_PORT", "8443"))
-        logger.info("Starting bot in WEBHOOK mode: %s", webhook_url)
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=webhook_port,
-            url_path="/webhooks/telegram",
-            webhook_url=webhook_url,
-            drop_pending_updates=True,
+        return
+
+    if not Config.TELEGRAM_WEBHOOK_SECRET:
+        raise RuntimeError(
+            "TELEGRAM_WEBHOOK_SECRET is required in webhook mode; refusing to "
+            "start an unauthenticated Telegram webhook."
         )
+
+    webhook_url = f"{Config.BASE_URL}/webhooks/telegram"
+    webhook_port = int(os.getenv("BOT_WEBHOOK_PORT", "8443"))
+    logger.info("Starting bot in WEBHOOK mode: %s", webhook_url)
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=webhook_port,
+        url_path="/webhooks/telegram",
+        webhook_url=webhook_url,
+        secret_token=Config.TELEGRAM_WEBHOOK_SECRET,
+        drop_pending_updates=True,
+    )
 
 
 if __name__ == "__main__":

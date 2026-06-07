@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from bot.config import Config
 from api.routes.account import router as account_router
@@ -62,14 +64,61 @@ def build_cors_origin_regex() -> str | None:
     return None
 
 
+# Explicit allowlists instead of "*": with allow_credentials=True a wildcard is
+# both risky and (per the CORS spec) ignored by browsers. Methods/headers are
+# scoped to what the web app actually uses (JWT bearer auth + JSON/multipart).
+CORS_ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+CORS_ALLOWED_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "x-oze-timestamp",
+    "x-oze-signature",
+]
+# Response headers the browser is allowed to read (PDF download filename).
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
+
+
+# Cap request bodies to blunt memory-exhaustion DoS. JSON endpoints are small;
+# only the offer-logo multipart upload needs headroom (the route itself enforces
+# a 2 MB image cap). We reject early on a declared Content-Length — uvicorn/the
+# platform also bound truly unbounded chunked streams.
+JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024  # 1 MB
+MULTIPART_BODY_LIMIT_BYTES = 6 * 1024 * 1024  # 6 MB
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                size = int(content_length)
+            except ValueError:
+                size = None
+            if size is not None:
+                content_type = request.headers.get("content-type", "")
+                limit = (
+                    MULTIPART_BODY_LIMIT_BYTES
+                    if content_type.startswith("multipart/form-data")
+                    else JSON_BODY_LIMIT_BYTES
+                )
+                if size > limit:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request body too large."},
+                    )
+        return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=build_cors_origins(),
     allow_origin_regex=build_cors_origin_regex(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=CORS_ALLOWED_METHODS,
+    allow_headers=CORS_ALLOWED_HEADERS,
+    expose_headers=CORS_EXPOSE_HEADERS,
 )
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.include_router(google_oauth_router, prefix="/auth")
 app.include_router(account_router, prefix="/api")
