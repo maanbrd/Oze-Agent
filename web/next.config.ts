@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// @ts-expect-error -- dependency-free .mjs module (shared with node:test); no .d.ts
+// Dependency-free .mjs module (shared with the node:test unit test).
 import { buildSecurityHeaders } from "./lib/security-headers.mjs";
 
 const nextConfig: NextConfig = {
