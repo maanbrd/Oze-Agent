@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 SECRET_ENV_NAMES = (
     "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_WEBHOOK_SECRET",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "GOOGLE_CLIENT_SECRET",
@@ -38,6 +39,10 @@ class Config:
 
     # Telegram
     TELEGRAM_BOT_TOKEN = _clean_env("TELEGRAM_BOT_TOKEN")
+    # Shared secret echoed by Telegram in the X-Telegram-Bot-Api-Secret-Token
+    # header; PTB validates it on every webhook update. Allowed chars: A-Z a-z
+    # 0-9 _ - (1-256). Required in webhook (non-dev) mode — see validate_phase_a.
+    TELEGRAM_WEBHOOK_SECRET = _clean_env("TELEGRAM_WEBHOOK_SECRET")
 
     # AI
     ANTHROPIC_API_KEY = _clean_env("ANTHROPIC_API_KEY")
@@ -128,4 +133,8 @@ class Config:
             "GOOGLE_CLIENT_SECRET": cls.GOOGLE_CLIENT_SECRET,
             "BASE_URL": cls.BASE_URL,
         }
+        # Webhook runs only outside dev (dev uses long-polling), so the webhook
+        # secret is required there to authenticate inbound Telegram requests.
+        if cls.ENV != "dev":
+            required["TELEGRAM_WEBHOOK_SECRET"] = cls.TELEGRAM_WEBHOOK_SECRET
         return [k for k, v in required.items() if not v]
