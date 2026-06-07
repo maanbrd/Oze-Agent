@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 
 from api.auth import AuthUser, get_current_auth_user
 from api.routes.billing import verify_internal_signature
@@ -25,6 +26,44 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_LINK_CODE_TTL_SECONDS = 90
 _RESOURCE_CREATION_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+# --- Request schemas (positive validation model) ----------------------------
+# Replacing raw ``dict[str, Any]`` bodies: FastAPI now rejects malformed or
+# oversized inputs at the edge with 422. ``max_length`` is a coarse guard above
+# the per-field truncation the handlers already apply. Extra keys are ignored
+# (default), so unknown/spoofed fields like ``google_sheets_id`` never reach a
+# write. ``_as_model`` keeps direct (non-HTTP) unit-test calls working with
+# plain dicts while preserving PATCH ``model_fields_set`` semantics.
+
+
+class AccountUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=80)
+
+
+class GoogleOAuthUrlRequest(BaseModel):
+    returnUrl: str | None = Field(default=None, max_length=2048)
+
+
+class GoogleResourcesRequest(BaseModel):
+    sheetsName: str | None = Field(default=None, max_length=200)
+    calendarName: str | None = Field(default=None, max_length=200)
+    driveFolderName: str | None = Field(default=None, max_length=200)
+
+
+def _as_model(payload, model_cls):
+    """Coerce HTTP-validated models, plain dicts (tests), or None to a model.
+
+    An already-validated instance is returned untouched so its
+    ``model_fields_set`` (which fields the caller actually sent) is preserved —
+    critical for PATCH partial updates.
+    """
+    if isinstance(payload, model_cls):
+        return payload
+    if payload is None:
+        return model_cls()
+    return model_cls.model_validate(payload)
 
 USER_SELECT = (
     "id, auth_user_id, email, name, phone, subscription_status, "
@@ -300,15 +339,17 @@ async def get_onboarding_status(auth_user: AuthUser = Depends(get_current_auth_u
 
 @router.patch("/account")
 async def update_account(
-    payload: dict[str, Any],
+    payload: AccountUpdateRequest,
     auth_user: AuthUser = Depends(get_current_auth_user),
 ):
+    data = _as_model(payload, AccountUpdateRequest)
+    provided = data.model_fields_set
     user = _get_user_for_auth(auth_user)
     update_data: dict[str, Any] = {}
-    if "name" in payload:
-        update_data["name"] = str(payload.get("name") or "").strip()[:120] or None
-    if "phone" in payload:
-        update_data["phone"] = str(payload.get("phone") or "").strip()[:40] or None
+    if "name" in provided:
+        update_data["name"] = (data.name or "").strip()[:120] or None
+    if "phone" in provided:
+        update_data["phone"] = (data.phone or "").strip()[:40] or None
 
     if not update_data:
         raise HTTPException(
@@ -367,16 +408,17 @@ async def activate_beta_access(auth_user: AuthUser = Depends(get_current_auth_us
 
 @router.post("/google/oauth-url")
 async def start_google_oauth(
-    payload: dict[str, Any] | None = Body(default=None),
+    payload: GoogleOAuthUrlRequest | None = Body(default=None),
     auth_user: AuthUser = Depends(get_current_auth_user),
 ):
+    data = _as_model(payload, GoogleOAuthUrlRequest)
     user = _get_user_for_auth(auth_user)
     if not _has_access(user, auth_user):
         raise HTTPException(
             status_code=402,
             detail="Payment is required before Google OAuth.",
         )
-    return_url = str((payload or {}).get("returnUrl") or "").strip() or None
+    return_url = str(data.returnUrl or "").strip() or None
     return {"url": build_oauth_url(user["id"], return_url=return_url)}
 
 
@@ -417,9 +459,10 @@ async def start_google_oauth_internal(request: Request):
 
 @router.post("/resources")
 async def create_google_resources(
-    payload: dict[str, Any],
+    payload: GoogleResourcesRequest | None = Body(default=None),
     auth_user: AuthUser = Depends(get_current_auth_user),
 ):
+    data = _as_model(payload, GoogleResourcesRequest).model_dump()
     user = _get_user_for_auth(auth_user)
     if not _has_access(user, auth_user):
         raise HTTPException(
@@ -433,7 +476,7 @@ async def create_google_resources(
         )
 
     async with _resource_creation_lock(user["id"]):
-        return await _create_google_resources_locked(payload, auth_user)
+        return await _create_google_resources_locked(data, auth_user)
 
 
 async def _create_google_resources_locked(
