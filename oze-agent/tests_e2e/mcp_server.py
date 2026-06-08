@@ -68,6 +68,29 @@ def _render_many(results: list[ScenarioResult]) -> str:
     return "\n\n".join(sections)
 
 
+def _render_release_gate_status(findings, *, report_dir: str) -> str:
+    """Render release-gate env findings plus canonical command pack."""
+    from tests_e2e.release_gate import build_release_gate_commands
+
+    lines = [
+        f"Release gate environment: {'OK' if findings.ok else 'BLOCKED'}",
+    ]
+    for message in findings.blockers:
+        lines.append(f"BLOCKER: {message}")
+    for message in findings.warnings:
+        lines.append(f"WARNING: {message}")
+    for message in findings.info:
+        lines.append(f"INFO: {message}")
+    lines.append("")
+    lines.append("Release gate commands (run from oze-agent/):")
+    for i, command in enumerate(
+        build_release_gate_commands(report_dir=report_dir),
+        start=1,
+    ):
+        lines.append(f"{i:02d}. {command.render()}")
+    return "\n".join(lines)
+
+
 async def _run_one(scenario_fn) -> str:
     """Run a single scenario with preflight, return rendered text."""
     config = E2EConfig.from_env()
@@ -144,6 +167,25 @@ def _build_server():
         for s in items:
             lines.append(f"  [{s.category:14}] {s.name:40}  {s.description}")
         return "\n".join(lines)
+
+    @mcp.tool()
+    async def release_gate_status(
+        allow_prod_bot: bool = False,
+        include_offer_send: bool = False,
+        report_dir: str = "output/smoke/release-gate",
+    ) -> str:
+        """Validate release-gate env safety and show the canonical command pack.
+
+        Does not contact Telegram, Google, Railway, or Gmail. Use this before
+        running live E2E scenarios.
+        """
+        from tests_e2e.release_gate import validate_environment_from_env
+
+        findings = validate_environment_from_env(
+            allow_prod_bot=allow_prod_bot,
+            include_offer_send=include_offer_send,
+        )
+        return _render_release_gate_status(findings, report_dir=report_dir)
 
     @mcp.tool()
     async def run_debug_brief() -> str:
