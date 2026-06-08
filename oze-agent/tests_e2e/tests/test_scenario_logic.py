@@ -15,10 +15,20 @@ import pytest
 
 from tests_e2e.harness import _ObservedMessage
 from tests_e2e.scenarios.debug_brief import run_debug_brief_scenario
+from tests_e2e.scenarios.error_paths import is_change_status_error_reply
 
 
 def _msg(mid: int, text: str) -> _ObservedMessage:
     return _ObservedMessage(id=mid, text=text, date_iso="2026-04-24T07:00:00+00:00")
+
+
+def test_change_status_error_matcher_accepts_invalid_status_copy():
+    assert is_change_status_error_reply(
+        "Niedostępny status. Wybierz jeden z: Nowy lead, Spotkanie umówione."
+    )
+    assert is_change_status_error_reply("Nie znam statusu \"Foo\".")
+    assert is_change_status_error_reply("Nie znalazłem klienta: 'Jan'.")
+    assert not is_change_status_error_reply("✅ Zapisać zmianę statusu?")
 
 
 class _FakeHarness:

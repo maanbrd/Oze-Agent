@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 CATEGORY = "error_path"
 
 
+def is_change_status_error_reply(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        is_not_found(text)
+        or "nie znam" in lowered
+        or "nieznany" in lowered
+        or "niedostępny status" in lowered
+    )
+
+
 # ── S14: change_status against non-existent client ──────────────────────────
 
 
@@ -55,11 +65,7 @@ async def run_change_status_invalid_client(
         # Should be either "Nie znalazłem" (preferred — client doesn't exist)
         # or an "Nie znam statusu" error. Either way, NO mutation card.
         any_msg = replies[-1]
-        not_found_or_invalid = (
-            is_not_found(any_msg.text)
-            or "nie znam" in any_msg.text.lower()
-            or "nieznany" in any_msg.text.lower()
-        )
+        not_found_or_invalid = is_change_status_error_reply(any_msg.text)
         result.add(
             "reply_is_error_class",
             not_found_or_invalid,
