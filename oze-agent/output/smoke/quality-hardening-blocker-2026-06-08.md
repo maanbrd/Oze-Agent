@@ -5,8 +5,10 @@
 Blocked at Stage 3: Live Environment Preflight.
 
 The repository hardening code was implemented, tested, committed, and pushed on
-`codex/agent-production-hardening`, but live Google/Railway verification cannot
-continue from this local environment without restored runtime access.
+`codex/agent-production-hardening`. Railway CLI access was later restored and
+the worktree was linked to `AgentOZE / production / bot-test`, but live Google
+verification still blocks release because the E2E user's configured Calendar ID
+is not accessible to the bot runtime OAuth account.
 
 ## Completed Before Blocker
 
@@ -27,6 +29,42 @@ continue from this local environment without restored runtime access.
   Result: OK.
 
 ## Blocking Checks
+
+### Google health with Railway runtime env after CLI login
+
+Command:
+
+```bash
+set -a; source tests_e2e/.env; set +a
+TELEGRAM_E2E_RAILWAY_SERVICE=bot-test \
+  railway run --service bot-test --environment production -- \
+  ./tests_e2e/run_release_gate.sh google-health --report output/smoke/release-gate/google-health.md
+```
+
+Result:
+
+```text
+Overall: BLOCKER
+supabase_user: pass
+google_credentials: pass
+sheets_read: pass
+calendar_read: blocker - Google Calendar API returned 404 Not Found
+drive_read: pass
+```
+
+Additional read-only diagnostic:
+
+```text
+configured_calendar_present=False
+accessible_calendar_count=4
+configured_calendar_hash=0eaa638a3657
+```
+
+Interpretation:
+
+The E2E user's `google_calendar_id` exists in Supabase config, but the runtime
+Google OAuth account cannot see that calendar. This is a runtime configuration
+blocker, not a repository code blocker.
 
 ### Google health without Railway runtime env
 
@@ -72,28 +110,30 @@ No linked project found. Run railway link to connect to a project
 
 Interpretation:
 
-The local Railway CLI session is expired and this worktree is not linked to a
-Railway project. No `RAILWAY_*` environment variable is available locally.
+This was the initial blocker. It was resolved after Railway login by linking:
+
+```bash
+railway link --project 1501c9a2-db5b-46fd-9e5f-fa4b0d33a9f7 --environment production --service bot-test
+```
 
 ## Stop Condition Triggered
 
 This matches the plan stop conditions:
 
-- Missing runtime credentials for Google health.
-- Railway deploy/log/runtime access unavailable.
+- Google health `BLOCKER`.
+- E2E cleanup cannot be trusted while the configured Calendar target is missing.
 
 No deploy, merge to `develop`, merge to `main`, production promotion, Telegram
 live E2E, Railway log review, or Gmail/send smoke was run after this blocker.
 
 ## Required Human/Environment Action
 
-Restore one of the following before continuing Stage 3:
+Restore Calendar configuration before continuing Stage 3:
 
-1. Re-authenticate Railway CLI and link the local worktree to the Agent OZE
-   Railway project, or
-2. Provide a valid Railway token/project link in the environment, or
-3. Provide local test-only Supabase verifier env including
-   `TELEGRAM_E2E_SUPABASE_USER_ID`, `SUPABASE_URL`, and `SUPABASE_SERVICE_KEY`.
+1. Update the E2E user's `google_calendar_id` to a calendar visible to the bot
+   runtime OAuth account, or
+2. Recreate/share the intended dedicated OZE calendar with the runtime OAuth
+   account and update Supabase accordingly.
 
 After access is restored, resume with:
 

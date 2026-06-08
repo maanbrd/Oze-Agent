@@ -81,6 +81,13 @@ async def test_google_health_passes_when_all_services_are_readable():
         "calendar_read",
         "drive_read",
     }
+    rendered = google_health.render_markdown(result)
+    assert "sheet-1" not in rendered
+    assert "calendar-1" not in rendered
+    assert "user-1" not in rendered
+    assert google_health._fingerprint("sheet-1") in rendered
+    assert google_health._fingerprint("calendar-1") in rendered
+    assert google_health._fingerprint("user-1") in rendered
 
 
 @pytest.mark.asyncio
@@ -123,3 +130,14 @@ async def test_google_health_reports_service_exception_as_blocker():
     sheets = next(check for check in result.checks if check.name == "sheets_read")
     assert sheets.tag == "blocker"
     assert "sheets down" in sheets.detail
+
+
+def test_safe_exception_detail_redacts_raw_and_url_encoded_ids():
+    detail = google_health._safe_exception_detail(
+        RuntimeError("missing cal%40group.calendar.google.com / cal@group.calendar.google.com"),
+        "cal@group.calendar.google.com",
+    )
+
+    assert "cal@group.calendar.google.com" not in detail
+    assert "cal%40group.calendar.google.com" not in detail
+    assert google_health._fingerprint("cal@group.calendar.google.com") in detail

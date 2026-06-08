@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from shared.database import get_user_by_id
 from shared.google_auth import get_google_credentials
@@ -48,6 +50,32 @@ async def _to_thread(fn):
     return await asyncio.to_thread(fn)
 
 
+def _fingerprint(value: str | None) -> str:
+    if not value:
+        return "missing"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _safe_exception_detail(exc: Exception, *sensitive_values: str | None) -> str:
+    """Return compact diagnostic detail without leaking resource IDs."""
+    resp = getattr(exc, "resp", None)
+    status = getattr(resp, "status", None)
+    reason = getattr(resp, "reason", None)
+    if status or reason:
+        return f"{type(exc).__name__}: status={status or 'unknown'} reason={reason or 'unknown'}"
+
+    detail = str(exc).replace("\n", " ")
+    for value in sensitive_values:
+        if not value:
+            continue
+        replacement = f"<redacted:{_fingerprint(value)}>"
+        detail = detail.replace(value, replacement)
+        detail = detail.replace(quote(value, safe=""), replacement)
+    if len(detail) > 500:
+        detail = detail[:497] + "..."
+    return f"{type(exc).__name__}: {detail}"
+
+
 async def _check_sheets(result: HealthResult, user: dict, user_id: str) -> None:
     spreadsheet_id = user.get("google_sheets_id")
     if not spreadsheet_id:
@@ -67,9 +95,12 @@ async def _check_sheets(result: HealthResult, user: dict, user_id: str) -> None:
     try:
         headers = await _to_thread(_read_headers)
     except Exception as exc:
-        result.add_blocker("sheets_read", f"{type(exc).__name__}: {exc}")
+        result.add_blocker("sheets_read", _safe_exception_detail(exc, spreadsheet_id))
         return
-    result.add_pass("sheets_read", f"headers={len(headers)} spreadsheet_id={spreadsheet_id}")
+    result.add_pass(
+        "sheets_read",
+        f"headers={len(headers)} spreadsheet_hash={_fingerprint(spreadsheet_id)}",
+    )
 
 
 async def _check_calendar(result: HealthResult, user: dict, user_id: str) -> None:
@@ -97,9 +128,12 @@ async def _check_calendar(result: HealthResult, user: dict, user_id: str) -> Non
     try:
         events = await _to_thread(_read_events)
     except Exception as exc:
-        result.add_blocker("calendar_read", f"{type(exc).__name__}: {exc}")
+        result.add_blocker("calendar_read", _safe_exception_detail(exc, calendar_id))
         return
-    result.add_pass("calendar_read", f"events_next_24h={len(events)} calendar_id={calendar_id}")
+    result.add_pass(
+        "calendar_read",
+        f"events_next_24h={len(events)} calendar_hash={_fingerprint(calendar_id)}",
+    )
 
 
 async def _check_drive(result: HealthResult, user_id: str) -> None:
@@ -128,7 +162,7 @@ async def run_google_health(telegram_id: int) -> HealthResult:
             f"no Supabase user found for telegram_id={telegram_id}",
         )
         return result
-    result.add_pass("supabase_user", f"user_id={user_id}")
+    result.add_pass("supabase_user", f"user_hash={_fingerprint(user_id)}")
 
     user = get_user_by_id(user_id) or {}
     credentials = get_google_credentials(user_id)
