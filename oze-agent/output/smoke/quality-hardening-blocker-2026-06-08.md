@@ -2,13 +2,17 @@
 
 ## Status
 
-Blocked at Stage 3: Live Environment Preflight.
+Resolved Stage 3 blocker.
 
 The repository hardening code was implemented, tested, committed, and pushed on
 `codex/agent-production-hardening`. Railway CLI access was later restored and
 the worktree was linked to `AgentOZE / production / bot-test`, but live Google
-verification still blocks release because the E2E user's configured Calendar ID
-is not accessible to the bot runtime OAuth account.
+verification initially blocked release because the E2E user's configured
+Calendar ID was not accessible to the bot runtime OAuth account.
+
+After inspecting calendars visible to the bot runtime OAuth account, the E2E
+user's `google_calendar_id` was updated to the dedicated calendar:
+`Agent OZE - Wszystkie spotkania`.
 
 ## Completed Before Blocker
 
@@ -29,6 +33,35 @@ is not accessible to the bot runtime OAuth account.
   Result: OK.
 
 ## Blocking Checks
+
+### Resolution
+
+Action:
+
+```text
+Updated E2E user's google_calendar_id from old_calendar_hash=0eaa638a3657
+to new_calendar_hash=ff1ac3c3c171.
+```
+
+Verification:
+
+```bash
+set -a; source tests_e2e/.env; set +a
+TELEGRAM_E2E_RAILWAY_SERVICE=bot-test \
+  railway run --service bot-test --environment production -- \
+  ./tests_e2e/run_release_gate.sh google-health --report output/smoke/release-gate/google-health.md
+```
+
+Result:
+
+```text
+Overall: PASS
+supabase_user: pass
+google_credentials: pass
+sheets_read: pass
+calendar_read: pass
+drive_read: pass
+```
 
 ### Google health with Railway runtime env after CLI login
 
@@ -118,26 +151,21 @@ railway link --project 1501c9a2-db5b-46fd-9e5f-fa4b0d33a9f7 --environment produc
 
 ## Stop Condition Triggered
 
-This matches the plan stop conditions:
+This matched the plan stop conditions before the Calendar pointer was fixed:
 
 - Google health `BLOCKER`.
 - E2E cleanup cannot be trusted while the configured Calendar target is missing.
 
 No deploy, merge to `develop`, merge to `main`, production promotion, Telegram
-live E2E, Railway log review, or Gmail/send smoke was run after this blocker.
+live E2E, Railway log review, or Gmail/send smoke was run while this blocker was
+active.
 
-## Required Human/Environment Action
+## Current Follow-up
 
-Restore Calendar configuration before continuing Stage 3:
-
-1. Update the E2E user's `google_calendar_id` to a calendar visible to the bot
-   runtime OAuth account, or
-2. Recreate/share the intended dedicated OZE calendar with the runtime OAuth
-   account and update Supabase accordingly.
-
-After access is restored, resume with:
+Resume release gate from Stage 4:
 
 ```bash
 cd /Users/mansoniasty/.config/superpowers/worktrees/Agent-OZE/agent-production-hardening/oze-agent
-TELEGRAM_E2E_RAILWAY_SERVICE=bot-test ./tests_e2e/run_release_gate.sh google-health --report output/smoke/release-gate/google-health.md
+TELEGRAM_E2E_RAILWAY_SERVICE=bot-test ./tests_e2e/run_release_gate.sh seed
+TELEGRAM_E2E_RAILWAY_SERVICE=bot-test ./tests_e2e/run_release_gate.sh category routing --report output/smoke/release-gate/routing.md
 ```
