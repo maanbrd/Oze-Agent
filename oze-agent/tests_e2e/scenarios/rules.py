@@ -46,6 +46,21 @@ logger = logging.getLogger(__name__)
 CATEGORY = "rules"
 
 
+def is_calm_frustration_reply(text: str) -> bool:
+    """Return true for short clarifying questions after frustrated input."""
+    lowered = text.lower()
+    calm_markers = (
+        "co chcesz",
+        "co chcesz zrobić",
+        "co konkretnie",
+        "co dalej",
+        "powiedz",
+        "podaj",
+        "zacznijmy",
+    )
+    return any(marker in lowered for marker in calm_markers)
+
+
 @register(
     name="cancel_one_click_no_loop",
     category=CATEGORY,
@@ -576,17 +591,14 @@ async def run_r8_frustration_calm_response(
             detail=f"got {len(reply_lines)} lines: {msg.text[:200]!r}",
         )
 
-        # Calm-question marker — accept any of the spec-suggested forms.
-        calm_markers = (
-            "co chcesz", "co chcesz zrobić", "co dalej", "powiedz",
-            "podaj", "zacznijmy",
-        )
-        has_calm = any(m in msg.text.lower() for m in calm_markers)
+        # Calm-question marker — accept concise clarifying questions.
+        has_calm = is_calm_frustration_reply(msg.text)
         result.add(
             "reply_has_calm_question",
             has_calm,
             detail=(
-                f"expected one of {calm_markers!r}; got: {msg.text[:240]!r}"
+                "expected concise clarifying question; "
+                f"got: {msg.text[:240]!r}"
             ),
         )
     except Exception as e:

@@ -16,6 +16,7 @@ import pytest
 from tests_e2e.harness import _ObservedMessage
 from tests_e2e.scenarios.debug_brief import run_debug_brief_scenario
 from tests_e2e.scenarios.error_paths import is_change_status_error_reply
+from tests_e2e.scenarios.rules import is_calm_frustration_reply
 
 
 def _msg(mid: int, text: str) -> _ObservedMessage:
@@ -29,6 +30,12 @@ def test_change_status_error_matcher_accepts_invalid_status_copy():
     assert is_change_status_error_reply("Nie znam statusu \"Foo\".")
     assert is_change_status_error_reply("Nie znalazłem klienta: 'Jan'.")
     assert not is_change_status_error_reply("✅ Zapisać zmianę statusu?")
+
+
+def test_calm_frustration_matcher_accepts_clarifying_question():
+    assert is_calm_frustration_reply("Co konkretnie nie działa?")
+    assert is_calm_frustration_reply("Co chcesz zrobić?")
+    assert not is_calm_frustration_reply("Rozumiem Twoją frustrację, powodzenia.")
 
 
 class _FakeHarness:
