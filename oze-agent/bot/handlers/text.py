@@ -544,6 +544,21 @@ def _client_updates_for_empty_fields(client_data: dict, existing_client: dict | 
     return updates
 
 
+def _extract_compound_note_text(message_text: str) -> str:
+    """Return note body for add_note + timed action compound messages."""
+    text = message_text.strip()
+    lowered = text.lower()
+    if "notatk" not in lowered or ":" not in text:
+        return ""
+    note_text = text.split(":", 1)[1].strip()
+    return note_text[:500]
+
+
+def _dated_note_update(existing_notes: str, note_text: str, today: date) -> str:
+    entry = f"[{today.strftime('%d.%m.%Y')}]: {note_text}"
+    return f"{existing_notes}; {entry}" if existing_notes else entry
+
+
 def _client_data_summary(client_data: dict) -> str:
     labels = [
         ("Telefon", "Tel."),
@@ -2155,6 +2170,21 @@ async def handle_add_meeting(
             source_client_data or {},
             enriched.get("existing_client_data") or {},
         )
+        compound_note_text = _extract_compound_note_text(message_text)
+        if (
+            compound_note_text
+            and enriched.get("client_found")
+            and not enriched.get("ambiguous_client")
+        ):
+            existing_notes = (
+                (enriched.get("existing_client_data") or {}).get("Notatki")
+                or ""
+            )
+            client_updates["Notatki"] = _dated_note_update(
+                existing_notes,
+                compound_note_text,
+                datetime.now(WARSAW).date(),
+            )
         raw_status_update = intent_data.get("status_update") or None
         # Slice 5.4.3: 3-branch status_update resolution.
         #   1) Ambiguous client → preserve raw compound in disambiguation payload;

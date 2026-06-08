@@ -881,6 +881,55 @@ async def test_handle_add_meeting_no_auto_status_for_phone_call():
 
 
 @pytest.mark.asyncio
+async def test_handle_add_meeting_preserves_compound_note_as_client_update():
+    upd = _update()
+    with patch(
+        "bot.handlers.text.extract_meeting_data",
+        new=AsyncMock(return_value={
+            "meetings": [{
+                "date": "2027-04-20",
+                "time": "14:00",
+                "client_name": "Jan Kowalski",
+                "location": "",
+            }]
+        }),
+    ), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={"client_data": {}}),
+    ), patch(
+        "bot.handlers.text._enrich_meeting",
+        new=AsyncMock(return_value={
+            "title": "Telefon — Jan Kowalski",
+            "location": "",
+            "description": "",
+            "full_name": "Jan Kowalski",
+            "client_found": True,
+            "client_row": 5,
+            "current_status": "Oferta wysłana",
+            "client_city": "Warszawa",
+            "existing_client_data": {
+                "Imię i nazwisko": "Jan Kowalski",
+                "Miasto": "Warszawa",
+                "Notatki": "stara notatka",
+            },
+        }),
+    ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending") as mock_save:
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "phone_call"}},
+            "dodaj notatkę Jan Kowalski, Warszawa: zadzwonić 20.04.2027 o 14:00",
+        )
+
+    saved_flow = mock_save.call_args.args[0]
+    note_update = saved_flow.flow_data["client_updates"]["Notatki"]
+    assert note_update.startswith("stara notatka; [")
+    assert "zadzwonić 20.04.2027 o 14:00" in note_update
+
+
+@pytest.mark.asyncio
 async def test_handle_add_meeting_no_auto_status_for_advanced_status():
     upd = _update()
     with patch(
