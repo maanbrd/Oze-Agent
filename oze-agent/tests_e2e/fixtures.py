@@ -195,3 +195,47 @@ async def cleanup_synthetic_data(
         "calendar_events_found": len(events),
         "calendar_deleted": calendar_deleted,
     }
+
+
+def _print_report(report: dict) -> None:
+    for key, value in report.items():
+        print(f"{key}: {value}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Small CLI for release-gate fixture setup/cleanup."""
+    import argparse
+    import asyncio
+
+    from tests_e2e.config import E2EConfig
+
+    parser = argparse.ArgumentParser(prog="python -m tests_e2e.fixtures")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("seed")
+    cleanup = sub.add_parser("cleanup")
+    cleanup.add_argument("--run-id", default="")
+    cleanup.add_argument("--include-fixtures", action="store_true")
+    args = parser.parse_args(argv)
+
+    try:
+        config = E2EConfig.from_env()
+    except RuntimeError as exc:
+        print(f"MISCONFIG: {exc}")
+        return 2
+
+    if args.command == "seed":
+        report = asyncio.run(seed_fixtures(config.admin_telegram_id))
+    else:
+        report = asyncio.run(
+            cleanup_synthetic_data(
+                config.admin_telegram_id,
+                run_id=args.run_id or None,
+                include_fixtures=args.include_fixtures,
+            )
+        )
+    _print_report(report)
+    return 2 if "error" in report else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

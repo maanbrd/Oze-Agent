@@ -63,10 +63,12 @@ Required variables (also documented in `.env.example`):
 |---|---|
 | `TELEGRAM_E2E_API_ID` | Telethon app id (from my.telegram.org) |
 | `TELEGRAM_E2E_API_HASH` | Telethon app hash |
-| `TELEGRAM_E2E_BOT_USERNAME` | Bot to test, e.g. `@OzeAgentBot` |
+| `TELEGRAM_E2E_BOT_USERNAME` | Bot to test, usually `@OZEAgentTestBot` before production promotion |
+| `TELEGRAM_E2E_RAILWAY_SERVICE` | Railway service whose env backs E2E verification, usually `bot-test` |
 | `TELEGRAM_E2E_ADMIN_ID` | Numeric Telegram id of the test user |
 | `TELEGRAM_E2E_SESSION` | Path prefix for the Telethon session file |
 | `TELEGRAM_E2E_REPORT` | (Optional) override for the report file path |
+| `TELEGRAM_E2E_OFFER_RECIPIENT` | (Optional) owned inbox required before controlled offer-send smoke |
 | `TELEGRAM_E2E_SUPABASE_USER_ID` | (Optional) Supabase UUID for local Sheets/Calendar verification when Supabase env cannot resolve `TELEGRAM_E2E_ADMIN_ID` |
 
 The harness reads plain env (no `.env` auto-load) — use `set -a; source
@@ -99,6 +101,35 @@ python -m tests_e2e.runner debug_brief
 python -m tests_e2e.runner debug_brief --report /tmp/e2e.md
 ```
 
+### 7. Controlled production hardening gate
+
+Before promoting `develop` to `main`, use the release gate instead of ad-hoc
+scenario picks:
+
+```bash
+./tests_e2e/run_release_gate.sh
+```
+
+The gate blocks non-test targets by default. It expects:
+
+- `TELEGRAM_E2E_BOT_USERNAME=@OZEAgentTestBot`
+- `TELEGRAM_E2E_RAILWAY_SERVICE=bot-test`
+
+It prints the canonical command pack:
+
+1. E2E harness unit tests
+2. scenario registry listing
+3. read-only Google health
+4. fixture seed
+5. release-risk scenario categories
+6. synthetic data cleanup
+
+For controlled offer-send smoke, set `TELEGRAM_E2E_OFFER_RECIPIENT` to an owned
+test inbox and pass `--include-offer-send` to the release gate preflight.
+
+For the final production smoke only, pass `--allow-prod-bot`; run the minimal
+controlled subset, not the full mutating campaign.
+
 Exit codes:
 
 - `0` — all scenarios PASS
@@ -130,8 +161,8 @@ Failing any of these records a PASS/FAIL line in the markdown report at
 
 ## Safety notes
 
-- The harness never deletes data. If you want to clean Sheets/Calendar
-  between runs, do it manually.
+- The harness only deletes data through explicit fixture cleanup commands.
+  Release-gate cleanup targets synthetic `E2E-Beta-*` rows/events.
 - Use E2E test data with the `E2E-Beta-` prefix in the client name
   (convention — lets you `grep` or filter).
 - Do **not** run the harness against the prod bot if real users are
@@ -152,9 +183,9 @@ Failing any of these records a PASS/FAIL line in the markdown report at
 1. Create `tests_e2e/scenarios/<name>.py` with an async
    `run_<name>_scenario(harness) -> ScenarioResult` function. Follow the
    pattern in `debug_brief.py`.
-2. Register it in `tests_e2e/runner.py::SCENARIOS`.
-3. If you want it available over MCP, add a `@mcp.tool()` in
-   `tests_e2e/mcp_server.py::_build_server`.
+2. Import/register the scenario module from `tests_e2e/scenarios/__init__.py`.
+3. If it belongs to release hardening, add its category to
+   `tests_e2e/release_gate.py::RELEASE_GATE_CATEGORIES`.
 
 Planned next scenarios (per `docs/TEST_PLAN_CURRENT.md`):
 
@@ -177,6 +208,9 @@ tests_e2e/
 ├── requirements-e2e.txt   # Telethon + optional MCP SDK
 ├── __init__.py
 ├── config.py              # E2EConfig.from_env()
+├── release_gate.py        # controlled pilot gate commands + env safety
+├── google_health.py       # read-only Sheets/Calendar/Drive health check
+├── fixtures.py            # seed/cleanup synthetic E2E data
 ├── harness.py             # TelegramE2EHarness (Telethon wrapper)
 ├── report.py              # ScenarioResult + markdown writer
 ├── runner.py              # CLI: python -m tests_e2e.runner
