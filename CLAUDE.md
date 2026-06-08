@@ -50,6 +50,7 @@ At the start of every session, read:
 
 1. `docs/SOURCE_OF_TRUTH.md`
 2. `docs/CURRENT_STATUS.md`
+3. `docs/AGENT_TOOLING_ACCESS.md`
 
 Then read task-specific docs:
 
