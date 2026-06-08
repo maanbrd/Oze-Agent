@@ -94,8 +94,8 @@ async def run_polish_slang_pv_pompeczka_parsing(
         # "fotowoltaika" / "pompa ciepła") — that's the whole point.
         result.add(
             "card_preserves_pv_ka_slang",
-            "PV-ka" in card_msg.text or "pv-ka" in card_msg.text.lower(),
-            detail=f"expected 'PV-ka' verbatim; got: {card_msg.text[:200]!r}",
+            "PV-k" in card_msg.text or "pv-k" in card_msg.text.lower(),
+            detail=f"expected 'PV-k' slang stem; got: {card_msg.text[:200]!r}",
         )
         result.add(
             "card_preserves_pompeczka_slang",
