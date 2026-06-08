@@ -2409,7 +2409,7 @@ async def handle_show_day_plan(
 ) -> None:
     """Show meetings for a given day (or 7-day range). Read-only — no free slots."""
     user_id = user["id"]
-    today = date.today()
+    today = datetime.now(WARSAW).date()
 
     target = _parse_show_day_date(message_text, today)
 

@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # Icons we consider "card headers". Order matters for detection (longest first).
-_CARD_ICONS = ("📋", "📝", "📊", "📅", "📞", "✉️", "⚠️")
+_CARD_ICONS = ("📋", "👤", "📝", "📊", "📅", "📞", "✉️", "⚠️")
 
 # Lines starting with these labels are treated as `key: value` fields.
 # Kept loose — bot may add new labels; unmatched lines fall into `notes_lines`.
@@ -192,7 +192,12 @@ def parse_card(text: str, button_labels: list[str] | None = None) -> ParsedCard:
 # ── Convenience: detect cancel / not-found / vision-only / post-mvp markers ──
 
 CANCEL_TEXT_MARKERS = ("Anulowane", "🫡 Anulowane", "⚠️ Anulowane")
-NOT_FOUND_MARKERS = ("Nie znalazłem", "nie znalazłem")
+NOT_FOUND_MARKERS = (
+    "Nie znalazłem",
+    "nie znalazłem",
+    "Nie mam ",
+    "nie mam ",
+)
 NOT_UNDERSTOOD_MARKERS = ("Nie zrozumiałem", "nie zrozumiałem")
 POST_MVP_MARKERS = ("post-MVP", "post mvp", "post-mvp")
 VISION_ONLY_MARKERS = ("vision-only", "vision only", "poza aktualnym MVP scope")
