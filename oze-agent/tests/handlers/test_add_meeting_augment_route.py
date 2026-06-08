@@ -104,6 +104,51 @@ async def _single_meeting_flow_for_duration(
 
 
 @pytest.mark.asyncio
+async def test_add_meeting_uses_warsaw_local_today_for_relative_dates():
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is not None
+            return cls(2026, 6, 9, 1, 5, tzinfo=tz)
+
+    upd = _update()
+    extract = AsyncMock(return_value={
+        "meetings": [{
+            "date": "2026-06-10",
+            "time": "10:00",
+            "client_name": "Jan Kowalski",
+            "location": "",
+        }]
+    })
+
+    with patch("bot.handlers.text.datetime", FixedDateTime), \
+         patch("bot.handlers.text.extract_meeting_data", new=extract), \
+         patch(
+             "bot.handlers.text._enrich_meeting",
+             new=AsyncMock(return_value={
+                 "title": "Spotkanie — Jan Kowalski",
+                 "location": "",
+                 "description": "",
+                 "full_name": "Jan Kowalski",
+                 "client_found": True,
+                 "client_row": 5,
+                 "current_status": "Oferta wysłana",
+                 "client_city": "Warszawa",
+             }),
+         ), patch("bot.handlers.text.check_conflicts", new=AsyncMock(return_value=[])), \
+         patch("bot.handlers.text.save_pending"):
+        await handle_add_meeting(
+            upd,
+            MagicMock(),
+            {"id": 1, "default_meeting_duration": 60},
+            {"entities": {"event_type": "in_person"}},
+            "jutro o 10 spotkanie z Janem Kowalskim",
+        )
+
+    assert extract.await_args.args[1] == "2026-06-09"
+
+
+@pytest.mark.asyncio
 async def test_add_meeting_augment_product_details_go_to_client_data_not_description():
     upd = _update()
     with patch("bot.handlers.text.save_pending") as mock_save:

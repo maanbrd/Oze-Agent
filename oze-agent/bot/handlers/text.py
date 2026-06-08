@@ -2078,7 +2078,7 @@ async def handle_add_meeting(
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
-    today_str = date.today().isoformat()
+    today_str = datetime.now(WARSAW).date().isoformat()
     history = get_history_unless_pending(telegram_id)
     meeting_result = await extract_meeting_data(message_text, today_str, history=history)
     meetings = meeting_result.get("meetings", [])
