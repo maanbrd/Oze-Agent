@@ -178,6 +178,11 @@ _TIME_RE = re.compile(
 _PHONE_VALUE_RE = re.compile(r"\b(?:tel|telefon|nr|numer)\b[^\n]*(?:\+?\d[\d\s-]{5,})")
 _EMAIL_VALUE_RE = re.compile(r"\b(?:e-?mail|mail)\b[^\n]*\S+@\S+")
 _LOOSE_PHONE_RE = re.compile(r"(?<!\d)(?:\+?48[\s-]?)?(?:\d[\s-]?){9}(?!\d)")
+_PIPELINE_COUNT_QUERY_RE = re.compile(
+    r"\b(il[eu]|liczb[aeę]|ile)\b.{0,40}\bklient(?:ów|ow|y|ach)?\b",
+    re.IGNORECASE,
+)
+_GIBBERISH_MARKERS = ("asdf", "qwer", "hjkl", "zxcv")
 
 _BANNER_INTENTS = frozenset({
     IntentType.POST_MVP_ROADMAP,
@@ -284,6 +289,23 @@ def _looks_like_intent_switch_reply(message_text: str) -> bool:
         "przypomnij", "follow-up", "followup",
     )
     return any(text_lower.startswith(prefix) for prefix in switch_prefixes)
+
+
+def _looks_like_gibberish(message_text: str) -> bool:
+    text = message_text.lower().strip()
+    if not text:
+        return False
+    if any(marker in text for marker in _GIBBERISH_MARKERS):
+        return True
+    tokens = re.findall(r"[a-ząćęłńóśźż]{6,}", text)
+    if len(tokens) < 2:
+        return False
+    vowels = set("aeiouyąęó")
+    return all(sum(1 for char in token if char in vowels) <= 1 for token in tokens)
+
+
+def _is_pipeline_count_query(message_text: str) -> bool:
+    return bool(_PIPELINE_COUNT_QUERY_RE.search(message_text))
 
 
 def _infer_meeting_event_type(
@@ -3083,6 +3105,33 @@ async def handle_general(
 ) -> None:
     """Handle general questions via Claude."""
     telegram_id = update.effective_user.id
+    if _looks_like_gibberish(message_text):
+        await reply_text(update, "Nie zrozumiałem. Co chcesz zrobić?")
+        await increment_interaction(
+            telegram_id,
+            "general_question",
+            "none",
+            0,
+            0,
+            0.0,
+        )
+        return
+
+    if _is_pipeline_count_query(message_text):
+        await reply_text(update, banner_for_legacy({
+            "intent": IntentType.POST_MVP_ROADMAP.value,
+            "feature_key": "pipeline_stats",
+        }))
+        await increment_interaction(
+            telegram_id,
+            "general_question",
+            "none",
+            0,
+            0,
+            0.0,
+        )
+        return
+
     history = get_conversation_history(
         telegram_id,
         limit=10,

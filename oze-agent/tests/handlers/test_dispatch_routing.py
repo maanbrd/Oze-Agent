@@ -7,8 +7,10 @@ from bot.handlers.text import (
     _BANNER_INTENTS,
     _HANDLERS,
     _infer_meeting_event_type,
+    _is_pipeline_count_query,
     _intent_result_to_legacy_dict,
     _is_client_scoped_action_reply,
+    _looks_like_gibberish,
     _message_with_add_client_context,
     _message_with_r7_client_context,
     _normalize_parsed_event_type,
@@ -181,6 +183,54 @@ async def test_handle_general_never_sends_empty_message():
         await handle_general(update, context, {"id": "uid"}, {}, "x")
 
     update.effective_message.reply_text.assert_awaited_once_with("Co chcesz zrobić?")
+
+
+def test_gibberish_detector_catches_keyboard_noise():
+    assert _looks_like_gibberish("asdfghjk qwerty")
+    assert not _looks_like_gibberish("co umiesz?")
+    assert not _looks_like_gibberish("dodaj klienta Jan Kowalski Warszawa")
+
+
+def test_pipeline_count_query_detector_matches_customer_count_questions():
+    assert _is_pipeline_count_query("ilu mam klientów?")
+    assert _is_pipeline_count_query("ile mam klientow w bazie?")
+    assert not _is_pipeline_count_query("dodaj klienta Jan Kowalski")
+
+
+@pytest.mark.asyncio
+async def test_handle_general_gibberish_uses_not_understood_fallback_without_llm():
+    update = MagicMock()
+    update.effective_user.id = 12345
+    update.effective_message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    with patch("bot.handlers.text.generate_bot_response", new=AsyncMock()) as generate, \
+         patch("bot.handlers.text.increment_interaction", new=AsyncMock()) as increment:
+        await handle_general(update, context, {"id": "uid"}, {}, "asdfghjk qwerty")
+
+    generate.assert_not_awaited()
+    update.effective_message.reply_text.assert_awaited_once_with(
+        "Nie zrozumiałem. Co chcesz zrobić?"
+    )
+    increment.assert_awaited_once_with(12345, "general_question", "none", 0, 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_handle_general_pipeline_count_uses_post_mvp_banner_without_llm():
+    update = MagicMock()
+    update.effective_user.id = 12345
+    update.effective_message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    with patch("bot.handlers.text.generate_bot_response", new=AsyncMock()) as generate, \
+         patch("bot.handlers.text.increment_interaction", new=AsyncMock()) as increment:
+        await handle_general(update, context, {"id": "uid"}, {}, "ilu mam klientów?")
+
+    generate.assert_not_awaited()
+    sent = update.effective_message.reply_text.await_args.args[0]
+    assert "post-MVP" in sent
+    assert "klientów" not in sent.lower()
+    increment.assert_awaited_once_with(12345, "general_question", "none", 0, 0, 0.0)
 
 
 @pytest.mark.asyncio
