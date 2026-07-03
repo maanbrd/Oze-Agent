@@ -104,6 +104,7 @@ def test_owner_dashboard_aggregates_business_and_funnel_metrics():
         monthly_subscription_pln=399,
         owner_spreadsheet_id="sheet-admin",
         owner_calendar_id="calendar-admin",
+        now=datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc),
     )
 
     assert payload["business"]["mrr_pln"] == 399
