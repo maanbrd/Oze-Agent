@@ -18,8 +18,8 @@ google-auth-oauthlib>=1.2.0,<2.0
 google-auth-httplib2>=0.2.0,<1.0
 
 # Security
-cryptography>=42.0.0,<45.0
-PyJWT>=2.8.0,<3.0
+cryptography>=48.0.1,<50.0
+PyJWT>=2.13.0,<3.0
 
 # Scheduler
 APScheduler>=3.10.0,<4.0
@@ -27,8 +27,15 @@ APScheduler>=3.10.0,<4.0
 # Utilities
 python-dotenv>=1.0.0,<2.0
 httpx>=0.27.0,<1.0
-python-multipart>=0.0.9,<1.0
+python-multipart>=0.0.31,<1.0
 reportlab>=4.2.0,<5.0
+
+# Transitive security floors (CVE fixes for deps pulled in by fastapi / google-auth / SDKs)
+starlette>=1.3.1          # via fastapi (fastapi requires starlette>=0.46.0)
+urllib3>=2.7.0            # via google-auth / fsspec
+pydantic-settings>=2.14.2  # via fastapi / pydantic stack
+aiohttp>=3.14.1          # via anthropic / openai SDKs (11 CVEs in 3.13.x)
+idna>=3.15               # via httpx / jsonschema
 
 # Monitoring
 sentry-sdk[fastapi]>=2.0.0,<3.0
