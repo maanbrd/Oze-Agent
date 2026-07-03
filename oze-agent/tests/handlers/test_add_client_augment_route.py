@@ -188,6 +188,57 @@ async def test_add_client_augment_accepts_spoken_polish_email_without_llm():
 
 
 @pytest.mark.asyncio
+async def test_add_client_augment_complete_data_shows_card_not_direct_write():
+    """R1: a second message that completes the record must re-show the ✅ card,
+    never write to Sheets directly (regression guard for the augment bypass)."""
+    upd = _update()
+    flow = {
+        "flow_type": "add_client",
+        "flow_data": {
+            "client_data": {
+                "Imię i nazwisko": "Marek Kowalski",
+                "Miasto": "Kraków",
+            }
+        },
+    }
+    sheet_columns = ["Imię i nazwisko", "Miasto", "Telefon", "Adres", "Produkt"]
+    with patch(
+        "bot.handlers.text.get_sheet_headers",
+        new=AsyncMock(return_value=sheet_columns),
+    ), patch(
+        "bot.handlers.text.extract_client_data",
+        new=AsyncMock(return_value={"client_data": {
+            "Telefon": "600123456",
+            "Adres": "ul. Długa 5",
+            "Produkt": "PV",
+        }}),
+    ), patch("bot.handlers.text.save_pending") as mock_save, patch(
+        "bot.handlers.text.commit_add_client", new=AsyncMock()
+    ) as mock_write, patch(
+        "bot.handlers.text.delete_pending_flow"
+    ) as mock_delete:
+        consumed = await _route_pending_flow(
+            upd,
+            MagicMock(),
+            {"id": "u1", "sheet_columns": sheet_columns},
+            flow,
+            "telefon 600123456, adres ul. Długa 5, produkt PV",
+        )
+
+    assert consumed is True
+    # No direct Sheets write and no flow teardown — the write is deferred to ✅.
+    mock_write.assert_not_awaited()
+    mock_delete.assert_not_called()
+    # Merged record is re-saved as a pending flow and the card is re-shown.
+    saved_flow = mock_save.call_args.args[0]
+    assert saved_flow.flow_type.value == "add_client"
+    assert saved_flow.flow_data["client_data"]["Imię i nazwisko"] == "Marek Kowalski"
+    assert saved_flow.flow_data["client_data"]["Telefon"] == "600123456"
+    assert saved_flow.flow_data["client_data"]["Produkt"] == "PV"
+    upd.effective_message.reply_text.assert_awaited()
+
+
+@pytest.mark.asyncio
 async def test_add_client_augment_preserves_meeting_seeded_closed_context():
     upd = _update()
     flow = {

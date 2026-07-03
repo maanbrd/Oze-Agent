@@ -90,7 +90,6 @@ from shared.google_calendar import (
     get_events_for_range,
 )
 from shared.google_sheets import (
-    add_client,
     get_all_clients,
     get_sheet_headers,
     search_clients,
@@ -1724,32 +1723,11 @@ async def _route_pending_flow(
             missing,
         )
 
-        if not missing:
-            delete_pending_flow(telegram_id)
-            row = await add_client(user_id, merged)
-            if row:
-                name = merged.get("Imię i nazwisko", "klient")
-                offer_remaining = old_flow_data.get("_offer_remaining", [])
-                if offer_remaining:
-                    next_client = offer_remaining[0]
-                    new_remaining = offer_remaining[1:]
-                    save_pending(PendingFlow(
-                        telegram_id=telegram_id,
-                        flow_type=PendingFlowType.ADD_CLIENT,
-                        flow_data=payload_to_flow_data(AddClientPayload(
-                            client_data={"Imię i nazwisko": next_client},
-                            _offer_remaining=new_remaining,
-                        )),
-                    ))
-                    await reply_text(update,
-                        f"✅ {name} dodany. Podaj dane {next_client} — adres, telefon, produkt."
-                    )
-                else:
-                    await reply_text(update, "✅ Zapisane.")
-            else:
-                await reply_markdown_v2(update, format_error("google_down"))
-            return True
-
+        # R1: never write to Sheets straight from an augment reply. Whether the
+        # merged record is now complete or still missing fields, re-show the
+        # confirmation card and wait for an explicit ✅ Zapisać — the write and
+        # any _offer_remaining advancement happen in _confirm_add_client.
+        #
         # User is correcting/adding data (possibly after tapping [Nie]) — clear cancel flag, re-show card
         offer_remaining = old_flow_data.get("_offer_remaining") or None
         save_pending(PendingFlow(
