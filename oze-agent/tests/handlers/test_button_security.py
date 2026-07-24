@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -68,13 +68,37 @@ async def test_fresh_save_callback_in_same_second_confirms_pending_flow():
         "updated_at": sent_at.replace(microsecond=293267).isoformat(),
     }
 
+    claimed = {**flow, "processing_token": "claim-1"}
     with patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
          patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
+         patch("bot.handlers.buttons.claim_pending_flow", return_value=claimed), \
          patch("bot.handlers.buttons.handle_confirm", new=AsyncMock()) as handle_confirm:
         await handle_button(update, MagicMock())
 
-    handle_confirm.assert_awaited_once()
+    handle_confirm.assert_awaited_once_with(
+        update, ANY, {"id": "user-1"}, {}, "", claimed_flow=claimed
+    )
     update.callback_query.edit_message_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_save_callback_loses_atomic_claim_and_does_not_mutate():
+    from bot.handlers.buttons import handle_button
+
+    update = _update("save:confirm")
+    flow = {
+        "flow_type": "add_client",
+        "flow_data": {},
+        "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    with patch("bot.handlers.buttons._run_guards", new=AsyncMock(return_value={"id": "user-1"})), \
+         patch("bot.handlers.buttons.get_pending_flow", return_value=flow), \
+         patch("bot.handlers.buttons.claim_pending_flow", return_value=None), \
+         patch("bot.handlers.buttons.handle_confirm", new=AsyncMock()) as handle_confirm:
+        await handle_button(update, MagicMock())
+
+    handle_confirm.assert_not_awaited()
+    assert "już przetwarzana" in update.callback_query.edit_message_text.await_args.args[0]
 
 
 @pytest.mark.asyncio

@@ -193,7 +193,9 @@ async def test_unsupported_stripe_event_is_logged_without_processing(monkeypatch
     result = await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
 
     assert result == {"received": True, "processed": False}
-    assert fake.webhook_logs[0]["processed"] is False
+    # Unsupported events are terminally acknowledged so Stripe retries do not
+    # create an infinite unprocessed backlog.
+    assert fake.webhook_logs[0]["processed"] is True
     assert fake.payment_history == []
 
 

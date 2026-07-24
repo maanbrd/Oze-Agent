@@ -9,7 +9,7 @@ from shared.google_sheets import update_client, update_client_fields_without_tou
 from shared.observability import exception_type
 from shared.perf import log_duration
 
-from .email_utils import merge_offer_recipients
+from .email_utils import RecipientMergeResult, merge_offer_recipients
 from .gmail import send_offer_email
 from .pdf import render_offer_pdf
 from .repository import OfferRepository
@@ -68,6 +68,8 @@ async def send_offer_after_confirmation(
     update_email=None,
     update_status=None,
     preclaimed: bool = False,
+    confirmed_recipients: list[str] | None = None,
+    confirmed_invalid_recipients: list[str] | None = None,
 ) -> SendOfferResult:
     """Send the PDF via Gmail, then best-effort update Sheets.
 
@@ -76,6 +78,14 @@ async def send_offer_after_confirmation(
     """
     repo = repository or OfferRepository()
     merge = merge_offer_recipients(client.get("Email", ""), command_text)
+    if confirmed_recipients is not None:
+        # Recipients are part of the user's confirmed command. Never silently
+        # add a newly edited Sheets address while a queued send is waiting.
+        merge = RecipientMergeResult(
+            recipients=list(confirmed_recipients),
+            invalid_recipients=list(confirmed_invalid_recipients or []),
+            new_emails_for_sheets=merge.new_emails_for_sheets,
+        )
 
     attempt = repo.ensure_send_attempt(
         idempotency_key=idempotency_key,
@@ -130,7 +140,15 @@ async def send_offer_after_confirmation(
         sender = gmail_sender or send_offer_email
         with log_duration(logger, "offer.gmail_send"):
             gmail_message_id = await _maybe_await(
-                sender(user_id, merge.recipients, template, seller_profile, client, pdf_bytes)
+                sender(
+                    user_id,
+                    merge.recipients,
+                    template,
+                    seller_profile,
+                    client,
+                    pdf_bytes,
+                    idempotency_key=idempotency_key,
+                )
             )
     except Exception as exc:
         failure_code = _safe_failure_code(exc)
@@ -142,7 +160,26 @@ async def send_offer_after_confirmation(
             error=failure_code,
         )
 
-    repo.mark_send_sent(idempotency_key, gmail_message_id or "")
+    try:
+        repo.mark_send_sent(idempotency_key, gmail_message_id or "")
+    except Exception as exc:
+        # Gmail accepted the message, so retrying could send a duplicate. Move
+        # the attempt to a manual reconciliation state, best-effort.
+        try:
+            repo.mark_send_reconcile_required(
+                idempotency_key,
+                gmail_message_id or "",
+                _safe_failure_code(exc),
+            )
+        except Exception:
+            logger.exception("offer.send_ack_and_reconcile_persist_failed")
+        return SendOfferResult(
+            sent=False,
+            gmail_message_id=gmail_message_id,
+            recipients=merge.recipients,
+            invalid_recipients=merge.invalid_recipients,
+            error="delivery_ambiguous",
+        )
 
     sheets_errors: list[str] = []
     row = client.get("_row")

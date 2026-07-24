@@ -23,7 +23,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends
 from zoneinfo import ZoneInfo
 
-from api.auth import AuthUser, get_current_auth_user
+from api.auth import AuthUser, require_active_access
 from shared.database import get_supabase_client
 from shared.google_calendar import get_events_for_range
 from shared.google_sheets import get_all_clients
@@ -118,7 +118,7 @@ def _empty_activity_week_payload(today: date) -> dict[str, Any]:
 
 @router.get("/insights/activity-week")
 async def get_activity_week(
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> dict[str, Any]:
     """Return 4 personal-activity counters for the current Warsaw week.
 
@@ -276,7 +276,7 @@ def _empty_trend_payload(today: date) -> dict[str, Any]:
 
 @router.get("/insights/trend-6mo")
 async def get_trend_6mo(
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> dict[str, Any]:
     """Return 4 monthly series over the last 6 calendar months.
 
@@ -381,7 +381,7 @@ def _empty_sources_payload(today: date) -> dict[str, Any]:
 
 @router.get("/insights/sources")
 async def get_lead_sources(
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> dict[str, Any]:
     """Top lead-source bars: count + conversion rate to "Podpisane".
 

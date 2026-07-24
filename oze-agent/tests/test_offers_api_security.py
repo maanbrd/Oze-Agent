@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+import pytest
 
 
 class _FakeQuery:
@@ -31,6 +32,17 @@ class _FakeSupabase:
         assert name == "users"
         self.last_query = _FakeQuery(self.rows)
         return self.last_query
+
+
+@pytest.fixture(autouse=True)
+def _active_subscription_for_authenticated_route_tests(monkeypatch):
+    from api import auth
+
+    monkeypatch.setattr(
+        auth,
+        "get_supabase_client",
+        lambda: _FakeSupabase([{"id": "owner-user", "subscription_status": "active"}]),
+    )
 
 
 def test_offers_routes_require_bearer_token():

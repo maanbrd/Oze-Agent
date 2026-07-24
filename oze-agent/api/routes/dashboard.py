@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from api.auth import AuthUser, get_current_auth_user
+from api.auth import AuthUser, require_active_access
 from shared.database import get_supabase_client
 from shared.google_calendar import get_events_for_range
 from shared.google_sheets import get_all_clients
@@ -114,7 +114,7 @@ async def _fetch_calendar_events(user_id: str, calendar_id: str) -> list[dict[st
 
 
 @router.get("/dashboard/crm")
-async def get_dashboard_crm(auth_user: AuthUser = Depends(get_current_auth_user)):
+async def get_dashboard_crm(auth_user: AuthUser = Depends(require_active_access)):
     user_result = (
         get_supabase_client()
         .table("users")

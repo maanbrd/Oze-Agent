@@ -1,20 +1,10 @@
-"""Decisions API routes — web-driven mutations for /dashboard/decyzje-preview.
+"""Read-only Decisions API routes for /dashboard/decyzje-preview.
 
-Per docs/agent_behavior_spec_v5.md R1.web (added in this PR), the web layer
-can mutate three specific CRM fields directly from explicit user clicks
-(no Telegram confirmation card). This module exposes:
+CRM changes remain Telegram-only so every mutation uses the canonical
+confirmation card. This module exposes:
 
   GET  /api/decisions/pending           — list of clients qualifying as "stale"
   GET  /api/decisions/count             — count for sidebar badge
-  POST /api/decisions/change-status     — Status (F) + auto-derive K/L
-  POST /api/decisions/touch-contact     — bump Data ostatniego kontaktu (J)
-  POST /api/decisions/schedule-call     — Calendar event + K/L/P sync
-
-All mutations reuse existing Python pipelines:
-  shared.mutations.commit_change_status
-  shared.clients.update_client_row_touching_contact (touching wrapper)
-  shared.mutations.commit_add_meeting (event_type="phone_call", 15-min)
-  shared.google_calendar.delete_event
 """
 
 from __future__ import annotations
@@ -26,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from zoneinfo import ZoneInfo
 
-from api.auth import AuthUser, get_current_auth_user
+from api.auth import AuthUser, require_active_access
 from shared.clients import update_client_row_touching_contact
 from shared.database import get_supabase_client
 from shared.google_calendar import delete_event
@@ -260,7 +250,7 @@ def _parse_warsaw_datetime(date_str: str, time_str: str) -> datetime:
 
 
 @router.get("/decisions/pending")
-async def get_pending_decisions(auth_user: AuthUser = Depends(get_current_auth_user)) -> dict[str, Any]:
+async def get_pending_decisions(auth_user: AuthUser = Depends(require_active_access)) -> dict[str, Any]:
     """Clients qualifying as 'wymagają decyzji' — open status + stale > 7 days.
 
     Sorted by stale days desc, then by full name. Returns max 50 clients —
@@ -292,7 +282,7 @@ async def get_pending_decisions(auth_user: AuthUser = Depends(get_current_auth_u
 
 @router.get("/decisions/count")
 async def get_pending_decisions_count(
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> dict[str, Any]:
     """Cheap count for sidebar badge. Same staleness rule as /pending."""
     record = _resolve_user_record(auth_user)
@@ -304,10 +294,9 @@ async def get_pending_decisions_count(
     return {"count": sum(1 for r in rows if _is_decision_pending(r, today))}
 
 
-@router.post("/decisions/change-status", response_model=DecisionResult)
 async def post_change_status(
     body: ChangeStatusRequest,
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> DecisionResult:
     new_status = _validate_status(body.new_status)
     record = _require_user_with_sheets(auth_user)
@@ -338,10 +327,9 @@ async def post_change_status(
     return DecisionResult(success=True)
 
 
-@router.post("/decisions/touch-contact", response_model=DecisionResult)
 async def post_touch_contact(
     body: TouchContactRequest,
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> DecisionResult:
     """'Stay / Nadal czeka' — bump column J only, no other changes."""
     record = _require_user_with_sheets(auth_user)
@@ -351,10 +339,9 @@ async def post_touch_contact(
     return DecisionResult(success=True)
 
 
-@router.post("/decisions/schedule-call", response_model=ScheduleCallResult)
 async def post_schedule_call(
     body: ScheduleCallRequest,
-    auth_user: AuthUser = Depends(get_current_auth_user),
+    auth_user: AuthUser = Depends(require_active_access),
 ) -> ScheduleCallResult:
     """Create / overwrite / cancel a 15-min Calendar phone call appointment.
 

@@ -24,7 +24,9 @@ from bot.utils.telegram_helpers import (
 )
 from bot.utils.conversation_reply import edit_message_text, reply_markdown_v2, reply_text
 from shared.behavior.action_type import calendar_title, confirmation_heading
+from shared.clients import build_client_ref
 from shared.database import (
+    claim_pending_flow,
     delete_pending_flow,
     get_pending_flow,
     increment_daily_interaction_count,
@@ -123,14 +125,22 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if not _callback_matches_pending_message(query, flow):
             await edit_message_text(query, "Nieaktualny przycisk. Wpisz polecenie jeszcze raz.")
             return
-        await handle_confirm(update, context, user, {}, "")
+        claimed = claim_pending_flow(telegram_id, flow.get("updated_at"))
+        if not claimed:
+            await edit_message_text(query, "Ta operacja jest już przetwarzana. Poczekaj na wynik.")
+            return
+        await handle_confirm(update, context, user, {}, "", claimed_flow=claimed)
 
     elif action == "offer_send":
         flow = get_pending_flow(telegram_id)
         if not _callback_matches_pending_message(query, flow):
             await edit_message_text(query, "Nieaktualny przycisk. Wpisz polecenie jeszcze raz.")
             return
-        await handle_confirm(update, context, user, {}, "")
+        claimed = claim_pending_flow(telegram_id, flow.get("updated_at"))
+        if not claimed:
+            await edit_message_text(query, "Ta operacja jest już przetwarzana. Poczekaj na wynik.")
+            return
+        await handle_confirm(update, context, user, {}, "", claimed_flow=claimed)
 
     elif action == "append":
         # R1: keep pending flow open, prompt user for more data
@@ -252,6 +262,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                     client_name=client.get("Imię i nazwisko", ""),
                     old_value=old_status,
                     city=client.get("Miasto", ""),
+                    client_ref=build_client_ref(client),
                 )),
             ))
             await edit_message_text(query,
@@ -374,6 +385,7 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                     client_name=client.get("Imię i nazwisko", ""),
                     old_value=old_status,
                     city=client.get("Miasto", ""),
+                    client_ref=build_client_ref(client),
                 )),
             ))
             await edit_message_text(query,
@@ -406,6 +418,7 @@ async def _handle_select_client(query, context, user: dict, row_str: str) -> Non
                     client_name=name,
                     city=c_city,
                     old_notes=old_notes,
+                    client_ref=build_client_ref(client),
                 )),
             ))
             display_note = note_text[:80] + ("..." if len(note_text) > 80 else "")
@@ -664,6 +677,7 @@ async def _resume_add_meeting_disambiguation(
             client_row=enriched.get("client_row"),
             current_status=enriched.get("current_status") or "",
             ambiguous_client=False,
+            client_ref=build_client_ref(client),
         )),
     ))
     await _send_add_meeting_confirmation_card(

@@ -267,6 +267,31 @@ class OfferRepository:
             "updated_at": _now_iso(),
         }).eq("idempotency_key", idempotency_key).execute()
 
+    def mark_send_reconcile_required(
+        self, idempotency_key: str, gmail_message_id: str, error: str
+    ) -> None:
+        self.client.table("offer_send_attempts").update({
+            "status": "reconcile_required",
+            "gmail_message_id": gmail_message_id,
+            "error": error[:1000],
+            "locked_at": None,
+            "lock_owner": None,
+            "next_attempt_at": None,
+            "updated_at": _now_iso(),
+        }).eq("idempotency_key", idempotency_key).execute()
+
+    def recover_stale_sending(self, stale_after_minutes: int = 15) -> None:
+        """Quarantine abandoned sends; their Gmail outcome is unknowable."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=stale_after_minutes)).isoformat()
+        self.client.table("offer_send_attempts").update({
+            "status": "reconcile_required",
+            "error": "stale_sending_outcome_unknown",
+            "locked_at": None,
+            "lock_owner": None,
+            "next_attempt_at": None,
+            "updated_at": _now_iso(),
+        }).eq("status", "sending").lt("locked_at", cutoff).execute()
+
     def release_or_fail_send_attempt(
         self,
         idempotency_key: str,

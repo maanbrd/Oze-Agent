@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Wymagają decyzji | Agent OZE",
   description:
-    "Klienci, których staleness przekroczył próg — szybkie decyzje wprost z dashboardu.",
+    "Klienci wymagający uwagi — podgląd w dashboardzie, potwierdzenie decyzji w Telegramie.",
 };
 
 export default async function DecyzjePreviewPage() {

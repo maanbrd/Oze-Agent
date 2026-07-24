@@ -325,6 +325,8 @@ def save_pending_flow(telegram_id: int, flow_type: str, flow_data: dict) -> None
                 "flow_type": flow_type,
                 "flow_data": flow_data,
                 "reminder_sent": False,
+                "processing_token": None,
+                "processing_started_at": None,
                 "updated_at": _utc_now_iso(),
             }
         ).execute()
@@ -351,6 +353,35 @@ def get_pending_flow(telegram_id: int) -> Optional[dict]:
         return result.data
     except Exception as e:
         logger.debug("get_pending_flow telegram_hash=%s exc_type=%s", id_hash(telegram_id), exception_type(e))
+        return None
+
+
+def claim_pending_flow(telegram_id: int, expected_updated_at: str | None = None) -> Optional[dict]:
+    """Atomically claim one pending mutation card.
+
+    The database RPC is the serialization boundary shared by all bot workers.
+    Returning ``None`` means another callback already owns the mutation or the
+    card was replaced after it was read.
+    """
+    try:
+        result = get_supabase_client().rpc(
+            "claim_pending_flow",
+            {
+                "p_telegram_id": telegram_id,
+                "p_expected_updated_at": expected_updated_at,
+            },
+        ).execute()
+        rows = result.data or []
+        if isinstance(rows, dict):
+            return rows
+        return rows[0] if rows else None
+    except Exception as e:
+        logger.error(
+            "claim_pending_flow telegram_hash=%s exc_type=%s",
+            id_hash(telegram_id),
+            exception_type(e),
+        )
+        # Fail closed: executing twice is worse than asking the user to retry.
         return None
 
 

@@ -44,6 +44,7 @@ class AddNotePayload:
     client_name: str
     city: str = ""
     old_notes: str = ""
+    client_ref: Optional[dict] = None
 
 
 @dataclass
@@ -54,6 +55,7 @@ class ChangeStatusPayload:
     field: str = "Status"
     old_value: str = ""
     city: str = ""
+    client_ref: Optional[dict] = None
 
 
 @dataclass
@@ -80,6 +82,7 @@ class AddMeetingPayload:
     # commits. None for plain meeting triggers without a notatka prefix.
     note_text: Optional[str] = None
     existing_notes: str = ""
+    client_ref: Optional[dict] = None
 
 
 @dataclass

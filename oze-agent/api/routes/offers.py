@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from api.auth import AuthUser, get_current_auth_user
+from api.auth import AuthUser, require_active_access
 from shared.database import get_supabase_client
 from shared.offers.email_template import EMAIL_VARIABLES, validate_email_template
 from shared.offers.email_utils import sanitize_filename_part
@@ -43,7 +43,7 @@ class ReorderPayload(BaseModel):
     ordered_template_ids: list[str]
 
 
-def _user_id(auth_user: AuthUser = Depends(get_current_auth_user)) -> str:
+def _user_id(auth_user: AuthUser = Depends(require_active_access)) -> str:
     result = (
         get_supabase_client()
         .table("users")
@@ -194,7 +194,7 @@ async def upsert_profile(payload: ProfilePayload, uid: str = Depends(_user_id)):
 
 
 @router.get("/email-variables")
-async def email_variables(_auth_user: AuthUser = Depends(get_current_auth_user)):
+async def email_variables(_auth_user: AuthUser = Depends(require_active_access)):
     return {"variables": EMAIL_VARIABLES}
 
 

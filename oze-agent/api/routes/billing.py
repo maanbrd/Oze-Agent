@@ -232,6 +232,31 @@ def _insert_log(payload: dict[str, Any]) -> str | None:
     return result.data[0].get("id") or result.data[0]
 
 
+def _get_or_create_log(event: dict[str, Any], existing: dict[str, Any] | None) -> str | dict | None:
+    if existing:
+        return existing.get("id") or existing
+    try:
+        return _insert_log(event)
+    except Exception:
+        # A concurrent delivery may have won the unique stripe_event_id race.
+        raced = _get_existing_log(str(event.get("id") or ""))
+        if raced:
+            return raced.get("id") or raced
+        raise
+
+
+def _event_target_user(event_type: str, obj: dict[str, Any]) -> dict[str, Any] | None:
+    if event_type.startswith("checkout.session"):
+        metadata = _metadata(obj)
+        user_id = metadata.get("user_id") or obj.get("client_reference_id")
+        return _find_user_by_id(str(user_id)) if user_id else None
+    subscription_id = (
+        obj.get("id") if event_type.startswith("customer.subscription")
+        else _invoice_subscription_id(obj)
+    )
+    return _find_user_by_subscription_id(str(subscription_id)) if subscription_id else None
+
+
 def _mark_log_processed(log_id: str | None) -> None:
     if not log_id:
         return
@@ -509,12 +534,24 @@ def process_stripe_event(event: dict[str, Any]) -> dict[str, Any]:
     if existing and existing.get("processed"):
         return {"processed": False, "duplicate": True}
 
-    log_id = _insert_log(event)
+    log_id = _get_or_create_log(event, existing)
     event_type = event.get("type")
     if event_type not in SUPPORTED_EVENTS:
+        _mark_log_processed(log_id)
         return {"processed": False, "duplicate": False}
 
     event_object = _event_object(event)
+    event_created = int(event.get("created") or 0)
+    target_user = _event_target_user(str(event_type), event_object)
+    last_created = int((target_user or {}).get("last_stripe_event_created") or 0)
+    if event_created and last_created > event_created:
+        _mark_log_processed(log_id)
+        return {
+            "processed": False,
+            "duplicate": False,
+            "stale": True,
+            "user_id": (target_user or {}).get("id"),
+        }
     updated: dict[str, Any] | None = None
 
     if event_type in {
@@ -585,6 +622,11 @@ def process_stripe_event(event: dict[str, Any]) -> dict[str, Any]:
             )
 
     if updated:
+        if event_created:
+            updated = _update_user(
+                updated["id"],
+                {"last_stripe_event_created": event_created},
+            )
         _mark_log_processed(log_id)
     return {
         "processed": updated is not None,

@@ -32,14 +32,6 @@ export type PendingDecisionsResponse = {
   source: "live" | "unavailable";
 };
 
-export type DecisionResult =
-  | { ok: true }
-  | { ok: false; code: string };
-
-export type ScheduleCallResult =
-  | { ok: true; eventId: string | null; sheetsSynced: boolean }
-  | { ok: false; code: string };
-
 async function authedFetch(path: string, init: RequestInit = {}) {
   const account = await getCurrentAccount();
   const baseUrl = fastApiBaseUrl();
@@ -97,70 +89,5 @@ export async function getDecisionsCount(): Promise<number> {
     return Number(payload.count) || 0;
   } catch {
     return 0;
-  }
-}
-
-export async function changeClientStatus(
-  row: number,
-  newStatus: FunnelStatus,
-): Promise<DecisionResult> {
-  try {
-    const response = await authedFetch("/api/decisions/change-status", {
-      method: "POST",
-      body: JSON.stringify({ row, new_status: newStatus }),
-    });
-    if (!response.ok) {
-      return { ok: false, code: `http_${response.status}` };
-    }
-    const payload = (await response.json()) as { success: boolean; error_code?: string };
-    if (!payload.success) return { ok: false, code: payload.error_code ?? "unknown" };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, code: e instanceof Error ? e.message : "fetch_failed" };
-  }
-}
-
-export async function touchClientContact(row: number): Promise<DecisionResult> {
-  try {
-    const response = await authedFetch("/api/decisions/touch-contact", {
-      method: "POST",
-      body: JSON.stringify({ row }),
-    });
-    if (!response.ok) return { ok: false, code: `http_${response.status}` };
-    const payload = (await response.json()) as { success: boolean; error_code?: string };
-    if (!payload.success) return { ok: false, code: payload.error_code ?? "unknown" };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, code: e instanceof Error ? e.message : "fetch_failed" };
-  }
-}
-
-export async function scheduleClientCall(input: {
-  row: number;
-  date: string;
-  time: string;
-  note: string;
-  mode: "create" | "overwrite" | "cancel-only";
-}): Promise<ScheduleCallResult> {
-  try {
-    const response = await authedFetch("/api/decisions/schedule-call", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
-    if (!response.ok) return { ok: false, code: `http_${response.status}` };
-    const payload = (await response.json()) as {
-      success: boolean;
-      error_code?: string;
-      event_id?: string | null;
-      sheets_synced?: boolean;
-    };
-    if (!payload.success) return { ok: false, code: payload.error_code ?? "unknown" };
-    return {
-      ok: true,
-      eventId: payload.event_id ?? null,
-      sheetsSynced: Boolean(payload.sheets_synced),
-    };
-  } catch (e) {
-    return { ok: false, code: e instanceof Error ? e.message : "fetch_failed" };
   }
 }

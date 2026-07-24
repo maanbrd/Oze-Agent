@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from telegram import Bot
 
+from shared.clients import ClientIdentityError, resolve_client_ref
 from shared.clients import lookup_client_by_row
 from shared.observability import exception_type, id_hash
 from shared.offers.pipeline import SendOfferResult, send_offer_after_confirmation
@@ -53,6 +54,8 @@ async def process_offer_send_queue_once(
     repo = repository or OfferRepository()
     owner = lock_owner or f"offer-worker-{uuid4()}"
     try:
+        if hasattr(repo, "recover_stale_sending"):
+            repo.recover_stale_sending()
         attempts = repo.claim_due_send_attempts(limit=limit, lock_owner=owner)
     except Exception as exc:
         logger.warning(
@@ -83,7 +86,14 @@ async def _process_attempt(bot: Bot, repo: OfferRepository, attempt: dict) -> No
             await _final_fail(bot, repo, idempotency_key, telegram_id, "template_missing")
             return
 
-        client = await lookup_client_by_row(user_id, attempt.get("client_row") or 0)
+        if attempt.get("client_ref"):
+            try:
+                client = await resolve_client_ref(user_id, attempt["client_ref"])
+            except ClientIdentityError:
+                client = None
+        else:
+            # Backward-compatible path for attempts queued before client_ref.
+            client = await lookup_client_by_row(user_id, attempt.get("client_row") or 0)
         if not client:
             await _final_fail(bot, repo, idempotency_key, telegram_id, "client_missing")
             return
@@ -99,6 +109,8 @@ async def _process_attempt(bot: Bot, repo: OfferRepository, attempt: dict) -> No
             command_text=attempt.get("command_text") or "",
             repository=repo,
             preclaimed=True,
+            confirmed_recipients=attempt.get("recipients") or [],
+            confirmed_invalid_recipients=attempt.get("invalid_recipients") or [],
         )
         if result.sent:
             await bot.send_message(chat_id=telegram_id, text=_success_text(result))
@@ -106,6 +118,13 @@ async def _process_attempt(bot: Bot, repo: OfferRepository, attempt: dict) -> No
             return
 
         error = result.error or "send_failed"
+        if error == "delivery_ambiguous":
+            await bot.send_message(
+                chat_id=telegram_id,
+                text="Wysyłka wymaga sprawdzenia — nie ponawiam jej automatycznie, aby nie wysłać duplikatu.",
+            )
+            repo.mark_result_notified(idempotency_key)
+            return
         permanent = error in PERMANENT_ERRORS
         released = repo.release_or_fail_send_attempt(
             idempotency_key,

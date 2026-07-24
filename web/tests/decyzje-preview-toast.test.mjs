@@ -9,9 +9,11 @@ function readSource(path) {
 
 const src = readSource("../components/dashboard/decyzje-preview.tsx");
 
-test("decyzje-preview uses sonner-backed helpers", () => {
-  assert.match(src, /from\s+['"]@\/lib\/ui\/toast['"]/);
-  assert.match(src, /showSuccess|showError|showAction/);
+test("decyzje-preview is read-only and routes decisions to Telegram", () => {
+  assert.equal(src.includes("/decyzje-preview/actions"), false);
+  assert.equal(src.includes("changeClientStatusAction"), false);
+  assert.equal(src.includes("scheduleClientCallAction"), false);
+  assert.match(src, /https:\/\/t\.me\/AgentOZE_Bot/);
 });
 
 test("decyzje-preview no longer maintains its own ToastState", () => {

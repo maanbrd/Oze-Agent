@@ -42,6 +42,10 @@ class RecordingRepo:
         self.attempt_status = "failed"
         self.failed_error = error
 
+    def mark_send_reconcile_required(self, idempotency_key, gmail_message_id, error):
+        self.events.append(("reconcile", idempotency_key, gmail_message_id, error))
+        self.attempt_status = "reconcile_required"
+
 
 def _template():
     return {
@@ -277,3 +281,35 @@ async def test_send_pipeline_updates_sheets_only_after_success_and_reports_parti
         ("sheet_email",),
         ("sheet_status",),
     ]
+
+
+@pytest.mark.asyncio
+async def test_gmail_success_with_db_ack_failure_is_not_retried(monkeypatch):
+    """After Gmail accepted a message, uncertainty must stop automatic retries."""
+    monkeypatch.setattr("shared.offers.pipeline.render_offer_pdf", lambda *_a, **_k: b"%PDF-1")
+
+    class AckFailRepo(RecordingRepo):
+        def mark_send_sent(self, idempotency_key, gmail_message_id):
+            raise RuntimeError("db_down")
+
+    repo = AckFailRepo()
+
+    async def gmail_sender(*_args, **_kwargs):
+        return "gmail-accepted-1"
+
+    result = await send_offer_after_confirmation(
+        user_id="user-1",
+        telegram_id=123,
+        idempotency_key="key-ambiguous",
+        offer_number=1,
+        template=_template(),
+        seller_profile={"company_name": "Firma"},
+        client={"_row": 2, "Imię i nazwisko": "Jan Kowalski", "Email": "jan@example.com"},
+        command_text="",
+        repository=repo,
+        gmail_sender=gmail_sender,
+    )
+
+    assert not result.sent
+    assert result.error == "delivery_ambiguous"
+    assert repo.events[-1][:3] == ("reconcile", "key-ambiguous", "gmail-accepted-1")

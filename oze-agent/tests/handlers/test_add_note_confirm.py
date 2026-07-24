@@ -76,6 +76,41 @@ async def test_handler_forwards_flow_data_to_pipeline():
 
 
 @pytest.mark.asyncio
+async def test_client_ref_re_resolves_moved_row_and_refreshes_notes():
+    """A pending card must not overwrite notes added after it was created."""
+    upd = _update()
+    pending = _pending_add_note()
+    pending["flow_data"]["client_ref"] = {
+        "version": 1,
+        "row_hint": 7,
+        "name": "mariusz krzywinski",
+        "city": "marki",
+        "phone": "48123123123",
+        "email": "m@example.com",
+    }
+    live_client = {
+        "_row": 19,
+        "Imię i nazwisko": "Mariusz Krzywinski",
+        "Miasto": "Marki",
+        "Telefon": "+48 123 123 123",
+        "Email": "m@example.com",
+        "Notatki": "notatka dopisana po pokazaniu karty",
+    }
+    with patch("bot.handlers.text.get_pending_flow", return_value=pending), patch(
+        "bot.handlers.text.resolve_client_ref",
+        new=AsyncMock(return_value=live_client),
+    ), patch(
+        "bot.handlers.text.commit_add_note",
+        new=AsyncMock(return_value=AddNoteResult(success=True, final_notes="x")),
+    ) as mock_pipeline, patch("bot.handlers.text.delete_pending_flow"):
+        await handle_confirm(upd, MagicMock(), {"id": "u1"}, {}, "")
+
+    args = mock_pipeline.await_args.args
+    assert args[1] == 19
+    assert args[3] == "notatka dopisana po pokazaniu karty"
+
+
+@pytest.mark.asyncio
 async def test_failure_replies_with_google_down_error_key():
     """error_message="google_down" must map to format_error("google_down"),
     not to a new error key — the taxonomy is frozen for Phase 5.

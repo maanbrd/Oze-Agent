@@ -108,6 +108,19 @@ def _calendar_patches(events: _EventsService):
     )
 
 
+@pytest.mark.asyncio
+async def test_get_events_for_date_uses_warsaw_day_boundaries():
+    from shared.google_calendar import get_events_for_date
+
+    events = _EventsService()
+    user_patch, service_patch = _calendar_patches(events)
+    with user_patch, service_patch:
+        await get_events_for_date("user-1", date(2026, 7, 24))
+
+    assert events.list_kwargs["timeMin"] == "2026-07-24T00:00:00+02:00"
+    assert events.list_kwargs["timeMax"] == "2026-07-25T00:00:00+02:00"
+
+
 # ── calendar branding ────────────────────────────────────────────────────────
 
 

@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from jwt import PyJWKClient
 
 from bot.config import Config
+from shared.database import get_supabase_client
 
 
 @dataclass(frozen=True)
@@ -89,4 +90,39 @@ async def get_current_auth_user(
         user_id=user_id,
         email=claims.get("email"),
         claims=claims,
+    )
+
+
+async def require_active_access(
+    auth_user: AuthUser = Depends(get_current_auth_user),
+) -> AuthUser:
+    """Authorize paid/trial or explicitly claimed beta product access."""
+    result = (
+        get_supabase_client()
+        .table("users")
+        .select("id, subscription_status")
+        .eq("auth_user_id", auth_user.user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+    user = result.data[0]
+    if user.get("subscription_status") in {"active", "trialing"}:
+        return auth_user
+
+    grant = (
+        get_supabase_client()
+        .table("beta_access_grants")
+        .select("id, auth_user_id, status")
+        .eq("auth_user_id", auth_user.user_id)
+        .eq("status", "active")
+        .limit(1)
+        .execute()
+    )
+    if grant.data and grant.data[0].get("auth_user_id") == auth_user.user_id:
+        return auth_user
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail="Active subscription required.",
     )

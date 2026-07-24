@@ -8,6 +8,7 @@ import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from googleapiclient.discovery import build
 
@@ -18,6 +19,7 @@ from shared.observability import exception_type, id_hash
 from shared.perf import log_duration
 
 logger = logging.getLogger(__name__)
+WARSAW = ZoneInfo("Europe/Warsaw")
 
 WORKING_HOURS_START = 9   # 09:00
 WORKING_HOURS_END = 18    # 18:00
@@ -170,7 +172,7 @@ async def get_events_for_date(user_id: str, day: date) -> list[dict]:
             return []
         calendar_id = user["google_calendar_id"]
 
-        day_start = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=timezone.utc)
+        day_start = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=WARSAW)
         day_end = day_start + timedelta(days=1)
 
         def _fetch():

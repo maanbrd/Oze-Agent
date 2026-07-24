@@ -309,3 +309,47 @@ async def test_stripe_event_does_not_duplicate_payment_history_snapshot(monkeypa
     await billing.process_signed_stripe_event(body, _signed_headers(body, secret))
 
     assert len(fake.payment_history) == 1
+
+
+def test_retry_reuses_unprocessed_webhook_log(monkeypatch):
+    from api.routes import billing
+
+    existing = {"id": "log-1", "processed": False}
+    monkeypatch.setattr(billing, "_get_existing_log", lambda _event_id: existing)
+    inserted = []
+    monkeypatch.setattr(billing, "_insert_log", lambda event: inserted.append(event))
+    marked = []
+    monkeypatch.setattr(billing, "_mark_log_processed", lambda log_id: marked.append(log_id))
+
+    result = billing.process_stripe_event({"id": "evt-retry", "type": "future.event", "object": {}})
+
+    assert inserted == []
+    assert marked == ["log-1"]
+    assert result["processed"] is False
+
+
+def test_out_of_order_subscription_event_cannot_revert_newer_state(monkeypatch):
+    from api.routes import billing
+
+    user = {
+        "id": "user-1",
+        "subscription_status": "active",
+        "stripe_subscription_id": "sub-1",
+        "last_stripe_event_created": 200,
+    }
+    monkeypatch.setattr(billing, "_get_existing_log", lambda _event_id: None)
+    monkeypatch.setattr(billing, "_insert_log", lambda _event: "log-1")
+    monkeypatch.setattr(billing, "_find_user_by_subscription_id", lambda _sub: user)
+    marked = []
+    monkeypatch.setattr(billing, "_mark_log_processed", lambda log_id: marked.append(log_id))
+
+    result = billing.process_stripe_event({
+        "id": "evt-old",
+        "type": "customer.subscription.deleted",
+        "created": 100,
+        "object": {"id": "sub-1", "status": "canceled"},
+    })
+
+    assert result["stale"] is True
+    assert user["subscription_status"] == "active"
+    assert marked == ["log-1"]

@@ -29,6 +29,7 @@ from bot.utils.telegram_helpers import (
 )
 from bot.utils.conversation_reply import reply_markdown_v2, reply_text
 from shared.active_client import derive_active_client
+from shared.clients import ClientIdentityError, build_client_ref, resolve_client_ref
 from shared.behavior.action_type import (
     action_label,
     calendar_title,
@@ -95,7 +96,11 @@ from shared.google_sheets import (
     search_clients,
     update_client,
 )
-from shared.offers.email_utils import extract_email_addresses, merge_offer_recipients
+from shared.offers.email_utils import (
+    RecipientMergeResult,
+    extract_email_addresses,
+    merge_offer_recipients,
+)
 from shared.offers.email_template import render_email_template
 from shared.offers.numbering import get_ready_offer_by_number, list_ready_with_numbers
 from shared.offers.pipeline import send_offer_after_confirmation
@@ -775,6 +780,9 @@ async def _start_offer_send_confirmation(
             "template_id": template.get("id"),
             "offer_number": offer_number,
             "client_row": row,
+            "client_ref": build_client_ref(client),
+            "recipients": merge.recipients,
+            "invalid_recipients": merge.invalid_recipients,
             "command_text": command_text,
         },
     )
@@ -837,7 +845,13 @@ async def _confirm_offer_send(update, telegram_id: int, user_id: str, flow_data:
         await reply_text(update, "Ta oferta nie jest już dostępna.")
         return False
 
-    client = await lookup_client_by_row(user_id, flow_data.get("client_row") or 0)
+    if flow_data.get("client_ref"):
+        try:
+            client = await resolve_client_ref(user_id, flow_data["client_ref"])
+        except ClientIdentityError:
+            client = None
+    else:
+        client = await lookup_client_by_row(user_id, flow_data.get("client_row") or 0)
     if not client:
         await reply_text(update, "Nie znalazłem klienta w arkuszu.")
         return False
@@ -845,6 +859,13 @@ async def _confirm_offer_send(update, telegram_id: int, user_id: str, flow_data:
     seller_profile = repo.get_seller_profile(user_id)
     command_text = flow_data.get("command_text", "")
     recipients = merge_offer_recipients(client.get("Email", ""), command_text)
+    confirmed_recipients = flow_data.get("recipients")
+    if confirmed_recipients is not None:
+        recipients = RecipientMergeResult(
+            recipients=list(confirmed_recipients),
+            invalid_recipients=list(flow_data.get("invalid_recipients") or []),
+            new_emails_for_sheets=recipients.new_emails_for_sheets,
+        )
     if not recipients.recipients:
         await reply_text(update, "Klient nie ma poprawnego maila. Podaj adres email.")
         return True
@@ -857,6 +878,7 @@ async def _confirm_offer_send(update, telegram_id: int, user_id: str, flow_data:
             client_row=client.get("_row"),
             client_name=client.get("Imię i nazwisko", ""),
             client_city=client.get("Miasto", ""),
+            client_ref=flow_data.get("client_ref") or build_client_ref(client),
             recipients=recipients.recipients,
             invalid_recipients=recipients.invalid_recipients,
             offer_template_id=template.get("id"),
@@ -1852,6 +1874,10 @@ async def _route_pending_flow(
                             client_row=enriched.get("client_row"),
                             current_status=enriched.get("current_status") or "",
                             ambiguous_client=enriched.get("ambiguous_client", False),
+                            client_ref=(
+                                build_client_ref(enriched["existing_client_data"])
+                                if enriched.get("existing_client_data") else None
+                            ),
                         )),
                     ))
                     card = _format_add_meeting_flow_card({
@@ -1905,6 +1931,7 @@ async def _route_pending_flow(
                     client_row=flow_data.get("client_row"),
                     current_status=flow_data.get("current_status") or "",
                     ambiguous_client=flow_data.get("ambiguous_client", False),
+                    client_ref=flow_data.get("client_ref"),
                 )),
             ))
             card = _format_add_meeting_flow_card({
@@ -1955,6 +1982,7 @@ async def _route_pending_flow(
                 client_name=flow_data.get("client_name", ""),
                 city=flow_data.get("city", ""),
                 old_notes=flow_data.get("old_notes", ""),
+                client_ref=flow_data.get("client_ref"),
             )),
         ))
 
@@ -2219,6 +2247,7 @@ async def handle_add_note(
             client_name=name,
             city=c_city,
             old_notes=old_notes,
+            client_ref=build_client_ref(client),
         )),
     ))
 
@@ -3198,6 +3227,10 @@ async def handle_add_meeting(
                 existing_notes=(
                     (enriched.get("existing_client_data") or {}).get("Notatki", "")
                 ),
+                client_ref=(
+                    build_client_ref(enriched["existing_client_data"])
+                    if enriched.get("existing_client_data") else None
+                ),
             )),
         ))
 
@@ -3551,6 +3584,7 @@ async def handle_change_status(
             client_name=client.get("Imię i nazwisko", ""),
             old_value=old_status,
             city=client.get("Miasto", ""),
+            client_ref=build_client_ref(client),
         )),
     ))
 
@@ -3683,11 +3717,24 @@ async def _confirm_add_client_duplicate(update, telegram_id, user_id, flow_data)
 
 
 async def _confirm_add_note(update, user_id, flow_data) -> bool:
+    row = flow_data["row"]
+    existing_notes = flow_data.get("old_notes", "")
+    if flow_data.get("client_ref"):
+        try:
+            live_client = await resolve_client_ref(user_id, flow_data["client_ref"])
+        except ClientIdentityError:
+            await reply_text(
+                update,
+                "Nie mogę bezpiecznie wskazać klienta. Wyszukaj go ponownie i dodaj notatkę jeszcze raz.",
+            )
+            return False
+        row = live_client["_row"]
+        existing_notes = live_client.get("Notatki", "") or ""
     result = await commit_add_note(
         user_id,
-        flow_data["row"],
+        row,
         flow_data["note_text"],
-        flow_data.get("old_notes", ""),
+        existing_notes,
         _today_warsaw(),
     )
     if result.success:
@@ -3699,9 +3746,20 @@ async def _confirm_add_note(update, user_id, flow_data) -> bool:
 
 
 async def _confirm_change_status(update, telegram_id, user_id, flow_data) -> bool:
+    row = flow_data["row"]
+    if flow_data.get("client_ref"):
+        try:
+            live_client = await resolve_client_ref(user_id, flow_data["client_ref"])
+        except ClientIdentityError:
+            await reply_text(
+                update,
+                "Nie mogę bezpiecznie wskazać klienta. Wyszukaj go ponownie i zmień status jeszcze raz.",
+            )
+            return False
+        row = live_client["_row"]
     result = await commit_change_status(
         user_id,
-        flow_data["row"],
+        row,
         flow_data["new_value"],
         _today_warsaw(),
     )
@@ -3721,7 +3779,7 @@ async def _confirm_change_status(update, telegram_id, user_id, flow_data) -> boo
             update, telegram_id,
             flow_data.get("client_name", "klient"),
             flow_data.get("city", ""),
-            client_row=flow_data.get("row"),
+            client_row=row,
             current_status=flow_data.get("new_value") or "",
         )
     return True
@@ -3733,12 +3791,14 @@ async def handle_confirm(
     user: dict,
     intent_data: dict,
     message_text: str,
+    *,
+    claimed_flow: Optional[dict] = None,
 ) -> None:
     """Execute the pending flow action."""
     telegram_id = update.effective_user.id
     user_id = user["id"]
 
-    flow = get_pending_flow(telegram_id)
+    flow = claimed_flow or get_pending_flow(telegram_id)
     if not flow:
         if message_text:  # From text input: inform user. From button (empty ""): silent return.
             await reply_text(update, "Nie ma nic do potwierdzenia.")
@@ -3835,6 +3895,23 @@ async def handle_confirm(
             ambiguous_client = flow_data.get("ambiguous_client", False)
             enriched_client_row = flow_data.get("client_row")
             current_status_hint = (flow_data.get("current_status") or "").strip()
+            if flow_data.get("client_ref"):
+                try:
+                    live_client = await resolve_client_ref(user_id, flow_data["client_ref"])
+                except ClientIdentityError:
+                    await reply_text(
+                        update,
+                        "Nie mogę bezpiecznie wskazać klienta. Wyszukaj go ponownie i utwórz spotkanie jeszcze raz.",
+                    )
+                    return
+                enriched_client_row = live_client["_row"]
+                current_status_hint = (live_client.get("Status") or "").strip()
+                if status_update:
+                    status_update = {**status_update, "row": enriched_client_row}
+                flow_data = {
+                    **flow_data,
+                    "existing_notes": live_client.get("Notatki", "") or "",
+                }
             event_description = _calendar_description_for_meeting(flow_data)
 
             with log_duration(logger, "telegram.confirm.add_meeting"):
